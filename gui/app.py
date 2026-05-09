@@ -37,6 +37,21 @@ class CancelledError(Exception):
     pass
 
 
+def _error_hint(e: Exception) -> str:
+    text = f"{type(e).__name__}: {e}"
+    if "JVInit" in text or "JV-Link" in text:
+        return "JV-Link が起動できません。JV-Link の設定と 32bit Python で起動しているか確認してください。"
+    if "32" in text and "bit" in text:
+        return "32bit Python で起動しているか確認してください。"
+    if "database is locked" in text:
+        return "SQLite DB がロックされています。別の実行中プロセスや開いている確認ツールを閉じてください。"
+    if "iCloud" in text or "ICLOUD" in text:
+        return "iCloud Drive が同期/マウントされているか確認してください。"
+    if "Permission denied" in text:
+        return "ファイル権限で失敗しています。対象フォルダを開いているアプリを閉じるか、権限を確認してください。"
+    return ""
+
+
 def _safe(fn):
     """API 呼び出しをまるごと try で包んで例外を JSON 化する。"""
 
@@ -53,6 +68,7 @@ def _safe(fn):
             return {
                 "ok": False,
                 "error": f"{type(e).__name__}: {e}",
+                "hint": _error_hint(e),
                 "trace": traceback.format_exc(),
             }
 
@@ -1129,24 +1145,28 @@ CONTROL_HTML = """<!doctype html>
     box-shadow: 0 0 0 1px var(--accent-soft), 0 4px 14px -8px rgba(55,65,81,.35);
   }
 
-  /* ---------- log ---------- */
-  #log {
-    white-space: pre-wrap;
-    word-break: break-all;
+  /* ---------- details ---------- */
+  #detailsBox {
     background: var(--log-bg);
     color: var(--log-fg);
-    padding: .58rem .7rem;
     border-radius: 3px;
     border: 1px solid var(--border-soft);
-    height: 6.4rem;
-    min-height: 6.4rem;
-    max-height: 6.4rem;
-    overflow: hidden;
+    margin: .62rem 0 0;
+    font-size: .72rem;
+  }
+  #detailsBox summary {
+    cursor: pointer;
+    padding: .45rem .62rem;
+    color: var(--text-dim);
+  }
+  #detailsText {
+    white-space: pre-wrap;
+    word-break: break-all;
+    padding: 0 .7rem .7rem;
     font-family: "JetBrains Mono", "Cascadia Code", "Consolas",
                  ui-monospace, monospace;
     font-size: .7rem;
     line-height: 1.42;
-    margin: .62rem 0 0;
   }
 
   /* ---------- scrollbar ---------- */
@@ -1199,7 +1219,10 @@ CONTROL_HTML = """<!doctype html>
 <button data-action="open_preview" onclick="run(this.dataset.action)"><span class="step">›</span>プレビューを開く</button>
 <button data-action="open_icloud_folder" onclick="run(this.dataset.action)"><span class="step">›</span>iCloud 公開先を Explorer で開く</button>
 
-<pre id="log">準備完了。</pre>
+<details id="detailsBox">
+  <summary>詳細を表示</summary>
+  <pre id="detailsText">準備完了。</pre>
+</details>
 </aside>
 
 <main class="main">
@@ -1423,14 +1446,19 @@ CONTROL_HTML = """<!doctype html>
       return false;
     }
   }
+  function setDetails(value, open = false) {
+    const box = document.getElementById('detailsBox');
+    const text = document.getElementById('detailsText');
+    text.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    box.open = open;
+  }
   async function run(method) {
-    const log = document.getElementById('log');
     if (await refreshStatus()) {
-      log.textContent = '別の処理が実行中です。完了後に再実行してください。';
+      setDetails('別の処理が実行中です。完了後に再実行してください。', true);
       return;
     }
     setActionButtonsDisabled(true);
-    log.textContent = method + ' 実行中…';
+    setDetails(method + ' 実行中…', false);
     let timer = setInterval(refreshStatus, 1000);
     refreshStatus();
     try {
@@ -1438,11 +1466,16 @@ CONTROL_HTML = """<!doctype html>
       clearInterval(timer);
       await refreshStatus();
       refreshDashboard();
-      log.textContent = JSON.stringify(res, null, 2);
+      if (res && res.ok === false) {
+        const summary = [res.error || res.message || 'エラーが発生しました', res.hint || ''].filter(Boolean).join('\n');
+        setDetails(summary + '\n\n' + JSON.stringify(res, null, 2), true);
+      } else {
+        setDetails(res, false);
+      }
     } catch (e) {
       clearInterval(timer);
       await refreshStatus();
-      log.textContent = 'エラー: ' + e;
+      setDetails('エラー: ' + e, true);
     } finally {
       if (!(await refreshStatus())) {
         setActionButtonsDisabled(false);
