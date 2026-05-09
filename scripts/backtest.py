@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from db import open_db
-from predictor.calibration import calibration_report
+from predictor.calibration import calibration_report, fit_bin_calibrator
 from predictor.rules import is_tentative, predict_race
 
 
@@ -349,6 +349,7 @@ def run_backtest(
         "buy_only_return_total": buy_only_stats["return_total"],
         "buy_only_return_rate": buy_only_stats["return_rate"],
         "calibration": calibration_report(calibration_records),
+        "calibrator": fit_bin_calibrator(calibration_records),
         "by_confidence": by_confidence,
         "filters": {
             "min_odds": min_odds,
@@ -512,6 +513,7 @@ def main() -> int:
         "--save", action="store_true",
         help="data/backtest/<timestamp>.json に結果を保存",
     )
+    ap.add_argument("--save-calibrator", action="store_true")
     ap.add_argument(
         "--rule-version", default="v1",
         help="保存時のルールバージョン名 (例: v1, v2-track-condition)",
@@ -545,6 +547,13 @@ def main() -> int:
             encoding="utf-8",
         )
         print(f"\nsaved: {out}")
+    if args.save_calibrator:
+        out = Path(__file__).resolve().parent.parent / "predictor" / "calibrator.json"
+        out.write_text(
+            json.dumps(result["calibrator"], indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        print(f"calibrator saved: {out}")
 
     return 0
 

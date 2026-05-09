@@ -18,8 +18,10 @@ from __future__ import annotations
 
 import os
 import math
+import json
 import sqlite3
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from .features import compute_features
 
@@ -31,6 +33,8 @@ V2_GRADE_ENABLED = os.environ.get("V2_GRADE", "1") != "0"
 # Phase 2-A: 長距離 (>2200m) の距離適性精緻化を有効化するかどうか。
 # 同距離バケット top3 / 脚質 (逃・先) ボーナス。デフォルトは有効。
 V2_DIST_ENABLED = os.environ.get("V2_DIST", "1") != "0"
+CALIBRATOR_PATH = Path(__file__).resolve().parent / "calibrator.json"
+_CALIBRATOR_CACHE: tuple[float, dict] | None = None
 
 
 @dataclass
@@ -617,6 +621,39 @@ def _score_probabilities(
     return {num: raw.get(num, 0.0) * (1.0 - shrink) + uniform * shrink for num in raw}
 
 
+def _load_calibrator() -> dict | None:
+    global _CALIBRATOR_CACHE
+    if os.environ.get("PRED_DISABLE_CALIBRATOR") == "1":
+        return None
+    if not CALIBRATOR_PATH.exists():
+        return None
+    mtime = CALIBRATOR_PATH.stat().st_mtime
+    if _CALIBRATOR_CACHE and _CALIBRATOR_CACHE[0] == mtime:
+        return _CALIBRATOR_CACHE[1]
+    data = json.loads(CALIBRATOR_PATH.read_text(encoding="utf-8"))
+    _CALIBRATOR_CACHE = (mtime, data)
+    return data
+
+
+def _apply_calibrator(probabilities: dict[str, float]) -> dict[str, float]:
+    calibrator = _load_calibrator()
+    if not calibrator or calibrator.get("type") != "bin":
+        return probabilities
+    bins = calibrator.get("bins") or []
+    adjusted: dict[str, float] = {}
+    for num, p in probabilities.items():
+        q = p
+        for b in bins:
+            if b.get("lower", 0.0) <= p < b.get("upper", 1.0) or (p >= 1.0 and b.get("upper") == 1.0):
+                q = float(b.get("calibrated_probability", p))
+                break
+        adjusted[num] = max(0.0, min(1.0, q))
+    total = sum(adjusted.values())
+    if total <= 0:
+        return probabilities
+    return {num: p / total for num, p in adjusted.items()}
+
+
 def _market_probabilities(scored: list[tuple[dict, float, list[str], float]]) -> dict[str, float]:
     implied: list[tuple[str, float]] = []
     for h, _, _, _ in scored:
@@ -764,7 +801,7 @@ def predict_race(
             scored[0][2].append(f"上位再評価(安定性差{stability_gap:.1f})")
 
     confidence, gap, all_tied = _confidence(scored)
-    probability_by_num = _score_probabilities(scored, confidence)
+    probability_by_num = _apply_calibrator(_score_probabilities(scored, confidence))
     market_probability_by_num = _market_probabilities(scored)
 
     out: list[Prediction] = []

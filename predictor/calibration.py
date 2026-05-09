@@ -55,3 +55,31 @@ def calibration_report(records: list[dict], bin_size: float = 0.05) -> dict:
         "log_loss": round(log_loss, 6),
         "bins": bins,
     }
+
+
+def fit_bin_calibrator(records: list[dict], bin_size: float = 0.05, min_count: int = 20) -> dict:
+    report = calibration_report(records, bin_size=bin_size)
+    bins = []
+    for b in report.get("bins", []):
+        if b["count"] >= min_count:
+            calibrated = b["actual_win_rate"]
+        else:
+            calibrated = b["avg_probability"]
+        bins.append(
+            {
+                "lower": b["lower"],
+                "upper": b["upper"],
+                "count": b["count"],
+                "avg_probability": b["avg_probability"],
+                "calibrated_probability": round(calibrated, 4),
+            }
+        )
+    return {
+        "type": "bin",
+        "bin_size": bin_size,
+        "min_count": min_count,
+        "source_count": report.get("count", 0),
+        "brier_score": report.get("brier_score"),
+        "log_loss": report.get("log_loss"),
+        "bins": bins,
+    }
