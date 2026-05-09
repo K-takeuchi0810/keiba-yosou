@@ -128,6 +128,23 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
         reasons.append("直近で1着あり")
 
     # 同種トラック実績
+    recent_top3 = feat.get("recent_top3_count", 0) or 0
+    recent_wins = feat.get("recent_win_count", 0) or 0
+    if recent_wins >= 2:
+        score += 4
+        reasons.append(f"直近勝利{recent_wins}回")
+    elif recent_top3 >= 2:
+        score += 3
+        reasons.append(f"直近3着内{recent_top3}回")
+    trend = feat.get("recent_trend_delta")
+    if trend is not None:
+        if trend <= -3:
+            score += 2
+            reasons.append("近走上昇")
+        elif trend >= 4:
+            score -= 2
+            reasons.append("近走下降")
+
     stt_top3 = feat.get("same_track_type_top3", 0)
     stt_wins = feat.get("same_track_type_wins", 0)
     if stt_wins >= 1:
@@ -391,6 +408,15 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     if avg_3f and avg_3f >= 390 and feat.get("past_count", 0) >= 3:
         score -= 3
         reasons.append(f"上がり鈍い{avg_3f / 10:.1f}")
+
+    best_time = feat.get("best_time_per_100m")
+    if best_time:
+        if best_time <= 5.9:
+            score += 3
+            reasons.append("持ち時計優秀")
+        elif best_time >= 6.8 and feat.get("past_count", 0) >= 3:
+            score -= 2
+            reasons.append("持ち時計平凡")
 
     sr = feat.get("sire_surface_top3_rate")
     sn = feat.get("sire_surface_samples", 0)
