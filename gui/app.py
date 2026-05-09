@@ -605,7 +605,15 @@ class Api:
                 "<p>「予想生成」を実行すると HTML がここに作られます。</p>",
                 encoding="utf-8",
             )
-        webview.windows[0].load_url(index.as_uri())
+        preview_url = index.as_uri().replace("&", "&amp;").replace('"', "&quot;")
+        webview.windows[0].load_html(
+            PREVIEW_HTML.replace("__PREVIEW_URL__", preview_url)
+        )
+        return {"ok": True}
+
+    @_safe
+    def show_control(self, options: dict | None = None) -> dict:
+        webview.windows[0].load_html(CONTROL_HTML)
         return {"ok": True}
 
     @_safe
@@ -1327,6 +1335,81 @@ CONTROL_HTML = """<!doctype html>
   document.getElementById('from_date').addEventListener('change', refreshDashboard);
   document.getElementById('to_date').addEventListener('change', refreshDashboard);
 </script>
+</body>
+</html>
+"""
+
+
+PREVIEW_HTML = """<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>予想プレビュー</title>
+<style>
+  :root {
+    --bg: #eef0f3;
+    --surface: #f8f9fb;
+    --border: #c7cdd5;
+    --text: #252a31;
+    --text-dim: #59616c;
+    --accent: #374151;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  }
+  .bar {
+    height: 42px;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: 0 .75rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  button {
+    height: 28px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: #eceff3;
+    color: var(--text);
+    padding: 0 .75rem;
+    font: inherit;
+    cursor: pointer;
+  }
+  button:hover {
+    background: #e1e5eb;
+    color: var(--accent);
+  }
+  .title {
+    font-size: .82rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  iframe {
+    width: 100%;
+    height: calc(100% - 42px);
+    border: 0;
+    display: block;
+    background: white;
+  }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <button type="button" onclick="window.pywebview.api.show_control()">操作画面に戻る</button>
+    <div class="title">予想プレビュー</div>
+  </div>
+  <iframe src="__PREVIEW_URL__"></iframe>
 </body>
 </html>
 """
