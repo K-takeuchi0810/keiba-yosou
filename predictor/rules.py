@@ -854,6 +854,8 @@ def predict_race(
                 warnings.append("leg_quality_estimated")
             if not feat.get("same_day_bias_available"):
                 warnings.append("same_day_bias_unavailable")
+            for flag in feat.get("needs_post_race_data") or []:
+                warnings.append(f"post_race:{flag}")
         h["_feature_warnings"] = warnings
         scored.append((h, score, reasons, stability))
 

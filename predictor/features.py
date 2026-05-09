@@ -658,6 +658,7 @@ def compute_features(
         "estimated_leg_samples": 0,
         "leg_quality_available": bool((horse.get("leg_quality_code") or "").strip()),
         "same_day_bias_available": False,
+        "needs_post_race_data": [],
         "class_level_runs": 0,
         "class_level_wins": 0,
         "class_level_top3": 0,
@@ -868,6 +869,8 @@ def compute_features(
                 feat["weight_trend"] = sum(diffs)
         except Exception:
             pass
+    if not feat["leg_quality_available"] and feat["estimated_leg_code"]:
+        feat["needs_post_race_data"].append("leg_quality_code")
 
     # OP/重賞時のみ「同格以上の接戦敗」を集計 (高コストなので閾値で守る)
     if feat["current_race_level"] >= 5:
@@ -931,6 +934,8 @@ def compute_features(
     feat["same_day_leg_samples"] = max(feat["same_day_leg_samples"], gate_n)
     feat["same_day_gate_bias_note"] = gate_note
     feat["same_day_bias_available"] = feat["same_day_bias_available"] or gate_n > 0
+    if not feat["same_day_bias_available"]:
+        feat["needs_post_race_data"].append("same_day_bias")
 
     feat["bloodline_data_available"] = _cached(
         cache,
