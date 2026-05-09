@@ -22,6 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from db import open_db
+from predictor.calibration import calibration_report
 from predictor.rules import is_tentative, predict_race
 
 
@@ -223,6 +224,8 @@ def run_backtest(
         total_return = 0
         all_stats = _empty_bet_stats()
         buy_only_stats = _empty_bet_stats()
+        calibration_records: list[dict] = []
+        confidence_stats: dict[str, dict] = defaultdict(_empty_bet_stats)
         # 会場別ブレイクダウン (track_code → [bet, return, hits])
         track_stats: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
         # グレード別 (graded/op/cond/jraded) ブレイクダウン
@@ -261,8 +264,21 @@ def run_backtest(
             if not top_horse:
                 n_no_pick += 1
                 continue
+            horse_by_num = {h.get("horse_num"): h for h in horses}
+            for pred in preds:
+                horse = horse_by_num.get(pred.horse_num)
+                if not horse:
+                    continue
+                calibration_records.append(
+                    {
+                        "probability": pred.win_probability,
+                        "actual": 1 if horse.get("confirmed_order") == 1 else 0,
+                        "confidence": pred.confidence,
+                    }
+                )
             payout = get_payout(conn, race, top.horse_num, bet_type)
             _add_bet(all_stats, payout)
+            _add_bet(confidence_stats[top.confidence], payout)
             if _matches_buy_filter(top, top_horse, tentative, buy_filter):
                 _add_bet(buy_only_stats, payout)
             if top_horse:
@@ -302,6 +318,10 @@ def run_backtest(
     elapsed = time.time() - started
     all_stats = _finish_bet_stats(all_stats)
     buy_only_stats = _finish_bet_stats(buy_only_stats)
+    by_confidence = {
+        k: _finish_bet_stats(v)
+        for k, v in sorted(confidence_stats.items())
+    }
     return {
         "from_date": from_date,
         "to_date": to_date,
@@ -328,6 +348,8 @@ def run_backtest(
         "buy_only_hit_rate": buy_only_stats["hit_rate"],
         "buy_only_return_total": buy_only_stats["return_total"],
         "buy_only_return_rate": buy_only_stats["return_rate"],
+        "calibration": calibration_report(calibration_records),
+        "by_confidence": by_confidence,
         "filters": {
             "min_odds": min_odds,
             "max_odds": max_odds,
@@ -395,6 +417,21 @@ def format_report(r: dict) -> str:
         f"  絞り運用:   {r.get('buy_only_bets', 0):,} 点  的中 {r.get('buy_only_hits', 0):,}  "
         f"回収率 {r.get('buy_only_return_rate', 0) * 100:.1f}%"
     )
+    cal = r.get("calibration") or {}
+    if cal.get("count"):
+        lines.append("")
+        lines.append(
+            f"確率校正:       Brier {cal.get('brier_score')}  LogLoss {cal.get('log_loss')}  "
+            f"n={cal.get('count'):,}"
+        )
+    if r.get("by_confidence"):
+        lines.append("")
+        lines.append("confidence別:")
+        for name, v in r["by_confidence"].items():
+            lines.append(
+                f"  {name}: {v['bets']:,} 点  的中 {v['hits']:,} "
+                f"({v['hit_rate'] * 100:.1f}%)  回収率 {v['return_rate'] * 100:.1f}%"
+            )
     if r["by_track"]:
         lines.append("")
         lines.append("会場別:")
