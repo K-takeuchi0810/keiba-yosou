@@ -90,6 +90,7 @@ class Api:
         }
         self._cancel_event = threading.Event()
         self._progress_samples: list[tuple[float, float]] = []
+        self._last_options: dict = {}
         self._weather_cache: dict[tuple[str, str], tuple[float, dict]] = {}
 
     def _begin_run(self) -> None:
@@ -163,6 +164,10 @@ class Api:
     def get_status(self, options: dict | None = None) -> dict:
         with self._status_lock:
             return dict(self._status)
+
+    @_safe
+    def get_last_options(self, options: dict | None = None) -> dict:
+        return {"ok": True, "options": dict(self._last_options)}
 
     @_safe
     def cancel(self, options: dict | None = None) -> dict:
@@ -752,6 +757,7 @@ class Api:
 
     @_safe
     def open_preview(self, options: dict | None = None) -> dict:
+        self._last_options = dict(options or {})
         index = WEB_DIST / "index.html"
         if not index.exists():
             index.write_text(
@@ -1531,6 +1537,19 @@ CONTROL_HTML = """<!doctype html>
     backtestRange = v;
     refreshDashboard();
   }
+  async function restoreOptions() {
+    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_last_options) return;
+    const res = await window.pywebview.api.get_last_options({});
+    const o = (res && res.options) || {};
+    if (o.from_date) document.getElementById('from_date').value = o.from_date;
+    if (o.to_date) document.getElementById('to_date').value = o.to_date;
+    if (o.bloodline_fromtime) document.getElementById('bloodline_fromtime').value = o.bloodline_fromtime;
+    if (o.backtest_range) backtestRange = String(o.backtest_range);
+    if (o.min_ev != null) document.getElementById('filter_ev').value = o.min_ev;
+    if (o.min_value != null) document.getElementById('filter_value').value = o.min_value;
+    if (o.min_odds != null) document.getElementById('filter_min_odds').value = o.min_odds;
+    if (o.max_odds != null) document.getElementById('filter_max_odds').value = o.max_odds;
+  }
   function setActionButtonsDisabled(disabled) {
     document.querySelectorAll('.sidebar button[data-action]').forEach(button => {
       button.disabled = disabled;
@@ -1623,9 +1642,9 @@ CONTROL_HTML = """<!doctype html>
     }
   }
   // pywebview の JS ブリッジが準備できてから初回の進捗取得を行う
-  window.addEventListener('pywebviewready', () => { refreshStatus(); refreshDashboard(); });
+  window.addEventListener('pywebviewready', async () => { await restoreOptions(); refreshStatus(); refreshDashboard(); });
   // 既に準備済みなら即時実行 (リロード時など)
-  if (window.pywebview && window.pywebview.api) { refreshStatus(); refreshDashboard(); }
+  if (window.pywebview && window.pywebview.api) { restoreOptions().then(() => { refreshStatus(); refreshDashboard(); }); }
   document.getElementById('from_date').addEventListener('change', refreshDashboard);
   document.getElementById('to_date').addEventListener('change', refreshDashboard);
   ['filter_ev','filter_value','filter_min_odds','filter_max_odds'].forEach(id => {
