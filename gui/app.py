@@ -196,19 +196,24 @@ class Api:
             latest = row[0] if row and row[0] else today
             return latest, latest
 
-    def _is_buy_candidate(self, pred, horse: dict, tentative: bool) -> bool:
+    def _is_buy_candidate(self, pred, horse: dict, tentative: bool, filters: dict | None = None) -> bool:
+        filters = filters or {}
         odds = (horse.get("win_odds") or 0) / 10.0
         odds_age = self._odds_age_minutes(horse.get("odds_fetched_at"))
+        min_value = float(filters.get("min_value", BET_MIN_VALUE))
+        min_ev = float(filters.get("min_ev", BET_MIN_EV))
+        min_odds = float(filters.get("min_odds", BET_MIN_ODDS))
+        max_odds = float(filters.get("max_odds", BET_MAX_ODDS))
         return (
             pred.rank == 1
             and pred.mark
             and not tentative
             and (odds_age is None or odds_age <= 30)
             and pred.confidence not in ("暫定", "混戦", "接戦")
-            and pred.value_score >= BET_MIN_VALUE
-            and pred.expected_value >= BET_MIN_EV
+            and pred.value_score >= min_value
+            and pred.expected_value >= min_ev
             and pred.kelly_fraction > 0
-            and BET_MIN_ODDS <= odds <= BET_MAX_ODDS
+            and min_odds <= odds <= max_odds
         )
 
     def _odds_age_minutes(self, fetched_at: str | None) -> int | None:
@@ -220,20 +225,32 @@ class Api:
             return None
         return max(0, int((datetime.now() - dt).total_seconds() // 60))
 
-    def _recent_backtest(self, conn, to_date: str) -> dict:
+    def _recent_backtest(self, conn, to_date: str, range_key: str = "3") -> dict:
+        if range_key == "month":
+            start_date = to_date[:6] + "01"
+            label = f"{to_date[:6]}月"
+            limit = 100
+        else:
+            days = int(range_key) if str(range_key).isdigit() else 3
+            try:
+                start_date = (datetime.strptime(to_date, "%Y%m%d") - timedelta(days=days - 1)).strftime("%Y%m%d")
+            except ValueError:
+                start_date = to_date
+            label = f"直近{range_key}日"
+            limit = 100
         rows = conn.execute(
             """
             SELECT DISTINCT race_year || race_month_day AS d
             FROM horse_races
-            WHERE confirmed_order > 0 AND (race_year || race_month_day) <= ?
+            WHERE confirmed_order > 0 AND (race_year || race_month_day) BETWEEN ? AND ?
             ORDER BY d DESC
-            LIMIT 3
+            LIMIT ?
             """,
-            (to_date,),
+            (start_date, to_date, limit),
         ).fetchall()
         dates = sorted([r["d"] for r in rows])
         if not dates:
-            return {"label": "直近3日", "races": 0, "wins": 0, "top3": 0, "return_rate": 0}
+            return {"label": label, "races": 0, "wins": 0, "top3": 0, "return_rate": 0}
         races = list_races(conn, dates[0], dates[-1], jra_only=True)
         date_set = set(dates)
         feature_cache: dict = {}
@@ -254,7 +271,7 @@ class Api:
                 top3 += 1
             payout += get_payout(conn, race, top.horse_num, "tan")
         return {
-            "label": f"{dates[0]}-{dates[-1]}",
+            "label": f"{label} {dates[0]}-{dates[-1]}",
             "races": total,
             "wins": wins,
             "top3": top3,
@@ -482,7 +499,14 @@ class Api:
 
     @_safe
     def get_dashboard(self, options: dict | None = None) -> dict:
+        options = options or {}
         from_date, to_date = self._date_range(options)
+        bet_filter = {
+            "min_value": options.get("min_value", BET_MIN_VALUE),
+            "min_ev": options.get("min_ev", BET_MIN_EV),
+            "min_odds": options.get("min_odds", BET_MIN_ODDS),
+            "max_odds": options.get("max_odds", BET_MAX_ODDS),
+        }
         with open_db() as conn:
             races = list_races(conn, from_date, to_date, jra_only=True)
             race_count = len(races)
@@ -544,7 +568,7 @@ class Api:
                         "probability": round(pred.win_probability * 100, 1),
                         "ev": pred.expected_value,
                         "kelly": round(pred.kelly_fraction * 100, 2),
-                        "buy": self._is_buy_candidate(pred, horse, tentative),
+                        "buy": self._is_buy_candidate(pred, horse, tentative, bet_filter),
                     }
                     if pred.rank == 1:
                         prediction_items.append(item)
@@ -561,7 +585,7 @@ class Api:
                         "confidence": pred.confidence,
                         "ev": pred.expected_value,
                     })
-            backtest = self._recent_backtest(conn, to_date)
+            backtest = self._recent_backtest(conn, to_date, str(options.get("backtest_range") or "3"))
             trends = self._track_trends(conn, from_date, to_date)
             if not trends:
                 trends = self._prediction_trends(races, prediction_items)
@@ -604,6 +628,7 @@ class Api:
                 "last_fetched_odds": odds_fetched_at,
                 "odds_dataspec": odds_meta["dataspec"] if odds_meta else None,
                 "odds_age_minutes": odds_age,
+                "bet_filter": bet_filter,
             },
             "buy_candidates": buy_candidates,
             "top_preview": top_preview[:4],
@@ -972,6 +997,34 @@ CONTROL_HTML = """<!doctype html>
     grid-template-columns: 1fr;
   }
   .preview-compact .mini-card { padding: .32rem .38rem; }
+  .filter-panel {
+    grid-column: 1 / -1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: .35rem .55rem;
+  }
+  .filter-panel summary { cursor: pointer; color: var(--accent-hi); font-size: .76rem; }
+  .filter-controls {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .45rem;
+    margin-top: .35rem;
+  }
+  .filter-controls input { width: 100%; }
+  .seg {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .25rem;
+    margin-bottom: .35rem;
+  }
+  .seg button {
+    margin: 0;
+    padding: .26rem .35rem;
+    text-align: center;
+    font-size: .72rem;
+  }
+  .seg button.active { background: var(--accent-soft); border-color: var(--accent-hi); }
   #warnings .warn-item:nth-child(n+4) { display: none; }
   #venues, #trackTrends, #previewList {
     overflow: hidden;
@@ -1277,6 +1330,15 @@ CONTROL_HTML = """<!doctype html>
 
 <main class="main">
   <div class="dashboard-grid">
+    <details class="filter-panel">
+      <summary>買い目フィルタ</summary>
+      <div class="filter-controls">
+        <label>EV<input id="filter_ev" type="number" min="0" max="3" step="0.01" value="1.05"></label>
+        <label>Value<input id="filter_value" type="number" min="-50" max="200" step="1" value="0"></label>
+        <label>Odds min<input id="filter_min_odds" type="number" min="1" max="100" step="0.1" value="10"></label>
+        <label>Odds max<input id="filter_max_odds" type="number" min="1" max="100" step="0.1" value="20"></label>
+      </div>
+    </details>
     <section class="card wide">
       <div class="card-title">本日の状況</div>
       <div id="summary" class="metric-row"><div class="card-empty">読み込み中...</div></div>
@@ -1317,6 +1379,7 @@ CONTROL_HTML = """<!doctype html>
   function metric(label, value) {
     return '<div class="metric"><div class="num">' + esc(value) + '</div><div class="label">' + esc(label) + '</div></div>';
   }
+  let backtestRange = '3';
   function shortTime(v) {
     if (!v) return '-';
     const d = new Date(v);
@@ -1350,6 +1413,9 @@ CONTROL_HTML = """<!doctype html>
 
     const bt = data.backtest || {};
     document.getElementById('backtest').innerHTML =
+      '<div class="seg">' +
+      ['3','7','30','month'].map(v => '<button type="button" class="' + (backtestRange === v ? 'active' : '') + '" onclick="setBacktestRange(\\'' + v + '\\')">' + (v === 'month' ? '当月' : v + '日') + '</button>').join('') +
+      '</div>' +
       '<div class="metric-row">' +
       metric('対象', bt.label || '-') +
       metric('単勝', (bt.wins ?? 0) + '/' + (bt.races ?? 0)) +
@@ -1444,7 +1510,16 @@ CONTROL_HTML = """<!doctype html>
       from_date: document.getElementById('from_date').value,
       to_date: document.getElementById('to_date').value,
       bloodline_fromtime: document.getElementById('bloodline_fromtime').value
+      , backtest_range: backtestRange,
+      min_ev: Number(document.getElementById('filter_ev')?.value || 1.05),
+      min_value: Number(document.getElementById('filter_value')?.value || 0),
+      min_odds: Number(document.getElementById('filter_min_odds')?.value || 10),
+      max_odds: Number(document.getElementById('filter_max_odds')?.value || 20)
     };
+  }
+  function setBacktestRange(v) {
+    backtestRange = v;
+    refreshDashboard();
   }
   function setActionButtonsDisabled(disabled) {
     document.querySelectorAll('.sidebar button[data-action]').forEach(button => {
@@ -1543,6 +1618,9 @@ CONTROL_HTML = """<!doctype html>
   if (window.pywebview && window.pywebview.api) { refreshStatus(); refreshDashboard(); }
   document.getElementById('from_date').addEventListener('change', refreshDashboard);
   document.getElementById('to_date').addEventListener('change', refreshDashboard);
+  ['filter_ev','filter_value','filter_min_odds','filter_max_odds'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', refreshDashboard);
+  });
 </script>
 </body>
 </html>
