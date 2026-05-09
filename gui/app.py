@@ -534,6 +534,14 @@ class Api:
                 """,
                 (from_date, to_date),
             ).fetchone()
+            race_meta = conn.execute(
+                """
+                SELECT MAX(data_created) AS fetched_at
+                FROM races
+                WHERE (race_year || race_month_day) BETWEEN ? AND ?
+                """,
+                (from_date, to_date),
+            ).fetchone()
             buy_candidates: list[dict] = []
             top_preview: list[dict] = []
             prediction_items: list[dict] = []
@@ -626,6 +634,7 @@ class Api:
                 "generated_at": generated_at,
                 "feature_warnings": feature_warning_counts,
                 "last_fetched_odds": odds_fetched_at,
+                "last_fetched_race": race_meta["fetched_at"] if race_meta else None,
                 "odds_dataspec": odds_meta["dataspec"] if odds_meta else None,
                 "odds_age_minutes": odds_age,
                 "bet_filter": bet_filter,
@@ -1394,6 +1403,7 @@ CONTROL_HTML = """<!doctype html>
       metric('出走頭数', s.horses ?? 0) +
       metric('オッズ', (s.odds ?? 0) + '/' + (s.horses ?? 0)) +
       metric('買い候補', s.buy_count ?? 0) +
+      metric('Race最新', s.last_fetched_race || '-') +
       metric('Odds最新', shortTime(s.last_fetched_odds) + (s.odds_age_minutes == null ? '' : ' / ' + s.odds_age_minutes + '分前'));
 
     const buys = data.buy_candidates || [];
