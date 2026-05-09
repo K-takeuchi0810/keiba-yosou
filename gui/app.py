@@ -422,6 +422,8 @@ class Api:
             buy_candidates: list[dict] = []
             top_preview: list[dict] = []
             prediction_items: list[dict] = []
+            feature_warning_counts: dict[str, int] = {}
+            feature_warning_total = 0
             feature_cache: dict = {}
             for race in races:
                 horses = horses_for_race(conn, race)
@@ -431,6 +433,10 @@ class Api:
                 tentative = is_tentative(preds)
                 horse_by_num = {h["horse_num"]: h for h in horses}
                 for pred in preds[:3]:
+                    if pred.rank == 1:
+                        feature_warning_total += 1
+                        for w in pred.feature_warnings:
+                            feature_warning_counts[w] = feature_warning_counts.get(w, 0) + 1
                     horse = horse_by_num.get(pred.horse_num, {})
                     item = {
                         "date": race_id_to_date(race["race_year"], race["race_month_day"]),
@@ -478,6 +484,15 @@ class Api:
         warnings = []
         if horse_count and odds_count < horse_count:
             warnings.append(f"オッズ未取得: {horse_count - odds_count}頭")
+        if feature_warning_total:
+            leg_missing = feature_warning_counts.get("leg_quality_unavailable", 0)
+            same_day_missing = feature_warning_counts.get("same_day_bias_unavailable", 0)
+            if leg_missing:
+                rate = round((feature_warning_total - leg_missing) / feature_warning_total * 100)
+                warnings.append(f"leg_quality 取得率 {rate}% / 不足分は過去走から推定")
+            if same_day_missing:
+                rate = round((feature_warning_total - same_day_missing) / feature_warning_total * 100)
+                warnings.append(f"当日傾向 利用率 {rate}% / 朝はデータなし")
         if not buy_candidates:
             warnings.append("買い候補なし: EV/信頼度条件を満たすレースは見送り")
         warnings.append("OP/重賞と長距離は継続改善中")
@@ -492,6 +507,7 @@ class Api:
                 "odds": odds_count,
                 "buy_count": len(buy_candidates),
                 "generated_at": generated_at,
+                "feature_warnings": feature_warning_counts,
             },
             "buy_candidates": buy_candidates,
             "top_preview": top_preview[:4],
