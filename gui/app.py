@@ -127,16 +127,27 @@ class Api:
 
     def _is_buy_candidate(self, pred, horse: dict, tentative: bool) -> bool:
         odds = (horse.get("win_odds") or 0) / 10.0
+        odds_age = self._odds_age_minutes(horse.get("odds_fetched_at"))
         return (
             pred.rank == 1
             and pred.mark
             and not tentative
+            and (odds_age is None or odds_age <= 30)
             and pred.confidence not in ("暫定", "混戦", "接戦")
             and pred.value_score >= BET_MIN_VALUE
             and pred.expected_value >= BET_MIN_EV
             and pred.kelly_fraction > 0
             and BET_MIN_ODDS <= odds <= BET_MAX_ODDS
         )
+
+    def _odds_age_minutes(self, fetched_at: str | None) -> int | None:
+        if not fetched_at:
+            return None
+        try:
+            dt = datetime.fromisoformat(str(fetched_at))
+        except ValueError:
+            return None
+        return max(0, int((datetime.now() - dt).total_seconds() // 60))
 
     def _recent_backtest(self, conn, to_date: str) -> dict:
         rows = conn.execute(
@@ -419,6 +430,15 @@ class Api:
                 """,
                 (from_date, to_date),
             ).fetchone()[0]
+            odds_meta = conn.execute(
+                """
+                SELECT MAX(odds_fetched_at) AS fetched_at, MAX(odds_dataspec) AS dataspec
+                FROM horse_races
+                WHERE (race_year || race_month_day) BETWEEN ? AND ?
+                  AND win_odds > 0
+                """,
+                (from_date, to_date),
+            ).fetchone()
             buy_candidates: list[dict] = []
             top_preview: list[dict] = []
             prediction_items: list[dict] = []
@@ -484,6 +504,10 @@ class Api:
         warnings = []
         if horse_count and odds_count < horse_count:
             warnings.append(f"オッズ未取得: {horse_count - odds_count}頭")
+        odds_fetched_at = odds_meta["fetched_at"] if odds_meta else None
+        odds_age = self._odds_age_minutes(odds_fetched_at)
+        if odds_age is not None and odds_age > 30:
+            warnings.append(f"オッズ鮮度警告: {odds_age}分前 / 買い候補から除外")
         if feature_warning_total:
             leg_missing = feature_warning_counts.get("leg_quality_unavailable", 0)
             same_day_missing = feature_warning_counts.get("same_day_bias_unavailable", 0)
@@ -508,6 +532,9 @@ class Api:
                 "buy_count": len(buy_candidates),
                 "generated_at": generated_at,
                 "feature_warnings": feature_warning_counts,
+                "last_fetched_odds": odds_fetched_at,
+                "odds_dataspec": odds_meta["dataspec"] if odds_meta else None,
+                "odds_age_minutes": odds_age,
             },
             "buy_candidates": buy_candidates,
             "top_preview": top_preview[:4],
@@ -1172,6 +1199,12 @@ CONTROL_HTML = """<!doctype html>
   function metric(label, value) {
     return '<div class="metric"><div class="num">' + esc(value) + '</div><div class="label">' + esc(label) + '</div></div>';
   }
+  function shortTime(v) {
+    if (!v) return '-';
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return String(v).slice(11, 16) || String(v);
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
   function renderDashboard(data) {
     if (!data || !data.ok) return;
     const s = data.summary || {};
@@ -1179,7 +1212,8 @@ CONTROL_HTML = """<!doctype html>
       metric('レース', s.races ?? 0) +
       metric('出走頭数', s.horses ?? 0) +
       metric('オッズ', (s.odds ?? 0) + '/' + (s.horses ?? 0)) +
-      metric('買い候補', s.buy_count ?? 0);
+      metric('買い候補', s.buy_count ?? 0) +
+      metric('Odds最新', shortTime(s.last_fetched_odds) + (s.odds_age_minutes == null ? '' : ' / ' + s.odds_age_minutes + '分前'));
 
     const buys = data.buy_candidates || [];
     document.getElementById('buyList').innerHTML = buys.length
