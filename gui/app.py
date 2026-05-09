@@ -33,12 +33,20 @@ from web.generator import BET_MAX_ODDS, BET_MIN_EV, BET_MIN_ODDS, BET_MIN_VALUE,
 ensure_dirs()
 
 
+class CancelledError(Exception):
+    pass
+
+
 def _safe(fn):
     """API 呼び出しをまるごと try で包んで例外を JSON 化する。"""
 
     def wrapper(*args, **kwargs):
         try:
             return fn(*args, **kwargs)
+        except CancelledError:
+            if args and hasattr(args[0], "_set_status"):
+                args[0]._set_status("中止しました", "cancelled", running=False)
+            return {"ok": False, "cancelled": True, "message": "中止しました"}
         except Exception as e:
             if args and hasattr(args[0], "_set_status"):
                 args[0]._set_status(f"エラー: {type(e).__name__}: {e}", "error", running=False)
@@ -64,7 +72,15 @@ class Api:
             "updated_at": datetime.now().strftime("%H:%M:%S"),
             "detail": {},
         }
+        self._cancel_event = threading.Event()
         self._weather_cache: dict[tuple[str, str], tuple[float, dict]] = {}
+
+    def _begin_run(self) -> None:
+        self._cancel_event.clear()
+
+    def _check_cancel(self) -> None:
+        if self._cancel_event.is_set():
+            raise CancelledError()
 
     def _set_status(
         self,
@@ -83,6 +99,7 @@ class Api:
             self._status["detail"] = detail or {}
 
     def _progress(self, stage: str, info: dict) -> None:
+        self._check_cancel()
         ds = info.get("dataspec", "")
         if stage == "open":
             msg = f"{ds} 開始: 読込{info.get('readcount', 0)}件 / DL{info.get('downloadcount', 0)}件"
@@ -102,6 +119,16 @@ class Api:
     def get_status(self, options: dict | None = None) -> dict:
         with self._status_lock:
             return dict(self._status)
+
+    @_safe
+    def cancel(self, options: dict | None = None) -> dict:
+        with self._status_lock:
+            running = bool(self._status.get("running"))
+        if not running:
+            return {"ok": True, "message": "実行中の処理はありません"}
+        self._cancel_event.set()
+        self._set_status("中止しています...", "cancelling", running=True)
+        return {"ok": True, "message": "中止要求を送信しました"}
 
     def _date_range(self, options: dict | None = None) -> tuple[str, str]:
         options = options or {}
@@ -547,9 +574,11 @@ class Api:
     @_safe
     def fetch_data(self, options: dict | None = None) -> dict:
         """JV-Link 差分取得 → raw 保存 → SQLite 取り込み。"""
+        self._begin_run()
         self._set_status("出馬表/結果データを取得中...", "fetch_data", running=True)
         with JVLinkClient() as cli:
             summaries = cli.fetch_all(option=1, dataspecs=["RACE", "HOSE"], on_progress=self._progress)
+        self._check_cancel()
         self._set_status("DBへ取り込み中...", "ingest", running=True)
         ingest_summary = ingest_all()
         self._set_status("データ取得が完了しました。", "done", running=False)
@@ -561,6 +590,7 @@ class Api:
 
     @_safe
     def fetch_odds(self, options: dict | None = None) -> dict:
+        self._begin_run()
         options = options or {}
         from_date = (options.get("from_date") or options.get("date") or "").replace("-", "")
         to_date = (options.get("to_date") or options.get("date") or "").replace("-", "")
@@ -573,6 +603,7 @@ class Api:
         with JVLinkClient() as cli:
             summaries = []
             for i, r in enumerate(races, start=1):
+                self._check_cancel()
                 self._set_status(
                     f"オッズ取得中: {i}/{len(races)} {r['track_code']} {int(r['race_num'])}R",
                     "fetch_odds",
@@ -581,6 +612,7 @@ class Api:
                 )
                 summaries.append(cli.fetch_realtime("0B31", race_key(dict(r)), on_progress=self._progress))
         self._set_status("オッズをDBへ取り込み中...", "ingest_odds", running=True)
+        self._check_cancel()
         ingest_summary = ingest_all(force=True, dataspecs=["0B31"])
         self._set_status("オッズ取得が完了しました。", "done", running=False)
         return {"ok": True, "races": len(races), "fetch": summaries, "ingest": ingest_summary}
@@ -588,6 +620,7 @@ class Api:
     @_safe
     def fetch_bloodline(self, options: dict | None = None) -> dict:
         """血統マスタを取得して、父系・母父系特徴量を有効化する。"""
+        self._begin_run()
         options = options or {}
         raw_fromtime = (options.get("bloodline_fromtime") or "").replace("-", "")
         fromtime = raw_fromtime or None
@@ -600,6 +633,7 @@ class Api:
                 dataspecs=["DIFN", "BLOD"],
                 on_progress=self._progress,
             )
+        self._check_cancel()
         self._set_status("血統データをDBへ取り込み中...", "ingest_bloodline", running=True)
         ingest_summary = ingest_all(dataspecs=["DIFN", "BLOD"])
         with open_db() as conn:
@@ -610,6 +644,7 @@ class Api:
     @_safe
     def run_prediction(self, options: dict | None = None) -> dict:
         """DB を読んで予想込み HTML を生成。"""
+        self._begin_run()
         options = options or {}
         from_date = (options.get("from_date") or "").replace("-", "") or None
         to_date = (options.get("to_date") or "").replace("-", "") or from_date
@@ -620,6 +655,7 @@ class Api:
 
     @_safe
     def publish(self, options: dict | None = None) -> dict:
+        self._begin_run()
         self._set_status("iCloud Driveへ公開中...", "publish", running=True)
         path = publish_to_icloud()
         now = datetime.now().strftime("%H:%M:%S")
@@ -664,12 +700,15 @@ class Api:
     @_safe
     def run_all(self, options: dict | None = None) -> dict:
         """① 取得 → ② 予想 → ③ 公開 を一括実行。"""
+        self._begin_run()
         self._set_status("一括実行: データ取得中...", "run_all", running=True)
         with JVLinkClient() as cli:
             summaries = cli.fetch_all(option=1, dataspecs=["RACE", "HOSE"], on_progress=self._progress)
+        self._check_cancel()
         self._set_status("一括実行: DB取り込み中...", "ingest", running=True)
         ingest_summary = ingest_all()
         odds_summary = self.fetch_odds(options)
+        self._check_cancel()
         options = options or {}
         from_date = (options.get("from_date") or "").replace("-", "") or None
         to_date = (options.get("to_date") or "").replace("-", "") or from_date
@@ -968,19 +1007,34 @@ CONTROL_HTML = """<!doctype html>
   }
 
   /* ---------- status ---------- */
+  .status-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: .35rem;
+    align-items: stretch;
+    margin: .62rem 0 .35rem;
+  }
   #status {
     background: var(--surface);
     border: 1px solid var(--border);
     border-left: 2px solid var(--text-mute);
     border-radius: 2px;
     padding: .46rem .65rem;
-    margin: .62rem 0 .35rem;
+    margin: 0;
     font-size: .8rem;
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;
     word-break: break-all;
     transition: all .25s ease;
   }
+  #cancelBtn {
+    width: auto;
+    min-width: 4.8rem;
+    margin: 0;
+    text-align: center;
+    display: none;
+  }
+  #cancelBtn.visible { display: block; }
   #status.running {
     border-left-color: var(--accent);
     color: var(--text);
@@ -1127,7 +1181,10 @@ CONTROL_HTML = """<!doctype html>
   <div class="hint">例 — 20260501000000</div>
 </div>
 
-<div id="status">準備完了。</div>
+<div class="status-row">
+  <div id="status">準備完了。</div>
+  <button id="cancelBtn" type="button" onclick="cancelRun()">中止</button>
+</div>
 
 <button class="primary" data-action="run_all" onclick="run(this.dataset.action)">取得 → 予想 → 公開</button>
 
@@ -1335,10 +1392,22 @@ CONTROL_HTML = """<!doctype html>
   }
   function applyStatus(st) {
     const box = document.getElementById('status');
+    const cancelBtn = document.getElementById('cancelBtn');
     box.textContent = '[' + st.updated_at + '] ' + st.message;
     box.className = st.running ? 'running' : '';
+    cancelBtn.className = st.running ? 'visible' : '';
     setActionButtonsDisabled(Boolean(st.running));
     return Boolean(st.running);
+  }
+  async function cancelRun() {
+    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.cancel) return;
+    document.getElementById('cancelBtn').disabled = true;
+    try {
+      await window.pywebview.api.cancel({});
+    } finally {
+      await refreshStatus();
+      document.getElementById('cancelBtn').disabled = false;
+    }
   }
   async function refreshStatus() {
     const box = document.getElementById('status');
