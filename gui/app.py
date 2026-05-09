@@ -590,8 +590,6 @@ class Api:
                 warnings.append(f"当日傾向 利用率 {rate}% / 朝はデータなし")
         if not buy_candidates:
             warnings.append("買い候補なし: EV/信頼度条件を満たすレースは見送り")
-        warnings.append("OP/重賞と長距離は継続改善中")
-        warnings.append("接戦・混戦は買い対象外")
         return {
             "ok": True,
             "from_date": from_date,
@@ -974,7 +972,6 @@ CONTROL_HTML = """<!doctype html>
     grid-template-columns: 1fr;
   }
   .preview-compact .mini-card { padding: .32rem .38rem; }
-  .main > section.card { display: none; }
   #warnings .warn-item:nth-child(n+4) { display: none; }
   #venues, #trackTrends, #previewList {
     overflow: hidden;
@@ -1234,7 +1231,7 @@ CONTROL_HTML = """<!doctype html>
 <aside class="sidebar">
 <header>
   <div class="brand"><span class="ornament">◆</span>競 馬 予 想</div>
-  <div class="subtitle">JV-Link Control · 鈍金 Edition</div>
+  <div class="subtitle">JV-Link Control</div>
   <div class="rule"></div>
 </header>
 
@@ -1309,18 +1306,6 @@ CONTROL_HTML = """<!doctype html>
       <div id="previewList" class="card-empty">読み込み中...</div>
     </section>
   </div>
-  <section class="card">
-    <div class="card-title">直近の予想</div>
-    <div class="card-empty">予想を実行するとここに概要が表示されます</div>
-  </section>
-  <section class="card">
-    <div class="card-title">取得サマリ</div>
-    <div class="card-empty">JVLink 取得結果のグラフ・件数推移などを今後ここに</div>
-  </section>
-  <section class="card">
-    <div class="card-title">バックテスト</div>
-    <div class="card-empty">的中率 / 回収率の履歴比較を今後ここに</div>
-  </section>
 </main>
 
 <script>
