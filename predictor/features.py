@@ -191,12 +191,13 @@ def horse_past_runs(
     rows = conn.execute(
         """
         SELECT
-            hr.confirmed_order, hr.finish_time, hr.final_3f,
+            hr.horse_num, hr.confirmed_order, hr.finish_time, hr.final_3f,
             hr.win_popularity, hr.win_odds,
             hr.leg_quality_code,
             hr.burden_weight, hr.horse_weight, hr.weight_change_diff,
             r.distance, r.track_code, r.track_type_code,
             r.race_year, r.race_month_day, r.grade_code, r.race_symbol_code,
+            r.kaiji, r.nichiji, r.race_num,
             r.starter_count, r.weather_code, r.turf_condition, r.dirt_condition
         FROM horse_races hr
         JOIN races r
@@ -226,6 +227,38 @@ def estimate_leg_code(past: list[dict], limit: int = 5) -> tuple[str, int]:
     if not counts:
         return "", 0
     return max(counts.items(), key=lambda x: (x[1], -int(x[0])))[0], sum(counts.values())
+
+
+def relative_race_metrics(conn: sqlite3.Connection, past_run: dict) -> tuple[float | None, int | None]:
+    keys = (
+        past_run.get("race_year"), past_run.get("race_month_day"), past_run.get("track_code"),
+        past_run.get("kaiji"), past_run.get("nichiji"), past_run.get("race_num"),
+    )
+    if not all(keys):
+        return None, None
+    rows = conn.execute(
+        """
+        SELECT horse_num, finish_time, final_3f
+        FROM horse_races
+        WHERE race_year=? AND race_month_day=? AND track_code=?
+          AND kaiji=? AND nichiji=? AND race_num=?
+          AND confirmed_order > 0
+        """,
+        keys,
+    ).fetchall()
+    finish_times = sorted([r["finish_time"] for r in rows if r["finish_time"]])
+    avg_top5 = sum(finish_times[:5]) / min(5, len(finish_times)) if finish_times else None
+    time_diff = None
+    if avg_top5 and past_run.get("finish_time"):
+        time_diff = float(past_run["finish_time"]) - avg_top5
+    final3 = [(r["horse_num"], r["final_3f"]) for r in rows if r["final_3f"]]
+    final3.sort(key=lambda x: x[1])
+    final3_rank = None
+    for idx, (num, _value) in enumerate(final3, start=1):
+        if str(num) == str(past_run.get("horse_num", "")):
+            final3_rank = idx
+            break
+    return time_diff, final3_rank
 
 
 def jockey_winrate(
@@ -649,6 +682,8 @@ def compute_features(
         "best_final_3f": None,
         "avg_final_3f": None,
         "best_time_per_100m": None,
+        "best_relative_time_diff": None,
+        "best_final_3f_rank": None,
         "had_grade_run": False,
         "jockey_win_rate": None,
         "jockey_rides": 0,
@@ -723,6 +758,8 @@ def compute_features(
         race_going = feat["current_going"]
         final3f_values = []
         time_per_100_values = []
+        relative_diffs = []
+        final3f_ranks = []
 
         for p in past:
             past_level = _race_level(p.get("grade_code"), p.get("race_symbol_code"))
@@ -791,6 +828,15 @@ def compute_features(
                     final3f_values.append(int(p["final_3f"]))
                 if p.get("finish_time") and pdist:
                     time_per_100_values.append(float(p["finish_time"]) / float(pdist) * 100.0)
+                rel_diff, rel_rank = _cached(
+                    cache,
+                    ("relative_race_metrics", p.get("race_year"), p.get("race_month_day"), p.get("track_code"), p.get("kaiji"), p.get("nichiji"), p.get("race_num")),
+                    lambda p=p: relative_race_metrics(conn, p),
+                )
+                if rel_diff is not None:
+                    relative_diffs.append(rel_diff)
+                if rel_rank is not None:
+                    final3f_ranks.append(rel_rank)
 
             if (p.get("grade_code") or "").strip() in ("A", "B", "C", "G", "H", "I"):
                 feat["had_grade_run"] = True
@@ -800,6 +846,10 @@ def compute_features(
             feat["avg_final_3f"] = sum(final3f_values) / len(final3f_values)
         if time_per_100_values:
             feat["best_time_per_100m"] = min(time_per_100_values)
+        if relative_diffs:
+            feat["best_relative_time_diff"] = min(relative_diffs)
+        if final3f_ranks:
+            feat["best_final_3f_rank"] = min(final3f_ranks)
 
         if feat["best_top3_race_level"]:
             level_gap = feat["current_race_level"] - feat["best_top3_race_level"]

@@ -417,6 +417,22 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
         elif best_time >= 6.8 and feat.get("past_count", 0) >= 3:
             score -= 2
             reasons.append("持ち時計平凡")
+    rel_time = feat.get("best_relative_time_diff")
+    if rel_time is not None:
+        if rel_time <= 2:
+            score += 4
+            reasons.append("相対時計優秀")
+        elif rel_time >= 12 and feat.get("past_count", 0) >= 3:
+            score -= 3
+            reasons.append("相対時計不足")
+    final3_rank = feat.get("best_final_3f_rank")
+    if final3_rank is not None:
+        if final3_rank == 1:
+            score += 4
+            reasons.append("上がり1位経験")
+        elif final3_rank <= 3:
+            score += 2
+            reasons.append(f"上がり{final3_rank}位経験")
 
     sr = feat.get("sire_surface_top3_rate")
     sn = feat.get("sire_surface_samples", 0)
