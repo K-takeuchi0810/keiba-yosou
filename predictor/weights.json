@@ -1,0 +1,31 @@
+{
+  "recent_avg": {
+    "excellent": 25,
+    "good": 12,
+    "ok": 4,
+    "poor": -4,
+    "bad": -12
+  },
+  "recent_best_win": 8,
+  "finish_rate": {
+    "top": 6,
+    "small_field_penalty": -6,
+    "large_field_credit": 3
+  },
+  "burden": {
+    "increase_penalty": -3,
+    "decrease_bonus": 2
+  },
+  "mining": {
+    "base": 20,
+    "per_rank": 1.2,
+    "graded_multiplier": 0.8
+  },
+  "pace": {
+    "front_conflict": -5,
+    "front_favor": 4,
+    "closer_favor": 3,
+    "closer_wait": -3,
+    "same_leg_many": -2
+  }
+}

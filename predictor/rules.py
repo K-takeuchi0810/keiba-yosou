@@ -34,7 +34,33 @@ V2_GRADE_ENABLED = os.environ.get("V2_GRADE", "1") != "0"
 # 同距離バケット top3 / 脚質 (逃・先) ボーナス。デフォルトは有効。
 V2_DIST_ENABLED = os.environ.get("V2_DIST", "1") != "0"
 CALIBRATOR_PATH = Path(__file__).resolve().parent / "calibrator.json"
+WEIGHTS_PATH = Path(__file__).resolve().parent / "weights.json"
 _CALIBRATOR_CACHE: tuple[float, dict] | None = None
+_WEIGHTS_CACHE: tuple[float, dict] | None = None
+
+
+def _weights() -> dict:
+    global _WEIGHTS_CACHE
+    if not WEIGHTS_PATH.exists():
+        return {}
+    mtime = WEIGHTS_PATH.stat().st_mtime
+    if _WEIGHTS_CACHE and _WEIGHTS_CACHE[0] == mtime:
+        return _WEIGHTS_CACHE[1]
+    data = json.loads(WEIGHTS_PATH.read_text(encoding="utf-8"))
+    _WEIGHTS_CACHE = (mtime, data)
+    return data
+
+
+def _w(path: str, default: float) -> float:
+    cur = _weights()
+    for part in path.split("."):
+        if not isinstance(cur, dict) or part not in cur:
+            return default
+        cur = cur[part]
+    try:
+        return float(cur)
+    except (TypeError, ValueError):
+        return default
 
 
 @dataclass
@@ -68,37 +94,37 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     if avg is not None:
         avg_weight = 0.6 if (V2_GRADE_ENABLED and current_level >= 5) else 1.0
         if avg <= 2.0:
-            score += 25 * avg_weight
+            score += _w("recent_avg.excellent", 25) * avg_weight
             reasons.append(f"直近3走平均{avg:.1f}着")
         elif avg <= 4.0:
-            score += 12 * avg_weight
+            score += _w("recent_avg.good", 12) * avg_weight
             reasons.append(f"直近3走平均{avg:.1f}着")
         elif avg <= 6.0:
-            score += 4 * avg_weight
+            score += _w("recent_avg.ok", 4) * avg_weight
             reasons.append(f"直近3走平均{avg:.1f}着")
         elif avg <= 10.0:
-            score -= 4
+            score += _w("recent_avg.poor", -4)
             reasons.append(f"直近平均{avg:.1f}着")
         else:
-            score -= 12
+            score += _w("recent_avg.bad", -12)
             reasons.append(f"直近平均{avg:.1f}着")
 
     finish_rate = feat.get("recent_avg_finish_rate")
     if finish_rate is not None:
         if finish_rate <= 0.18:
-            score += 6
+            score += _w("finish_rate.top", 6)
             reasons.append(f"頭数補正上位{finish_rate * 100:.0f}%")
         elif avg is not None and avg <= 4.0 and finish_rate >= 0.45:
-            score -= 6
+            score += _w("finish_rate.small_field_penalty", -6)
             reasons.append(f"少頭数好走補正{finish_rate * 100:.0f}%")
         elif avg is not None and avg >= 7.0 and finish_rate <= 0.35:
-            score += 3
+            score += _w("finish_rate.large_field_credit", 3)
             reasons.append(f"多頭数健闘{finish_rate * 100:.0f}%")
 
     # 直近最高着順（1着あれば強気）
     best = feat.get("recent_best_finish")
     if best == 1:
-        score += 8
+        score += _w("recent_best_win", 8)
         reasons.append("直近で1着あり")
 
     # 同種トラック実績
@@ -251,10 +277,10 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
 
     burden_delta = feat.get("burden_delta")
     if burden_delta is not None and burden_delta >= 20:
-        score -= 3
+        score += _w("burden.increase_penalty", -3)
         reasons.append(f"斤量増{burden_delta / 10:.1f}kg")
     elif burden_delta is not None and burden_delta <= -20:
-        score += 2
+        score += _w("burden.decrease_bonus", 2)
         reasons.append(f"斤量減{abs(burden_delta) / 10:.1f}kg")
 
     sign = (horse.get("weight_change_sign") or "").strip()
@@ -298,8 +324,8 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     # (相手関係や枠順・展開・血統が支配的) なので、重みを 0.8 倍に下げる。
     mp = horse.get("mining_predicted_order") or 0
     if 1 <= mp <= 18:
-        mining_weight = 0.8 if (V2_GRADE_ENABLED and current_level >= 7) else 1.0
-        score += max(20 - mp * 1.2, 0) * mining_weight
+        mining_weight = _w("mining.graded_multiplier", 0.8) if (V2_GRADE_ENABLED and current_level >= 7) else 1.0
+        score += max(_w("mining.base", 20) - mp * _w("mining.per_rank", 1.2), 0) * mining_weight
         reasons.append(f"マイニング{mp}位")
 
     leg = feat.get("leg_code") or ""
@@ -307,20 +333,20 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     same_leg_rivals = feat.get("same_leg_rivals", 0) or 0
     if leg in ("1", "2"):
         if front_count >= 5:
-            score -= 5
+            score += _w("pace.front_conflict", -5)
             reasons.append(f"先行競合{front_count}頭")
         elif front_count <= 2:
-            score += 4
+            score += _w("pace.front_favor", 4)
             reasons.append("前残り展開")
     elif leg in ("3", "4"):
         if front_count >= 5:
-            score += 3
+            score += _w("pace.closer_favor", 3)
             reasons.append("差し向き展開")
         elif front_count <= 1:
-            score -= 3
+            score += _w("pace.closer_wait", -3)
             reasons.append("展開待ち")
     if same_leg_rivals >= 5:
-        score -= 2
+        score += _w("pace.same_leg_many", -2)
         reasons.append("同脚質過多")
     if leg and not feat.get("leg_quality_available") and feat.get("estimated_leg_code"):
         reasons.append(f"脚質推定{leg}({feat.get('estimated_leg_samples', 0)}走)")
