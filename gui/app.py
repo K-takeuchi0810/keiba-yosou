@@ -89,10 +89,12 @@ class Api:
             "detail": {},
         }
         self._cancel_event = threading.Event()
+        self._progress_samples: list[tuple[float, float]] = []
         self._weather_cache: dict[tuple[str, str], tuple[float, dict]] = {}
 
     def _begin_run(self) -> None:
         self._cancel_event.clear()
+        self._progress_samples = []
 
     def _check_cancel(self) -> None:
         if self._cancel_event.is_set():
@@ -117,6 +119,10 @@ class Api:
     def _progress(self, stage: str, info: dict) -> None:
         self._check_cancel()
         ds = info.get("dataspec", "")
+        progress = self._stage_progress(ds, stage)
+        detail = dict(info)
+        if progress is not None:
+            detail.update(self._progress_detail(progress, 100))
         if stage == "open":
             msg = f"{ds} 開始: 読込{info.get('readcount', 0)}件 / DL{info.get('downloadcount', 0)}件"
         elif stage == "download":
@@ -129,7 +135,29 @@ class Api:
             msg = f"{ds} {stage}: {info.get('message') or info}"
         else:
             msg = f"{ds} {stage}: {info}"
-        self._set_status(msg, stage, info, running=True)
+        self._set_status(msg, stage, detail, running=True)
+
+    def _stage_progress(self, dataspec: str, stage: str) -> float | None:
+        weights = {"RACE": (0, 40), "HOSE": (40, 80), "DIFN": (0, 45), "BLOD": (45, 90), "0B31": (0, 90)}
+        if dataspec not in weights:
+            return None
+        start, end = weights[dataspec]
+        frac = {"open": 0.05, "download": 0.35, "read": 0.85}.get(stage, 0.2)
+        return start + (end - start) * frac
+
+    def _progress_detail(self, current: float, total: float) -> dict:
+        now = time.time()
+        progress = max(0.0, min(100.0, current / total * 100 if total else 0.0))
+        self._progress_samples.append((now, progress))
+        self._progress_samples = self._progress_samples[-5:]
+        eta_sec = None
+        if len(self._progress_samples) >= 2:
+            t0, p0 = self._progress_samples[0]
+            t1, p1 = self._progress_samples[-1]
+            if t1 > t0 and p1 > p0:
+                per_sec = (p1 - p0) / (t1 - t0)
+                eta_sec = int((100.0 - progress) / per_sec) if per_sec > 0 else None
+        return {"progress": round(progress, 1), "eta_sec": eta_sec}
 
     @_safe
     def get_status(self, options: dict | None = None) -> dict:
@@ -623,7 +651,7 @@ class Api:
                 self._set_status(
                     f"オッズ取得中: {i}/{len(races)} {r['track_code']} {int(r['race_num'])}R",
                     "fetch_odds",
-                    {"current": i, "total": len(races)},
+                    {"current": i, "total": len(races), **self._progress_detail(i, len(races) or 1)},
                     running=True,
                 )
                 summaries.append(cli.fetch_realtime("0B31", race_key(dict(r)), on_progress=self._progress))
@@ -1062,6 +1090,29 @@ CONTROL_HTML = """<!doctype html>
     margin-right: .5rem;
     animation: pulse 1.4s ease-in-out infinite;
   }
+  .progress-wrap {
+    grid-column: 1 / -1;
+    height: 6px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-soft);
+    border-radius: 999px;
+    overflow: hidden;
+    display: none;
+  }
+  .progress-wrap.visible { display: block; }
+  #progressBar {
+    height: 100%;
+    width: 0%;
+    background: var(--accent-hi);
+    transition: width .25s ease;
+  }
+  #progressText {
+    grid-column: 1 / -1;
+    color: var(--text-mute);
+    font-size: .68rem;
+    display: none;
+  }
+  #progressText.visible { display: block; }
   @keyframes pulse {
     0%, 100% { opacity: .25; }
     50%      { opacity: 1; }
@@ -1204,6 +1255,8 @@ CONTROL_HTML = """<!doctype html>
 <div class="status-row">
   <div id="status">準備完了。</div>
   <button id="cancelBtn" type="button" onclick="cancelRun()">中止</button>
+  <div id="progressWrap" class="progress-wrap"><div id="progressBar"></div></div>
+  <div id="progressText"></div>
 </div>
 
 <button class="primary" data-action="run_all" onclick="run(this.dataset.action)">取得 → 予想 → 公開</button>
@@ -1416,9 +1469,26 @@ CONTROL_HTML = """<!doctype html>
   function applyStatus(st) {
     const box = document.getElementById('status');
     const cancelBtn = document.getElementById('cancelBtn');
+    const progressWrap = document.getElementById('progressWrap');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
     box.textContent = '[' + st.updated_at + '] ' + st.message;
     box.className = st.running ? 'running' : '';
     cancelBtn.className = st.running ? 'visible' : '';
+    const detail = st.detail || {};
+    const progress = detail.progress;
+    if (st.running && progress != null) {
+      progressWrap.className = 'progress-wrap visible';
+      progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
+      const eta = detail.eta_sec == null ? '-' : Math.ceil(detail.eta_sec / 60) + '分';
+      progressText.textContent = progress.toFixed ? progress.toFixed(1) + '% / 残り 約 ' + eta : progress + '%';
+      progressText.className = 'visible';
+    } else {
+      progressWrap.className = 'progress-wrap';
+      progressBar.style.width = '0%';
+      progressText.className = '';
+      progressText.textContent = '';
+    }
     setActionButtonsDisabled(Boolean(st.running));
     return Boolean(st.running);
   }
