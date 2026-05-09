@@ -605,11 +605,13 @@ class Api:
                 "<p>「予想生成」を実行すると HTML がここに作られます。</p>",
                 encoding="utf-8",
             )
-        preview_url = index.as_uri().replace("&", "&amp;").replace('"', "&quot;")
-        webview.windows[0].load_html(
-            PREVIEW_HTML.replace("__PREVIEW_URL__", preview_url)
+        wrapper = WEB_DIST / "_gui_preview.html"
+        wrapper.write_text(
+            PREVIEW_HTML.replace("__PREVIEW_URL__", "index.html"),
+            encoding="utf-8",
         )
-        return {"ok": True}
+        webview.windows[0].load_url(wrapper.as_uri())
+        return {"ok": True, "preview": str(index), "wrapper": str(wrapper)}
 
     @_safe
     def show_control(self, options: dict | None = None) -> dict:
