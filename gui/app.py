@@ -766,9 +766,11 @@ class Api:
                 "<p>「予想生成」を実行すると HTML がここに作られます。</p>",
                 encoding="utf-8",
             )
-        wrapper = WEB_DIST / "_gui_preview.html"
+        wrapper_dir = WEB_DIST / "_gui"
+        wrapper_dir.mkdir(parents=True, exist_ok=True)
+        wrapper = wrapper_dir / "preview.html"
         wrapper.write_text(
-            PREVIEW_HTML.replace("__PREVIEW_URL__", "index.html"),
+            PREVIEW_HTML.replace("__PREVIEW_URL__", "../index.html"),
             encoding="utf-8",
         )
         webview.windows[0].load_url(wrapper.as_uri())
