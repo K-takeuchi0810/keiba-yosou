@@ -1,0 +1,101 @@
+{
+  "rule_version": "v2-grade",
+  "from_date": "20260430",
+  "to_date": "20260503",
+  "bet_type": "tan",
+  "elapsed_sec": 25.0,
+  "races_total": 72,
+  "races_no_horses": 0,
+  "races_no_pick": 0,
+  "races_filtered": 0,
+  "races_tentative_skipped": 0,
+  "races_bet": 72,
+  "hits": 14,
+  "hit_rate": 0.19444444444444445,
+  "bet_total": 7200,
+  "return_total": 4490,
+  "return_rate": 0.6236111111111111,
+  "all_bets": 72,
+  "all_hits": 14,
+  "all_hit_rate": 0.19444444444444445,
+  "all_return_total": 4490,
+  "all_return_rate": 0.6236111111111111,
+  "buy_only_bets": 0,
+  "buy_only_hits": 0,
+  "buy_only_hit_rate": 0,
+  "buy_only_return_total": 0,
+  "buy_only_return_rate": 0,
+  "filters": {
+    "min_odds": null,
+    "max_odds": null,
+    "min_popularity": null,
+    "max_popularity": null
+  },
+  "buy_filter": null,
+  "by_track": {
+    "04": {
+      "bet": 2400,
+      "return": 2040,
+      "hits": 5,
+      "return_rate": 0.85
+    },
+    "05": {
+      "bet": 2400,
+      "return": 1220,
+      "hits": 4,
+      "return_rate": 0.5083333333333333
+    },
+    "08": {
+      "bet": 2400,
+      "return": 1230,
+      "hits": 5,
+      "return_rate": 0.5125
+    }
+  },
+  "by_class": {
+    "cond": {
+      "bet": 5200,
+      "return": 3570,
+      "hits": 11,
+      "return_rate": 0.6865384615384615
+    },
+    "graded": {
+      "bet": 300,
+      "return": 0,
+      "hits": 0,
+      "return_rate": 0.0
+    },
+    "op": {
+      "bet": 1700,
+      "return": 920,
+      "hits": 3,
+      "return_rate": 0.5411764705882353
+    }
+  },
+  "by_bucket": {
+    "long": {
+      "bet": 600,
+      "return": 0,
+      "hits": 0,
+      "return_rate": 0.0
+    },
+    "middle": {
+      "bet": 1400,
+      "return": 1380,
+      "hits": 4,
+      "return_rate": 0.9857142857142858
+    },
+    "mile": {
+      "bet": 2700,
+      "return": 1380,
+      "hits": 5,
+      "return_rate": 0.5111111111111111
+    },
+    "sprint": {
+      "bet": 2500,
+      "return": 1730,
+      "hits": 5,
+      "return_rate": 0.692
+    }
+  }
+}
