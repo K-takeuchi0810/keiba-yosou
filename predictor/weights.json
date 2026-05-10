@@ -1,8 +1,8 @@
 {
   "recent_avg": {
-    "excellent": 25,
-    "good": 12,
-    "ok": 4,
+    "excellent": 18,
+    "good": 8,
+    "ok": 2,
     "poor": -4,
     "bad": -12
   },
@@ -17,7 +17,7 @@
     "decrease_bonus": 2
   },
   "mining": {
-    "base": 20,
+    "base": 16,
     "per_rank": 1.2,
     "graded_multiplier": 0.8
   },
@@ -27,5 +27,40 @@
     "closer_favor": 3,
     "closer_wait": -3,
     "same_leg_many": -2
+  },
+  "model_blend": {
+    "high": 0.85,
+    "standard": 0.78,
+    "close": 0.7,
+    "tight": 0.62,
+    "tentative": 0.3,
+    "default": 0.55
+  },
+  "discount": {
+    "_comment": "オッズ帯別の確率割引。1.0 にすれば無効化。PRED_DISABLE_DISCOUNT=1 でも全無効化",
+    "base": 0.92,
+    "over8": 0.9,
+    "over15": 0.82,
+    "over30": 0.72
+  },
+  "popularity": {
+    "_comment": "多頭数 (>=min_field) で 1-3 人気にスコアボーナス。市場との極端な乖離を抑える",
+    "min_field": 12,
+    "first": 0,
+    "second": 0,
+    "third": 0
+  },
+  "final3f": {
+    "_comment": "上がり 3F の評価。sprint バケットでは sprint_multiplier 倍",
+    "elite": 4,
+    "good": 2,
+    "sprint_multiplier": 1.5
+  },
+  "confidence": {
+    "_comment": "「高信頼」と判定する閾値。直近で大外しが多かったので厳しく",
+    "min_score": 110,
+    "min_gap": 25,
+    "min_stability": 12,
+    "negative_gap": 28
   }
 }
