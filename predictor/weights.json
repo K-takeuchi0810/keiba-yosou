@@ -70,6 +70,9 @@
     "graded_value_penalty": 10,
     "op_value_penalty": 8,
     "sprint_unproven_value_penalty": 6,
-    "longshot_value_penalty": 18
+    "longshot_value_penalty": 18,
+    "op_unproven_score_penalty": 4,
+    "sprint_unproven_score_penalty": 3,
+    "low_roi_track_value_penalty": 6
   }
 }

@@ -646,6 +646,7 @@ def compute_features(
         "current_race_level": _race_level(race.get("grade_code"), race.get("race_symbol_code")),
         "current_distance": int(race.get("distance") or 0),
         "current_bucket": _distance_bucket(race.get("distance") or 0),
+        "current_track_code": (race.get("track_code") or "").strip(),
         "current_surface_family": _surface_family(race.get("track_type_code")),
         "current_going": _race_condition_code(race),
         "best_top3_race_level": 0,

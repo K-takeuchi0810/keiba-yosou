@@ -274,6 +274,9 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
                 score += min(midfield_close, 2) * 2
                 reasons.append(f"同格以上中位コンマ差{midfield_close}回")
 
+        if V2_GRADE_ENABLED and 5 <= current_level < 7 and class_top3 == 0 and (feat.get("high_grade_close_loss", 0) or 0) == 0 and (feat.get("high_grade_midfield_close", 0) or 0) == 0:
+            score -= _w("risk.op_unproven_score_penalty", 4)
+            reasons.append("OP risk")
     days_since_last = feat.get("days_since_last")
     if days_since_last is not None:
         if days_since_last >= 100:
@@ -410,6 +413,9 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
         elif best_3f <= 360:
             score += _w("final3f.good", 2) * sprint_mul
             reasons.append(f"上がり良好{best_3f / 10:.1f}")
+    if is_sprint and (feat.get("same_distance_top3", 0) or 0) == 0 and (not best_3f or best_3f > 360):
+        score -= _w("risk.sprint_unproven_score_penalty", 3)
+        reasons.append("sprint risk")
     if avg_3f and avg_3f >= 390 and feat.get("past_count", 0) >= 3:
         score -= 3
         reasons.append(f"上がり鈍い{avg_3f / 10:.1f}")
@@ -859,6 +865,8 @@ def _value_score(
         value -= _w("risk.sprint_unproven_value_penalty", 4)
     if odds >= 8.0:
         value -= _w("risk.longshot_value_penalty", 18)
+    if feat.get("current_track_code") in {"03", "06", "10"}:
+        value -= _w("risk.low_roi_track_value_penalty", 6)
     if 1 <= popularity <= 3 and odds and odds < 5.0:
         value -= 8
     if confidence in ("暫定", "混戦"):
