@@ -1396,39 +1396,73 @@ CONTROL_HTML = """<!doctype html>
 </main>
 
 <script>
+  var backtestRange = '3';
+
+  function valueOr(value, fallback) {
+    return value == null ? fallback : value;
+  }
+  function byId(id) {
+    return document.getElementById(id);
+  }
   function esc(v) {
-    return String(valueOr(v, '')).replace(/[&<>"']/g, ch => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[ch]));
+    return String(valueOr(v, '')).replace(/[&<>"']/g, function (ch) {
+      return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch];
+    });
   }
   function metric(label, value) {
     return '<div class="metric"><div class="num">' + esc(value) + '</div><div class="label">' + esc(label) + '</div></div>';
   }
-  let backtestRange = '3';
-  function valueOr(value, fallback) {
-    return value == null ? fallback : value;
-  }
   function inputNumber(id, fallback) {
-    const el = document.getElementById(id);
+    var el = byId(id);
     if (!el) return fallback;
-    const n = Number(el.value);
-    return Number.isFinite(n) ? n : fallback;
-  }
-  function bindBacktestRangeButtons() {
-    document.querySelectorAll('#backtest button[data-range]').forEach(button => {
-      button.addEventListener('click', () => setBacktestRange(button.getAttribute('data-range')));
-    });
+    var n = Number(el.value);
+    return isFinite(n) ? n : fallback;
   }
   function shortTime(v) {
     if (!v) return '-';
-    const d = new Date(v);
-    if (Number.isNaN(d.getTime())) return String(v).slice(11, 16) || String(v);
-    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    var d = new Date(v);
+    if (isNaN(d.getTime())) return String(v).slice(11, 16) || String(v);
+    return String(d.getHours()).padStart ? String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') : d.getHours() + ':' + d.getMinutes();
+  }
+  function options() {
+    return {
+      from_date: byId('from_date').value,
+      to_date: byId('to_date').value,
+      bloodline_fromtime: byId('bloodline_fromtime').value,
+      backtest_range: backtestRange,
+      min_ev: inputNumber('filter_ev', 1.05),
+      min_value: inputNumber('filter_value', 0),
+      min_odds: inputNumber('filter_min_odds', 10),
+      max_odds: inputNumber('filter_max_odds', 20)
+    };
+  }
+  function setActionButtonsDisabled(disabled) {
+    var buttons = document.querySelectorAll('.sidebar button[data-action]');
+    for (var i = 0; i < buttons.length; i += 1) buttons[i].disabled = disabled;
+  }
+  function setDetails(value, open) {
+    var box = byId('detailsBox');
+    var text = byId('detailsText');
+    text.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    box.open = Boolean(open);
+  }
+  function bindBacktestRangeButtons() {
+    var buttons = document.querySelectorAll('#backtest button[data-range]');
+    for (var i = 0; i < buttons.length; i += 1) {
+      buttons[i].onclick = function () {
+        backtestRange = this.getAttribute('data-range');
+        refreshDashboard();
+      };
+    }
+  }
+  function weatherText(code) {
+    var m = {0:'\u6674',1:'\u6674',2:'\u66c7',3:'\u66c7',45:'\u9727',48:'\u9727',51:'\u5c0f\u96e8',53:'\u5c0f\u96e8',55:'\u96e8',61:'\u96e8',63:'\u96e8',65:'\u5f37\u96e8',71:'\u96ea',73:'\u96ea',75:'\u5927\u96ea',80:'\u306b\u308f\u304b\u96e8',81:'\u306b\u308f\u304b\u96e8',82:'\u5f37\u96e8',95:'\u96f7\u96e8'};
+    return m[code] || '\u5929\u5019\u53d6\u5f97';
   }
   function renderDashboard(data) {
     if (!data || !data.ok) return;
-    const s = data.summary || {};
-    document.getElementById('summary').innerHTML =
+    var s = data.summary || {};
+    byId('summary').innerHTML =
       metric('\u30ec\u30fc\u30b9', valueOr(s.races, 0)) +
       metric('\u51fa\u8d70\u982d\u6570', valueOr(s.horses, 0)) +
       metric('\u30aa\u30c3\u30ba', valueOr(s.odds, 0) + '/' + valueOr(s.horses, 0)) +
@@ -1436,166 +1470,95 @@ CONTROL_HTML = """<!doctype html>
       metric('Race\u6700\u65b0', s.last_fetched_race || '-') +
       metric('Odds\u6700\u65b0', shortTime(s.last_fetched_odds) + (s.odds_age_minutes == null ? '' : ' / ' + s.odds_age_minutes + '\u5206\u524d'));
 
-    const buys = data.buy_candidates || [];
-    document.getElementById('buyList').innerHTML = buys.length
-      ? buys.map(b =>
-          '<div class="buy-item">' +
-          '<div class="buy-main">' + esc(b.track) + ' ' + esc(b.race_num) + 'R ' + esc(b.horse_num) + ' ' + esc(b.horse_name) + '</div>' +
-          '<div class="buy-sub">' + esc(b.start_time) + ' / ' + esc(b.race_name || '') +
-          '<span class="pill buy">' + esc(b.odds) + '\u500d</span>' +
-          '<span class="pill">' + esc(b.popularity) + '\u4eba\u6c17</span>' +
-          '<span class="pill">P ' + esc(b.probability) + '%</span>' +
-          '<span class="pill">EV ' + esc(b.ev) + '</span>' +
-          '<span class="pill">K ' + esc(b.kelly) + '%</span></div>' +
-          '</div>'
-        ).join('')
-      : '<div class="card-empty">\u8cb7\u3044\u5019\u88dc\u306a\u3057\u3002EV/\u4fe1\u983c\u5ea6\u6761\u4ef6\u3067\u306f\u898b\u9001\u308a\u3067\u3059\u3002</div>';
+    var buys = data.buy_candidates || [];
+    byId('buyList').innerHTML = buys.length ? buys.map(function (b) {
+      return '<div class="buy-item">' +
+        '<div class="buy-main">' + esc(b.track) + ' ' + esc(b.race_num) + 'R ' + esc(b.horse_num) + ' ' + esc(b.horse_name) + '</div>' +
+        '<div class="buy-sub">' + esc(b.start_time) + ' / ' + esc(b.race_name || '') +
+        '<span class="pill buy">' + esc(b.odds) + '\u500d</span>' +
+        '<span class="pill">' + esc(b.popularity) + '\u4eba\u6c17</span>' +
+        '<span class="pill">P ' + esc(b.probability) + '%</span>' +
+        '<span class="pill">EV ' + esc(b.ev) + '</span>' +
+        '<span class="pill">K ' + esc(b.kelly) + '%</span></div></div>';
+    }).join('') : '<div class="card-empty">\u8cb7\u3044\u5019\u88dc\u306a\u3057\u3002EV/\u4fe1\u983c\u5ea6\u6761\u4ef6\u3067\u306f\u898b\u9001\u308a\u3067\u3059\u3002</div>';
 
-    const bt = data.backtest || {};
-    document.getElementById('backtest').innerHTML =
-      '<div class="seg">' +
-      ['3','7','30','month'].map(v => '<button type="button" data-range="' + esc(v) + '" class="' + (backtestRange === v ? 'active' : '') + '">' + (v === 'month' ? '\u5f53\u6708' : v + '\u65e5') + '</button>').join('') +
-      '</div>' +
-      '<div class="metric-row">' +
+    var bt = data.backtest || {};
+    byId('backtest').innerHTML = '<div class="seg">' +
+      ['3','7','30','month'].map(function (v) {
+        return '<button type="button" data-range="' + esc(v) + '" class="' + (backtestRange === v ? 'active' : '') + '">' + (v === 'month' ? '\u5f53\u6708' : v + '\u65e5') + '</button>';
+      }).join('') + '</div><div class="metric-row">' +
       metric('\u5bfe\u8c61', bt.label || '-') +
       metric('\u5358\u52dd', valueOr(bt.wins, 0) + '/' + valueOr(bt.races, 0)) +
       metric('3\u7740\u5185', valueOr(bt.top3, 0) + '/' + valueOr(bt.races, 0)) +
-      metric('\u56de\u53ce\u7387', valueOr(bt.return_rate, 0) + '%') +
-      '</div>';
+      metric('\u56de\u53ce\u7387', valueOr(bt.return_rate, 0) + '%') + '</div>';
     bindBacktestRangeButtons();
 
-    const warnings = data.warnings || [];
-    document.getElementById('warnings').innerHTML = warnings.length
-      ? warnings.map(w => '<div class="warn-item">' + esc(w) + '</div>').join('')
-      : '<div class="card-empty">\u6ce8\u610f\u70b9\u306f\u3042\u308a\u307e\u305b\u3093\u3002</div>';
+    var warnings = data.warnings || [];
+    byId('warnings').innerHTML = warnings.length ? warnings.map(function (w) { return '<div class="warn-item">' + esc(w) + '</div>'; }).join('') : '<div class="card-empty">\u6ce8\u610f\u70b9\u306f\u3042\u308a\u307e\u305b\u3093\u3002</div>';
 
-    const venues = data.venues || [];
-    document.getElementById('venues').innerHTML = venues.length
-      ? '<div class="compact-grid">' + venues.map(v =>
-          '<div class="mini-card venue-card" data-track="' + esc(v.track) + '" data-lat="' + esc(v.lat) + '" data-lon="' + esc(v.lon) + '">' +
-          '<div class="mini-title">' + esc(v.track) + ' <span class="pill">' + esc(v.races) + 'R</span></div>' +
-          '<div class="mini-line">' + esc(v.surfaces) + '</div>' +
-          '<div class="mini-line weather-line">\u5929\u5019 ' + esc(v.weather) + ' / \u829d ' + esc(v.turf) + ' / \u30c0 ' + esc(v.dirt) + '</div>' +
-          '</div>'
-        ).join('') + '</div>'
-      : '<div class="card-empty">\u958b\u50ac\u60c5\u5831\u304c\u3042\u308a\u307e\u305b\u3093\u3002</div>';
+    var venues = data.venues || [];
+    byId('venues').innerHTML = venues.length ? '<div class="compact-grid">' + venues.map(function (v) {
+      return '<div class="mini-card venue-card" data-track="' + esc(v.track) + '" data-lat="' + esc(v.lat) + '" data-lon="' + esc(v.lon) + '">' +
+        '<div class="mini-title">' + esc(v.track) + ' <span class="pill">' + esc(v.races) + 'R</span></div>' +
+        '<div class="mini-line">' + esc(v.surfaces) + '</div>' +
+        '<div class="mini-line weather-line">\u5929\u5019 ' + esc(v.weather) + ' / \u829d ' + esc(v.turf) + ' / \u30c0 ' + esc(v.dirt) + '</div></div>';
+    }).join('') + '</div>' : '<div class="card-empty">\u958b\u50ac\u60c5\u5831\u304c\u3042\u308a\u307e\u305b\u3093\u3002</div>';
     updateVenueWeather();
 
-    const trends = data.track_trends || [];
-    document.getElementById('trackTrends').innerHTML = trends.length
-      ? '<div class="compact-grid">' + trends.map(t =>
-          '<div class="mini-card">' +
-          '<div class="mini-title">' + esc(t.track) + ' <span class="pill">3\u7740\u5185 ' + esc(t.top3_samples) + '</span></div>' +
-          '<div class="mini-line">' + esc(t.surface) + ' / ' + esc(t.leg) + ' / ' + esc(t.gate) + '</div>' +
-          '<div class="mini-line">' + esc(t.note) + '</div>' +
-          '</div>'
-        ).join('') + '</div>'
-      : '<div class="card-empty">\u78ba\u5b9a\u6e08\u307f\u306e\u5f53\u65e5\u7d50\u679c\u304c\u307e\u3060\u5c11\u306a\u304f\u3001\u50be\u5411\u306f\u8868\u793a\u3067\u304d\u307e\u305b\u3093\u3002</div>';
+    var trends = data.track_trends || [];
+    byId('trackTrends').innerHTML = trends.length ? '<div class="compact-grid">' + trends.map(function (t) {
+      return '<div class="mini-card"><div class="mini-title">' + esc(t.track) + ' <span class="pill">3\u7740\u5185 ' + esc(t.top3_samples) + '</span></div>' +
+        '<div class="mini-line">' + esc(t.surface) + ' / ' + esc(t.leg) + ' / ' + esc(t.gate) + '</div><div class="mini-line">' + esc(t.note) + '</div></div>';
+    }).join('') + '</div>' : '<div class="card-empty">\u78ba\u5b9a\u6e08\u307f\u306e\u5f53\u65e5\u7d50\u679c\u304c\u307e\u3060\u5c11\u306a\u304f\u3001\u50be\u5411\u306f\u8868\u793a\u3067\u304d\u307e\u305b\u3093\u3002</div>';
 
-    const preview = data.top_preview || [];
-    document.getElementById('previewList').innerHTML = preview.length
-      ? '<div class="preview-compact">' + preview.map(p =>
-          '<div class="mini-card">' +
-          '<div class="mini-title">' + esc(p.track) + ' ' + esc(p.race_num) + 'R</div>' +
-          '<div class="mini-line">' + esc(p.horse_name) + '</div>' +
-          '<div class="mini-line">' + esc(p.odds) + '\u500d / ' + esc(p.confidence) + ' / EV ' + esc(p.ev) + '</div>' +
-          '</div>'
-        ).join('') + '</div>'
-      : '<div class="card-empty">\u4e88\u60f3\u30c7\u30fc\u30bf\u304c\u3042\u308a\u307e\u305b\u3093\u3002</div>';
+    var preview = data.top_preview || [];
+    byId('previewList').innerHTML = preview.length ? '<div class="preview-compact">' + preview.map(function (p) {
+      return '<div class="mini-card"><div class="mini-title">' + esc(p.track) + ' ' + esc(p.race_num) + 'R</div>' +
+        '<div class="mini-line">' + esc(p.horse_name) + '</div><div class="mini-line">' + esc(p.odds) + '\u500d / ' + esc(p.confidence) + ' / EV ' + esc(p.ev) + '</div></div>';
+    }).join('') + '</div>' : '<div class="card-empty">\u4e88\u60f3\u30c7\u30fc\u30bf\u304c\u3042\u308a\u307e\u305b\u3093\u3002</div>';
   }
-  async function refreshDashboard() {
+  function refreshDashboard() {
     if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_dashboard) return;
-    try {
-      const data = await window.pywebview.api.get_dashboard(options());
+    window.pywebview.api.get_dashboard(options()).then(function (data) {
       renderDashboard(data);
-    } catch (e) {
-      document.getElementById('summary').innerHTML = '<div class="card-empty">\u30c0\u30c3\u30b7\u30e5\u30dc\u30fc\u30c9\u53d6\u5f97\u30a8\u30e9\u30fc: ' + esc(e) + '</div>';
-    }
-  }
-  function weatherText(code) {
-    const m = {0:'\u6674', 1:'\u6674', 2:'\u66c7', 3:'\u66c7', 45:'\u9727', 48:'\u9727', 51:'\u5c0f\u96e8', 53:'\u5c0f\u96e8', 55:'\u96e8', 61:'\u96e8', 63:'\u96e8', 65:'\u5f37\u96e8', 71:'\u96ea', 73:'\u96ea', 75:'\u5927\u96ea', 80:'\u306b\u308f\u304b\u96e8', 81:'\u306b\u308f\u304b\u96e8', 82:'\u5f37\u96e8', 95:'\u96f7\u96e8'};
-    return m[code] || '\u5929\u5019\u53d6\u5f97';
-  }
-  async function updateVenueWeather() {
-    const cards = Array.from(document.querySelectorAll('.venue-card'));
-    for (const card of cards) {
-      const lat = card.dataset.lat;
-      const lon = card.dataset.lon;
-      const line = card.querySelector('.weather-line');
-      if (!lat || !lon || lat === 'None' || lon === 'None' || !line) continue;
-      try {
-        let cur = null;
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.get_weather) {
-          const py = await window.pywebview.api.get_weather({lat, lon});
-          if (py && py.ok) cur = {weather_code: py.weather_code, temperature_2m: py.temperature, precipitation: py.precipitation};
-        }
-        if (!cur) {
-          const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + encodeURIComponent(lat) +
-            '&longitude=' + encodeURIComponent(lon) + '&current=weather_code,temperature_2m,precipitation';
-          const res = await fetch(url);
-          if (!res.ok) continue;
-          const data = await res.json();
-          cur = data.current || {};
-        }
-        const w = weatherText(cur.weather_code);
-        const temp = cur.temperature_2m == null ? '-' : Math.round(cur.temperature_2m) + '\u5ea6';
-        const rain = cur.precipitation == null ? '-' : cur.precipitation + 'mm';
-        line.textContent = '\u73fe\u5728 ' + w + ' / ' + temp + ' / \u964d\u6c34 ' + rain;
-      } catch (_e) {
-        // Network/weather fallback: keep JV-Data weather line.
-      }
-    }
-  }
-  function options() {
-    return {
-      from_date: document.getElementById('from_date').value,
-      to_date: document.getElementById('to_date').value,
-      bloodline_fromtime: document.getElementById('bloodline_fromtime').value
-      , backtest_range: backtestRange,
-      min_ev: inputNumber('filter_ev', 1.05),
-      min_value: inputNumber('filter_value', 0),
-      min_odds: inputNumber('filter_min_odds', 10),
-      max_odds: inputNumber('filter_max_odds', 20)
-    };
-  }
-  function setBacktestRange(v) {
-    backtestRange = v;
-    refreshDashboard();
-  }
-  async function restoreOptions() {
-    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_last_options) return;
-    const res = await window.pywebview.api.get_last_options({});
-    const o = (res && res.options) || {};
-    if (o.from_date) document.getElementById('from_date').value = o.from_date;
-    if (o.to_date) document.getElementById('to_date').value = o.to_date;
-    if (o.bloodline_fromtime) document.getElementById('bloodline_fromtime').value = o.bloodline_fromtime;
-    if (o.backtest_range) backtestRange = String(o.backtest_range);
-    if (o.min_ev != null) document.getElementById('filter_ev').value = o.min_ev;
-    if (o.min_value != null) document.getElementById('filter_value').value = o.min_value;
-    if (o.min_odds != null) document.getElementById('filter_min_odds').value = o.min_odds;
-    if (o.max_odds != null) document.getElementById('filter_max_odds').value = o.max_odds;
-  }
-  function setActionButtonsDisabled(disabled) {
-    document.querySelectorAll('.sidebar button[data-action]').forEach(button => {
-      button.disabled = disabled;
+    }).catch(function (e) {
+      byId('summary').innerHTML = '<div class="card-empty">\u30c0\u30c3\u30b7\u30e5\u30dc\u30fc\u30c9\u53d6\u5f97\u30a8\u30e9\u30fc: ' + esc(e) + '</div>';
     });
   }
+  function updateVenueWeather() {
+    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_weather) return;
+    var cards = document.querySelectorAll('.venue-card');
+    for (var i = 0; i < cards.length; i += 1) {
+      (function (card) {
+        var lat = card.getAttribute('data-lat');
+        var lon = card.getAttribute('data-lon');
+        var line = card.querySelector('.weather-line');
+        if (!lat || !lon || lat === 'None' || lon === 'None' || !line) return;
+        window.pywebview.api.get_weather({lat: lat, lon: lon}).then(function (py) {
+          if (!py || !py.ok) return;
+          var temp = py.temperature == null ? '-' : Math.round(py.temperature) + '\u5ea6';
+          var rain = py.precipitation == null ? '-' : py.precipitation + 'mm';
+          line.textContent = '\u73fe\u5728 ' + weatherText(py.weather_code) + ' / ' + temp + ' / \u964d\u6c34 ' + rain;
+        }).catch(function () {});
+      })(cards[i]);
+    }
+  }
   function applyStatus(st) {
-    const box = document.getElementById('status');
-    const cancelBtn = document.getElementById('cancelBtn');
-    const progressWrap = document.getElementById('progressWrap');
-    const progressBar = document.getElementById('progressBar');
-    const progressText = document.getElementById('progressText');
+    var box = byId('status');
+    var cancelBtn = byId('cancelBtn');
+    var progressWrap = byId('progressWrap');
+    var progressBar = byId('progressBar');
+    var progressText = byId('progressText');
     box.textContent = '[' + st.updated_at + '] ' + st.message;
     box.className = st.running ? 'running' : '';
     cancelBtn.className = st.running ? 'visible' : '';
-    const detail = st.detail || {};
-    const progress = detail.progress;
+    var detail = st.detail || {};
+    var progress = detail.progress;
     if (st.running && progress != null) {
       progressWrap.className = 'progress-wrap visible';
       progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
-      const eta = detail.eta_sec == null ? '-' : Math.ceil(detail.eta_sec / 60) + '分';
-      progressText.textContent = progress.toFixed ? progress.toFixed(1) + '% / 残り 約 ' + eta : progress + '%';
+      var eta = detail.eta_sec == null ? '-' : Math.ceil(detail.eta_sec / 60) + '\u5206';
+      progressText.textContent = progress.toFixed ? progress.toFixed(1) + '% / \u6b8b\u308a \u7d04' + eta : progress + '%';
       progressText.className = 'visible';
     } else {
       progressWrap.className = 'progress-wrap';
@@ -1606,83 +1569,85 @@ CONTROL_HTML = """<!doctype html>
     setActionButtonsDisabled(Boolean(st.running));
     return Boolean(st.running);
   }
-  async function cancelRun() {
+  function refreshStatus() {
+    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_status) return Promise.resolve(false);
+    return window.pywebview.api.get_status({}).then(function (st) { return applyStatus(st); }).catch(function (e) {
+      byId('status').textContent = '\u9032\u6357\u53d6\u5f97\u30a8\u30e9\u30fc: ' + e;
+      return false;
+    });
+  }
+  function cancelRun() {
     if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.cancel) return;
-    document.getElementById('cancelBtn').disabled = true;
-    try {
-      await window.pywebview.api.cancel({});
-    } finally {
-      await refreshStatus();
-      document.getElementById('cancelBtn').disabled = false;
-    }
-  }
-  async function refreshStatus() {
-    const box = document.getElementById('status');
-    // pywebview の JS ブリッジ注入前に呼ばれることがあるのでガード
-    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_status) {
-      return false;
-    }
-    try {
-      const st = await window.pywebview.api.get_status({});
-      return applyStatus(st);
-    } catch (e) {
-      box.textContent = '進捗取得エラー: ' + e;
-      return false;
-    }
-  }
-  function setDetails(value, open = false) {
-    const box = document.getElementById('detailsBox');
-    const text = document.getElementById('detailsText');
-    text.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-    box.open = open;
+    byId('cancelBtn').disabled = true;
+    window.pywebview.api.cancel({}).then(function () { return refreshStatus(); }).then(function () {
+      byId('cancelBtn').disabled = false;
+    }).catch(function () { byId('cancelBtn').disabled = false; });
   }
   function runAction(button) {
     run(button.getAttribute('data-action'));
   }
-  async function run(method) {
+  function run(method) {
     if (!method || !window.pywebview || !window.pywebview.api || typeof window.pywebview.api[method] !== 'function') {
-      setDetails('実行できない操作です: ' + method, true);
+      setDetails('\u5b9f\u884c\u3067\u304d\u306a\u3044\u64cd\u4f5c\u3067\u3059: ' + method, true);
       return;
     }
-    if (await refreshStatus()) {
-      setDetails('別の処理が実行中です。完了後に再実行してください。', true);
-      return;
-    }
-    setActionButtonsDisabled(true);
-    setDetails(method + ' 実行中…', false);
-    let timer = setInterval(refreshStatus, 1000);
-    refreshStatus();
-    try {
-      const res = await window.pywebview.api[method](options());
-      clearInterval(timer);
-      await refreshStatus();
+    refreshStatus().then(function (running) {
+      if (running) {
+        setDetails('\u5225\u306e\u51e6\u7406\u304c\u5b9f\u884c\u4e2d\u3067\u3059\u3002\u5b8c\u4e86\u5f8c\u306b\u518d\u5b9f\u884c\u3057\u3066\u304f\u3060\u3055\u3044\u3002', true);
+        return;
+      }
+      setActionButtonsDisabled(true);
+      setDetails(method + ' \u5b9f\u884c\u4e2d...', false);
+      var timer = setInterval(refreshStatus, 1000);
+      window.pywebview.api[method](options()).then(function (res) {
+        refreshDashboard();
+        if (res && res.ok === false) {
+          var summary = [res.error || res.message || '\u30a8\u30e9\u30fc\u304c\u767a\u751f\u3057\u307e\u3057\u305f', res.hint || ''].filter(function (x) { return Boolean(x); }).join('\n');
+          setDetails(summary + '\n\n' + JSON.stringify(res, null, 2), true);
+        } else {
+          setDetails(res, false);
+        }
+      }).catch(function (e) {
+        setDetails('\u30a8\u30e9\u30fc: ' + e, true);
+      }).then(function () {
+        clearInterval(timer);
+        return refreshStatus();
+      }).then(function (stillRunning) {
+        if (!stillRunning) setActionButtonsDisabled(false);
+      });
+    });
+  }
+  function restoreOptions() {
+    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_last_options) return Promise.resolve();
+    return window.pywebview.api.get_last_options({}).then(function (res) {
+      var o = (res && res.options) || {};
+      if (o.from_date) byId('from_date').value = o.from_date;
+      if (o.to_date) byId('to_date').value = o.to_date;
+      if (o.bloodline_fromtime) byId('bloodline_fromtime').value = o.bloodline_fromtime;
+      if (o.backtest_range) backtestRange = String(o.backtest_range);
+      if (o.min_ev != null && byId('filter_ev')) byId('filter_ev').value = o.min_ev;
+      if (o.min_value != null && byId('filter_value')) byId('filter_value').value = o.min_value;
+      if (o.min_odds != null && byId('filter_min_odds')) byId('filter_min_odds').value = o.min_odds;
+      if (o.max_odds != null && byId('filter_max_odds')) byId('filter_max_odds').value = o.max_odds;
+    });
+  }
+  function boot() {
+    restoreOptions().then(function () {
+      refreshStatus();
       refreshDashboard();
-      if (res && res.ok === false) {
-        const summary = [res.error || res.message || 'エラーが発生しました', res.hint || ''].filter(Boolean).join('\n');
-        setDetails(summary + '\n\n' + JSON.stringify(res, null, 2), true);
-      } else {
-        setDetails(res, false);
-      }
-    } catch (e) {
-      clearInterval(timer);
-      await refreshStatus();
-      setDetails('エラー: ' + e, true);
-    } finally {
-      if (!(await refreshStatus())) {
-        setActionButtonsDisabled(false);
-      }
+    });
+    var from = byId('from_date');
+    var to = byId('to_date');
+    if (from) from.onchange = refreshDashboard;
+    if (to) to.onchange = refreshDashboard;
+    var ids = ['filter_ev','filter_value','filter_min_odds','filter_max_odds'];
+    for (var i = 0; i < ids.length; i += 1) {
+      var el = byId(ids[i]);
+      if (el) el.onchange = refreshDashboard;
     }
   }
-  // pywebview の JS ブリッジが準備できてから初回の進捗取得を行う
-  window.addEventListener('pywebviewready', async () => { await restoreOptions(); refreshStatus(); refreshDashboard(); });
-  // 既に準備済みなら即時実行 (リロード時など)
-  if (window.pywebview && window.pywebview.api) { restoreOptions().then(() => { refreshStatus(); refreshDashboard(); }); }
-  document.getElementById('from_date').addEventListener('change', refreshDashboard);
-  document.getElementById('to_date').addEventListener('change', refreshDashboard);
-  ['filter_ev','filter_value','filter_min_odds','filter_max_odds'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('change', refreshDashboard);
-  });
+  window.addEventListener('pywebviewready', boot);
+  if (window.pywebview && window.pywebview.api) boot();
 </script>
 </body>
 </html>
