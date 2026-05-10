@@ -850,10 +850,15 @@ def _value_score(
         value += min(odds, 30.0) / 3.0
     if feat.get("current_bucket") == "long":
         value -= _w("risk.long_value_penalty", 10)
-    if (feat.get("current_race_level", 0) or 0) >= 7:
+    current_level = feat.get("current_race_level", 0) or 0
+    if current_level >= 7:
         value -= _w("risk.graded_value_penalty", 10)
+    elif current_level >= 5:
+        value -= _w("risk.op_value_penalty", 8)
     if feat.get("current_bucket") == "sprint" and not feat.get("same_distance_top3", 0):
         value -= _w("risk.sprint_unproven_value_penalty", 4)
+    if odds >= 8.0:
+        value -= _w("risk.longshot_value_penalty", 18)
     if 1 <= popularity <= 3 and odds and odds < 5.0:
         value -= 8
     if confidence in ("暫定", "混戦"):

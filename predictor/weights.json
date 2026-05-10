@@ -68,6 +68,8 @@
     "long_unproven_penalty": 4,
     "long_value_penalty": 10,
     "graded_value_penalty": 10,
-    "sprint_unproven_value_penalty": 4
+    "op_value_penalty": 8,
+    "sprint_unproven_value_penalty": 6,
+    "longshot_value_penalty": 18
   }
 }

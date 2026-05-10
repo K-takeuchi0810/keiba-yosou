@@ -1602,8 +1602,8 @@ CONTROL_HTML = """<!doctype html>
       window.pywebview.api[method](options()).then(function (res) {
         refreshDashboard();
         if (res && res.ok === false) {
-          var summary = [res.error || res.message || '\u30a8\u30e9\u30fc\u304c\u767a\u751f\u3057\u307e\u3057\u305f', res.hint || ''].filter(function (x) { return Boolean(x); }).join('\n');
-          setDetails(summary + '\n\n' + JSON.stringify(res, null, 2), true);
+          var summary = [res.error || res.message || '\u30a8\u30e9\u30fc\u304c\u767a\u751f\u3057\u307e\u3057\u305f', res.hint || ''].filter(function (x) { return Boolean(x); }).join('\\n');
+          setDetails(summary + '\\n\\n' + JSON.stringify(res, null, 2), true);
         } else {
           setDetails(res, false);
         }
