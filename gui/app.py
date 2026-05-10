@@ -672,6 +672,9 @@ class Api:
     @_safe
     def fetch_odds(self, options: dict | None = None) -> dict:
         self._begin_run()
+        return self._fetch_odds_inner(options, finish=True)
+
+    def _fetch_odds_inner(self, options: dict | None = None, *, finish: bool) -> dict:
         options = options or {}
         from_date = (options.get("from_date") or options.get("date") or "").replace("-", "")
         to_date = (options.get("to_date") or options.get("date") or "").replace("-", "")
@@ -680,22 +683,23 @@ class Api:
                 row = conn.execute("SELECT MAX(race_year || race_month_day) FROM races").fetchone()
                 from_date = to_date = row[0]
             races = list_races(conn, from_date, to_date, jra_only=True)
-        self._set_status(f"オッズ取得開始: {len(races)}レース", "fetch_odds", running=True)
+        self._set_status(f"\u30aa\u30c3\u30ba\u53d6\u5f97\u958b\u59cb: {len(races)}\u30ec\u30fc\u30b9", "fetch_odds", running=True)
         with JVLinkClient() as cli:
             summaries = []
             for i, r in enumerate(races, start=1):
                 self._check_cancel()
                 self._set_status(
-                    f"オッズ取得中: {i}/{len(races)} {r['track_code']} {int(r['race_num'])}R",
+                    f"\u30aa\u30c3\u30ba\u53d6\u5f97\u4e2d: {i}/{len(races)} {r['track_code']} {int(r['race_num'])}R",
                     "fetch_odds",
                     {"current": i, "total": len(races), **self._progress_detail(i, len(races) or 1)},
                     running=True,
                 )
                 summaries.append(cli.fetch_realtime("0B31", race_key(dict(r)), on_progress=self._progress))
-        self._set_status("オッズをDBへ取り込み中...", "ingest_odds", running=True)
+        self._set_status("\u30aa\u30c3\u30ba\u3092DB\u3078\u53d6\u308a\u8fbc\u307f\u4e2d...", "ingest_odds", running=True)
         self._check_cancel()
         ingest_summary = ingest_all(force=True, dataspecs=["0B31"])
-        self._set_status("オッズ取得が完了しました。", "done", running=False)
+        if finish:
+            self._set_status("\u30aa\u30c3\u30ba\u53d6\u5f97\u304c\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002", "done", running=False)
         return {"ok": True, "races": len(races), "fetch": summaries, "ingest": ingest_summary}
 
     @_safe
@@ -791,7 +795,7 @@ class Api:
         self._check_cancel()
         self._set_status("一括実行: DB取り込み中...", "ingest", running=True)
         ingest_summary = ingest_all()
-        odds_summary = self.fetch_odds(options)
+        odds_summary = self._fetch_odds_inner(options, finish=False)
         self._check_cancel()
         options = options or {}
         from_date = (options.get("from_date") or "").replace("-", "") or None
@@ -1389,7 +1393,7 @@ CONTROL_HTML = """<!doctype html>
 
 <script>
   function esc(v) {
-    return String(v ?? '').replace(/[&<>"']/g, ch => ({
+    return String(valueOr(v, '')).replace(/[&<>"']/g, ch => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[ch]));
   }
@@ -1397,6 +1401,20 @@ CONTROL_HTML = """<!doctype html>
     return '<div class="metric"><div class="num">' + esc(value) + '</div><div class="label">' + esc(label) + '</div></div>';
   }
   let backtestRange = '3';
+  function valueOr(value, fallback) {
+    return value == null ? fallback : value;
+  }
+  function inputNumber(id, fallback) {
+    const el = document.getElementById(id);
+    if (!el) return fallback;
+    const n = Number(el.value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+  function bindBacktestRangeButtons() {
+    document.querySelectorAll('#backtest button[data-range]').forEach(button => {
+      button.addEventListener('click', () => setBacktestRange(button.getAttribute('data-range')));
+    });
+  }
   function shortTime(v) {
     if (!v) return '-';
     const d = new Date(v);
@@ -1407,12 +1425,12 @@ CONTROL_HTML = """<!doctype html>
     if (!data || !data.ok) return;
     const s = data.summary || {};
     document.getElementById('summary').innerHTML =
-      metric('レース', s.races ?? 0) +
-      metric('出走頭数', s.horses ?? 0) +
-      metric('オッズ', (s.odds ?? 0) + '/' + (s.horses ?? 0)) +
-      metric('買い候補', s.buy_count ?? 0) +
-      metric('Race最新', s.last_fetched_race || '-') +
-      metric('Odds最新', shortTime(s.last_fetched_odds) + (s.odds_age_minutes == null ? '' : ' / ' + s.odds_age_minutes + '分前'));
+      metric('\u30ec\u30fc\u30b9', valueOr(s.races, 0)) +
+      metric('\u51fa\u8d70\u982d\u6570', valueOr(s.horses, 0)) +
+      metric('\u30aa\u30c3\u30ba', valueOr(s.odds, 0) + '/' + valueOr(s.horses, 0)) +
+      metric('\u8cb7\u3044\u5019\u88dc', valueOr(s.buy_count, 0)) +
+      metric('Race\u6700\u65b0', s.last_fetched_race || '-') +
+      metric('Odds\u6700\u65b0', shortTime(s.last_fetched_odds) + (s.odds_age_minutes == null ? '' : ' / ' + s.odds_age_minutes + '\u5206\u524d'));
 
     const buys = data.buy_candidates || [];
     document.getElementById('buyList').innerHTML = buys.length
@@ -1420,31 +1438,32 @@ CONTROL_HTML = """<!doctype html>
           '<div class="buy-item">' +
           '<div class="buy-main">' + esc(b.track) + ' ' + esc(b.race_num) + 'R ' + esc(b.horse_num) + ' ' + esc(b.horse_name) + '</div>' +
           '<div class="buy-sub">' + esc(b.start_time) + ' / ' + esc(b.race_name || '') +
-          '<span class="pill buy">' + esc(b.odds) + '倍</span>' +
-          '<span class="pill">' + esc(b.popularity) + '人気</span>' +
+          '<span class="pill buy">' + esc(b.odds) + '\u500d</span>' +
+          '<span class="pill">' + esc(b.popularity) + '\u4eba\u6c17</span>' +
           '<span class="pill">P ' + esc(b.probability) + '%</span>' +
           '<span class="pill">EV ' + esc(b.ev) + '</span>' +
           '<span class="pill">K ' + esc(b.kelly) + '%</span></div>' +
           '</div>'
         ).join('')
-      : '<div class="card-empty">買い候補なし。EV/信頼度条件では見送りです。</div>';
+      : '<div class="card-empty">\u8cb7\u3044\u5019\u88dc\u306a\u3057\u3002EV/\u4fe1\u983c\u5ea6\u6761\u4ef6\u3067\u306f\u898b\u9001\u308a\u3067\u3059\u3002</div>';
 
     const bt = data.backtest || {};
     document.getElementById('backtest').innerHTML =
       '<div class="seg">' +
-      ['3','7','30','month'].map(v => '<button type="button" class="' + (backtestRange === v ? 'active' : '') + '" onclick="setBacktestRange(\\'' + v + '\\')">' + (v === 'month' ? '当月' : v + '日') + '</button>').join('') +
+      ['3','7','30','month'].map(v => '<button type="button" data-range="' + esc(v) + '" class="' + (backtestRange === v ? 'active' : '') + '">' + (v === 'month' ? '\u5f53\u6708' : v + '\u65e5') + '</button>').join('') +
       '</div>' +
       '<div class="metric-row">' +
-      metric('対象', bt.label || '-') +
-      metric('単勝', (bt.wins ?? 0) + '/' + (bt.races ?? 0)) +
-      metric('3着内', (bt.top3 ?? 0) + '/' + (bt.races ?? 0)) +
-      metric('回収率', (bt.return_rate ?? 0) + '%') +
+      metric('\u5bfe\u8c61', bt.label || '-') +
+      metric('\u5358\u52dd', valueOr(bt.wins, 0) + '/' + valueOr(bt.races, 0)) +
+      metric('3\u7740\u5185', valueOr(bt.top3, 0) + '/' + valueOr(bt.races, 0)) +
+      metric('\u56de\u53ce\u7387', valueOr(bt.return_rate, 0) + '%') +
       '</div>';
+    bindBacktestRangeButtons();
 
     const warnings = data.warnings || [];
     document.getElementById('warnings').innerHTML = warnings.length
       ? warnings.map(w => '<div class="warn-item">' + esc(w) + '</div>').join('')
-      : '<div class="card-empty">注意点はありません。</div>';
+      : '<div class="card-empty">\u6ce8\u610f\u70b9\u306f\u3042\u308a\u307e\u305b\u3093\u3002</div>';
 
     const venues = data.venues || [];
     document.getElementById('venues').innerHTML = venues.length
@@ -1452,22 +1471,22 @@ CONTROL_HTML = """<!doctype html>
           '<div class="mini-card venue-card" data-track="' + esc(v.track) + '" data-lat="' + esc(v.lat) + '" data-lon="' + esc(v.lon) + '">' +
           '<div class="mini-title">' + esc(v.track) + ' <span class="pill">' + esc(v.races) + 'R</span></div>' +
           '<div class="mini-line">' + esc(v.surfaces) + '</div>' +
-          '<div class="mini-line weather-line">天候 ' + esc(v.weather) + ' / 芝 ' + esc(v.turf) + ' / ダ ' + esc(v.dirt) + '</div>' +
+          '<div class="mini-line weather-line">\u5929\u5019 ' + esc(v.weather) + ' / \u829d ' + esc(v.turf) + ' / \u30c0 ' + esc(v.dirt) + '</div>' +
           '</div>'
         ).join('') + '</div>'
-      : '<div class="card-empty">開催情報がありません。</div>';
+      : '<div class="card-empty">\u958b\u50ac\u60c5\u5831\u304c\u3042\u308a\u307e\u305b\u3093\u3002</div>';
     updateVenueWeather();
 
     const trends = data.track_trends || [];
     document.getElementById('trackTrends').innerHTML = trends.length
       ? '<div class="compact-grid">' + trends.map(t =>
           '<div class="mini-card">' +
-          '<div class="mini-title">' + esc(t.track) + ' <span class="pill">3着内 ' + esc(t.top3_samples) + '</span></div>' +
+          '<div class="mini-title">' + esc(t.track) + ' <span class="pill">3\u7740\u5185 ' + esc(t.top3_samples) + '</span></div>' +
           '<div class="mini-line">' + esc(t.surface) + ' / ' + esc(t.leg) + ' / ' + esc(t.gate) + '</div>' +
           '<div class="mini-line">' + esc(t.note) + '</div>' +
           '</div>'
         ).join('') + '</div>'
-      : '<div class="card-empty">確定済みの当日結果がまだ少なく、傾向は表示できません。</div>';
+      : '<div class="card-empty">\u78ba\u5b9a\u6e08\u307f\u306e\u5f53\u65e5\u7d50\u679c\u304c\u307e\u3060\u5c11\u306a\u304f\u3001\u50be\u5411\u306f\u8868\u793a\u3067\u304d\u307e\u305b\u3093\u3002</div>';
 
     const preview = data.top_preview || [];
     document.getElementById('previewList').innerHTML = preview.length
@@ -1475,10 +1494,10 @@ CONTROL_HTML = """<!doctype html>
           '<div class="mini-card">' +
           '<div class="mini-title">' + esc(p.track) + ' ' + esc(p.race_num) + 'R</div>' +
           '<div class="mini-line">' + esc(p.horse_name) + '</div>' +
-          '<div class="mini-line">' + esc(p.odds) + '倍 / ' + esc(p.confidence) + ' / EV ' + esc(p.ev) + '</div>' +
+          '<div class="mini-line">' + esc(p.odds) + '\u500d / ' + esc(p.confidence) + ' / EV ' + esc(p.ev) + '</div>' +
           '</div>'
         ).join('') + '</div>'
-      : '<div class="card-empty">予想データがありません。</div>';
+      : '<div class="card-empty">\u4e88\u60f3\u30c7\u30fc\u30bf\u304c\u3042\u308a\u307e\u305b\u3093\u3002</div>';
   }
   async function refreshDashboard() {
     if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_dashboard) return;
@@ -1486,12 +1505,12 @@ CONTROL_HTML = """<!doctype html>
       const data = await window.pywebview.api.get_dashboard(options());
       renderDashboard(data);
     } catch (e) {
-      document.getElementById('summary').innerHTML = '<div class="card-empty">ダッシュボード取得エラー: ' + esc(e) + '</div>';
+      document.getElementById('summary').innerHTML = '<div class="card-empty">\u30c0\u30c3\u30b7\u30e5\u30dc\u30fc\u30c9\u53d6\u5f97\u30a8\u30e9\u30fc: ' + esc(e) + '</div>';
     }
   }
   function weatherText(code) {
-    const m = {0:'晴', 1:'晴', 2:'曇', 3:'曇', 45:'霧', 48:'霧', 51:'霧雨', 53:'霧雨', 55:'霧雨', 61:'雨', 63:'雨', 65:'強雨', 71:'雪', 73:'雪', 75:'大雪', 80:'にわか雨', 81:'にわか雨', 82:'強雨', 95:'雷雨'};
-    return m[code] || '天候取得';
+    const m = {0:'\u6674', 1:'\u6674', 2:'\u66c7', 3:'\u66c7', 45:'\u9727', 48:'\u9727', 51:'\u5c0f\u96e8', 53:'\u5c0f\u96e8', 55:'\u96e8', 61:'\u96e8', 63:'\u96e8', 65:'\u5f37\u96e8', 71:'\u96ea', 73:'\u96ea', 75:'\u5927\u96ea', 80:'\u306b\u308f\u304b\u96e8', 81:'\u306b\u308f\u304b\u96e8', 82:'\u5f37\u96e8', 95:'\u96f7\u96e8'};
+    return m[code] || '\u5929\u5019\u53d6\u5f97';
   }
   async function updateVenueWeather() {
     const cards = Array.from(document.querySelectorAll('.venue-card'));
@@ -1515,9 +1534,9 @@ CONTROL_HTML = """<!doctype html>
           cur = data.current || {};
         }
         const w = weatherText(cur.weather_code);
-        const temp = cur.temperature_2m == null ? '-' : Math.round(cur.temperature_2m) + '℃';
+        const temp = cur.temperature_2m == null ? '-' : Math.round(cur.temperature_2m) + '\u5ea6';
         const rain = cur.precipitation == null ? '-' : cur.precipitation + 'mm';
-        line.textContent = '現在 ' + w + ' / ' + temp + ' / 降水 ' + rain;
+        line.textContent = '\u73fe\u5728 ' + w + ' / ' + temp + ' / \u964d\u6c34 ' + rain;
       } catch (_e) {
         // Network/weather fallback: keep JV-Data weather line.
       }
@@ -1529,10 +1548,10 @@ CONTROL_HTML = """<!doctype html>
       to_date: document.getElementById('to_date').value,
       bloodline_fromtime: document.getElementById('bloodline_fromtime').value
       , backtest_range: backtestRange,
-      min_ev: Number(document.getElementById('filter_ev')?.value || 1.05),
-      min_value: Number(document.getElementById('filter_value')?.value || 0),
-      min_odds: Number(document.getElementById('filter_min_odds')?.value || 10),
-      max_odds: Number(document.getElementById('filter_max_odds')?.value || 20)
+      min_ev: inputNumber('filter_ev', 1.05),
+      min_value: inputNumber('filter_value', 0),
+      min_odds: inputNumber('filter_min_odds', 10),
+      max_odds: inputNumber('filter_max_odds', 20)
     };
   }
   function setBacktestRange(v) {
@@ -1650,7 +1669,8 @@ CONTROL_HTML = """<!doctype html>
   document.getElementById('from_date').addEventListener('change', refreshDashboard);
   document.getElementById('to_date').addEventListener('change', refreshDashboard);
   ['filter_ev','filter_value','filter_min_odds','filter_max_odds'].forEach(id => {
-    document.getElementById(id)?.addEventListener('change', refreshDashboard);
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', refreshDashboard);
   });
 </script>
 </body>
