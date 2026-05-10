@@ -37,6 +37,10 @@ class CancelledError(Exception):
     pass
 
 
+def _normalize_date(value: object) -> str:
+    return "".join(ch for ch in str(value or "") if ch.isdigit())
+
+
 def _error_hint(e: Exception) -> str:
     text = f"{type(e).__name__}: {e}"
     if "JVInit" in text or "JV-Link" in text:
@@ -181,8 +185,8 @@ class Api:
 
     def _date_range(self, options: dict | None = None) -> tuple[str, str]:
         options = options or {}
-        from_date = (options.get("from_date") or "").replace("-", "")
-        to_date = (options.get("to_date") or "").replace("-", "")
+        from_date = _normalize_date(options.get("from_date"))
+        to_date = _normalize_date(options.get("to_date"))
         if from_date and not to_date:
             to_date = from_date
         if to_date and not from_date:
@@ -676,8 +680,8 @@ class Api:
 
     def _fetch_odds_inner(self, options: dict | None = None, *, finish: bool) -> dict:
         options = options or {}
-        from_date = (options.get("from_date") or options.get("date") or "").replace("-", "")
-        to_date = (options.get("to_date") or options.get("date") or "").replace("-", "")
+        from_date = _normalize_date(options.get("from_date") or options.get("date"))
+        to_date = _normalize_date(options.get("to_date") or options.get("date"))
         with open_db() as conn:
             if not from_date or not to_date:
                 row = conn.execute("SELECT MAX(race_year || race_month_day) FROM races").fetchone()
@@ -731,8 +735,8 @@ class Api:
         """DB を読んで予想込み HTML を生成。"""
         self._begin_run()
         options = options or {}
-        from_date = (options.get("from_date") or "").replace("-", "") or None
-        to_date = (options.get("to_date") or "").replace("-", "") or from_date
+        from_date = _normalize_date(options.get("from_date")) or None
+        to_date = _normalize_date(options.get("to_date")) or from_date
         self._set_status("予想HTMLを生成中...", "prediction", running=True)
         path = render(from_date=from_date, to_date=to_date)
         self._set_status("予想生成が完了しました。", "done", running=False)
@@ -798,8 +802,8 @@ class Api:
         odds_summary = self._fetch_odds_inner(options, finish=False)
         self._check_cancel()
         options = options or {}
-        from_date = (options.get("from_date") or "").replace("-", "") or None
-        to_date = (options.get("to_date") or "").replace("-", "") or from_date
+        from_date = _normalize_date(options.get("from_date")) or None
+        to_date = _normalize_date(options.get("to_date")) or from_date
         self._set_status("一括実行: 予想生成中...", "prediction", running=True)
         rendered = render(from_date=from_date, to_date=to_date)
         self._set_status("一括実行: 公開中...", "publish", running=True)
@@ -1330,18 +1334,18 @@ CONTROL_HTML = """<!doctype html>
   <div id="progressText"></div>
 </div>
 
-<button class="primary" data-action="run_all" onclick="run(this.dataset.action)">取得 → 予想 → 公開</button>
+<button class="primary" data-action="run_all" onclick="runAction(this)">取得 → 予想 → 公開</button>
 
 <div class="section-label">個別実行</div>
-<button data-action="fetch_data" onclick="run(this.dataset.action)"><span class="step">Ⅰ</span>JVLink でデータ取得</button>
-<button data-action="fetch_odds" onclick="run(this.dataset.action)"><span class="step">Ⅱ</span>最新オッズ取得</button>
-<button data-action="fetch_bloodline" onclick="run(this.dataset.action)"><span class="step">＊</span>血統データ取得</button>
-<button data-action="run_prediction" onclick="run(this.dataset.action)"><span class="step">Ⅲ</span>予想生成</button>
-<button data-action="publish" onclick="run(this.dataset.action)"><span class="step">Ⅳ</span>iCloud Drive へ公開</button>
+<button data-action="fetch_data" onclick="runAction(this)"><span class="step">Ⅰ</span>JVLink でデータ取得</button>
+<button data-action="fetch_odds" onclick="runAction(this)"><span class="step">Ⅱ</span>最新オッズ取得</button>
+<button data-action="fetch_bloodline" onclick="runAction(this)"><span class="step">＊</span>血統データ取得</button>
+<button data-action="run_prediction" onclick="runAction(this)"><span class="step">Ⅲ</span>予想生成</button>
+<button data-action="publish" onclick="runAction(this)"><span class="step">Ⅳ</span>iCloud Drive へ公開</button>
 
 <div class="section-label">確認</div>
-<button data-action="open_preview" onclick="run(this.dataset.action)"><span class="step">›</span>プレビューを開く</button>
-<button data-action="open_icloud_folder" onclick="run(this.dataset.action)"><span class="step">›</span>iCloud 公開先を Explorer で開く</button>
+<button data-action="open_preview" onclick="runAction(this)"><span class="step">›</span>プレビューを開く</button>
+<button data-action="open_icloud_folder" onclick="runAction(this)"><span class="step">›</span>iCloud 公開先を Explorer で開く</button>
 
 <details id="detailsBox">
   <summary>詳細を表示</summary>
@@ -1632,7 +1636,14 @@ CONTROL_HTML = """<!doctype html>
     text.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
     box.open = open;
   }
+  function runAction(button) {
+    run(button.getAttribute('data-action'));
+  }
   async function run(method) {
+    if (!method || !window.pywebview || !window.pywebview.api || typeof window.pywebview.api[method] !== 'function') {
+      setDetails('実行できない操作です: ' + method, true);
+      return;
+    }
     if (await refreshStatus()) {
       setDetails('別の処理が実行中です。完了後に再実行してください。', true);
       return;

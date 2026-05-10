@@ -398,12 +398,17 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
 
     best_3f = feat.get("best_final_3f")
     avg_3f = feat.get("avg_final_3f")
+    # 短距離 (sprint <= 1400m) は上がり脚 / トップスピードの依存度が高い。
+    # 直近 2 日の backtest で sprint 回収率 21.6% (25 戦 2 勝) と劣勢のため、
+    # sprint バケットで上がり 3F 系の評価を厚くする。
+    is_sprint = feat.get("current_bucket") == "sprint"
+    sprint_mul = _w("final3f.sprint_multiplier", 1.5) if is_sprint else 1.0
     if best_3f:
         if best_3f <= 345:
-            score += 4
+            score += _w("final3f.elite", 4) * sprint_mul
             reasons.append(f"上がり最速級{best_3f / 10:.1f}")
         elif best_3f <= 360:
-            score += 2
+            score += _w("final3f.good", 2) * sprint_mul
             reasons.append(f"上がり良好{best_3f / 10:.1f}")
     if avg_3f and avg_3f >= 390 and feat.get("past_count", 0) >= 3:
         score -= 3
@@ -540,6 +545,23 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     if feat.get("past_count", 0) == 0 and not reasons:
         reasons.append("過去走なし")
 
+    # 市場 (人気) ボーナス。直近 backtest で「予想モデルが 1〜2 人気を
+    # ランキング下位に置いて勝ち馬を取り逃す」例が多発 (5/2-3 の 72 レース中
+    # 6 件で勝ち馬を予想 7 位以下)。多頭数レースでは人気は強いシグナル
+    # なので、極端な乖離を抑える方向にスコアを補正する。
+    # 少頭数 (< 12 頭) では人気が薄いので補正なし。
+    starter_count = feat.get("current_starter_count", 0) or 0
+    popularity = horse.get("win_popularity") or 0
+    if starter_count >= _w("popularity.min_field", 12):
+        if popularity == 1:
+            score += _w("popularity.first", 6)
+            reasons.append("市場1人気")
+        elif popularity == 2:
+            score += _w("popularity.second", 3)
+            reasons.append("市場2人気")
+        elif popularity == 3:
+            score += _w("popularity.third", 1)
+
     return score, reasons
 
 
@@ -644,12 +666,15 @@ def _confidence(scored: list[tuple[dict, float, list[str], float]]) -> tuple[str
         return "混戦", gap, False
     if gap <= 10:
         return "接戦", gap, False
-    if _has_negative_signal(scored[0][2]) and gap <= 20:
+    # 「接戦扱い」を狭めに引き直す閾値も外出し。直近で「高信頼」のまま
+    # 大外しが複数あったので、認定基準を厳しくする (既定 score≥100, gap≥20,
+    # stability≥10)。weights.json の confidence セクションで上書き可。
+    if _has_negative_signal(scored[0][2]) and gap <= _w("confidence.negative_gap", 20):
         return "接戦", gap, False
     if (
-        scored[0][1] >= 95
-        and gap >= 15
-        and stability >= 8
+        scored[0][1] >= _w("confidence.min_score", 100)
+        and gap >= _w("confidence.min_gap", 20)
+        and stability >= _w("confidence.min_stability", 10)
         and not _has_negative_signal(scored[0][2])
     ):
         return "高信頼", gap, False
@@ -704,16 +729,42 @@ def _load_calibrator() -> dict | None:
 
 
 def _apply_calibrator(probabilities: dict[str, float]) -> dict[str, float]:
+    """bin ベース calibrator + Bayesian shrinkage。
+
+    bin に入ったサンプル数が少ない (≤ alpha) と、観測した actual_win_rate が
+    ノイズに引っ張られて極端な値になる。これを生反映するとオッズ × 校正確率
+    の EV が暴れる (現在の 0.15-0.20 bin で count=27 が calibrated 0.33 を
+    出している例)。raw 確率 p との重み付き平均で滑らかにする:
+
+        q = (count * calibrated + alpha * p) / (count + alpha)
+
+    alpha は calibrator.json の `shrinkage_alpha` (既定 30) から読む。
+    環境変数 `PRED_CALIBRATOR_ALPHA` で実行時に上書き可。
+    """
     calibrator = _load_calibrator()
     if not calibrator or calibrator.get("type") != "bin":
         return probabilities
     bins = calibrator.get("bins") or []
+    try:
+        alpha_default = float(calibrator.get("shrinkage_alpha", 30))
+    except (TypeError, ValueError):
+        alpha_default = 30.0
+    try:
+        alpha = float(os.environ.get("PRED_CALIBRATOR_ALPHA", alpha_default))
+    except ValueError:
+        alpha = alpha_default
+    alpha = max(0.0, alpha)
     adjusted: dict[str, float] = {}
     for num, p in probabilities.items():
         q = p
         for b in bins:
             if b.get("lower", 0.0) <= p < b.get("upper", 1.0) or (p >= 1.0 and b.get("upper") == 1.0):
-                q = float(b.get("calibrated_probability", p))
+                cal = float(b.get("calibrated_probability", p))
+                count = float(b.get("count", 0) or 0)
+                if count + alpha > 0:
+                    q = (count * cal + alpha * p) / (count + alpha)
+                else:
+                    q = cal
                 break
         adjusted[num] = max(0.0, min(1.0, q))
     total = sum(adjusted.values())
@@ -739,26 +790,35 @@ def _investment_probability(
     confidence: str,
     odds: float,
 ) -> float:
+    """投資判断用の確率。
+
+    - calibrator 適用済み model_probability と市場確率を信頼度別重みで blend
+    - オッズ帯別 discount は重複ヒューリスティックで EV を消滅させがちなので、
+      `weights.json` の `discount` で外出し、環境変数 `PRED_DISABLE_DISCOUNT=1`
+      で全無効化 (= 1.0) できるようにした。デフォルトは現行値を維持。
+    """
     if model_probability <= 0:
         return 0.0
     model_weight = {
-        "高信頼": 0.72,
-        "標準": 0.62,
-        "接戦": 0.50,
-        "混戦": 0.42,
-        "暫定": 0.30,
-    }.get(confidence, 0.55)
+        "高信頼": _w("model_blend.high", 0.72),
+        "標準": _w("model_blend.standard", 0.62),
+        "接戦": _w("model_blend.close", 0.50),
+        "混戦": _w("model_blend.tight", 0.42),
+        "暫定": _w("model_blend.tentative", 0.30),
+    }.get(confidence, _w("model_blend.default", 0.55))
     if market_probability <= 0:
         blended = model_probability
     else:
         blended = model_probability * model_weight + market_probability * (1.0 - model_weight)
-    discount = 0.92
+    if os.environ.get("PRED_DISABLE_DISCOUNT") == "1":
+        return blended
+    discount = _w("discount.base", 0.92)
     if odds >= 30.0:
-        discount *= 0.72
+        discount *= _w("discount.over30", 0.72)
     elif odds >= 15.0:
-        discount *= 0.82
+        discount *= _w("discount.over15", 0.82)
     elif odds >= 8.0:
-        discount *= 0.90
+        discount *= _w("discount.over8", 0.90)
     return blended * discount
 
 
@@ -784,9 +844,16 @@ def _value_score(
     """買い目候補用。オッズは予想スコアではなく、この値だけに使う。"""
     odds = (horse.get("win_odds") or 0) / 10.0
     popularity = horse.get("win_popularity") or 0
+    feat = horse.get("_features") or {}
     value = (expected_value - 1.0) * 100 if expected_value else score - 70
     if expected_value == 0.0 and 7.0 <= odds <= 30.0:
         value += min(odds, 30.0) / 3.0
+    if feat.get("current_bucket") == "long":
+        value -= _w("risk.long_value_penalty", 10)
+    if (feat.get("current_race_level", 0) or 0) >= 7:
+        value -= _w("risk.graded_value_penalty", 10)
+    if feat.get("current_bucket") == "sprint" and not feat.get("same_distance_top3", 0):
+        value -= _w("risk.sprint_unproven_value_penalty", 4)
     if 1 <= popularity <= 3 and odds and odds < 5.0:
         value -= 8
     if confidence in ("暫定", "混戦"):
@@ -832,6 +899,7 @@ def predict_race(
             leg = feat.get("leg_code") or ""
             feat["front_runner_count"] = front_runner_count
             feat["same_leg_rivals"] = max(leg_counts.get(leg, 0) - 1, 0) if leg else 0
+            h["_features"] = feat
             score, reasons = _score_one(h, feat)
             stability = _stability_score(h, feat)
         else:

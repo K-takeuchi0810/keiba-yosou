@@ -62,5 +62,12 @@
     "min_gap": 25,
     "min_stability": 12,
     "negative_gap": 28
+  },
+  "risk": {
+    "graded_unproven_penalty": 5,
+    "long_unproven_penalty": 4,
+    "long_value_penalty": 10,
+    "graded_value_penalty": 10,
+    "sprint_unproven_value_penalty": 4
   }
 }
