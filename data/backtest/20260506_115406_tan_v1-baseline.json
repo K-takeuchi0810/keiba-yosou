@@ -1,0 +1,112 @@
+{
+  "rule_version": "v1-baseline",
+  "from_date": "20250601",
+  "to_date": "20260430",
+  "bet_type": "tan",
+  "elapsed_sec": 513.8,
+  "races_total": 3180,
+  "races_no_horses": 0,
+  "races_no_pick": 0,
+  "races_filtered": 0,
+  "races_tentative_skipped": 0,
+  "races_bet": 3180,
+  "hits": 722,
+  "hit_rate": 0.2270440251572327,
+  "bet_total": 318000,
+  "return_total": 234200,
+  "return_rate": 0.7364779874213836,
+  "filters": {
+    "min_odds": null,
+    "max_odds": null,
+    "min_popularity": null,
+    "max_popularity": null
+  },
+  "by_track": {
+    "01": {
+      "bet": 16800,
+      "return": 17260,
+      "hits": 47,
+      "return_rate": 1.0273809523809523
+    },
+    "02": {
+      "bet": 14400,
+      "return": 8030,
+      "hits": 30,
+      "return_rate": 0.5576388888888889
+    },
+    "03": {
+      "bet": 24000,
+      "return": 17930,
+      "hits": 46,
+      "return_rate": 0.7470833333333333
+    },
+    "04": {
+      "bet": 19200,
+      "return": 16580,
+      "hits": 45,
+      "return_rate": 0.8635416666666667
+    },
+    "05": {
+      "bet": 44400,
+      "return": 29580,
+      "hits": 102,
+      "return_rate": 0.6662162162162162
+    },
+    "06": {
+      "bet": 50400,
+      "return": 28610,
+      "hits": 102,
+      "return_rate": 0.5676587301587301
+    },
+    "07": {
+      "bet": 28800,
+      "return": 17370,
+      "hits": 61,
+      "return_rate": 0.603125
+    },
+    "08": {
+      "bet": 46800,
+      "return": 37830,
+      "hits": 106,
+      "return_rate": 0.8083333333333333
+    },
+    "09": {
+      "bet": 49200,
+      "return": 44220,
+      "hits": 131,
+      "return_rate": 0.8987804878048781
+    },
+    "10": {
+      "bet": 24000,
+      "return": 16790,
+      "hits": 52,
+      "return_rate": 0.6995833333333333
+    }
+  },
+  "by_class": {
+    "cond": {
+      "bet": 232600,
+      "return": 168840,
+      "hits": 555,
+      "return_rate": 0.7258813413585554
+    },
+    "graded": {
+      "bet": 12400,
+      "return": 9720,
+      "hits": 24,
+      "return_rate": 0.7838709677419354
+    },
+    "jraded": {
+      "bet": 700,
+      "return": 190,
+      "hits": 1,
+      "return_rate": 0.2714285714285714
+    },
+    "op": {
+      "bet": 72300,
+      "return": 55450,
+      "hits": 142,
+      "return_rate": 0.7669432918395575
+    }
+  }
+}

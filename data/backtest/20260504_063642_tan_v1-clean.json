@@ -1,0 +1,86 @@
+{
+  "rule_version": "v1-clean",
+  "from_date": "20250601",
+  "to_date": "20260430",
+  "bet_type": "tan",
+  "elapsed_sec": 37.3,
+  "races_total": 3180,
+  "races_no_horses": 0,
+  "races_no_pick": 0,
+  "races_filtered": 0,
+  "races_tentative_skipped": 0,
+  "races_bet": 3180,
+  "hits": 774,
+  "hit_rate": 0.24339622641509434,
+  "bet_total": 318000,
+  "return_total": 232010,
+  "return_rate": 0.7295911949685535,
+  "filters": {
+    "min_odds": null,
+    "max_odds": null,
+    "min_popularity": null,
+    "max_popularity": null
+  },
+  "by_track": {
+    "01": {
+      "bet": 16800,
+      "return": 15650,
+      "hits": 47,
+      "return_rate": 0.9315476190476191
+    },
+    "02": {
+      "bet": 14400,
+      "return": 8580,
+      "hits": 34,
+      "return_rate": 0.5958333333333333
+    },
+    "03": {
+      "bet": 24000,
+      "return": 17650,
+      "hits": 51,
+      "return_rate": 0.7354166666666667
+    },
+    "04": {
+      "bet": 19200,
+      "return": 15740,
+      "hits": 53,
+      "return_rate": 0.8197916666666667
+    },
+    "05": {
+      "bet": 44400,
+      "return": 31550,
+      "hits": 113,
+      "return_rate": 0.7105855855855856
+    },
+    "06": {
+      "bet": 50400,
+      "return": 26090,
+      "hits": 101,
+      "return_rate": 0.5176587301587302
+    },
+    "07": {
+      "bet": 28800,
+      "return": 19980,
+      "hits": 69,
+      "return_rate": 0.69375
+    },
+    "08": {
+      "bet": 46800,
+      "return": 35100,
+      "hits": 112,
+      "return_rate": 0.75
+    },
+    "09": {
+      "bet": 49200,
+      "return": 44820,
+      "hits": 142,
+      "return_rate": 0.9109756097560976
+    },
+    "10": {
+      "bet": 24000,
+      "return": 16850,
+      "hits": 52,
+      "return_rate": 0.7020833333333333
+    }
+  }
+}

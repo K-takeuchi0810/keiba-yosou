@@ -1,0 +1,509 @@
+{
+  "rule_version": "p04-final-design",
+  "from_date": "20250601",
+  "to_date": "20251231",
+  "bet_type": "tan",
+  "elapsed_sec": 616.1,
+  "races_total": 2016,
+  "races_no_horses": 0,
+  "races_no_pick": 0,
+  "races_filtered": 0,
+  "races_tentative_skipped": 0,
+  "races_bet": 2016,
+  "hits": 437,
+  "hit_rate": 0.21676587301587302,
+  "bet_total": 201600,
+  "return_total": 141530,
+  "return_rate": 0.7020337301587302,
+  "all_bets": 2016,
+  "all_hits": 437,
+  "all_hit_rate": 0.21676587301587302,
+  "all_return_total": 141530,
+  "all_return_rate": 0.7020337301587302,
+  "buy_only_bets": 0,
+  "buy_only_hits": 0,
+  "buy_only_hit_rate": 0,
+  "buy_only_return_total": 0,
+  "buy_only_return_rate": 0,
+  "whitelist_only_bets": 547,
+  "whitelist_only_hits": 124,
+  "whitelist_only_hit_rate": 0.226691042047532,
+  "whitelist_only_return_total": 40640,
+  "whitelist_only_return_rate": 0.7429616087751371,
+  "calibration": {
+    "count": 27314,
+    "brier_score": 0.062046,
+    "log_loss": 0.223088,
+    "bins": [
+      {
+        "lower": 0.0,
+        "upper": 0.05,
+        "count": 15872,
+        "avg_probability": 0.0286,
+        "actual_win_rate": 0.0199,
+        "wins": 316
+      },
+      {
+        "lower": 0.05,
+        "upper": 0.1,
+        "count": 6910,
+        "avg_probability": 0.0705,
+        "actual_win_rate": 0.0835,
+        "wins": 577
+      },
+      {
+        "lower": 0.1,
+        "upper": 0.15,
+        "count": 2629,
+        "avg_probability": 0.1218,
+        "actual_win_rate": 0.1955,
+        "wins": 514
+      },
+      {
+        "lower": 0.15,
+        "upper": 0.2,
+        "count": 1061,
+        "avg_probability": 0.1716,
+        "actual_win_rate": 0.2846,
+        "wins": 302
+      },
+      {
+        "lower": 0.2,
+        "upper": 0.25,
+        "count": 478,
+        "avg_probability": 0.2216,
+        "actual_win_rate": 0.3598,
+        "wins": 172
+      },
+      {
+        "lower": 0.25,
+        "upper": 0.3,
+        "count": 227,
+        "avg_probability": 0.2702,
+        "actual_win_rate": 0.3436,
+        "wins": 78
+      },
+      {
+        "lower": 0.3,
+        "upper": 0.35,
+        "count": 85,
+        "avg_probability": 0.3205,
+        "actual_win_rate": 0.3882,
+        "wins": 33
+      },
+      {
+        "lower": 0.35,
+        "upper": 0.4,
+        "count": 32,
+        "avg_probability": 0.3649,
+        "actual_win_rate": 0.4375,
+        "wins": 14
+      },
+      {
+        "lower": 0.4,
+        "upper": 0.45,
+        "count": 15,
+        "avg_probability": 0.4304,
+        "actual_win_rate": 0.5333,
+        "wins": 8
+      },
+      {
+        "lower": 0.45,
+        "upper": 0.5,
+        "count": 5,
+        "avg_probability": 0.4781,
+        "actual_win_rate": 0.8,
+        "wins": 4
+      },
+      {
+        "lower": 0.5,
+        "upper": 0.55,
+        "count": 0,
+        "avg_probability": 0.0,
+        "actual_win_rate": 0.0,
+        "wins": 0
+      },
+      {
+        "lower": 0.55,
+        "upper": 0.6,
+        "count": 0,
+        "avg_probability": 0.0,
+        "actual_win_rate": 0.0,
+        "wins": 0
+      },
+      {
+        "lower": 0.6,
+        "upper": 0.65,
+        "count": 0,
+        "avg_probability": 0.0,
+        "actual_win_rate": 0.0,
+        "wins": 0
+      },
+      {
+        "lower": 0.65,
+        "upper": 0.7,
+        "count": 0,
+        "avg_probability": 0.0,
+        "actual_win_rate": 0.0,
+        "wins": 0
+      },
+      {
+        "lower": 0.7,
+        "upper": 0.75,
+        "count": 0,
+        "avg_probability": 0.0,
+        "actual_win_rate": 0.0,
+        "wins": 0
+      },
+      {
+        "lower": 0.75,
+        "upper": 0.8,
+        "count": 0,
+        "avg_probability": 0.0,
+        "actual_win_rate": 0.0,
+        "wins": 0
+      },
+      {
+        "lower": 0.8,
+        "upper": 0.85,
+        "count": 0,
+        "avg_probability": 0.0,
+        "actual_win_rate": 0.0,
+        "wins": 0
+      },
+      {
+        "lower": 0.85,
+        "upper": 0.9,
+        "count": 0,
+        "avg_probability": 0.0,
+        "actual_win_rate": 0.0,
+        "wins": 0
+      },
+      {
+        "lower": 0.9,
+        "upper": 0.95,
+        "count": 0,
+        "avg_probability": 0.0,
+        "actual_win_rate": 0.0,
+        "wins": 0
+      },
+      {
+        "lower": 0.95,
+        "upper": 1.0,
+        "count": 0,
+        "avg_probability": 0.0,
+        "actual_win_rate": 0.0,
+        "wins": 0
+      }
+    ]
+  },
+  "calibrator": {
+    "type": "bin",
+    "bin_size": 0.05,
+    "min_count": 20,
+    "source_count": 27314,
+    "brier_score": 0.062046,
+    "log_loss": 0.223088,
+    "bins": [
+      {
+        "lower": 0.0,
+        "upper": 0.05,
+        "count": 15872,
+        "avg_probability": 0.0286,
+        "calibrated_probability": 0.0199
+      },
+      {
+        "lower": 0.05,
+        "upper": 0.1,
+        "count": 6910,
+        "avg_probability": 0.0705,
+        "calibrated_probability": 0.0835
+      },
+      {
+        "lower": 0.1,
+        "upper": 0.15,
+        "count": 2629,
+        "avg_probability": 0.1218,
+        "calibrated_probability": 0.1955
+      },
+      {
+        "lower": 0.15,
+        "upper": 0.2,
+        "count": 1061,
+        "avg_probability": 0.1716,
+        "calibrated_probability": 0.2846
+      },
+      {
+        "lower": 0.2,
+        "upper": 0.25,
+        "count": 478,
+        "avg_probability": 0.2216,
+        "calibrated_probability": 0.3598
+      },
+      {
+        "lower": 0.25,
+        "upper": 0.3,
+        "count": 227,
+        "avg_probability": 0.2702,
+        "calibrated_probability": 0.3436
+      },
+      {
+        "lower": 0.3,
+        "upper": 0.35,
+        "count": 85,
+        "avg_probability": 0.3205,
+        "calibrated_probability": 0.3882
+      },
+      {
+        "lower": 0.35,
+        "upper": 0.4,
+        "count": 32,
+        "avg_probability": 0.3649,
+        "calibrated_probability": 0.4375
+      },
+      {
+        "lower": 0.4,
+        "upper": 0.45,
+        "count": 15,
+        "avg_probability": 0.4304,
+        "calibrated_probability": 0.4304
+      },
+      {
+        "lower": 0.45,
+        "upper": 0.5,
+        "count": 5,
+        "avg_probability": 0.4781,
+        "calibrated_probability": 0.4781
+      },
+      {
+        "lower": 0.5,
+        "upper": 0.55,
+        "count": 0,
+        "avg_probability": 0.0,
+        "calibrated_probability": 0.0
+      },
+      {
+        "lower": 0.55,
+        "upper": 0.6,
+        "count": 0,
+        "avg_probability": 0.0,
+        "calibrated_probability": 0.0
+      },
+      {
+        "lower": 0.6,
+        "upper": 0.65,
+        "count": 0,
+        "avg_probability": 0.0,
+        "calibrated_probability": 0.0
+      },
+      {
+        "lower": 0.65,
+        "upper": 0.7,
+        "count": 0,
+        "avg_probability": 0.0,
+        "calibrated_probability": 0.0
+      },
+      {
+        "lower": 0.7,
+        "upper": 0.75,
+        "count": 0,
+        "avg_probability": 0.0,
+        "calibrated_probability": 0.0
+      },
+      {
+        "lower": 0.75,
+        "upper": 0.8,
+        "count": 0,
+        "avg_probability": 0.0,
+        "calibrated_probability": 0.0
+      },
+      {
+        "lower": 0.8,
+        "upper": 0.85,
+        "count": 0,
+        "avg_probability": 0.0,
+        "calibrated_probability": 0.0
+      },
+      {
+        "lower": 0.85,
+        "upper": 0.9,
+        "count": 0,
+        "avg_probability": 0.0,
+        "calibrated_probability": 0.0
+      },
+      {
+        "lower": 0.9,
+        "upper": 0.95,
+        "count": 0,
+        "avg_probability": 0.0,
+        "calibrated_probability": 0.0
+      },
+      {
+        "lower": 0.95,
+        "upper": 1.0,
+        "count": 0,
+        "avg_probability": 0.0,
+        "calibrated_probability": 0.0
+      }
+    ]
+  },
+  "by_confidence": {
+    "接戦": {
+      "bets": 682,
+      "hits": 141,
+      "bet_total": 68200,
+      "return_total": 46870,
+      "hit_rate": 0.20674486803519063,
+      "return_rate": 0.6872434017595308,
+      "profit": -21330
+    },
+    "標準": {
+      "bets": 605,
+      "hits": 165,
+      "bet_total": 60500,
+      "return_total": 48200,
+      "hit_rate": 0.2727272727272727,
+      "return_rate": 0.7966942148760331,
+      "profit": -12300
+    },
+    "混戦": {
+      "bets": 616,
+      "hits": 99,
+      "bet_total": 61600,
+      "return_total": 39790,
+      "hit_rate": 0.16071428571428573,
+      "return_rate": 0.6459415584415584,
+      "profit": -21810
+    },
+    "高信頼": {
+      "bets": 113,
+      "hits": 32,
+      "bet_total": 11300,
+      "return_total": 6670,
+      "hit_rate": 0.2831858407079646,
+      "return_rate": 0.5902654867256637,
+      "profit": -4630
+    }
+  },
+  "filters": {
+    "min_odds": null,
+    "max_odds": null,
+    "min_popularity": null,
+    "max_popularity": null
+  },
+  "buy_filter": null,
+  "by_track": {
+    "01": {
+      "bet": 16800,
+      "return": 13440,
+      "hits": 40,
+      "return_rate": 0.8
+    },
+    "02": {
+      "bet": 14400,
+      "return": 6840,
+      "hits": 26,
+      "return_rate": 0.475
+    },
+    "03": {
+      "bet": 16800,
+      "return": 11300,
+      "hits": 32,
+      "return_rate": 0.6726190476190477
+    },
+    "04": {
+      "bet": 19200,
+      "return": 17300,
+      "hits": 47,
+      "return_rate": 0.9010416666666666
+    },
+    "05": {
+      "bet": 31200,
+      "return": 20060,
+      "hits": 67,
+      "return_rate": 0.642948717948718
+    },
+    "06": {
+      "bet": 20400,
+      "return": 12540,
+      "hits": 42,
+      "return_rate": 0.6147058823529412
+    },
+    "07": {
+      "bet": 21600,
+      "return": 12570,
+      "hits": 43,
+      "return_rate": 0.5819444444444445
+    },
+    "08": {
+      "bet": 24000,
+      "return": 14100,
+      "hits": 44,
+      "return_rate": 0.5875
+    },
+    "09": {
+      "bet": 27600,
+      "return": 25930,
+      "hits": 75,
+      "return_rate": 0.9394927536231884
+    },
+    "10": {
+      "bet": 9600,
+      "return": 7450,
+      "hits": 21,
+      "return_rate": 0.7760416666666666
+    }
+  },
+  "by_class": {
+    "cond": {
+      "bet": 146800,
+      "return": 102330,
+      "hits": 336,
+      "return_rate": 0.6970708446866485
+    },
+    "graded": {
+      "bet": 7200,
+      "return": 2790,
+      "hits": 8,
+      "return_rate": 0.3875
+    },
+    "jraded": {
+      "bet": 500,
+      "return": 190,
+      "hits": 1,
+      "return_rate": 0.38
+    },
+    "op": {
+      "bet": 47100,
+      "return": 36220,
+      "hits": 92,
+      "return_rate": 0.7690021231422506
+    }
+  },
+  "by_bucket": {
+    "long": {
+      "bet": 14300,
+      "return": 11670,
+      "hits": 34,
+      "return_rate": 0.8160839160839161
+    },
+    "middle": {
+      "bet": 28900,
+      "return": 19690,
+      "hits": 66,
+      "return_rate": 0.6813148788927336
+    },
+    "mile": {
+      "bet": 86900,
+      "return": 64140,
+      "hits": 201,
+      "return_rate": 0.7380897583429229
+    },
+    "sprint": {
+      "bet": 71500,
+      "return": 46030,
+      "hits": 136,
+      "return_rate": 0.6437762237762238
+    }
+  }
+}
