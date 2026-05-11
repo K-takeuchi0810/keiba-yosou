@@ -119,15 +119,22 @@ data/
 
 ## 新セッション開始時のチェックリスト
 
+> **⚠ 鉄則**: ステップ 1 (`git status`) は省略しない。
+> 未コミットの変更や未追跡ファイルが残っていれば、**新規改修に着手する前にコミット or 退避**。
+> 過去、`master` 側に `config.py` `CLAUDE.md` `scripts/filter_sweep.py` 等の主要ファイルが untracked のまま長期間放置され、worktree 側のファイル一覧 (スパース) と乖離して優先課題リストが噛み合わない事故が起きた (2026-05-12)。
+> スパースな worktree に居ても、迷ったら親リポ (`C:\Users\kizun\dev\keiba-yosou`) でも `git status` を取ること。
+
 ```bash
-# 1. 最新 scorecard を確認 (現状把握)
+# 1. 未コミット差分があるか (★最優先★ — 残っていれば先にコミット)
+git status
+# 親リポでも (worktree に居る場合)
+cd C:/Users/kizun/dev/keiba-yosou && git status
+
+# 2. 最新 scorecard を確認 (現状把握)
 ls -lt data/scorecards/*.md | head -5
 
-# 2. 直近 backtest を確認 (数値把握)
+# 3. 直近 backtest を確認 (数値把握)
 ls -lt data/backtest/*.json | head -5
-
-# 3. 未コミット差分があるか
-git status
 
 # 4. 構文 + JS パースが通っているか (運用準備)
 .venv32/Scripts/python.exe -c "

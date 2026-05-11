@@ -4,6 +4,14 @@
 
 ## 必須ルール
 
+### 0. セッション開始時は `git status` を必ず確認
+
+新しいセッションを開いたら **まず `git status`** を確認する。
+
+- 未コミットの変更や未追跡ファイルがあれば、**新規改修に着手する前に整理する** (コミット or 退避 or 削除)。
+- 過去にここを怠った結果、本体ファイル (`config.py`, `CLAUDE.md`, `scripts/filter_sweep.py` 等) が長期間 untracked のまま放置され、`master` と worktree branch でファイル構成が乖離して優先課題リスト (`project-state`) と現実が噛み合わない事故が起きた。
+- スパースな worktree (`condescending-ellis-a242c5` 等) に居ても、`master` 側に未コミットの主要ファイルが居る可能性があるので、迷ったら親リポも見る。
+
 ### 1. 改修ごとに `expert-review` を必ず実行 (D1 モード)
 
 `gui/` `predictor/` `jvlink_client/` `web/` `scripts/` 配下、または `weights.json` `calibrator.json` `schema.sql` のいずれかを編集して **タスク完了を宣言する直前** に、`expert-review` メタスキルを必ず通す。
