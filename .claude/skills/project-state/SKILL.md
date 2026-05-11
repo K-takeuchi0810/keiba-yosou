@@ -61,11 +61,10 @@ BUY_FILTER_DEFAULT = {
 ## 直近の重要な指摘 (= 次の改修候補、優先順)
 
 ### 🔴 即対処すべき軽微回帰
-1. **backtest 出力に calibration メタを復元** (検証プロセス指摘)
-   - `data/backtest/*p04*.json` で `brier_score` `log_loss` `reliability_bins` が欠落
-   - `scripts/backtest.py` のどこかで calibration 出力が漏れている
-2. **filter_sweep.py の WHITELIST_GRADES/TRACKS を config 参照に** (コード品質指摘)
-   - `scripts/filter_sweep.py:23-24` で再定義されている → `from config import BUY_FILTER_DEFAULT` 経由に
+1. ~~**backtest 出力に calibration メタを復元**~~ ✅ **解決済み (2026-05-12 確認)**
+   - 全 p04 backtest で `count=16550 / brier=0.057508 / bins=20` 確認済。`scripts/backtest.py:351` で `calibration_report()` を正常に出力中。リスト上の指摘は古い。
+2. ~~**filter_sweep.py の WHITELIST_GRADES/TRACKS を config 参照に**~~ ✅ **解決済み (2026-05-12)**
+   - `scripts/filter_sweep.py:18-22` で `from config import BUY_FILTER_DEFAULT` → `frozenset(BUY_FILTER_DEFAULT["whitelist_grades"|"whitelist_tracks"])` 経由に変更済。
 
 ### 🟠 高インパクト未着手
 3. **`wl_odds_8_20` 路線で +100% 超え探索** (収益性)

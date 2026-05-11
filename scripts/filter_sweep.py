@@ -15,13 +15,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from config import BUY_FILTER_DEFAULT
 from db import open_db
 from predictor.rules import is_tentative, predict_race
 from scripts.backtest import get_payout, horses_for_race, list_races
 
-# 重賞ホワイトリストモード判定 (config.BUY_FILTER_DEFAULT と一致)
-WHITELIST_GRADES = {"A", "B", "C", "F"}  # G1/G2/G3/重賞
-WHITELIST_TRACKS = {"07", "09"}           # 中山, 京都
+WHITELIST_GRADES = frozenset(BUY_FILTER_DEFAULT["whitelist_grades"])
+WHITELIST_TRACKS = frozenset(BUY_FILTER_DEFAULT["whitelist_tracks"])
 
 
 @dataclass
