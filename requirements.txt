@@ -1,0 +1,11 @@
+# 32bit Python 環境用（JVLink 呼び出し）
+pywin32
+
+# GUI（管理画面）
+pywebview
+
+# HTML テンプレート
+jinja2
+
+# .env からのサービスキー読み込み
+python-dotenv

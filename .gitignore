@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.venv32/
+*.egg-info/
+
+# データ（取得済みレースデータ・SQLite 等は同期しない）
+data/*
+!data/.gitkeep
+!data/schema.sql
+# 採点履歴・backtest 履歴は追跡する (A/B 比較・品質ログ)
+!data/scorecards/
+!data/scorecards/**
+!data/backtest/
+!data/backtest/**
+
+# OS / エディタ
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# 環境変数（サービスキー等の機密情報）
+.env
+*.local
+
+# JV-Data 仕様書 PDF など、再配布制限のあるドキュメント
+docs/
+
+# Claude Code (worktree 状態 / ローカル設定は共有しない)
+.claude/worktrees/
+.claude/settings.local.json
+
+# 生成物 (web/generator.py が render 毎に再生成)
+web/dist/
