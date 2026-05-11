@@ -74,5 +74,110 @@
     "op_unproven_score_penalty": 4,
     "sprint_unproven_score_penalty": 3,
     "low_roi_track_value_penalty": 6
+  },
+  "_comment_p11": "P1-1: rules.py の直書き定数を namespace ごとに移送。各 key は _w(\"namespace.key\", default) で参照。値は backtest 結果に応じて調整可。",
+  "track_type": {
+    "_comment": "同種トラック (芝/ダート) 実績",
+    "win_per_count": 5,
+    "top3_count_threshold": 4
+  },
+  "distance": {
+    "_comment": "同距離 ±100m / 距離バケット",
+    "top3_per_count": 4,
+    "runs_threshold": 3,
+    "long_win_per_count": 6,
+    "long_top3_count": 8,
+    "long_top3_single": 4,
+    "long_unproven_penalty": -6,
+    "long_poor_penalty": -5,
+    "long_front_leg_bonus": 3
+  },
+  "course": {
+    "_comment": "同競馬場・同コース距離帯",
+    "win_per_count": 4,
+    "top3_count_threshold": 5,
+    "poor_penalty": -3,
+    "course_distance_top3_per_count": 3,
+    "course_distance_poor_penalty": -2
+  },
+  "class_level": {
+    "_comment": "クラス階級経験 (current_level >= 5 = OP/重賞)",
+    "graded_win_bonus": 8,
+    "non_graded_win_bonus": 5,
+    "top3_threshold": 7,
+    "top3_single": 4,
+    "graded_runs_penalty": -8,
+    "non_graded_runs_penalty": -5,
+    "graded_condition_bonus": 4,
+    "non_graded_condition_bonus": 3,
+    "rise_penalty": -6,
+    "rise_minor_penalty": -3,
+    "drop_bonus": 4,
+    "graded_unproven_penalty": -8,
+    "elevated_unproven_penalty": -3,
+    "close_loss_graded_bonus": 5,
+    "close_loss_non_graded_bonus": 3,
+    "midfield_close_bonus": 2
+  },
+  "had_grade_run_bonus": 5,
+  "condition": {
+    "_comment": "状態 (休み明け / 馬体減 / 前走大敗)",
+    "rest_long_penalty": -6,
+    "rest_medium_penalty": -3,
+    "last_finish_bad_penalty": -5,
+    "last_finish_poor_penalty": -3,
+    "weight_drop_heavy_penalty": -5,
+    "weight_drop_moderate_penalty": -3
+  },
+  "jockey": {
+    "_comment": "騎手勝率 (n>=30)",
+    "elite_bonus": 12,
+    "good_bonus": 6,
+    "weak_penalty": -4
+  },
+  "trainer": {
+    "_comment": "調教師勝率 (n>=30)",
+    "elite_bonus": 6,
+    "good_bonus": 2
+  },
+  "going": {
+    "_comment": "道悪 (turf_condition / dirt_condition in 2/3/4)",
+    "good_bonus": 5,
+    "poor_penalty": -4
+  },
+  "time_signal": {
+    "_comment": "持ち時計・相対時計・上がり3F順位",
+    "best_per100m_bonus": 3,
+    "best_per100m_penalty": -2,
+    "relative_time_excellent": 4,
+    "relative_time_poor": -3,
+    "final3f_rank1": 4,
+    "final3f_rank2to3": 2
+  },
+  "bloodline": {
+    "_comment": "父系・母父系の同馬場/距離/道悪統計 (× blood_weight)",
+    "sire_surface_strong": 5,
+    "sire_surface_weak": -3,
+    "sire_distance_strong": 4,
+    "sire_distance_weak": -3,
+    "dam_sire_surface_strong": 3,
+    "dam_sire_surface_weak": -2,
+    "dam_sire_distance_strong": 3,
+    "dam_sire_distance_weak": -2,
+    "sire_going_strong": 5,
+    "sire_going_weak": -4,
+    "dam_sire_going_strong": 3,
+    "dam_sire_going_weak": -2,
+    "long_blood_backup": 3,
+    "long_blood_lacking": -4,
+    "matched_combo_bonus": 4,
+    "young_horse_with_blood_team": 3
+  },
+  "recent_form": {
+    "_comment": "直近 3 走の派生 (上昇/下降 / 連続好走)",
+    "wins_2plus_bonus": 4,
+    "top3_2plus_bonus": 3,
+    "trend_up_bonus": 2,
+    "trend_down_penalty": -2
   }
 }

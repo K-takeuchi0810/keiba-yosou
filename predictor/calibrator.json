@@ -1,8 +1,10 @@
 {
   "type": "bin",
   "bin_size": 0.05,
-  "min_count": 20,
+  "min_count": 50,
+  "shrinkage_alpha": 30,
   "source_count": 512,
+  "_comment_min_count": "count < min_count の bin は calibrated を捨てて raw 確率に寄せる。少サンプル bin の過学習を防ぐ。値変更後は scripts/backtest.py --save-calibrator で再生成推奨。",
   "brier_score": 0.058346,
   "log_loss": 0.210631,
   "bins": [

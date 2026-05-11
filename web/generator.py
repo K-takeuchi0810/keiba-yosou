@@ -11,7 +11,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from config import ICLOUD_PUBLISH_DIR, WEB_DIST
+from config import BUY_FILTER_DEFAULT, ICLOUD_PUBLISH_DIR, WEB_DIST, is_whitelisted_race
 from db import open_db
 from predictor import is_tentative, predict_race
 from web.codes import (
@@ -28,10 +28,18 @@ from web.codes import (
 )
 
 TEMPLATES = Path(__file__).resolve().parent / "templates"
-BET_MIN_ODDS = 2.0
-BET_MAX_ODDS = 8.0
-BET_MIN_VALUE = 10.0
-BET_MIN_EV = 1.10
+
+# 買い目フィルタの既定値は `config.BUY_FILTER_DEFAULT` が唯一の出典。
+# 既存コード (gui / backtest 等) が `BET_MIN_*` を import している関係で、
+# シンボル名はそのまま残し、実体を config からたどる薄いシムにしている。
+BET_MIN_ODDS: float = float(BUY_FILTER_DEFAULT["min_odds"])
+BET_MAX_ODDS: float = float(BUY_FILTER_DEFAULT["max_odds"])
+# None なら「制約なし」を意味するため、それぞれ -inf へフォールバック (>= 比較で常に True)
+_mv = BUY_FILTER_DEFAULT.get("min_value")
+BET_MIN_VALUE: float = float(_mv) if _mv is not None else float("-inf")
+_me = BUY_FILTER_DEFAULT.get("min_ev")
+BET_MIN_EV: float = float(_me) if _me is not None else float("-inf")
+BET_MAX_ODDS_AGE_MIN: int = int(BUY_FILTER_DEFAULT["max_odds_age_min"])
 
 
 def _surface_class(t: str) -> str:
@@ -95,6 +103,15 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
 
         for key, raws in raw_horses_by_race.items():
             race_dict = race_by_key.get(key, {})
+            # horse_num が "00" / "" の行は出馬表未確定のプレースホルダ。
+            # 残すと HTML に「0」が並び、予想ロジックも無意味な行を含めて
+            # スコアリングしてしまうため、ここで弾く。
+            raws = [
+                h for h in raws
+                if (h.get("horse_num") or "").strip() not in ("", "00")
+            ]
+            if not raws:
+                continue
             preds = predict_race(raws, conn=conn, race=race_dict, cache=feature_cache)
             mark_by_num = {p.horse_num: p for p in preds}
             tentative_by_race[key] = is_tentative(preds)
@@ -128,6 +145,13 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
                 for h in raws_sorted
             ]
             # 印つきトップ 3 を抜粋（根拠付き）
+            # 重賞ホワイトリストモードでは、race が whitelist 条件を満たさない
+            # 場合 bet_candidate を False に強制する。
+            race_whitelisted = is_whitelisted_race(race_dict)
+            # 人気帯 / 信頼度除外も config から読む (P0-4 の sweep 結果反映)
+            wl_min_pop = int(BUY_FILTER_DEFAULT.get("min_popularity", 1))
+            wl_max_pop = int(BUY_FILTER_DEFAULT.get("max_popularity", 18))
+            wl_exclude_conf = BUY_FILTER_DEFAULT.get("exclude_confidence", ["暫定", "混戦", "接戦"])
             top_picks_by_race[key] = [
                 {
                     "mark": p.mark,
@@ -139,15 +163,19 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
                     "popularity": next((r["win_popularity"] for r in raws
                                         if r["horse_num"] == p.horse_num), 0) or 0,
                     "bet_candidate": (
-                        p.rank == 1 and not tentative_by_race.get(key, False)
-                        and p.confidence not in ("暫定", "混戦", "接戦")
+                        race_whitelisted
+                        and p.rank == 1 and not tentative_by_race.get(key, False)
+                        and p.confidence not in wl_exclude_conf
                         and p.value_score >= BET_MIN_VALUE
                         and p.expected_value >= BET_MIN_EV
-                        and p.kelly_fraction > 0
                         and BET_MIN_ODDS <= (
                             (next((r["win_odds"] for r in raws
                                    if r["horse_num"] == p.horse_num), 0) or 0) / 10.0
                         ) <= BET_MAX_ODDS
+                        and wl_min_pop <= (
+                            next((r["win_popularity"] for r in raws
+                                  if r["horse_num"] == p.horse_num), 0) or 0
+                        ) <= wl_max_pop
                     ),
                     "rationale": p.rationale,
                     "confidence": p.confidence,

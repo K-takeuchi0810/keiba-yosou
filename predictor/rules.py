@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import math
 import json
@@ -24,6 +25,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .features import compute_features
+
+logger = logging.getLogger(__name__)
 
 MARKS = ["◎", "○", "▲", "△", "☆"]
 
@@ -127,69 +130,69 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
         score += _w("recent_best_win", 8)
         reasons.append("直近で1着あり")
 
-    # 同種トラック実績
+    # 直近 3 走由来 (連続好走 / トレンド)
     recent_top3 = feat.get("recent_top3_count", 0) or 0
     recent_wins = feat.get("recent_win_count", 0) or 0
     if recent_wins >= 2:
-        score += 4
+        score += _w("recent_form.wins_2plus_bonus", 4)
         reasons.append(f"直近勝利{recent_wins}回")
     elif recent_top3 >= 2:
-        score += 3
+        score += _w("recent_form.top3_2plus_bonus", 3)
         reasons.append(f"直近3着内{recent_top3}回")
     trend = feat.get("recent_trend_delta")
     if trend is not None:
         if trend <= -3:
-            score += 2
+            score += _w("recent_form.trend_up_bonus", 2)
             reasons.append("近走上昇")
         elif trend >= 4:
-            score -= 2
+            score += _w("recent_form.trend_down_penalty", -2)
             reasons.append("近走下降")
 
+    # 同種トラック (芝/ダート) 実績
     stt_top3 = feat.get("same_track_type_top3", 0)
     stt_wins = feat.get("same_track_type_wins", 0)
     if stt_wins >= 1:
-        score += min(stt_wins, 3) * 5
+        score += min(stt_wins, 3) * _w("track_type.win_per_count", 5)
         reasons.append(f"同種T{stt_wins}勝")
     elif stt_top3 >= 2:
-        score += 4
+        score += _w("track_type.top3_count_threshold", 4)
         reasons.append(f"同種T複勝{stt_top3}回")
 
-    # 同距離適性
+    # 同距離適性 (±100m)
     sd_runs = feat.get("same_distance_runs", 0)
     sd_top3 = feat.get("same_distance_top3", 0)
     if sd_top3 >= 1:
-        score += sd_top3 * 4
+        score += sd_top3 * _w("distance.top3_per_count", 4)
         reasons.append(f"同距離複勝{sd_top3}回")
     elif sd_runs >= 3:
-        score += 3
+        score += _w("distance.runs_threshold", 3)
         reasons.append(f"同距離{sd_runs}走")
 
     # 長距離適性 (Phase 2-A): 距離バケットで同一の実績は ±100m より広く拾えるので、
     # 2201m+ (long バケット) のレースで「適性ありを強く評価/未経験を強く減点」する。
-    # 短〜中距離では既存の同距離・同コース距離帯シグナルで十分なので、long のみ追加。
     if V2_DIST_ENABLED and feat.get("current_bucket") == "long":
         sb_runs = feat.get("same_bucket_runs", 0) or 0
         sb_top3 = feat.get("same_bucket_top3", 0) or 0
         sb_wins = feat.get("same_bucket_wins", 0) or 0
         if sb_wins >= 1:
-            score += min(sb_wins, 2) * 6
+            score += min(sb_wins, 2) * _w("distance.long_win_per_count", 6)
             reasons.append(f"長距離{sb_wins}勝")
         elif sb_top3 >= 2:
-            score += 8
+            score += _w("distance.long_top3_count", 8)
             reasons.append(f"長距離複勝{sb_top3}回")
         elif sb_top3 == 1:
-            score += 4
+            score += _w("distance.long_top3_single", 4)
             reasons.append("長距離複勝あり")
         elif sb_runs == 0 and feat.get("past_count", 0) >= 3:
-            score -= 6
+            score += _w("distance.long_unproven_penalty", -6)
             reasons.append("長距離未経験")
         elif sb_runs >= 3 and sb_top3 == 0:
-            score -= 5
+            score += _w("distance.long_poor_penalty", -5)
             reasons.append(f"長距離不振{sb_runs}走")
         # 脚質: 長距離は前残りが効きやすい (1=逃, 2=先)
         leg = feat.get("leg_code") or ""
         if leg in ("1", "2"):
-            score += 3
+            score += _w("distance.long_front_leg_bonus", 3)
             note = "長距離向き脚質"
             if not feat.get("leg_quality_available") and feat.get("estimated_leg_code"):
                 note += f"(推定{feat.get('estimated_leg_samples', 0)}走)"
@@ -202,76 +205,91 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     scd_runs = feat.get("same_course_distance_runs", 0)
     scd_top3 = feat.get("same_course_distance_top3", 0)
     if sc_wins >= 1:
-        score += min(sc_wins, 2) * 4
+        score += min(sc_wins, 2) * _w("course.win_per_count", 4)
         reasons.append(f"同場{sc_wins}勝")
     elif sc_top3 >= 2:
-        score += 5
+        score += _w("course.top3_count_threshold", 5)
         reasons.append(f"同場複勝{sc_top3}回")
     elif sc_runs >= 3 and sc_top3 == 0:
-        score -= 3
+        score += _w("course.poor_penalty", -3)
         reasons.append(f"同場不振{sc_runs}走")
     if scd_top3 >= 1:
-        score += min(scd_top3, 2) * 3
+        score += min(scd_top3, 2) * _w("course.course_distance_top3_per_count", 3)
         reasons.append(f"同場距離帯複勝{scd_top3}回")
     elif scd_runs >= 3:
-        score -= 2
+        score += _w("course.course_distance_poor_penalty", -2)
         reasons.append(f"同場距離帯不振{scd_runs}走")
 
     # 重賞経験
     if feat.get("had_grade_run"):
-        score += 5
+        score += _w("had_grade_run_bonus", 5)
         reasons.append("重賞経験あり")
 
     class_rise = feat.get("class_rise_points", 0) or 0
     class_drop = feat.get("class_drop_points", 0) or 0
     best_top3_level = feat.get("best_top3_race_level", 0) or 0
     if class_rise >= 2:
-        score -= 6
+        score += _w("class_level.rise_penalty", -6)
         reasons.append(f"格上挑戦+{class_rise}")
     elif class_rise >= 1 and current_level >= 5:
-        score -= 3
+        score += _w("class_level.rise_minor_penalty", -3)
         reasons.append("上級条件で実績薄")
     elif class_drop >= 2:
-        score += 4
+        score += _w("class_level.drop_bonus", 4)
         reasons.append("相手関係緩和")
     if current_level >= 7 and best_top3_level and best_top3_level <= current_level - 2:
-        score -= 8
+        score += _w("class_level.graded_unproven_penalty", -8)
     elif current_level >= 5 and best_top3_level and best_top3_level <= current_level - 2:
-        score -= 3
+        score += _w("class_level.elevated_unproven_penalty", -3)
     if current_level >= 5:
         class_runs = feat.get("class_level_runs", 0) or 0
         class_wins = feat.get("class_level_wins", 0) or 0
         class_top3 = feat.get("class_level_top3", 0) or 0
         class_condition_top3 = feat.get("class_condition_top3", 0) or 0
         if class_wins:
-            win_bonus = 8 if current_level >= 7 else 5
+            win_bonus = (
+                _w("class_level.graded_win_bonus", 8)
+                if current_level >= 7
+                else _w("class_level.non_graded_win_bonus", 5)
+            )
             score += min(class_wins, 2) * win_bonus
             reasons.append(f"同格以上{class_wins}勝")
         elif class_top3 >= 2:
-            score += 7
+            score += _w("class_level.top3_threshold", 7)
             reasons.append(f"同格以上複勝{class_top3}回")
         elif class_top3 == 1:
-            score += 4
+            score += _w("class_level.top3_single", 4)
             reasons.append("同格以上複勝あり")
         elif class_runs >= 3:
-            score -= 8 if current_level >= 7 else 5
+            score += (
+                _w("class_level.graded_runs_penalty", -8)
+                if current_level >= 7
+                else _w("class_level.non_graded_runs_penalty", -5)
+            )
             reasons.append("同格以上実績不足")
         if class_condition_top3:
-            condition_bonus = 4 if current_level >= 7 else 3
+            condition_bonus = (
+                _w("class_level.graded_condition_bonus", 4)
+                if current_level >= 7
+                else _w("class_level.non_graded_condition_bonus", 3)
+            )
             score += min(class_condition_top3, 2) * condition_bonus
             reasons.append(f"同格条件複勝{class_condition_top3}回")
 
         # 同格以上の「接戦敗」: 着外でも勝ち馬から +0.5 秒以内なら地力評価。
-        # 重賞では着順が悪くても内容が良ければ次走で巻き返す可能性が高い。
         if V2_GRADE_ENABLED:
             close_loss = feat.get("high_grade_close_loss", 0) or 0
             midfield_close = feat.get("high_grade_midfield_close", 0) or 0
             if close_loss >= 1:
-                base_bonus = 5 if current_level >= 7 else 3
+                base_bonus = (
+                    _w("class_level.close_loss_graded_bonus", 5)
+                    if current_level >= 7
+                    else _w("class_level.close_loss_non_graded_bonus", 3)
+                )
                 score += min(close_loss, 3) * base_bonus
                 reasons.append(f"同格以上接戦敗{close_loss}回")
             if midfield_close >= 1:
-                score += min(midfield_close, 2) * 2
+                score += min(midfield_close, 2) * _w("class_level.midfield_close_bonus", 2)
                 reasons.append(f"同格以上中位コンマ差{midfield_close}回")
 
         if V2_GRADE_ENABLED and 5 <= current_level < 7 and class_top3 == 0 and (feat.get("high_grade_close_loss", 0) or 0) == 0 and (feat.get("high_grade_midfield_close", 0) or 0) == 0:
@@ -280,19 +298,19 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     days_since_last = feat.get("days_since_last")
     if days_since_last is not None:
         if days_since_last >= 100:
-            score -= 6
+            score += _w("condition.rest_long_penalty", -6)
             reasons.append(f"休み明け{days_since_last}日")
         elif days_since_last >= 70:
-            score -= 3
+            score += _w("condition.rest_medium_penalty", -3)
             reasons.append(f"間隔長め{days_since_last}日")
 
     last_finish = feat.get("last_finish")
     if last_finish is not None:
         if last_finish >= 12:
-            score -= 5
+            score += _w("condition.last_finish_bad_penalty", -5)
             reasons.append(f"前走大敗{last_finish}着")
         elif last_finish >= 8:
-            score -= 3
+            score += _w("condition.last_finish_poor_penalty", -3)
             reasons.append(f"前走{last_finish}着")
 
     burden_delta = feat.get("burden_delta")
@@ -308,10 +326,10 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     if sign == "-" and diff_text.isdigit():
         weight_drop = int(diff_text)
         if weight_drop >= 14:
-            score -= 5
+            score += _w("condition.weight_drop_heavy_penalty", -5)
             reasons.append(f"馬体減-{weight_drop}kg")
         elif weight_drop >= 10:
-            score -= 3
+            score += _w("condition.weight_drop_moderate_penalty", -3)
             reasons.append(f"馬体減-{weight_drop}kg")
 
     # 騎手勝率（直近 100 騎乗）
@@ -319,13 +337,13 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     jn = feat.get("jockey_rides", 0)
     if jr is not None and jn >= 30:
         if jr >= 0.20:
-            score += 12
+            score += _w("jockey.elite_bonus", 12)
             reasons.append(f"騎手勝率{jr * 100:.0f}%")
         elif jr >= 0.12:
-            score += 6
+            score += _w("jockey.good_bonus", 6)
             reasons.append(f"騎手勝率{jr * 100:.0f}%")
         elif jr < 0.04:
-            score -= 4
+            score += _w("jockey.weak_penalty", -4)
             reasons.append(f"騎手勝率{jr * 100:.0f}%")
 
     # 調教師勝率
@@ -333,10 +351,10 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     tn = feat.get("trainer_runs", 0)
     if tr is not None and tn >= 30:
         if tr >= 0.18:
-            score += 6
+            score += _w("trainer.elite_bonus", 6)
             reasons.append(f"調教師勝率{tr * 100:.0f}%")
         elif tr >= 0.10:
-            score += 2
+            score += _w("trainer.good_bonus", 2)
             reasons.append(f"調教師勝率{tr * 100:.0f}%")
 
     # マイニング予想（直前のみ入る。最強シグナル）
@@ -371,7 +389,9 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     if leg and not feat.get("leg_quality_available") and feat.get("estimated_leg_code"):
         reasons.append(f"脚質推定{leg}({feat.get('estimated_leg_samples', 0)}走)")
 
-    # 異常区分（取消・除外）
+    # 異常区分（取消・除外）。これは「数値ペナルティ」ではなく
+    # 「最下位確定マーカー」(他のシグナル合計を確実に上回る大値) なので、
+    # weights.json の調整対象外。意図的に直書き。
     abnormal = (horse.get("abnormal_code") or "").strip()
     if abnormal and abnormal != "0":
         score -= 1000
@@ -393,10 +413,10 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
         sg_runs = feat.get("same_going_runs", 0) or 0
         sg_top3 = feat.get("same_going_top3", 0) or 0
         if sg_top3 >= 2:
-            score += 5
+            score += _w("going.good_bonus", 5)
             reasons.append(f"道悪実績{sg_top3}/{sg_runs}")
         elif sg_runs >= 3 and sg_top3 == 0:
-            score -= 4
+            score += _w("going.poor_penalty", -4)
             reasons.append(f"道悪不振{sg_runs}走")
 
     best_3f = feat.get("best_final_3f")
@@ -417,42 +437,42 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
         score -= _w("risk.sprint_unproven_score_penalty", 3)
         reasons.append("sprint risk")
     if avg_3f and avg_3f >= 390 and feat.get("past_count", 0) >= 3:
-        score -= 3
+        score += _w("time_signal.best_per100m_penalty", -3)
         reasons.append(f"上がり鈍い{avg_3f / 10:.1f}")
 
     best_time = feat.get("best_time_per_100m")
     if best_time:
         if best_time <= 5.9:
-            score += 3
+            score += _w("time_signal.best_per100m_bonus", 3)
             reasons.append("持ち時計優秀")
         elif best_time >= 6.8 and feat.get("past_count", 0) >= 3:
-            score -= 2
+            score += _w("time_signal.best_per100m_penalty", -2)
             reasons.append("持ち時計平凡")
     rel_time = feat.get("best_relative_time_diff")
     if rel_time is not None:
         if rel_time <= 2:
-            score += 4
+            score += _w("time_signal.relative_time_excellent", 4)
             reasons.append("相対時計優秀")
         elif rel_time >= 12 and feat.get("past_count", 0) >= 3:
-            score -= 3
+            score += _w("time_signal.relative_time_poor", -3)
             reasons.append("相対時計不足")
     final3_rank = feat.get("best_final_3f_rank")
     if final3_rank is not None:
         if final3_rank == 1:
-            score += 4
+            score += _w("time_signal.final3f_rank1", 4)
             reasons.append("上がり1位経験")
         elif final3_rank <= 3:
-            score += 2
+            score += _w("time_signal.final3f_rank2to3", 2)
             reasons.append(f"上がり{final3_rank}位経験")
 
     sr = feat.get("sire_surface_top3_rate")
     sn = feat.get("sire_surface_samples", 0)
     if sr is not None and sn >= 30:
         if sr >= 0.38:
-            score += 5 * blood_weight
+            score += _w("bloodline.sire_surface_strong", 5) * blood_weight
             reasons.append(f"父系同馬場複勝{sr * 100:.0f}%")
         elif sr <= 0.18:
-            score -= 3 * blood_weight
+            score += _w("bloodline.sire_surface_weak", -3) * blood_weight
             reasons.append(f"父系同馬場低調{sr * 100:.0f}%")
     elif not feat.get("bloodline_data_available", True):
         reasons.append("血統データ未投入")
@@ -461,50 +481,50 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     sdn = feat.get("sire_distance_samples", 0)
     if sdr is not None and sdn >= 30:
         if sdr >= 0.40:
-            score += 4 * blood_weight
+            score += _w("bloodline.sire_distance_strong", 4) * blood_weight
             reasons.append(f"父系距離帯複勝{sdr * 100:.0f}%")
         elif sdr <= 0.18:
-            score -= 3 * blood_weight
+            score += _w("bloodline.sire_distance_weak", -3) * blood_weight
             reasons.append(f"父系距離帯低調{sdr * 100:.0f}%")
 
     dsr = feat.get("dam_sire_surface_top3_rate")
     dsn = feat.get("dam_sire_surface_samples", 0)
     if dsr is not None and dsn >= 30:
         if dsr >= 0.38:
-            score += 3 * blood_weight
+            score += _w("bloodline.dam_sire_surface_strong", 3) * blood_weight
             reasons.append(f"母父同馬場複勝{dsr * 100:.0f}%")
         elif dsr <= 0.18:
-            score -= 2 * blood_weight
+            score += _w("bloodline.dam_sire_surface_weak", -2) * blood_weight
             reasons.append(f"母父同馬場低調{dsr * 100:.0f}%")
 
     ddr = feat.get("dam_sire_distance_top3_rate")
     ddn = feat.get("dam_sire_distance_samples", 0)
     if ddr is not None and ddn >= 30:
         if ddr >= 0.40:
-            score += 3 * blood_weight
+            score += _w("bloodline.dam_sire_distance_strong", 3) * blood_weight
             reasons.append(f"母父距離帯複勝{ddr * 100:.0f}%")
         elif ddr <= 0.18:
-            score -= 2 * blood_weight
+            score += _w("bloodline.dam_sire_distance_weak", -2) * blood_weight
             reasons.append(f"母父距離帯低調{ddr * 100:.0f}%")
 
     sgr = feat.get("sire_going_top3_rate")
     sgn = feat.get("sire_going_samples", 0)
     if going in ("2", "3", "4") and sgr is not None and sgn >= 20:
         if sgr >= 0.38:
-            score += 5 * blood_weight
+            score += _w("bloodline.sire_going_strong", 5) * blood_weight
             reasons.append(f"父系道悪{sgr * 100:.0f}%")
         elif sgr <= 0.18:
-            score -= 4 * blood_weight
+            score += _w("bloodline.sire_going_weak", -4) * blood_weight
             reasons.append(f"父系道悪低調{sgr * 100:.0f}%")
 
     dsgr = feat.get("dam_sire_going_top3_rate")
     dsgn = feat.get("dam_sire_going_samples", 0)
     if going in ("2", "3", "4") and dsgr is not None and dsgn >= 20:
         if dsgr >= 0.38:
-            score += 3 * blood_weight
+            score += _w("bloodline.dam_sire_going_strong", 3) * blood_weight
             reasons.append(f"母父道悪{dsgr * 100:.0f}%")
         elif dsgr <= 0.18:
-            score -= 2 * blood_weight
+            score += _w("bloodline.dam_sire_going_weak", -2) * blood_weight
             reasons.append(f"母父道悪低調{dsgr * 100:.0f}%")
 
     if V2_DIST_ENABLED and feat.get("current_bucket") == "long":
@@ -514,10 +534,10 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
         )
         long_bucket_top3 = feat.get("same_bucket_top3", 0) or 0
         if long_bucket_top3 >= 1 and long_blood_ok:
-            score += 3
+            score += _w("bloodline.long_blood_backup", 3)
             reasons.append("長距離血統裏付け")
         elif long_bucket_top3 == 0 and not long_blood_ok and past_count >= 3:
-            score -= 4
+            score += _w("bloodline.long_blood_lacking", -4)
             reasons.append("長距離裏付け薄")
 
     strong_blood = 0
@@ -541,10 +561,10 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
         or (tr is not None and tn >= 30 and tr >= 0.12)
     )
     if strong_blood >= 2 and condition_fit:
-        score += 4
+        score += _w("bloodline.matched_combo_bonus", 4)
         reasons.append("血統条件一致")
     if past_count <= 2 and strong_blood >= 2 and stable_team:
-        score += 3
+        score += _w("bloodline.young_horse_with_blood_team", 3)
         reasons.append("少キャリア血統陣営")
 
     # 過去走なし
@@ -735,20 +755,32 @@ def _load_calibrator() -> dict | None:
 
 
 def _apply_calibrator(probabilities: dict[str, float]) -> dict[str, float]:
-    """bin ベース calibrator + Bayesian shrinkage。
+    """bin ベース calibrator + Bayesian shrinkage + 少数 bin 恒等寄せ。
 
-    bin に入ったサンプル数が少ない (≤ alpha) と、観測した actual_win_rate が
-    ノイズに引っ張られて極端な値になる。これを生反映するとオッズ × 校正確率
-    の EV が暴れる (現在の 0.15-0.20 bin で count=27 が calibrated 0.33 を
-    出している例)。raw 確率 p との重み付き平均で滑らかにする:
+    bin に入ったサンプル数が少ないと、観測した actual_win_rate が
+    ノイズに引っ張られて極端な値になる (例: 0.15-0.20 bin で count=27 が
+    `calibrated 0.33` を出すと、オッズ × 校正確率の EV が暴れて偽の高 EV
+    候補を量産する)。次の 2 段で対処:
 
-        q = (count * calibrated + alpha * p) / (count + alpha)
-
-    alpha は calibrator.json の `shrinkage_alpha` (既定 30) から読む。
-    環境変数 `PRED_CALIBRATOR_ALPHA` で実行時に上書き可。
+    1. **少数 bin 恒等寄せ**: count < min_count なら calibrated を捨てて
+       `q = p` (raw のまま)。少サンプル bin がそもそも信用できない、という
+       前提に基づく強めの安全弁。`min_count` は calibrator.json と
+       環境変数 `PRED_CALIBRATOR_MIN_COUNT` で上書き可。
+    2. **Bayesian shrinkage** (count >= min_count の bin に適用):
+       `q = (count * calibrated + alpha * p) / (count + alpha)`
+       count が大きいほど calibrated を信用、小さいほど raw に寄せる。
+       `alpha` は calibrator.json の `shrinkage_alpha` (既定 30)。
     """
     calibrator = _load_calibrator()
-    if not calibrator or calibrator.get("type") != "bin":
+    if not calibrator:
+        return probabilities
+    if calibrator.get("type") != "bin":
+        # calibrator.json は存在するが想定外の type → サイレント無効化を避け
+        # 警告を 1 度出して raw 確率にフォールバック。
+        logger.warning(
+            "calibrator disabled: unsupported type=%r in calibrator.json",
+            calibrator.get("type"),
+        )
         return probabilities
     bins = calibrator.get("bins") or []
     try:
@@ -760,6 +792,15 @@ def _apply_calibrator(probabilities: dict[str, float]) -> dict[str, float]:
     except ValueError:
         alpha = alpha_default
     alpha = max(0.0, alpha)
+    try:
+        min_count_default = float(calibrator.get("min_count", 50))
+    except (TypeError, ValueError):
+        min_count_default = 50.0
+    try:
+        min_count = float(os.environ.get("PRED_CALIBRATOR_MIN_COUNT", min_count_default))
+    except ValueError:
+        min_count = min_count_default
+    min_count = max(0.0, min_count)
     adjusted: dict[str, float] = {}
     for num, p in probabilities.items():
         q = p
@@ -767,7 +808,11 @@ def _apply_calibrator(probabilities: dict[str, float]) -> dict[str, float]:
             if b.get("lower", 0.0) <= p < b.get("upper", 1.0) or (p >= 1.0 and b.get("upper") == 1.0):
                 cal = float(b.get("calibrated_probability", p))
                 count = float(b.get("count", 0) or 0)
-                if count + alpha > 0:
+                # 少数 bin は丸ごと信用しない (恒等寄せ)
+                if count < min_count:
+                    q = p
+                # 通常 bin は Bayesian shrinkage
+                elif count + alpha > 0:
                     q = (count * cal + alpha * p) / (count + alpha)
                 else:
                     q = cal

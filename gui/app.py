@@ -20,7 +20,7 @@ from pathlib import Path
 import webview
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import ICLOUD_PUBLISH_DIR, WEB_DIST, ensure_dirs
+from config import BUY_FILTER_DEFAULT, ICLOUD_PUBLISH_DIR, WEB_DIST, ensure_dirs, is_whitelisted_race
 from db import open_db
 from jvlink_client import ALL_DATASPECS, JVLinkClient
 from jvlink_client.ingest import ingest_all
@@ -174,6 +174,15 @@ class Api:
         return {"ok": True, "options": dict(self._last_options)}
 
     @_safe
+    def get_buy_filter_default(self, options: dict | None = None) -> dict:
+        """JS dashboard が input の初期値を取りに来る API。
+
+        config.BUY_FILTER_DEFAULT を直接配信。これで HTML 内ハードコードの
+        初期値 (例: value="1.05") と Python 側 BET_MIN_* がズレる事故を防ぐ。
+        """
+        return {"ok": True, "filter": dict(BUY_FILTER_DEFAULT)}
+
+    @_safe
     def cancel(self, options: dict | None = None) -> dict:
         with self._status_lock:
             running = bool(self._status.get("running"))
@@ -205,25 +214,55 @@ class Api:
             latest = row[0] if row and row[0] else today
             return latest, latest
 
-    def _is_buy_candidate(self, pred, horse: dict, tentative: bool, filters: dict | None = None) -> bool:
+    def _is_buy_candidate(
+        self,
+        pred,
+        horse: dict,
+        tentative: bool,
+        filters: dict | None = None,
+        race: dict | None = None,
+    ) -> bool:
         filters = filters or {}
         odds = (horse.get("win_odds") or 0) / 10.0
+        popularity = horse.get("win_popularity") or 0
         odds_age = self._odds_age_minutes(horse.get("odds_fetched_at"))
-        min_value = float(filters.get("min_value", BET_MIN_VALUE))
-        min_ev = float(filters.get("min_ev", BET_MIN_EV))
+        # 既定値は config.BUY_FILTER_DEFAULT (= web/generator.py の BET_MIN_* と
+        # JS dashboard input value 全部が同じ出典)。これでフィルタの数値が
+        # 経路によって変わる事故を防ぐ。
+        # None は「制約なし」を意味する (config.BUY_FILTER_DEFAULT で None を許容)
+        min_value_raw = filters.get("min_value", BET_MIN_VALUE)
+        min_value = float(min_value_raw) if min_value_raw is not None else None
+        min_ev_raw = filters.get("min_ev", BET_MIN_EV)
+        min_ev = float(min_ev_raw) if min_ev_raw is not None else None
         min_odds = float(filters.get("min_odds", BET_MIN_ODDS))
         max_odds = float(filters.get("max_odds", BET_MAX_ODDS))
-        return (
-            pred.rank == 1
-            and pred.mark
-            and not tentative
-            and (odds_age is None or odds_age <= 30)
-            and pred.confidence not in ("暫定", "混戦", "接戦")
-            and pred.value_score >= min_value
-            and pred.expected_value >= min_ev
-            and pred.kelly_fraction > 0
-            and min_odds <= odds <= max_odds
+        min_pop = int(filters.get("min_popularity", BUY_FILTER_DEFAULT.get("min_popularity", 1)))
+        max_pop = int(filters.get("max_popularity", BUY_FILTER_DEFAULT.get("max_popularity", 18)))
+        exclude_conf = filters.get(
+            "exclude_confidence",
+            BUY_FILTER_DEFAULT.get("exclude_confidence", ["暫定", "混戦", "接戦"]),
         )
+        max_age_min = int(filters.get("max_odds_age_min", BUY_FILTER_DEFAULT["max_odds_age_min"]))
+        # 重賞ホワイトリスト (race を渡したときのみ評価)。BET_WHITELIST=0 で無効。
+        if race is not None and not is_whitelisted_race(race):
+            return False
+        # Kelly>0 / EV>0 を条件にすると現状のモデルでは候補ゼロになるので、
+        # min_ev=0 等の既定値で「事実上無効化」されるよう書き直す。
+        if pred.rank != 1 or not pred.mark or tentative:
+            return False
+        if odds_age is not None and odds_age > max_age_min:
+            return False
+        if pred.confidence in exclude_conf:
+            return False
+        if min_value is not None and pred.value_score < min_value:
+            return False
+        if min_ev is not None and pred.expected_value < min_ev:
+            return False
+        if not (min_odds <= odds <= max_odds):
+            return False
+        if popularity and not (min_pop <= popularity <= max_pop):
+            return False
+        return True
 
     def _odds_age_minutes(self, fetched_at: str | None) -> int | None:
         if not fetched_at:
@@ -585,7 +624,7 @@ class Api:
                         "probability": round(pred.win_probability * 100, 1),
                         "ev": pred.expected_value,
                         "kelly": round(pred.kelly_fraction * 100, 2),
-                        "buy": self._is_buy_candidate(pred, horse, tentative, bet_filter),
+                        "buy": self._is_buy_candidate(pred, horse, tentative, bet_filter, race=race),
                     }
                     if pred.rank == 1:
                         prediction_items.append(item)
@@ -618,8 +657,9 @@ class Api:
             warnings.append(f"オッズ未取得: {horse_count - odds_count}頭")
         odds_fetched_at = odds_meta["fetched_at"] if odds_meta else None
         odds_age = self._odds_age_minutes(odds_fetched_at)
-        if odds_age is not None and odds_age > 30:
-            warnings.append(f"オッズ鮮度警告: {odds_age}分前 / 買い候補から除外")
+        max_age = int(BUY_FILTER_DEFAULT["max_odds_age_min"])
+        if odds_age is not None and odds_age > max_age:
+            warnings.append(f"オッズ鮮度警告: {odds_age}分前 (>{max_age}分) / 買い候補から除外")
         if feature_warning_total:
             leg_missing = feature_warning_counts.get("leg_quality_unavailable", 0)
             same_day_missing = feature_warning_counts.get("same_day_bias_unavailable", 0)
@@ -1617,18 +1657,32 @@ CONTROL_HTML = """<!doctype html>
       });
     });
   }
+  function applyBuyFilter(f) {
+    if (!f) return;
+    if (f.min_ev != null && byId('filter_ev')) byId('filter_ev').value = f.min_ev;
+    if (f.min_value != null && byId('filter_value')) byId('filter_value').value = f.min_value;
+    if (f.min_odds != null && byId('filter_min_odds')) byId('filter_min_odds').value = f.min_odds;
+    if (f.max_odds != null && byId('filter_max_odds')) byId('filter_max_odds').value = f.max_odds;
+  }
   function restoreOptions() {
-    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_last_options) return Promise.resolve();
-    return window.pywebview.api.get_last_options({}).then(function (res) {
-      var o = (res && res.options) || {};
-      if (o.from_date) byId('from_date').value = o.from_date;
-      if (o.to_date) byId('to_date').value = o.to_date;
-      if (o.bloodline_fromtime) byId('bloodline_fromtime').value = o.bloodline_fromtime;
-      if (o.backtest_range) backtestRange = String(o.backtest_range);
-      if (o.min_ev != null && byId('filter_ev')) byId('filter_ev').value = o.min_ev;
-      if (o.min_value != null && byId('filter_value')) byId('filter_value').value = o.min_value;
-      if (o.min_odds != null && byId('filter_min_odds')) byId('filter_min_odds').value = o.min_odds;
-      if (o.max_odds != null && byId('filter_max_odds')) byId('filter_max_odds').value = o.max_odds;
+    if (!window.pywebview || !window.pywebview.api) return Promise.resolve();
+    // 1) まず Python 側 config.BUY_FILTER_DEFAULT を input 初期値に反映
+    var defaults = window.pywebview.api.get_buy_filter_default
+      ? window.pywebview.api.get_buy_filter_default({}).then(function (res) {
+          if (res && res.filter) applyBuyFilter(res.filter);
+        })
+      : Promise.resolve();
+    // 2) その後で前回ユーザが弄った値があれば上書き
+    return defaults.then(function () {
+      if (!window.pywebview.api.get_last_options) return;
+      return window.pywebview.api.get_last_options({}).then(function (res) {
+        var o = (res && res.options) || {};
+        if (o.from_date) byId('from_date').value = o.from_date;
+        if (o.to_date) byId('to_date').value = o.to_date;
+        if (o.bloodline_fromtime) byId('bloodline_fromtime').value = o.bloodline_fromtime;
+        if (o.backtest_range) backtestRange = String(o.backtest_range);
+        applyBuyFilter(o);
+      });
     });
   }
   function boot() {

@@ -635,7 +635,6 @@ def compute_features(
         "past_count": len(past),
         "recent_avg_finish": None,
         "recent_avg_finish_rate": None,
-        "recent_avg_starters": None,
         "recent_best_finish": None,
         "recent_top3_count": 0,
         "recent_win_count": 0,
@@ -691,9 +690,6 @@ def compute_features(
         "jockey_rides": 0,
         "trainer_win_rate": None,
         "trainer_runs": 0,
-        "weight_trend": None,
-        "same_day_leg_bias": False,
-        "same_day_leg_samples": 0,
         "same_day_bias_score": 0,
         "same_day_bias_note": "",
         "same_day_gate_bias_score": 0,
@@ -732,7 +728,6 @@ def compute_features(
                     starters.append(sc)
             if rates:
                 feat["recent_avg_finish_rate"] = sum(rates) / len(rates)
-                feat["recent_avg_starters"] = sum(starters) / len(starters)
             feat["recent_best_finish"] = min(finishes)
             feat["recent_top3_count"] = sum(1 for f in finishes if f in (1, 2, 3))
             feat["recent_win_count"] = sum(1 for f in finishes if f == 1)
@@ -858,18 +853,9 @@ def compute_features(
             feat["class_rise_points"] = max(level_gap, 0)
             feat["class_drop_points"] = max(-level_gap, 0)
 
-        # 馬体重トレンド: 直近 3 走の増減差合計（正なら増加傾向）
-        try:
-            diffs = []
-            for p in past[:3]:
-                d = (p.get("weight_change_diff") or "").strip()
-                sign_field = ""  # weight_change_sign は別カラムだが過去走では取ってない
-                if d.isdigit():
-                    diffs.append(int(d))
-            if diffs:
-                feat["weight_trend"] = sum(diffs)
-        except Exception:
-            pass
+        # weight_trend (馬体重トレンド) は過去計算していたが rules.py で
+        # 一度も使われていない dead feature だったため P1-1 で削除済み。
+        # 復活させるなら過去走の weight_change_sign を取得する経路から作り直し。
     if not feat["leg_quality_available"] and feat["estimated_leg_code"]:
         feat["needs_post_race_data"].append("leg_quality_code")
 
@@ -909,22 +895,21 @@ def compute_features(
         race.get("race_year"), race.get("race_month_day"), race.get("track_code"),
         race.get("track_type_code"), race.get("start_time"), leg,
     )
-    bias, n = _cached(
+    # legacy 呼び出しはサンプル数 (= same_day_bias_available 判定) のため
+    # だけに残す。bias / samples は dead feature だったので feat に格納しない。
+    _legacy_bias, legacy_n = _cached(
         cache,
         race_bias_key + ("legacy",),
         lambda: same_day_track_bias(conn, horse, race),
     )
-    feat["same_day_leg_bias"] = bias
-    feat["same_day_leg_samples"] = n
     score, n, note = _cached(
         cache,
         race_bias_key + ("detail",),
         lambda: same_day_track_bias_detail(conn, horse, race),
     )
     feat["same_day_bias_score"] = score
-    feat["same_day_leg_samples"] = max(feat["same_day_leg_samples"], n)
     feat["same_day_bias_note"] = note
-    feat["same_day_bias_available"] = n > 0
+    feat["same_day_bias_available"] = max(legacy_n, n) > 0
 
     gate_score, gate_n, gate_note = _cached(
         cache,
@@ -932,7 +917,6 @@ def compute_features(
         lambda: same_day_gate_bias_detail(conn, horse, race),
     )
     feat["same_day_gate_bias_score"] = gate_score
-    feat["same_day_leg_samples"] = max(feat["same_day_leg_samples"], gate_n)
     feat["same_day_gate_bias_note"] = gate_note
     feat["same_day_bias_available"] = feat["same_day_bias_available"] or gate_n > 0
     if not feat["same_day_bias_available"]:

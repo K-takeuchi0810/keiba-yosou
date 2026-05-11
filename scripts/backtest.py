@@ -27,13 +27,24 @@ from predictor.rules import is_tentative, predict_race
 
 
 def buy_filter_from_generator() -> dict:
-    from web.generator import BET_MAX_ODDS, BET_MIN_EV, BET_MIN_ODDS, BET_MIN_VALUE
+    """買い目フィルタの既定値を取得する。
+
+    出典は `config.BUY_FILTER_DEFAULT` 単一。`min_ev` `min_value` は
+    None (= 制約なし) を許容するため、float 変換時に None を温存する。
+    """
+    from config import BUY_FILTER_DEFAULT
+
+    def _maybe_float(v):
+        return float(v) if v is not None else None
 
     return {
-        "min_odds": BET_MIN_ODDS,
-        "max_odds": BET_MAX_ODDS,
-        "min_value": BET_MIN_VALUE,
-        "min_ev": BET_MIN_EV,
+        "min_odds": float(BUY_FILTER_DEFAULT["min_odds"]),
+        "max_odds": float(BUY_FILTER_DEFAULT["max_odds"]),
+        "min_value": _maybe_float(BUY_FILTER_DEFAULT.get("min_value")),
+        "min_ev": _maybe_float(BUY_FILTER_DEFAULT.get("min_ev")),
+        "min_popularity": BUY_FILTER_DEFAULT.get("min_popularity"),
+        "max_popularity": BUY_FILTER_DEFAULT.get("max_popularity"),
+        "exclude_confidence": list(BUY_FILTER_DEFAULT.get("exclude_confidence") or []),
     }
 
 
@@ -87,6 +98,11 @@ def list_races(conn, from_date: str, to_date: str, jra_only: bool = True) -> lis
 
 
 def horses_for_race(conn, race: dict) -> list[dict]:
+    """1 レースの出走馬を返す。horse_num が空 / "00" のプレースホルダ行は除外。
+
+    JV-Data 上で出馬表確定前は SE レコードに馬番が入らない / "00" のことが
+    あるが、表示・予想・回収率計算のいずれにも有害なので根元で弾く。
+    """
     return [
         dict(r)
         for r in conn.execute(
@@ -94,6 +110,9 @@ def horses_for_race(conn, race: dict) -> list[dict]:
             SELECT * FROM horse_races
             WHERE race_year=? AND race_month_day=? AND track_code=?
               AND kaiji=? AND nichiji=? AND race_num=?
+              AND horse_num IS NOT NULL
+              AND TRIM(horse_num) != ''
+              AND horse_num != '00'
             ORDER BY CAST(horse_num AS INTEGER)
             """,
             (
@@ -158,21 +177,39 @@ def _finish_bet_stats(stats: dict) -> dict:
     }
 
 
-def _matches_buy_filter(pred, horse: dict, tentative: bool, spec: dict | None) -> bool:
+def _matches_buy_filter(
+    pred,
+    horse: dict,
+    tentative: bool,
+    spec: dict | None,
+    race: dict | None = None,
+) -> bool:
+    """買い目フィルタ判定。
+
+    spec は config.BUY_FILTER_DEFAULT 由来の dict で、以下キーを参照する:
+        min_ev / min_value / min_odds / max_odds / min_popularity /
+        max_popularity / exclude_confidence (list).
+    `Kelly > 0` の固定条件は撤廃した (現行モデルで Kelly が正になる候補が
+    存在しなかったため死フィルタになっていた)。重賞ホワイトリストは race を
+    渡したときだけ評価。
+    """
     if not spec:
         return False
+    from config import is_whitelisted_race  # 関数スコープ import で循環回避
+    if race is not None and not is_whitelisted_race(race):
+        return False
     odds = (horse.get("win_odds") or 0) / 10.0
-    if tentative:
+    popularity = horse.get("win_popularity") or 0
+    if tentative or pred.rank != 1:
         return False
-    if pred.rank != 1:
+    exclude_conf = spec.get("exclude_confidence", ["暫定", "混戦", "接戦"])
+    if pred.confidence in exclude_conf:
         return False
-    if pred.confidence in ("暫定", "混戦", "接戦"):
+    min_value = spec.get("min_value")
+    if min_value is not None and pred.value_score < min_value:
         return False
-    if pred.value_score < spec.get("min_value", 0.0):
-        return False
-    if pred.expected_value < spec.get("min_ev", 0.0):
-        return False
-    if pred.kelly_fraction <= 0:
+    min_ev = spec.get("min_ev")
+    if min_ev is not None and pred.expected_value < min_ev:
         return False
     min_odds = spec.get("min_odds")
     max_odds = spec.get("max_odds")
@@ -180,6 +217,13 @@ def _matches_buy_filter(pred, horse: dict, tentative: bool, spec: dict | None) -
         return False
     if max_odds is not None and (odds <= 0 or odds > max_odds):
         return False
+    min_pop = spec.get("min_popularity")
+    max_pop = spec.get("max_popularity")
+    if popularity:
+        if min_pop is not None and popularity < min_pop:
+            return False
+        if max_pop is not None and popularity > max_pop:
+            return False
     return True
 
 
@@ -224,6 +268,9 @@ def run_backtest(
         total_return = 0
         all_stats = _empty_bet_stats()
         buy_only_stats = _empty_bet_stats()
+        # 重賞ホワイトリスト単独 (EV/Odds フィルタ無視) で◎単勝ベタ買いした
+        # 場合の集計。「whitelist だけで控除率超えるか」を測るための指標。
+        whitelist_only_stats = _empty_bet_stats()
         calibration_records: list[dict] = []
         confidence_stats: dict[str, dict] = defaultdict(_empty_bet_stats)
         # 会場別ブレイクダウン (track_code → [bet, return, hits])
@@ -279,8 +326,14 @@ def run_backtest(
             payout = get_payout(conn, race, top.horse_num, bet_type)
             _add_bet(all_stats, payout)
             _add_bet(confidence_stats[top.confidence], payout)
-            if _matches_buy_filter(top, top_horse, tentative, buy_filter):
+            if _matches_buy_filter(top, top_horse, tentative, buy_filter, race=race):
                 _add_bet(buy_only_stats, payout)
+            # 重賞ホワイトリスト単独 (EV/Odds 等のフィルタ無視) でのベタ買い結果。
+            # 暫定だけは除外。BET_WHITELIST=0 のときは is_whitelisted_race が
+            # 常に True を返すので、この集計は all_stats と同等になる。
+            from config import is_whitelisted_race  # 循環回避のため局所 import
+            if not tentative and is_whitelisted_race(race):
+                _add_bet(whitelist_only_stats, payout)
             if top_horse:
                 odds = (top_horse.get("win_odds") or 0) / 10.0
                 popularity = top_horse.get("win_popularity") or 0
@@ -318,6 +371,7 @@ def run_backtest(
     elapsed = time.time() - started
     all_stats = _finish_bet_stats(all_stats)
     buy_only_stats = _finish_bet_stats(buy_only_stats)
+    whitelist_only_stats = _finish_bet_stats(whitelist_only_stats)
     by_confidence = {
         k: _finish_bet_stats(v)
         for k, v in sorted(confidence_stats.items())
@@ -348,6 +402,13 @@ def run_backtest(
         "buy_only_hit_rate": buy_only_stats["hit_rate"],
         "buy_only_return_total": buy_only_stats["return_total"],
         "buy_only_return_rate": buy_only_stats["return_rate"],
+        # ホワイトリスト単独 (EV/Odds フィルタ無視) で◎単勝ベタ買いの結果。
+        # 「重賞 + 中山 + 京都だけで普通に買えば勝てるか」の指標。
+        "whitelist_only_bets": whitelist_only_stats["bets"],
+        "whitelist_only_hits": whitelist_only_stats["hits"],
+        "whitelist_only_hit_rate": whitelist_only_stats["hit_rate"],
+        "whitelist_only_return_total": whitelist_only_stats["return_total"],
+        "whitelist_only_return_rate": whitelist_only_stats["return_rate"],
         "calibration": calibration_report(calibration_records),
         "calibrator": fit_bin_calibrator(calibration_records),
         "by_confidence": by_confidence,
@@ -417,6 +478,10 @@ def format_report(r: dict) -> str:
     lines.append(
         f"  絞り運用:   {r.get('buy_only_bets', 0):,} 点  的中 {r.get('buy_only_hits', 0):,}  "
         f"回収率 {r.get('buy_only_return_rate', 0) * 100:.1f}%"
+    )
+    lines.append(
+        f"  WL単独:     {r.get('whitelist_only_bets', 0):,} 点  的中 {r.get('whitelist_only_hits', 0):,}  "
+        f"回収率 {r.get('whitelist_only_return_rate', 0) * 100:.1f}%  (重賞+中山+京都ベタ買い)"
     )
     cal = r.get("calibration") or {}
     if cal.get("count"):
@@ -500,9 +565,9 @@ def main() -> int:
     ap.add_argument("--min-odds", type=float, default=None)
     ap.add_argument("--max-odds", type=float, default=None)
     ap.add_argument(
-        "--filter-from-config",
+        "--no-filter-from-config",
         action="store_true",
-        help="web/generator.py の BET_MIN_* で買い候補だけの成績も保存する",
+        help="buy_only_* の集計を無効化する (P0-4 以降は config の買い目フィルタが既定 ON)",
     )
     ap.add_argument("--min-value", type=float, default=None)
     ap.add_argument("--min-ev", type=float, default=None)
@@ -528,7 +593,7 @@ def main() -> int:
         max_odds=args.max_odds,
         min_popularity=args.min_popularity,
         max_popularity=args.max_popularity,
-        filter_from_config=args.filter_from_config,
+        filter_from_config=not args.no_filter_from_config,
         min_value=args.min_value,
         min_ev=args.min_ev,
         db_path=args.db,
@@ -539,7 +604,7 @@ def main() -> int:
         out_dir = Path(__file__).resolve().parent.parent / "data" / "backtest"
         out_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        suffix = "-filtered" if args.filter_from_config else "-all"
+        suffix = "-all" if args.no_filter_from_config else "-filtered"
         out = out_dir / f"{ts}_{args.bet}_{args.rule_version}{suffix}.json"
         out.write_text(
             json.dumps({"rule_version": args.rule_version, **result},

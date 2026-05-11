@@ -12,12 +12,15 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 import traceback
 from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+logger = logging.getLogger(__name__)
 
 from config import DATA_DIR
 from db import (
@@ -120,11 +123,22 @@ def ingest_file_dispatch(conn, path: Path, dataspec: str = "") -> tuple[int, int
     return ra_count, se_count, hr_count, o1_count, um_count, skipped
 
 
-def ingest_all(force: bool = False, dataspecs: list[str] | None = None) -> dict:
+def ingest_all(
+    force: bool = False,
+    dataspecs: list[str] | None = None,
+    only_files: set[str] | None = None,
+    modified_since: float | None = None,
+) -> dict:
     """data/raw/ 配下の全ファイルを取り込む。
 
     既に取り込み済みのファイルはスキップ（force=True で再取り込み）。
     1 ファイルでエラーが出ても残りに影響させない。
+
+    JV-Link は **同名ファイル名のまま内容を更新** する運用 (週次 RACE 等) のため、
+    is_file_ingested による「ファイル名ベース重複判定」だけでは新着内容を取り
+    こぼす。直近の取得で書き出されたファイルだけ再 ingest したい場合は、
+    `only_files` (ファイル名 set) または `modified_since` (Unix epoch 秒) で
+    対象を絞ってください。これらが指定されれば force=False でも処理されます。
     """
     summary = {
         "files_processed": 0,
@@ -150,7 +164,17 @@ def ingest_all(force: bool = False, dataspecs: list[str] | None = None) -> dict:
             for f in sorted(ds_dir.iterdir()):
                 if not f.suffix == ".jvd":
                     continue
-                if not force and is_file_ingested(conn, f.name):
+                # only_files / modified_since が指定されたら、それに該当する
+                # ファイルは強制的に再 ingest (force 相当)。指定外はスキップ。
+                fresh = False
+                if only_files is not None and f.name in only_files:
+                    fresh = True
+                if modified_since is not None and f.stat().st_mtime >= modified_since:
+                    fresh = True
+                if (only_files is not None or modified_since is not None) and not fresh:
+                    summary["files_skipped"] += 1
+                    continue
+                if not fresh and not force and is_file_ingested(conn, f.name):
                     summary["files_skipped"] += 1
                     continue
                 try:
@@ -168,8 +192,8 @@ def ingest_all(force: bool = False, dataspecs: list[str] | None = None) -> dict:
                     summary["errors"].append(
                         {"file": f.name, "error": f"{type(e).__name__}: {e}"}
                     )
-                    # スタックトレースは標準出力に出すが処理は継続
-                    print(f"[ingest] FAILED {f.name}: {e}", flush=True)
+                    # スタックトレースを残しつつ次ファイルへ続行
+                    logger.error("ingest failed: %s", f.name, exc_info=True)
 
     return summary
 
