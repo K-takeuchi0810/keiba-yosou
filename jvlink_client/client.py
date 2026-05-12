@@ -22,9 +22,20 @@ import time
 import os
 from pathlib import Path
 
-import pythoncom
-import win32com.client
-from win32com.client import VARIANT
+# pywin32 (pythoncom / win32com) は 32-bit COM 専用なので 64-bit venv では
+# import 不可。64-bit 側から ALL_DATASPECS 等の定数を参照するケースで壊れない
+# ようにここでは try/except でラップする。JVLinkClient を実際に使う箇所
+# (32-bit でしか動かない) で AttributeError が出れば理由が明確になる。
+try:
+    import pythoncom  # type: ignore[import-not-found]
+    import win32com.client  # type: ignore[import-not-found]
+    from win32com.client import VARIANT  # type: ignore[import-not-found]
+    _COM_AVAILABLE = True
+except ModuleNotFoundError:
+    pythoncom = None  # type: ignore[assignment]
+    win32com = None  # type: ignore[assignment]
+    VARIANT = None  # type: ignore[assignment]
+    _COM_AVAILABLE = False
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import DATA_DIR, JVLINK_SID
@@ -113,6 +124,11 @@ class JVLinkClient:
     PROG_ID = "JVDTLab.JVLink.1"
 
     def __init__(self, sid: str = JVLINK_SID) -> None:
+        if not _COM_AVAILABLE:
+            raise RuntimeError(
+                "JVLinkClient requires 32-bit Python + pywin32 (COM). "
+                "Run from .venv32, not .venv64. JV-Link COM DLL is 32-bit fixed."
+            )
         self.sid = sid
         self._jv = win32com.client.Dispatch(self.PROG_ID)
         self._initialized = False

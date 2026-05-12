@@ -1,0 +1,18 @@
+# 64-bit Python 3.14 環境用 (.venv64)
+# 用途: ML 訓練 / 推論 / backtest / sweep / web / GUI
+# 32-bit JV-Link COM 側 (.venv32) との切り分けは requirements.txt 参照。
+
+# ML stack
+lightgbm>=4.6,<5.0
+scipy>=1.17,<2.0
+numpy>=2.4,<3.0
+pandas>=3.0,<4.0
+scikit-learn>=1.8,<2.0
+optuna>=4.8,<5.0
+
+# 既存機能 (web/scripts で利用)
+jinja2
+python-dotenv
+# pywebview は 32-bit 側 (.venv32) に残す。pythonnet が Python 3.14 用 wheel
+# 未提供で build に失敗するため。GUI は .venv32\Scripts\python.exe で起動。
+# GUI から ML 推論を呼ぶ場合は subprocess 経由で .venv64\Scripts\python.exe を起動。

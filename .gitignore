@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 .venv/
 .venv32/
+.venv64/
 *.egg-info/
 
 # データ（取得済みレースデータ・SQLite 等は同期しない）

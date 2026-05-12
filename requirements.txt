@@ -1,10 +1,15 @@
-# 32bit Python 環境用（JVLink 呼び出し）
+# 32-bit Python 3.13 環境用 (.venv32)
+# 用途: JV-Link COM (DLL が 32-bit 固定) + GUI (pywebview の pythonnet が
+# Python 3.14 用 wheel 未提供のため、当面 GUI は 32-bit に残す)
+# ML / 推論 / backtest は requirements64.txt (.venv64) を使う。
+
+# JV-Link COM 呼び出し
 pywin32
 
-# GUI（管理画面）
+# GUI (管理画面)
 pywebview
 
-# HTML テンプレート
+# HTML テンプレート (web/generator.py が render 時に使う)
 jinja2
 
 # .env からのサービスキー読み込み
