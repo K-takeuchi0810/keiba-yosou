@@ -825,12 +825,14 @@ class Api:
             PREVIEW_HTML.replace("__PREVIEW_URL__", "../index.html"),
             encoding="utf-8",
         )
-        webview.windows[0].load_url(wrapper.as_uri())
+        # return が JS 側に届く前に navigate するとコールバックレジストリが
+        # 消えて pywebview が TypeError を吐く。Timer で遅延させて切り離す。
+        threading.Timer(0.1, lambda: webview.windows[0].load_url(wrapper.as_uri())).start()
         return {"ok": True, "preview": str(index), "wrapper": str(wrapper)}
 
     @_safe
     def show_control(self, options: dict | None = None) -> dict:
-        webview.windows[0].load_html(CONTROL_HTML)
+        threading.Timer(0.1, lambda: webview.windows[0].load_html(CONTROL_HTML)).start()
         return {"ok": True}
 
     @_safe
