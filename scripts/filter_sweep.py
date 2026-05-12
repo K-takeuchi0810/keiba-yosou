@@ -141,6 +141,20 @@ FILTERS = [
     ("wl_odds_5_15_pop_1_4", {"whitelist": True, "min_odds": 5.0, "max_odds": 15.0, "min_pop": 1, "max_pop": 4}),
     ("wl_odds_2_8_pop_1_3", {"whitelist": True, "min_odds": 2.0, "max_odds": 8.0, "min_pop": 1, "max_pop": 3}),
     ("wl_ex_unsure_pop_1_4", {"whitelist": True, "exclude_conf": ["暫定", "混戦", "接戦"], "min_pop": 1, "max_pop": 4}),
+    # wl_odds_8_20 路線の +100% 追求 (2026-05-12 追加, project-state 高インパクト #3)
+    # 隣接 odds 帯を試して戦数増の可能性を見る
+    ("wl_odds_6_20", {"whitelist": True, "min_odds": 6.0, "max_odds": 20.0}),
+    ("wl_odds_7_22", {"whitelist": True, "min_odds": 7.0, "max_odds": 22.0}),
+    ("wl_odds_8_25", {"whitelist": True, "min_odds": 8.0, "max_odds": 25.0}),
+    ("wl_odds_9_25", {"whitelist": True, "min_odds": 9.0, "max_odds": 25.0}),
+    # 8-20 + 信頼度フィルタ重ね掛け (戦数減 / 回収率上振れ狙い)
+    ("wl_odds_8_20_ex_unsure", {"whitelist": True, "min_odds": 8.0, "max_odds": 20.0, "exclude_conf": ["暫定", "混戦", "接戦"]}),
+    ("wl_odds_8_20_ex_tentative", {"whitelist": True, "min_odds": 8.0, "max_odds": 20.0, "exclude_conf": ["暫定"]}),
+    # 8-20 + 人気帯 (中穴 4-8 が wl_pop_4_8 単体で eval 122.1% を出したため)
+    ("wl_odds_8_20_pop_4_8", {"whitelist": True, "min_odds": 8.0, "max_odds": 20.0, "min_pop": 4, "max_pop": 8}),
+    # wl_pop_4_8 の安定化候補
+    ("wl_pop_4_10", {"whitelist": True, "min_pop": 4, "max_pop": 10}),
+    ("wl_pop_5_9_ex_unsure", {"whitelist": True, "min_pop": 5, "max_pop": 9, "exclude_conf": ["暫定", "混戦", "接戦"]}),
     # whitelist 外 (= 控除率の低い領域)
     ("non_wl", {"whitelist": False}),
     # 旧バリアント (参考)

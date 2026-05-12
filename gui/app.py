@@ -236,12 +236,14 @@ class Api:
         min_ev = float(min_ev_raw) if min_ev_raw is not None else None
         min_odds = float(filters.get("min_odds", BET_MIN_ODDS))
         max_odds = float(filters.get("max_odds", BET_MAX_ODDS))
-        min_pop = int(filters.get("min_popularity", BUY_FILTER_DEFAULT.get("min_popularity", 1)))
-        max_pop = int(filters.get("max_popularity", BUY_FILTER_DEFAULT.get("max_popularity", 18)))
+        _raw_min_pop = filters.get("min_popularity", BUY_FILTER_DEFAULT.get("min_popularity"))
+        _raw_max_pop = filters.get("max_popularity", BUY_FILTER_DEFAULT.get("max_popularity"))
+        min_pop = int(_raw_min_pop) if _raw_min_pop is not None else None
+        max_pop = int(_raw_max_pop) if _raw_max_pop is not None else None
         exclude_conf = filters.get(
             "exclude_confidence",
-            BUY_FILTER_DEFAULT.get("exclude_confidence", ["暫定", "混戦", "接戦"]),
-        )
+            BUY_FILTER_DEFAULT.get("exclude_confidence") or [],
+        ) or []
         max_age_min = int(filters.get("max_odds_age_min", BUY_FILTER_DEFAULT["max_odds_age_min"]))
         # 重賞ホワイトリスト (race を渡したときのみ評価)。BET_WHITELIST=0 で無効。
         if race is not None and not is_whitelisted_race(race):
@@ -260,7 +262,9 @@ class Api:
             return False
         if not (min_odds <= odds <= max_odds):
             return False
-        if popularity and not (min_pop <= popularity <= max_pop):
+        if popularity and min_pop is not None and popularity < min_pop:
+            return False
+        if popularity and max_pop is not None and popularity > max_pop:
             return False
         return True
 

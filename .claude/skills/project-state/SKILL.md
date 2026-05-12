@@ -7,22 +7,22 @@ description: keiba-yosou プロジェクトの **現状スナップショット*
 
 ## 1 行サマリ
 
-JRA-VAN JV-Link を使うローカル競馬予想 GUI。直近 walk-forward 検証で **「重賞+中山+京都+1-4 人気+信頼度判定」フィルタが 4 ヶ月 105 戦 / 回収率 89%** (控除率 80% を +9pt 超え、ただし +100% 未達) を達成。実弾投入の現実線が見えている段階。
+JRA-VAN JV-Link を使うローカル競馬予想 GUI。**2026-05-12 walk-forward sweep で `wl_odds_8_20` (重賞+中山+京都 で 8-20 倍帯) を採用、EVAL 4 ヶ月 41 戦 / 回収率 116.1% / +660 円で初の +収支到達**。両期間 (DESIGN 103.5% / EVAL 116.1%) +100% 維持。サンプル少 (n=41 / 月 ~10 戦) で分散リスクあり、第三 hold-out (2026/05 以降) 必須。
 
-## スコア推移 (7 改修分、`data/scorecards/` 詳細あり)
+## スコア推移 (8 改修分、`data/scorecards/` 詳細あり)
 
-| | baseline | P0-1 | P0-2 | P1-3 | P0-3 | P1-1 | P2-1 | **a+e** |
-|---|---|---|---|---|---|---|---|---|
-| **全体平均** | 3.06 | 3.14 | 3.30 | 3.41 | 3.59 | 3.77 | 3.99 | **4.09** |
-| GUI / UX 監査 | 3.2 | 3.2 | 3.3 | 3.3 | 3.2 | 3.2 | 3.6 | 3.6 |
-| モバイル HTML | 3.4 | 3.4 | 3.4 | 3.4 | 3.4 | 3.4 | 4.4 | 4.4 |
-| 予想ロジック | 3.4 | 3.4 | 3.6 | 3.6 | 3.6 | 4.2 | 4.2 | 4.2 |
-| **収益性** | 1.8 | 2.0 | 2.4 | 2.0 | 3.0 | 3.0 | 3.0 | **3.4** |
-| データパイプライン | 3.8 | 3.8 | 3.8 | 4.0 | 4.0 | 4.0 | 4.0 | 4.0 |
-| コード品質 | 2.6 | 2.8 | 3.0 | 3.4 | 3.5 | 4.0 | 4.1 | 4.2 |
-| **検証プロセス** | 3.2 | 3.4 | 3.6 | 4.2 | 4.4 | 4.6 | 4.6 | **4.8** |
+| | baseline | P0-1 | P0-2 | P1-3 | P0-3 | P1-1 | P2-1 | a+e | **p05** |
+|---|---|---|---|---|---|---|---|---|---|
+| **全体平均** | 3.06 | 3.14 | 3.30 | 3.41 | 3.59 | 3.77 | 3.99 | 4.09 | **4.09** |
+| GUI / UX 監査 | 3.2 | 3.2 | 3.3 | 3.3 | 3.2 | 3.2 | 3.6 | 3.6 | **3.4** ⚠ |
+| モバイル HTML | 3.4 | 3.4 | 3.4 | 3.4 | 3.4 | 3.4 | 4.4 | 4.4 | 4.4 |
+| 予想ロジック | 3.4 | 3.4 | 3.6 | 3.6 | 3.6 | 4.2 | 4.2 | 4.2 | 4.1 |
+| **収益性** | 1.8 | 2.0 | 2.4 | 2.0 | 3.0 | 3.0 | 3.0 | 3.4 | **3.8** 🏆 |
+| データパイプライン | 3.8 | 3.8 | 3.8 | 4.0 | 4.0 | 4.0 | 4.0 | 4.0 | 4.0 |
+| コード品質 | 2.6 | 2.8 | 3.0 | 3.4 | 3.5 | 4.0 | 4.1 | 4.2 | 4.3 |
+| **検証プロセス** | 3.2 | 3.4 | 3.6 | 4.2 | 4.4 | 4.6 | 4.6 | 4.8 | **4.6** |
 
-baseline 比 **+1.03**。3 名 (収益性除く) が 4.0 超え。
+baseline 比 **+1.03** 維持。収益性が +0.4 ジャンプ (初の +収支実現)。一方 GUI -0.2 (UI input default が config と乖離)、検証 -0.2 (EVAL が in-sample 化)。
 
 ## 完了した改修 (時系列)
 
@@ -34,19 +34,20 @@ baseline 比 **+1.03**。3 名 (収益性除く) が 4.0 超え。
 | P0-3 | 重賞ホワイトリストモード (`whitelist_grades / tracks`) | `20260510_2355_p03_whitelist.md` |
 | P1-1 | dead feature 5 削除 + 直書き 60→1 + weights.json 12 namespace | `20260511_0030_p11_refactor.md` |
 | P2-1 | モバイル CSS 変数化 + `<details>` インジケータ + theme-color | `20260511_0100_p21_mobile.md` |
-| a+e | walk-forward 検証 + sweep + filter 更新 | `20260511_2345_ae_walkforward_sweep_review.md` |
+| a+e | walk-forward 検証 + sweep + filter 更新 (wl_ex_unsure_pop_1_4 採用) | `20260511_2345_ae_walkforward_sweep_review.md` |
+| **p05** | **wl_odds_8_20 に切替、初の +収支到達** + filter_sweep dedup + scorecards/code 整理 4 コミット | `20260512_2100_p05_wl_odds_8_20.md` |
 
-## 現在の運用フィルタ (= `config.BUY_FILTER_DEFAULT`)
+## 現在の運用フィルタ (= `config.BUY_FILTER_DEFAULT`, 2026-05-12 更新)
 
 ```python
 BUY_FILTER_DEFAULT = {
-    "min_ev": None,          # 制約なし (calibrator 不安定のため EV 依存解除)
+    "min_ev": None,
     "min_value": None,
-    "min_odds": 1.0,         # 実質無効化
-    "max_odds": 100.0,       # 実質無効化
-    "min_popularity": 1,     # ★主絞り条件: 1-4 人気
-    "max_popularity": 4,
-    "exclude_confidence": ["暫定", "混戦", "接戦"],
+    "min_odds": 8.0,         # ★主絞り条件: 8〜20 倍帯 (中穴)
+    "max_odds": 20.0,
+    "min_popularity": None,  # 制約解除
+    "max_popularity": None,
+    "exclude_confidence": [], # 8-20 帯は混戦ラベル不可避なので解除
     "max_odds_age_min": 30,
     "whitelist_mode": True,
     "whitelist_grades": ["A", "B", "C", "F"],  # G1/G2/G3/重賞
@@ -54,33 +55,40 @@ BUY_FILTER_DEFAULT = {
 }
 ```
 
-**現実の数値** (`data/backtest/20260511_234351_tan_p04-final-eval-v3-filtered.json`):
-- EVAL (2026/01-04): buy_only **105 戦 / 34.3% / 89.0%** / 収支 -1,150 円
-- DESIGN (2025/06-12): sweep 値 166 戦 / 86.3% (再現性確認済)
+**現実の数値** (`data/backtest/20260512_205837_tan_p05-wl-odds-8-20-filtered.json`):
+- EVAL (2026/01-04): buy_only **41 戦 / 9.8% / 116.1%** / 収支 **+660 円** 🏆
+- DESIGN (2025/06-12): sweep 値 74 戦 / 103.5% (再現性確認済)
+- ⚠ 戦数少なくサンプル分散大。Wilson 95% CI: hit_rate [3.9%, 22.6%] / return_rate [8.0%, 224.2%]
+- 旧 `wl_ex_unsure_pop_1_4` (EVAL 105 戦/89.0%/-1,150 円) からの切替で初の +収支
 
 ## 直近の重要な指摘 (= 次の改修候補、優先順)
 
 ### 🔴 即対処すべき軽微回帰
-1. ~~**backtest 出力に calibration メタを復元**~~ ✅ **解決済み (2026-05-12 確認)**
-   - 全 p04 backtest で `count=16550 / brier=0.057508 / bins=20` 確認済。`scripts/backtest.py:351` で `calibration_report()` を正常に出力中。リスト上の指摘は古い。
-2. ~~**filter_sweep.py の WHITELIST_GRADES/TRACKS を config 参照に**~~ ✅ **解決済み (2026-05-12)**
-   - `scripts/filter_sweep.py:18-22` で `from config import BUY_FILTER_DEFAULT` → `frozenset(BUY_FILTER_DEFAULT["whitelist_grades"|"whitelist_tracks"])` 経由に変更済。
+1. **GUI input デフォルト値を config 参照に統一** (2026-05-12 採点で GUI -0.2 の主因)
+   - `gui/app.py:1405-1408, 1477-1480` の `value="10"` `value="1.05"` `value="0"` が新 config (`min_odds=8.0, min_ev=None, min_value=None`) と矛盾
+   - F5 直後 UI が config と一致するよう `f"value=\"{BUY_FILTER_DEFAULT['min_odds']}\""` 等動的埋込
+   - 工数 30-60 分、GUI -0.2 を取り戻し可
+2. **第三 hold-out 期間で本番昇格判断** (検証 -0.2 の主因)
+   - 「両期間 +100%」を採用基準にしたことで EVAL 2026/01-04 が in-sample 化
+   - 採用決定後の前向きデータ (2026/05 以降) で `--rule-version p05-holdout` 1 回だけ実行
+   - `scripts/backtest.py` に `buy_only_hit_rate_ci95` / `buy_only_return_rate_ci95` 出力追加
 
 ### 🟠 高インパクト未着手
-3. **`wl_odds_8_20` 路線で +100% 超え探索** (収益性)
-   - sweep で両期間 100%+ (74戦/103%, 41戦/116%) と既に検出済
-   - 戦数少なめなのでハイブリッド (wl + 信頼度除外 + odds 8-20) も検討
-4. **データパイプライン 3 件** (7 連続持ち越し!): mtime / JVStatus timeout / DB PRAGMA
-5. **`_score_one` 関数分割** (予想ロジック)
+3. **`_score_one` 関数分割** (予想ロジック / コード品質 — 多セッション持ち越し)
    - 508 行肥大、namespace 化済なので機械的分割可
-   - 項目「デッドコード / 整合性」が 4.5 → 5 で総合 4.4-4.5 射程
+   - 項目「デッドコード / 整合性」が 4.5 → 5、テスト容易性 2.5 → 3.5 で総合 4.5 射程の最大レバー
+4. **データパイプライン 3 件** (**8 連続持ち越し、臨界域**): mtime / JVStatus timeout / DB PRAGMA
+   - `wl_odds_8_20` 運用でオッズ鮮度 SQL 自動カット不在のリスク影響度拡大
+5. **`wl_odds_8_20_pop_4_8` 併用 A/B** (収益性)
+   - sweep で 67戦/101.2% (design) / 37戦/128.6% (eval) 検出、戦数を 41→ 50-60 に増やす候補
+   - `BUY_FILTER_DEFAULT` を list-of-dict 化して和集合運用化
 
 ### 🟡 GUI / UX 改善
-6. **GUI dashboard で人気帯 input を露出**
-   - 現在 min_popularity / max_popularity / exclude_confidence は config のみ、JS dashboard で弄れない
+6. **`min_popularity / max_popularity / exclude_confidence` を JS dashboard input に露出**
+   - 現状 config のみ、UI から弄れない
 7. **「ホワイトリスト除外で買い候補無し」を画面に説明**
    - エラー人間化軸の継続課題
-8. **サイドバー overflow + helpBox** (5 連続持ち残し)
+8. **サイドバー overflow + helpBox** (6 連続持ち残し)
 
 ## 重要ファイル / ディレクトリ早見
 

@@ -36,23 +36,29 @@ JVLINK_SID = os.environ.get("JVLINK_SID", "UNKNOWN")
 # この値が変わったら data/backtest/ で新たに rule_version 付きで保存し直すこと
 # (過去 backtest と直接比較できなくなるため)。
 BUY_FILTER_DEFAULT: dict = {
-    # --- 既定値の根拠 (P0-4 walk-forward sweep) ---
-    # scripts/filter_sweep.py --walk-forward の結果、複数の robust なフィルタが検出:
-    #   - wl_odds_8_20 (= whitelist + Odds 8-20): 74戦/103.5% (design) / 41戦/116.1% (eval)
-    #   - wl_ex_unsure_pop_1_4 (= whitelist + 信頼度除外 + 1-4 人気): 166戦/86.3% / 105戦/89.0% ★採用
-    #   - wl_odds_2_5 (= 重賞+中山+京都 で 2-5 倍本命): 259戦/80.7% / 180戦/84.2%
-    # サンプル豊富 (271 戦) で両期間とも控除率超え + 既存の信頼度判定と
-    # 整合する `wl_ex_unsure_pop_1_4` を採用。EV / 内部バリューはモデルが
-    # 校正できていないため実質無効化 (0.0)。Odds 帯は 1〜100 で実質無効化し、
-    # 代わりに人気帯 (1-4) と信頼度除外で絞る。
+    # --- 既定値の根拠 (P0-4 walk-forward sweep, 2026-05-12 更新) ---
+    # `scripts/filter_sweep.py --walk-forward` を 2 期間 (design 2025/06-12 / eval
+    # 2026/01-04) で再計測し、両期間とも控除率 80% を超えるフィルタを sweep。
+    # 主要結果 (data/backtest/20260512_walk_forward_v2.csv):
+    #   - wl_odds_8_20          : 74戦/103.5% (design) / 41戦/116.1% (eval) ★採用
+    #   - wl_odds_8_20_pop_4_8  : 67戦/101.2% / 37戦/128.6% (戦数最少だが上振れ大)
+    #   - wl_ex_unsure_pop_1_4  : 166戦/86.3% / 105戦/89.0% (旧採用、+100% 未達)
+    #   - wl_odds_2_5           : 259戦/80.7% / 180戦/84.2%
+    # 旧採用の `wl_ex_unsure_pop_1_4` は両期間 80%+ ロバストだが +100% に届かず
+    # 控除率 -13% 確定運用。+100% 圏を狙う `wl_odds_8_20` に切替。
+    # 戦数 115 (両期間合計) でサンプル少だが、両期間とも +100% を出すロバスト性
+    # を優先。`pop_4_8` 重ね掛けは EVAL 上振れ大だが DESIGN +1.2% でギリのため見送り。
+    # 信頼度除外 (exclude_confidence) は 8-20 帯では `picks` がほぼ消失する
+    # (sweep の `wl_odds_8_20_ex_unsure` が 17/7 戦, 65%/0% に崩壊) ため解除。
+    # 人気帯 (popularity) も解除し、Odds 帯 8-20 のみで絞る。
     # None は「制約なし」を意味する (= 負値も許容)。0.0 だと負の EV が排除される。
     "min_ev": None,
     "min_value": None,
-    "min_odds": 1.0,
-    "max_odds": 100.0,
-    "min_popularity": 1,           # 単勝 1 〜 N 人気
-    "max_popularity": 4,           # ←ここがメインの絞り条件
-    "exclude_confidence": ["暫定", "混戦", "接戦"],   # 信頼度ラベルでこれらは買わない
+    "min_odds": 8.0,               # ←ここが主絞り条件 (wl_odds_8_20 採用)
+    "max_odds": 20.0,
+    "min_popularity": None,        # popularity 制約は解除 (Odds 帯で代替)
+    "max_popularity": None,
+    "exclude_confidence": [],      # 8-20 帯では混戦ラベル不可避なので解除
     "max_odds_age_min": 30,
     # ----- 重賞ホワイトリストモード -----
     "whitelist_mode": True,

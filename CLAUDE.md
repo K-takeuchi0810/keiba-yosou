@@ -60,8 +60,8 @@ JV-Link COM は 32bit。`.venv32/Scripts/python.exe` を使う。詳細は `.cla
 
 ## 現在の状態 (2026-05 時点)
 
-7 改修完了で全体平均 **3.06 → 4.09** (baseline 比 +1.03)。
+8 改修完了で全体平均 **3.06 → 4.09** (baseline 比 +1.03)。直近 p05 改修で **EVAL 41 戦 / 116.1% / +660 円** と初の +収支到達。
 
-詳細スナップショット (実 backtest 数値 / 次の優先 6 件 / 既知の軽微回帰 など) は `.claude/skills/project-state/SKILL.md` を参照。新セッションは **まずこれを読む** ことから始める。
+詳細スナップショット (実 backtest 数値 / 次の優先 5 件 / 既知の軽微回帰 など) は `.claude/skills/project-state/SKILL.md` を参照。新セッションは **まずこれを読む** ことから始める。
 
-scorecards は `data/scorecards/<日時>_<topic>.md` に時系列で保存済。最新の集約は `20260511_2345_ae_walkforward_sweep_review.md`。
+scorecards は `data/scorecards/<日時>_<topic>.md` に時系列で保存済。最新の集約は `20260512_2100_p05_wl_odds_8_20.md`。

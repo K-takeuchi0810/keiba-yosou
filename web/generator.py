@@ -149,9 +149,12 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
             # 場合 bet_candidate を False に強制する。
             race_whitelisted = is_whitelisted_race(race_dict)
             # 人気帯 / 信頼度除外も config から読む (P0-4 の sweep 結果反映)
-            wl_min_pop = int(BUY_FILTER_DEFAULT.get("min_popularity", 1))
-            wl_max_pop = int(BUY_FILTER_DEFAULT.get("max_popularity", 18))
-            wl_exclude_conf = BUY_FILTER_DEFAULT.get("exclude_confidence", ["暫定", "混戦", "接戦"])
+            # None = 制約なし (wl_odds_8_20 採用後は popularity 制約解除中)
+            _raw_min_pop = BUY_FILTER_DEFAULT.get("min_popularity")
+            _raw_max_pop = BUY_FILTER_DEFAULT.get("max_popularity")
+            wl_min_pop = int(_raw_min_pop) if _raw_min_pop is not None else 1
+            wl_max_pop = int(_raw_max_pop) if _raw_max_pop is not None else 99
+            wl_exclude_conf = BUY_FILTER_DEFAULT.get("exclude_confidence") or []
             top_picks_by_race[key] = [
                 {
                     "mark": p.mark,
