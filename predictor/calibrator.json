@@ -1,89 +1,87 @@
 {
   "type": "bin",
   "bin_size": 0.05,
-  "min_count": 50,
-  "shrinkage_alpha": 30,
-  "source_count": 512,
-  "_comment_min_count": "count < min_count の bin は calibrated を捨てて raw 確率に寄せる。少サンプル bin の過学習を防ぐ。値変更後は scripts/backtest.py --save-calibrator で再生成推奨。",
-  "brier_score": 0.058346,
-  "log_loss": 0.210631,
+  "min_count": 20,
+  "source_count": 142713,
+  "brier_score": 0.021864,
+  "log_loss": 0.120761,
   "bins": [
     {
       "lower": 0.0,
       "upper": 0.05,
-      "count": 317,
-      "avg_probability": 0.0245,
-      "calibrated_probability": 0.0252
+      "count": 70165,
+      "avg_probability": 0.0375,
+      "calibrated_probability": 0.0175
     },
     {
       "lower": 0.05,
       "upper": 0.1,
-      "count": 99,
-      "avg_probability": 0.0727,
-      "calibrated_probability": 0.0707
+      "count": 47390,
+      "avg_probability": 0.0691,
+      "calibrated_probability": 0.0116
     },
     {
       "lower": 0.1,
       "upper": 0.15,
-      "count": 52,
-      "avg_probability": 0.1235,
-      "calibrated_probability": 0.1154
+      "count": 13175,
+      "avg_probability": 0.1201,
+      "calibrated_probability": 0.0133
     },
     {
       "lower": 0.15,
       "upper": 0.2,
-      "count": 27,
-      "avg_probability": 0.1725,
-      "calibrated_probability": 0.3333
+      "count": 5213,
+      "avg_probability": 0.1721,
+      "calibrated_probability": 0.0238
     },
     {
       "lower": 0.2,
       "upper": 0.25,
-      "count": 11,
-      "avg_probability": 0.2192,
-      "calibrated_probability": 0.2192
+      "count": 3128,
+      "avg_probability": 0.2227,
+      "calibrated_probability": 0.0253
     },
     {
       "lower": 0.25,
       "upper": 0.3,
-      "count": 4,
-      "avg_probability": 0.2718,
-      "calibrated_probability": 0.2718
+      "count": 1830,
+      "avg_probability": 0.2734,
+      "calibrated_probability": 0.0372
     },
     {
       "lower": 0.3,
       "upper": 0.35,
-      "count": 0,
-      "avg_probability": 0.0,
-      "calibrated_probability": 0.0
+      "count": 1177,
+      "avg_probability": 0.3192,
+      "calibrated_probability": 0.0323
     },
     {
       "lower": 0.35,
       "upper": 0.4,
-      "count": 2,
-      "avg_probability": 0.3862,
-      "calibrated_probability": 0.3862
+      "count": 525,
+      "avg_probability": 0.3729,
+      "calibrated_probability": 0.0286
     },
     {
       "lower": 0.4,
       "upper": 0.45,
-      "count": 0,
-      "avg_probability": 0.0,
-      "calibrated_probability": 0.0
+      "count": 93,
+      "avg_probability": 0.4168,
+      "calibrated_probability": 0.0538
     },
     {
       "lower": 0.45,
       "upper": 0.5,
-      "count": 0,
-      "avg_probability": 0.0,
-      "calibrated_probability": 0.0
+      "count": 15,
+      "avg_probability": 0.4689,
+      "calibrated_probability": 0.4689
     },
     {
       "lower": 0.5,
       "upper": 0.55,
-      "count": 0,
-      "avg_probability": 0.0,
-      "calibrated_probability": 0.0
+      "count": 2,
+      "avg_probability": 0.5063,
+      "calibrated_probability": 0.5063
     },
     {
       "lower": 0.55,
@@ -148,5 +146,9 @@
       "avg_probability": 0.0,
       "calibrated_probability": 0.0
     }
-  ]
+  ],
+  "trained_from": "20210101",
+  "trained_to": "20231231",
+  "generated_at": "2026-05-12T23:12:38",
+  "rule_version": "p07-train-21-23"
 }

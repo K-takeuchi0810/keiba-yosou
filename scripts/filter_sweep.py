@@ -204,11 +204,27 @@ def main() -> int:
     started = time.time()
 
     if args.walk_forward:
-        # ヘッダの d_ = train (DESIGN 同義), e_ = test (EVAL 同義) を維持
-        # (履歴 CSV との互換のため)。期間そのものは config.DATA_PERIODS 由来。
+        # walk-forward は TEST 期間を年単位で 2 分割して並列 sweep。
+        # TRAIN (= calibrator 学習期間) は in-sample なので比較対象に入れない。
+        # ヘッダ d_ / e_ は履歴 CSV との互換維持 (d=design, e=eval)。
+        # DATA_PERIODS["test"] = 2024-2025 を仮定: design=2024 / eval=2025
+        test_from = DATA_PERIODS["test"]["from"]
+        test_to = DATA_PERIODS["test"]["to"]
+        from_year = test_from[:4]
+        to_year = test_to[:4]
+        if from_year == to_year:
+            sys.exit(
+                f"walk-forward requires multi-year test period, got "
+                f"{test_from}-{test_to}. Edit config.DATA_PERIODS['test']."
+            )
+        # design = 最初の年、eval = 最後の年。中間年は今回は使わない (3 年なら 2024/2025 を取る)。
+        design_from = f"{from_year}0101"
+        design_to = f"{from_year}1231"
+        eval_from = f"{to_year}0101"
+        eval_to = test_to
         periods = [
-            ("train", DATA_PERIODS["train"]["from"], DATA_PERIODS["train"]["to"]),
-            ("test", DATA_PERIODS["test"]["from"], DATA_PERIODS["test"]["to"]),
+            ("design", design_from, design_to),
+            ("eval", eval_from, eval_to),
         ]
         period_picks: dict[str, list[Pick]] = {}
         for name, fr, to in periods:
@@ -220,8 +236,8 @@ def main() -> int:
         print("filter,d_bets,d_hit_rate,d_return_rate,e_bets,e_hit_rate,e_return_rate,robust")
         rows: list[tuple[str, dict, dict]] = []
         for name, spec in FILTERS:
-            d = summarize(period_picks["train"], args.bet, spec)
-            e = summarize(period_picks["test"], args.bet, spec)
+            d = summarize(period_picks["design"], args.bet, spec)
+            e = summarize(period_picks["eval"], args.bet, spec)
             rows.append((name, d, e))
         rows.sort(
             key=lambda x: (

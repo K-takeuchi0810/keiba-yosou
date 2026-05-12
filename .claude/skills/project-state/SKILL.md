@@ -7,7 +7,19 @@ description: keiba-yosou プロジェクトの **現状スナップショット*
 
 ## 1 行サマリ
 
-JRA-VAN JV-Link を使うローカル競馬予想 GUI。**2026-05-12 walk-forward sweep で `wl_odds_8_20` (重賞+中山+京都 で 8-20 倍帯) を採用、EVAL 4 ヶ月 41 戦 / 回収率 116.1% / +660 円で初の +収支到達**。両期間 (DESIGN 103.5% / EVAL 116.1%) +100% 維持。サンプル少 (n=41 / 月 ~10 戦) で分散リスクあり、第三 hold-out (2026/05 以降) 必須。
+JRA-VAN JV-Link を使うローカル競馬予想 GUI。**2026-05-12 wl_odds_8_20 採用で初の +収支到達** (EVAL 41 戦 / 116.1% / +660 円)。同日 **5 年分割を正規化** (`config.DATA_PERIODS`: train 2021-2023 / test 2024-2025 / production 2026)、raw_old_bstr から過去データ ingest 完了 (RA +61,083 / SE +720,479)、calibrator は TRAIN で再 fit 中。
+
+## データ期間の正規分割 (`config.DATA_PERIODS`)
+
+| ラベル | 期間 | 用途 | 注意 |
+|---|---|---|---|
+| **train** | 2021-01-01 〜 2023-12-31 (3 年) | calibrator fit + weights チューニング素材 | TEST と必ず disjoint |
+| **test** | 2024-01-01 〜 2025-12-31 (2 年) | filter sweep + A/B 採用判断 | win_odds は ~50% カバー |
+| **production** | 2026-01-01 〜 2026-12-31 (本番) | 当日まで遡って予測。HOLDOUT 兼用 | 採用 *決定後* に 1 回検証 |
+
+JRA 中央場 (track_code 01-10) の各年カバレッジ (ingest 後):
+- 2021-2025: 各 ~3,460 戦 / ~47,000 horse_races / ~24,500 with win_odds
+- 2026 (5/10 まで): 1,308 戦 / 18,588 horse_races / 12,328 with win_odds
 
 ## スコア推移 (9 改修分、`data/scorecards/` 詳細あり)
 
@@ -56,11 +68,13 @@ BUY_FILTER_DEFAULT = {
 }
 ```
 
-**現実の数値** (`data/backtest/20260512_205837_tan_p05-wl-odds-8-20-filtered.json`):
-- EVAL (2026/01-04): buy_only **41 戦 / 9.8% / 116.1%** / 収支 **+660 円** 🏆
-- DESIGN (2025/06-12): sweep 値 74 戦 / 103.5% (再現性確認済)
+**現実の数値** (`data/backtest/20260512_205837_tan_p05-wl-odds-8-20-filtered.json`、旧 EVAL = 現 TEST 部分の 2026 Q1):
+- 旧 EVAL (2026/01-04): buy_only **41 戦 / 9.8% / 116.1%** / 収支 **+660 円** 🏆
+- 旧 DESIGN (2025/06-12): sweep 値 74 戦 / 103.5% (再現性確認済)
 - ⚠ 戦数少なくサンプル分散大。Wilson 95% CI: hit_rate [3.9%, 22.6%] / return_rate [8.0%, 224.2%]
 - 旧 `wl_ex_unsure_pop_1_4` (EVAL 105 戦/89.0%/-1,150 円) からの切替で初の +収支
+- 5 年分割再評価 (TRAIN 2021-23 calibrator + TEST 2024-25 sweep) は 2026-05-12 進行中。
+  完了後 `20260512_2300_p07_5year_split_*.md` に新スコアを保存予定。
 
 ## 直近の重要な指摘 (= 次の改修候補、優先順)
 
