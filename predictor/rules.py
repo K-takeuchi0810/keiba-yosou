@@ -750,6 +750,19 @@ def _load_calibrator() -> dict | None:
     if _CALIBRATOR_CACHE and _CALIBRATOR_CACHE[0] == mtime:
         return _CALIBRATOR_CACHE[1]
     data = json.loads(CALIBRATOR_PATH.read_text(encoding="utf-8"))
+    # 期間メタが入っていれば 1 回だけログ (再現性監査の起点)。
+    tf, tt = data.get("trained_from"), data.get("trained_to")
+    if tf and tt:
+        logger.info(
+            "calibrator loaded: trained %s-%s (n=%s, gen=%s)",
+            tf, tt, data.get("source_count"), data.get("generated_at", "?"),
+        )
+    else:
+        logger.warning(
+            "calibrator has no trained_from/trained_to metadata. "
+            "Re-fit with `python -m scripts.backtest --save-calibrator "
+            "--from <train_from> --to <train_to>` to record provenance."
+        )
     _CALIBRATOR_CACHE = (mtime, data)
     return data
 

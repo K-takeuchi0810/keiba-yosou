@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from config import BUY_FILTER_DEFAULT
+from config import BUY_FILTER_DEFAULT, DATA_PERIODS
 from db import open_db
 from predictor.rules import is_tentative, predict_race
 from scripts.backtest import get_payout, horses_for_race, list_races
@@ -189,8 +189,14 @@ def main() -> int:
     ap.add_argument(
         "--walk-forward",
         action="store_true",
-        help="2 期間並列 sweep (design=2025/06-12, eval=2026/01-04)。"
-        "両期間とも 80%+ かを比較表示。",
+        help="config.DATA_PERIODS の train / test 2 期間並列 sweep。"
+        "両期間とも 80%+ かを比較表示。HOLDOUT は別途 --holdout で。",
+    )
+    ap.add_argument(
+        "--holdout",
+        action="store_true",
+        help="config.DATA_PERIODS['holdout'] のみで 1 回限り検証。"
+        "採用済み filter を本番投入前に sanity check する用途。",
     )
     ap.add_argument("--db", default=None, help="SQLite DB path")
     args = ap.parse_args()
@@ -198,9 +204,11 @@ def main() -> int:
     started = time.time()
 
     if args.walk_forward:
+        # ヘッダの d_ = train (DESIGN 同義), e_ = test (EVAL 同義) を維持
+        # (履歴 CSV との互換のため)。期間そのものは config.DATA_PERIODS 由来。
         periods = [
-            ("design", "20250601", "20251231"),
-            ("eval", "20260101", "20260430"),
+            ("train", DATA_PERIODS["train"]["from"], DATA_PERIODS["train"]["to"]),
+            ("test", DATA_PERIODS["test"]["from"], DATA_PERIODS["test"]["to"]),
         ]
         period_picks: dict[str, list[Pick]] = {}
         for name, fr, to in periods:
@@ -209,14 +217,12 @@ def main() -> int:
                 f"  collected {name} ({fr}-{to}): {len(period_picks[name])} picks",
                 file=sys.stderr,
             )
-        # 両期間で summarize を集計し並列表示
         print("filter,d_bets,d_hit_rate,d_return_rate,e_bets,e_hit_rate,e_return_rate,robust")
         rows: list[tuple[str, dict, dict]] = []
         for name, spec in FILTERS:
-            d = summarize(period_picks["design"], args.bet, spec)
-            e = summarize(period_picks["eval"], args.bet, spec)
+            d = summarize(period_picks["train"], args.bet, spec)
+            e = summarize(period_picks["test"], args.bet, spec)
             rows.append((name, d, e))
-        # ソート: 両期間とも >=80% (= robust) を上位、次に min(return) で
         rows.sort(
             key=lambda x: (
                 x[1]["return_rate"] >= 0.80 and x[2]["return_rate"] >= 0.80,
@@ -233,8 +239,27 @@ def main() -> int:
         print(f"sec,{time.time() - started:.1f}", file=sys.stderr)
         return 0
 
+    if args.holdout:
+        # HOLDOUT (= 本番 PRODUCTION 期間) は採用済み filter を検証する用途。
+        # `config.BUY_FILTER_DEFAULT` と同じ条件の filter (主絞り) で picks を
+        # まとめて出力。本番投入 *決定後* に走らせる位置付け。
+        fr = DATA_PERIODS["production"]["from"]
+        to = DATA_PERIODS["production"]["to"]
+        picks = collect_picks(fr, to, db_path=args.db)
+        print(f"  collected production/holdout ({fr}-{to}): {len(picks)} picks", file=sys.stderr)
+        print("filter,bets,hits,hit_rate,return_rate,profit")
+        rows = [(name, summarize(picks, args.bet, spec)) for name, spec in FILTERS]
+        rows.sort(key=lambda x: (x[1]["return_rate"], x[1]["bets"]), reverse=True)
+        for name, r in rows:
+            print(
+                f"{name},{r['bets']},{r['hits']},"
+                f"{r['hit_rate'] * 100:.1f},{r['return_rate'] * 100:.1f},{r['profit']}"
+            )
+        print(f"sec,{time.time() - started:.1f}", file=sys.stderr)
+        return 0
+
     if not args.from_date or not args.to_date:
-        ap.error("--from と --to が必要 (または --walk-forward)")
+        ap.error("--from と --to が必要 (または --walk-forward / --holdout)")
 
     print("filter,bets,hits,hit_rate,return_rate,profit")
 

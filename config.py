@@ -30,6 +30,28 @@ ICLOUD_PUBLISH_DIR = Path.home() / "iCloudDrive" / "競馬予想"
 JVLINK_SID = os.environ.get("JVLINK_SID", "UNKNOWN")
 
 
+# データ期間の正規分割 (2026-05-12 5 年分割版)。
+# 過去、calibrator の学習窓と filter sweep の評価窓が不明確で in-sample 化が
+# 発生していた。以後は **必ずこの 3 期間に従う**:
+#   TRAIN      : calibrator fit + weights ハンドチューニング素材。3 年分。
+#   TEST       : filter / weight 採用判断、A/B 比較。**TRAIN と必ず disjoint**
+#   PRODUCTION : 本番運用 = 当日まで遡って features を構築し予測。
+#                副次的に「採用 *決定後*」の HOLDOUT としても扱う。
+# 各期間境界は `from <= race_date <= to` の閉区間。
+#
+# 注意: 過去 win_odds (発走前単勝オッズ) は JV-Data の O1 records 由来で、JV-Link
+# は過去履歴を保持しない。当プロジェクトでは 2025-05 から累積開始。よって:
+#   - 2024 以前: RA/SE/HR (race info / 出走馬 / 払戻) のみ → calibrator fit OK、
+#     ベタ買い回収率 OK、`wl_odds_8_20` 系の buy filter は 0 件評価になる。
+#   - 2025+ : 全部揃う → filter sweep 完全動作。
+# このため filter_sweep --walk-forward の数値は実質 TEST 期間内 2025 部分が支配的。
+DATA_PERIODS: dict[str, dict[str, str]] = {
+    "train":      {"from": "20210101", "to": "20231231"},   # 3 年 / calibrator + weights
+    "test":       {"from": "20240101", "to": "20251231"},   # 2 年 / 採用判断・A/B
+    "production": {"from": "20260101", "to": "20261231"},   # 本番 + HOLDOUT
+}
+
+
 # 買い目フィルタの既定値。アプリ全体で **必ずここを唯一の出典** とする。
 # 利用箇所: web/generator.py (公開 HTML 用) / gui/app.py:_is_buy_candidate
 #         / scripts/backtest.py (デフォルト引数) / GUI dashboard JS の input value

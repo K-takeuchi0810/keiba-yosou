@@ -614,11 +614,20 @@ def main() -> int:
         print(f"\nsaved: {out}")
     if args.save_calibrator:
         out = Path(__file__).resolve().parent.parent / "predictor" / "calibrator.json"
+        # 後追い監査用に「いつ・何のデータで fit したか」を必ず記録する
+        # (2026-05-12 まで欠落、再現性不能だったため)
+        calib_with_meta = {
+            **result["calibrator"],
+            "trained_from": args.from_date,
+            "trained_to": args.to_date,
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "rule_version": args.rule_version,
+        }
         out.write_text(
-            json.dumps(result["calibrator"], indent=2, ensure_ascii=False),
+            json.dumps(calib_with_meta, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
-        print(f"calibrator saved: {out}")
+        print(f"calibrator saved: {out} (trained {args.from_date}-{args.to_date})")
 
     return 0
 

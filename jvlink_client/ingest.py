@@ -128,8 +128,9 @@ def ingest_all(
     dataspecs: list[str] | None = None,
     only_files: set[str] | None = None,
     modified_since: float | None = None,
+    raw_dir: Path | None = None,
 ) -> dict:
-    """data/raw/ 配下の全ファイルを取り込む。
+    """`raw_dir` (省略時は data/raw/) 配下の全ファイルを取り込む。
 
     既に取り込み済みのファイルはスキップ（force=True で再取り込み）。
     1 ファイルでエラーが出ても残りに影響させない。
@@ -139,6 +140,9 @@ def ingest_all(
     こぼす。直近の取得で書き出されたファイルだけ再 ingest したい場合は、
     `only_files` (ファイル名 set) または `modified_since` (Unix epoch 秒) で
     対象を絞ってください。これらが指定されれば force=False でも処理されます。
+
+    過去バルクデータ (data/raw_old_bstr/) のような別ディレクトリから読み込みたい
+    ときは `raw_dir` を渡す。
     """
     summary = {
         "files_processed": 0,
@@ -152,11 +156,12 @@ def ingest_all(
         "records_skipped": 0,
         "errors": [],
     }
-    if not RAW_DIR.exists():
+    root = raw_dir or RAW_DIR
+    if not root.exists():
         return summary
 
     with open_db() as conn:
-        for ds_dir in sorted(RAW_DIR.iterdir()):
+        for ds_dir in sorted(root.iterdir()):
             if not ds_dir.is_dir():
                 continue
             if dataspecs is not None and ds_dir.name not in dataspecs:
