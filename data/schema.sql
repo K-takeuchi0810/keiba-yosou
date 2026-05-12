@@ -167,3 +167,109 @@ CREATE TABLE IF NOT EXISTS ingested_files (
     record_count   INTEGER,
     ingested_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ========================================================================
+-- Phase 1 (2026-05-13): JV-Link 未活用 dataspec 取り込み用テーブル
+-- 5 dataspec: MING (DM/TM) / BLOD (HN, SK) / SLOP (HC) / WOOD (WC) / TOKU (TK)
+-- ========================================================================
+
+-- JRA-VAN マイニング予想 (DM=タイム型 / TM=対戦型)
+CREATE TABLE IF NOT EXISTS mining_predictions (
+    race_year       TEXT NOT NULL,
+    race_month_day  TEXT NOT NULL,
+    track_code      TEXT NOT NULL,
+    kaiji           TEXT NOT NULL,
+    nichiji         TEXT NOT NULL,
+    race_num        TEXT NOT NULL,
+    horse_num       TEXT NOT NULL,
+    record_type     TEXT NOT NULL,   -- 'DM' or 'TM'
+    data_div        TEXT,
+    data_created    TEXT,
+    predicted_time  INTEGER,         -- DM: 1/10 秒
+    error_plus      INTEGER,         -- DM: 誤差 + 側 (1/10 秒)
+    error_minus     INTEGER,         -- DM: 誤差 - 側 (1/10 秒)
+    predicted_rank  INTEGER,         -- 推定順位 (1=best)
+    score           INTEGER,         -- TM: 対戦評価点 (0-100 等)
+    PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji, race_num, horse_num, record_type)
+);
+CREATE INDEX IF NOT EXISTS idx_mining_race
+    ON mining_predictions (race_year, race_month_day, track_code, kaiji, nichiji, race_num);
+
+-- 繁殖馬マスタ (HN レコード)
+CREATE TABLE IF NOT EXISTS breeding_horses (
+    breeding_num    TEXT PRIMARY KEY,
+    data_div        TEXT,
+    data_created    TEXT,
+    horse_name      TEXT,
+    blood_register_num TEXT,
+    sex_code        TEXT,
+    breed_code      TEXT,
+    coat_code       TEXT,
+    birth_year      TEXT,
+    sire_breeding_num    TEXT,
+    sire_name            TEXT,
+    dam_breeding_num     TEXT,
+    dam_name             TEXT,
+    dam_sire_breeding_num TEXT,
+    dam_sire_name        TEXT
+);
+
+-- 産駒マスタ (SK レコード)
+CREATE TABLE IF NOT EXISTS offspring_master (
+    blood_register_num   TEXT PRIMARY KEY,
+    data_div             TEXT,
+    data_created         TEXT,
+    birth_year           TEXT,
+    sex_code             TEXT,
+    breed_code           TEXT,
+    coat_code            TEXT,
+    sire_breeding_num    TEXT,
+    sire_name            TEXT,
+    dam_breeding_num     TEXT,
+    dam_name             TEXT,
+    dam_sire_breeding_num TEXT,
+    dam_sire_name        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_offspring_sire
+    ON offspring_master (sire_breeding_num);
+CREATE INDEX IF NOT EXISTS idx_offspring_dam_sire
+    ON offspring_master (dam_sire_breeding_num);
+
+-- 調教タイム (HC=坂路 / WC=ウッドチップ)
+CREATE TABLE IF NOT EXISTS training_times (
+    blood_register_num   TEXT NOT NULL,
+    training_date        TEXT NOT NULL,   -- YYYYMMDD
+    training_time_str    TEXT,            -- HHMM
+    training_type        TEXT NOT NULL,   -- 'slope' (HC) / 'wood' (WC)
+    course_code          TEXT,
+    times_total          INTEGER,         -- 全距離タイム (1/10 秒)
+    times_last_600m      INTEGER,
+    times_last_400m      INTEGER,
+    times_last_200m      INTEGER,
+    lap_last_300m        INTEGER,         -- ラスト 1F (1/10 秒)
+    rider_code           TEXT,
+    PRIMARY KEY (blood_register_num, training_date, training_type, course_code)
+);
+CREATE INDEX IF NOT EXISTS idx_training_blood_date
+    ON training_times (blood_register_num, training_date DESC);
+
+-- 特別登録馬 (TK)
+CREATE TABLE IF NOT EXISTS special_entries (
+    race_year         TEXT NOT NULL,
+    race_month_day    TEXT NOT NULL,
+    track_code        TEXT NOT NULL,
+    kaiji             TEXT NOT NULL,
+    nichiji           TEXT NOT NULL,
+    race_num          TEXT NOT NULL,
+    blood_register_num TEXT NOT NULL,
+    data_div          TEXT,
+    data_created      TEXT,
+    entry_priority    INTEGER,
+    burden_weight     INTEGER,
+    jockey_code       TEXT,
+    east_west_code    TEXT,
+    trainer_code      TEXT,
+    PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji, race_num, blood_register_num)
+);
+CREATE INDEX IF NOT EXISTS idx_special_race
+    ON special_entries (race_year, race_month_day, track_code, kaiji, nichiji, race_num);

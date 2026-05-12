@@ -15,7 +15,18 @@ from datetime import datetime
 from pathlib import Path
 
 from config import DB_PATH, PROJECT_ROOT
-from jvlink_client.parser import HorseMaster, HorseRaceInfo, O1Odds, Payout, RaceInfo
+from jvlink_client.parser import (
+    BreedingHorse,
+    HorseMaster,
+    HorseRaceInfo,
+    MiningPrediction,
+    O1Odds,
+    OffspringMaster,
+    Payout,
+    RaceInfo,
+    SpecialEntry,
+    TrainingTime,
+)
 
 SCHEMA_PATH = PROJECT_ROOT / "data" / "schema.sql"
 
@@ -173,3 +184,61 @@ def record_ingested_file(
         "(filename, dataspec, record_count) VALUES (?, ?, ?)",
         (filename, dataspec, record_count),
     )
+
+
+# ============================================================
+# Phase 1 (2026-05-13): JV-Link 未活用 dataspec upsert
+# ============================================================
+
+
+def upsert_mining_prediction(conn: sqlite3.Connection, mp: MiningPrediction) -> None:
+    """DM / TM の per-horse 予想 1 件を upsert。"""
+    d = asdict(mp)
+    d["race_year"] = d.pop("year")
+    d["race_month_day"] = d.pop("month_day")
+    cols = list(d.keys())
+    placeholders = ",".join(f":{c}" for c in cols)
+    sql = f"INSERT OR REPLACE INTO mining_predictions ({','.join(cols)}) VALUES ({placeholders})"
+    conn.execute(sql, d)
+
+
+def upsert_breeding_horse(conn: sqlite3.Connection, hn: BreedingHorse) -> None:
+    """HN (繁殖馬マスタ) 1 件を upsert。"""
+    d = asdict(hn)
+    d.pop("record_type", None)
+    cols = list(d.keys())
+    placeholders = ",".join(f":{c}" for c in cols)
+    sql = f"INSERT OR REPLACE INTO breeding_horses ({','.join(cols)}) VALUES ({placeholders})"
+    conn.execute(sql, d)
+
+
+def upsert_offspring_master(conn: sqlite3.Connection, sk: OffspringMaster) -> None:
+    """SK (産駒マスタ) 1 件を upsert。"""
+    d = asdict(sk)
+    d.pop("record_type", None)
+    cols = list(d.keys())
+    placeholders = ",".join(f":{c}" for c in cols)
+    sql = f"INSERT OR REPLACE INTO offspring_master ({','.join(cols)}) VALUES ({placeholders})"
+    conn.execute(sql, d)
+
+
+def upsert_training_time(conn: sqlite3.Connection, tt: TrainingTime) -> None:
+    """HC / WC (調教タイム) 1 件を upsert。"""
+    d = asdict(tt)
+    d.pop("record_type", None)
+    cols = list(d.keys())
+    placeholders = ",".join(f":{c}" for c in cols)
+    sql = f"INSERT OR REPLACE INTO training_times ({','.join(cols)}) VALUES ({placeholders})"
+    conn.execute(sql, d)
+
+
+def upsert_special_entry(conn: sqlite3.Connection, se: SpecialEntry) -> None:
+    """TK (特別登録) per-horse エントリ 1 件を upsert。"""
+    d = asdict(se)
+    d["race_year"] = d.pop("year")
+    d["race_month_day"] = d.pop("month_day")
+    d.pop("record_type", None)
+    cols = list(d.keys())
+    placeholders = ",".join(f":{c}" for c in cols)
+    sql = f"INSERT OR REPLACE INTO special_entries ({','.join(cols)}) VALUES ({placeholders})"
+    conn.execute(sql, d)

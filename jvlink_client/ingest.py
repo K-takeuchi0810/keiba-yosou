@@ -27,22 +27,34 @@ from db import (
     is_file_ingested,
     open_db,
     record_ingested_file,
+    upsert_breeding_horse,
     upsert_horse_race,
+    upsert_horse_master,
+    upsert_mining_prediction,
+    upsert_offspring_master,
     upsert_payout,
     upsert_race,
+    upsert_special_entry,
+    upsert_training_time,
     update_win_odds,
-    upsert_horse_master,
 )
 from jvlink_client.parser import (
     HR_LENGTH,
     RA_LENGTH,
     SE_LENGTH,
+    parse_dm,
+    parse_hc,
+    parse_hn,
     parse_hr,
+    parse_hs,
     parse_o1,
     parse_ra,
     parse_se,
-    parse_hs,
+    parse_sk,
+    parse_tk,
+    parse_tm,
     parse_um,
+    parse_wc,
 )
 
 RAW_DIR = DATA_DIR / "raw"
@@ -72,7 +84,9 @@ def _split_records(data: bytes) -> list[bytes]:
 def ingest_file_dispatch(conn, path: Path, dataspec: str = "") -> tuple[int, int, int, int, int, int]:
     """ファイルを開き、レコード単位に分割 → 種別別に DB へ。
 
-    戻り値: (ra_count, se_count, hr_count, o1_count, skipped)
+    戻り値: (ra_count, se_count, hr_count, o1_count, um_count, skipped)。
+    Phase 1 新規 dataspec (DM/TM/HN/SK/HC/WC/TK) は本戻り値タプルに含めない
+    (互換維持)。代わりに ingest_all の summary 辞書に extra カウンタを集計。
     """
     data = path.read_bytes()
     records = _split_records(data)
@@ -114,8 +128,30 @@ def ingest_file_dispatch(conn, path: Path, dataspec: str = "") -> tuple[int, int
                 hs = parse_hs(rec)
                 upsert_horse_master(conn, hs)
                 um_count += 1
+            # === Phase 1 新規 dataspec (2026-05-13) ===
+            elif rec_type == "DM":
+                for mp in parse_dm(rec):
+                    upsert_mining_prediction(conn, mp)
+            elif rec_type == "TM":
+                for mp in parse_tm(rec):
+                    upsert_mining_prediction(conn, mp)
+            elif rec_type == "HN":
+                hn = parse_hn(rec)
+                upsert_breeding_horse(conn, hn)
+            elif rec_type == "SK":
+                sk = parse_sk(rec)
+                upsert_offspring_master(conn, sk)
+            elif rec_type == "HC":
+                hc = parse_hc(rec)
+                upsert_training_time(conn, hc)
+            elif rec_type == "WC":
+                wc = parse_wc(rec)
+                upsert_training_time(conn, wc)
+            elif rec_type == "TK":
+                for se_ in parse_tk(rec):
+                    upsert_special_entry(conn, se_)
             else:
-                # 未対応レコード種別。後段で他テーブル実装するまでスキップ。
+                # 未対応レコード種別 (BN/KS/CH/CK/RC/HY/YS/JG/WH/WE/AV/JC/CC 等)
                 skipped += 1
         except Exception:
             skipped += 1

@@ -17,6 +17,15 @@ O1_LENGTH = 962
 UM_LENGTH = 1609
 HS_LENGTH = 194
 
+# Phase 1 (2026-05-13): 未活用 dataspec
+DM_LENGTH = 303      # MING タイム型マイニング予想
+TM_LENGTH = 141      # MING 対戦型マイニング予想
+HN_LENGTH = 251      # BLOD 繁殖馬マスタ
+SK_LENGTH = 208      # BLOD 産駒マスタ
+HC_LENGTH = 60       # SLOP 坂路調教
+WC_LENGTH = 105      # WOOD ウッドチップ調教
+TK_LENGTH = 21657    # TOKU 特別登録馬
+
 
 def _slice(rec: bytes, pos: int, length: int) -> bytes:
     """仕様書 1-indexed 位置からバイト列を切り出し。"""
@@ -493,3 +502,379 @@ def parse_hs(rec: bytes) -> HorseMaster:
         dam_sire_name="",
         leg_tendency_code="",
     )
+
+
+# ================================================================
+# Phase 1 (2026-05-13): JV-Link 未活用 dataspec parser
+# 仕様書: docs/JV-Data4901.pdf §1 (TK), §18 (HN), §19 (SK), §22 (HC),
+#         §27 (WC), §28 (DM), §29 (TM)
+# 共通レイアウト (JV-Data 標準):
+#   1-2:   record_type
+#   3:     data_div
+#   4-11:  data_created (yyyymmdd)
+# レース紐付きレコードはその後 12-27 に race_id 6 フィールドが続く。
+# 馬個体紐付きレコードは 12-21 に blood_register_num が続く。
+# ================================================================
+
+
+@dataclass
+class MiningPrediction:
+    """DM (タイム型) / TM (対戦型) の per-horse 予想エントリ。"""
+    record_type: str       # 'DM' or 'TM'
+    data_div: str
+    data_created: str
+    year: str
+    month_day: str
+    track_code: str
+    kaiji: str
+    nichiji: str
+    race_num: str
+    horse_num: str
+    predicted_time: int = 0   # DM: 1/10 秒。TM では 0
+    error_plus: int = 0       # DM: 誤差 + 側 (1/10 秒)。TM では 0
+    error_minus: int = 0      # DM: 誤差 - 側 (1/10 秒)。TM では 0
+    predicted_rank: int = 0   # DM/TM 共通: 1=本命
+    score: int = 0            # TM: 対戦評価点 (0-100 等)。DM では 0
+
+    @property
+    def race_id(self) -> str:
+        return f"{self.year}{self.month_day}_{self.track_code}_{self.kaiji}_{self.nichiji}_{self.race_num}"
+
+
+def _race_id_fields(rec: bytes) -> tuple[str, str, str, str, str, str, str, str]:
+    """JV-Data race-bound レコード共通の 1-27 byte を抽出。"""
+    return (
+        _ascii(rec, 1, 2),   # record_type
+        _ascii(rec, 3, 1),   # data_div
+        _ascii(rec, 4, 8),   # data_created
+        _ascii(rec, 12, 4),  # year
+        _ascii(rec, 16, 4),  # month_day
+        _ascii(rec, 20, 2),  # track_code
+        _ascii(rec, 22, 2),  # kaiji
+        _ascii(rec, 24, 2),  # nichiji
+    )
+
+
+def parse_dm(rec: bytes) -> list[MiningPrediction]:
+    """DM (タイム型データマイニング予想) 303 byte → 1 record 内に 18 頭分。
+
+    仕様書 §28 (PDF page 26)。**byte offset は実データで再検証必要**。
+    現状は race_id + 各馬の (horse_num, predicted_time, error_+, error_-) を
+    保守的に取り出す。スコア欄が無い (= DM はタイム型) ので score=0。
+    予測順位 (predicted_rank) は predicted_time の昇順から事後計算。
+    """
+    if len(rec) < DM_LENGTH:
+        rec = rec.ljust(DM_LENGTH, b"\x00")
+    elif len(rec) > DM_LENGTH:
+        rec = rec[:DM_LENGTH]
+    rec_type, data_div, data_created, year, month_day, track_code, kaiji, nichiji = _race_id_fields(rec)
+    race_num = _ascii(rec, 26, 2)
+    # 28 以降に 18 頭分のエントリ (1 頭 15 byte 仮定: horse_num(2) + time(4) + err+(3) + err-(3) + reserve(3))
+    # 18 * 15 = 270 byte (303 - 28 - 5 (CRLF + reserve) = 270 でちょうど合う)
+    entries: list[MiningPrediction] = []
+    base = 28
+    block = 15
+    for i in range(18):
+        pos = base + i * block
+        horse_num = _ascii(rec, pos, 2).strip("\x00 ")
+        if not horse_num or horse_num == "00":
+            continue
+        pred_time = _int(rec, pos + 2, 4)
+        err_plus = _int(rec, pos + 6, 3)
+        err_minus = _int(rec, pos + 9, 3)
+        entries.append(
+            MiningPrediction(
+                record_type=rec_type,
+                data_div=data_div,
+                data_created=data_created,
+                year=year, month_day=month_day, track_code=track_code,
+                kaiji=kaiji, nichiji=nichiji, race_num=race_num,
+                horse_num=horse_num,
+                predicted_time=pred_time,
+                error_plus=err_plus,
+                error_minus=err_minus,
+            )
+        )
+    # predicted_time 昇順から rank を計算 (1=最速)。0 は除外して並べる。
+    timed = [e for e in entries if e.predicted_time > 0]
+    timed.sort(key=lambda e: e.predicted_time)
+    for r, e in enumerate(timed, start=1):
+        e.predicted_rank = r
+    return entries
+
+
+def parse_tm(rec: bytes) -> list[MiningPrediction]:
+    """TM (対戦型データマイニング予想) 141 byte → 1 record 内に 18 頭分。
+
+    仕様書 §29 (PDF page 26)。**byte offset は実データで再検証必要**。
+    score (対戦評価点) + rank を per-horse 抽出。
+    """
+    if len(rec) < TM_LENGTH:
+        rec = rec.ljust(TM_LENGTH, b"\x00")
+    elif len(rec) > TM_LENGTH:
+        rec = rec[:TM_LENGTH]
+    rec_type, data_div, data_created, year, month_day, track_code, kaiji, nichiji = _race_id_fields(rec)
+    race_num = _ascii(rec, 26, 2)
+    # 28 以降に 18 頭分 (1 頭 6 byte 仮定: horse_num(2) + score(3) + reserve(1))
+    # 18 * 6 = 108 byte (141 - 28 - 5 = 108)
+    entries: list[MiningPrediction] = []
+    base = 28
+    block = 6
+    for i in range(18):
+        pos = base + i * block
+        horse_num = _ascii(rec, pos, 2).strip("\x00 ")
+        if not horse_num or horse_num == "00":
+            continue
+        score = _int(rec, pos + 2, 3)
+        entries.append(
+            MiningPrediction(
+                record_type=rec_type,
+                data_div=data_div,
+                data_created=data_created,
+                year=year, month_day=month_day, track_code=track_code,
+                kaiji=kaiji, nichiji=nichiji, race_num=race_num,
+                horse_num=horse_num,
+                score=score,
+            )
+        )
+    # score 降順 (= 評価点が高い順) で rank。
+    scored = [e for e in entries if e.score > 0]
+    scored.sort(key=lambda e: -e.score)
+    for r, e in enumerate(scored, start=1):
+        e.predicted_rank = r
+    return entries
+
+
+@dataclass
+class BreedingHorse:
+    """HN (繁殖馬マスタ) 251 byte。"""
+    record_type: str
+    data_div: str
+    data_created: str
+    breeding_num: str           # 繁殖登録番号 (10 byte)
+    blood_register_num: str     # 血統登録番号 (10 byte、JRA現役なら存在)
+    horse_name: str
+    sex_code: str
+    breed_code: str
+    coat_code: str
+    birth_year: str
+    sire_breeding_num: str
+    dam_breeding_num: str
+
+
+def parse_hn(rec: bytes) -> BreedingHorse:
+    """HN (繁殖馬マスタ) parser。仕様書 §18 (PDF page 20)。
+
+    1-2: rec_type / 3: data_div / 4-11: data_created
+    12-21: breeding_num / 30-39: blood_register_num / 41-76: horse_name
+    197-200: birth_year / 201: sex_code / 202: breed_code / 203-204: coat
+    230-239: sire_breeding_num / 240-249: dam_breeding_num
+    """
+    if len(rec) < HN_LENGTH:
+        rec = rec.ljust(HN_LENGTH, b"\x00")
+    elif len(rec) > HN_LENGTH:
+        rec = rec[:HN_LENGTH]
+    return BreedingHorse(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        breeding_num=_ascii(rec, 12, 10),
+        blood_register_num=_ascii(rec, 30, 10),
+        horse_name=_str(rec, 41, 36),
+        sex_code=_ascii(rec, 201, 1),
+        breed_code=_ascii(rec, 202, 1),
+        coat_code=_ascii(rec, 203, 2),
+        birth_year=_ascii(rec, 197, 4),
+        sire_breeding_num=_ascii(rec, 230, 10),
+        dam_breeding_num=_ascii(rec, 240, 10),
+    )
+
+
+@dataclass
+class OffspringMaster:
+    """SK (産駒マスタ) 208 byte。3 代血統情報あり。"""
+    record_type: str
+    data_div: str
+    data_created: str
+    blood_register_num: str
+    birth_year: str
+    sex_code: str
+    breed_code: str
+    coat_code: str
+    sire_breeding_num: str
+    dam_breeding_num: str
+    dam_sire_breeding_num: str
+
+
+def parse_sk(rec: bytes) -> OffspringMaster:
+    """SK (産駒マスタ) parser。仕様書 §19 (PDF page 20)。
+
+    1-2: rec_type / 3: data_div / 4-11: data_created
+    12-21: blood_register_num / 22-29: birth_date (yyyymmdd)
+    30: sex_code / 31: breed_code / 32-33: coat
+    67-: 3代血統 14 codes × 10 bytes (sire, dam, sire_sire, sire_dam,
+        dam_sire, dam_dam, sire_sire_sire, ...). 父=index 0, 母=index 1,
+        母父=index 4.
+    """
+    if len(rec) < SK_LENGTH:
+        rec = rec.ljust(SK_LENGTH, b"\x00")
+    elif len(rec) > SK_LENGTH:
+        rec = rec[:SK_LENGTH]
+    pedigree_base = 67
+    return OffspringMaster(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        blood_register_num=_ascii(rec, 12, 10),
+        birth_year=_ascii(rec, 22, 4),
+        sex_code=_ascii(rec, 30, 1),
+        breed_code=_ascii(rec, 31, 1),
+        coat_code=_ascii(rec, 32, 2),
+        sire_breeding_num=_ascii(rec, pedigree_base + 0 * 10, 10),
+        dam_breeding_num=_ascii(rec, pedigree_base + 1 * 10, 10),
+        dam_sire_breeding_num=_ascii(rec, pedigree_base + 4 * 10, 10),
+    )
+
+
+@dataclass
+class TrainingTime:
+    """HC (坂路) / WC (ウッドチップ) 調教タイム。"""
+    record_type: str           # 'HC' or 'WC'
+    data_div: str
+    data_created: str
+    training_date: str         # yyyymmdd
+    training_time_str: str     # hhmm
+    blood_register_num: str
+    training_type: str         # 'slope' / 'wood' (DB 統一)
+    course_code: str
+    times_total: int           # 全距離タイム (1/10 秒)
+    times_last_600m: int = 0
+    times_last_400m: int = 0
+    times_last_200m: int = 0
+    lap_last_300m: int = 0
+    rider_code: str = ""
+
+
+def parse_hc(rec: bytes) -> TrainingTime:
+    """HC (坂路調教) 60 byte。仕様書 §22 (PDF page 24)。
+
+    1-2: rec_type / 3: data_div / 4-11: data_created
+    12: training_center_div (0:栗東 1:美浦)
+    13-20: training_date / 21-24: training_time
+    25-34: blood_register_num
+    35-38: 4 ハロン total (800M-0M) 1/10 秒
+    39-41 / 42-44 / 45-47 / 48-50: lap (800-600 / 600-400 / 400-200 / 200-0)
+    """
+    if len(rec) < HC_LENGTH:
+        rec = rec.ljust(HC_LENGTH, b"\x00")
+    elif len(rec) > HC_LENGTH:
+        rec = rec[:HC_LENGTH]
+    return TrainingTime(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        training_date=_ascii(rec, 13, 8),
+        training_time_str=_ascii(rec, 21, 4),
+        blood_register_num=_ascii(rec, 25, 10),
+        training_type="slope",
+        course_code=_ascii(rec, 12, 1),
+        times_total=_int(rec, 35, 4),
+        times_last_600m=_int(rec, 39, 3),
+        times_last_400m=_int(rec, 42, 3),
+        times_last_200m=_int(rec, 45, 3),
+        lap_last_300m=_int(rec, 48, 3),
+    )
+
+
+def parse_wc(rec: bytes) -> TrainingTime:
+    """WC (ウッドチップ調教) 105 byte。仕様書 §27 (PDF page 27)。
+
+    HC と類似構造 + course_code 詳細 + rider_code。
+    1-2: rec_type / 3: data_div / 4-11: data_created
+    12: training_center_div / 13-20: training_date / 21-24: training_time
+    25-34: blood_register_num / 35-36: course_code (W コース種別)
+    37-: lap times (8 ハロン構造、HC より長い)
+    """
+    if len(rec) < WC_LENGTH:
+        rec = rec.ljust(WC_LENGTH, b"\x00")
+    elif len(rec) > WC_LENGTH:
+        rec = rec[:WC_LENGTH]
+    return TrainingTime(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        training_date=_ascii(rec, 13, 8),
+        training_time_str=_ascii(rec, 21, 4),
+        blood_register_num=_ascii(rec, 25, 10),
+        training_type="wood",
+        course_code=_ascii(rec, 35, 2),
+        times_total=_int(rec, 37, 4),
+        times_last_600m=_int(rec, 41, 3),
+        times_last_400m=_int(rec, 44, 3),
+        times_last_200m=_int(rec, 47, 3),
+        lap_last_300m=_int(rec, 50, 3),
+    )
+
+
+@dataclass
+class SpecialEntry:
+    """TK (特別登録馬) per-horse エントリ。1 レース 1 record に最大 300 頭。"""
+    record_type: str
+    data_div: str
+    data_created: str
+    year: str
+    month_day: str
+    track_code: str
+    kaiji: str
+    nichiji: str
+    race_num: str
+    blood_register_num: str
+    entry_priority: int
+    burden_weight: int     # 0.1kg
+    jockey_code: str
+    east_west_code: str
+
+
+def parse_tk(rec: bytes) -> list[SpecialEntry]:
+    """TK (特別登録馬) 21657 byte。仕様書 §1 (PDF page 10)。
+
+    1-27: race_id 共通エリア / 28: weekday_code / 29-32: special_race_num
+    ... (race-level fields) ...
+    656-: <登録馬情報> 300 entries × 70 bytes each。
+    1 entry のレイアウト (1-indexed within entry):
+      1-3: 連番 / 4-13: blood_register_num / 14-49: horse_name (36 byte)
+      50-51: horse_symbol / 52: sex / 53: jockey_apprentice
+      54-58: jockey_code / 59-66: jockey_short_name
+      67-69: burden_weight (0.1kg) / 70: east_west_code
+    """
+    if len(rec) < TK_LENGTH:
+        rec = rec.ljust(TK_LENGTH, b"\x00")
+    elif len(rec) > TK_LENGTH:
+        rec = rec[:TK_LENGTH]
+    rec_type, data_div, data_created, year, month_day, track_code, kaiji, nichiji = _race_id_fields(rec)
+    race_num = _ascii(rec, 26, 2)
+    entries: list[SpecialEntry] = []
+    base = 656
+    block = 70
+    for i in range(300):
+        pos = base + i * block
+        priority = _int(rec, pos, 3)
+        blood_num = _ascii(rec, pos + 3, 10).strip("\x00 ")
+        if not blood_num or blood_num.strip("0") == "":
+            # 空きスロット (全0 or NUL) は登録なし
+            continue
+        entries.append(
+            SpecialEntry(
+                record_type=rec_type,
+                data_div=data_div,
+                data_created=data_created,
+                year=year, month_day=month_day, track_code=track_code,
+                kaiji=kaiji, nichiji=nichiji, race_num=race_num,
+                blood_register_num=blood_num,
+                entry_priority=priority,
+                burden_weight=_int(rec, pos + 66, 3),
+                jockey_code=_ascii(rec, pos + 53, 5),
+                east_west_code=_ascii(rec, pos + 69, 1),
+            )
+        )
+    return entries

@@ -946,4 +946,45 @@ def compute_features(
     feat["dam_sire_going_top3_rate"] = rate
     feat["dam_sire_going_samples"] = n
 
+    # Phase 1 (2026-05-13): JRA-VAN マイニング予想 (DM/TM) を feature 化。
+    # mining_predictions テーブルに record_type='DM' と 'TM' の per-horse 行が
+    # 入っている (Phase 1 ingest)。predict 時に当該レース×馬の予測順位 / score
+    # を取り出し LightGBM の feature として渡す。SE.mining_predicted_order
+    # (既存) は DM の rank と重複だが、SE は 1 値、DM/TM は分離して持つ。
+    horse_num = horse.get("horse_num") or ""
+    if horse_num and conn is not None:
+        rows = conn.execute(
+            """
+            SELECT record_type, predicted_rank, predicted_time, score
+              FROM mining_predictions
+             WHERE race_year=? AND race_month_day=? AND track_code=?
+               AND kaiji=? AND nichiji=? AND race_num=? AND horse_num=?
+            """,
+            (
+                race.get("race_year"), race.get("race_month_day"), race.get("track_code"),
+                race.get("kaiji"), race.get("nichiji"), race.get("race_num"), horse_num,
+            ),
+        ).fetchall()
+        dm_rank = None
+        dm_time = None
+        tm_rank = None
+        tm_score = None
+        for r in rows:
+            rt = r[0]
+            if rt == "DM":
+                dm_rank = r[1] if r[1] else None
+                dm_time = r[2] if r[2] else None
+            elif rt == "TM":
+                tm_rank = r[1] if r[1] else None
+                tm_score = r[3] if r[3] else None
+        feat["mining_dm_rank"] = dm_rank
+        feat["mining_dm_time"] = dm_time
+        feat["mining_tm_rank"] = tm_rank
+        feat["mining_tm_score"] = tm_score
+    else:
+        feat["mining_dm_rank"] = None
+        feat["mining_dm_time"] = None
+        feat["mining_tm_rank"] = None
+        feat["mining_tm_score"] = None
+
     return feat
