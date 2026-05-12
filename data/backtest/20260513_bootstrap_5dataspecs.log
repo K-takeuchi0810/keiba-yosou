@@ -1,0 +1,335 @@
+============================================================
+bootstrap: 過去データ一括取得
+対象 dataspec: RACE, DIFN, HOSE, BLOD, SLOP, WOOD, HOYU, YSCH, TOKU, COMM, MING
+option = 4 (ダイアログなしセットアップ)
+fromtime = 20210101000000
+============================================================
+
+[01:07:09] open: {'dataspec': 'RACE', 'readcount': 1031, 'downloadcount': 0, 'last_timestamp': '20260511133754'}
+[01:07:14] read: {'dataspec': 'RACE', 'files_done': 4, 'records': 3461, 'file': 'JGVM2021019920230808173711.jvd'}
+[01:07:19] read: {'dataspec': 'RACE', 'files_done': 8, 'records': 7080, 'file': 'O4VM2021019920230808173715.jvd'}
+[01:07:24] read: {'dataspec': 'RACE', 'files_done': 13, 'records': 10563, 'file': 'SEVM2021019920230808173720.jvd'}
+[01:07:29] read: {'dataspec': 'RACE', 'files_done': 13, 'records': 14244, 'file': 'SEVM2021019920230808173720.jvd'}
+[01:07:34] read: {'dataspec': 'RACE', 'files_done': 19, 'records': 17772, 'file': 'JGVM2021029920230808173733.jvd'}
+[01:07:39] read: {'dataspec': 'RACE', 'files_done': 23, 'records': 21471, 'file': 'O4VM2021029920230808173737.jvd'}
+[01:07:44] read: {'dataspec': 'RACE', 'files_done': 28, 'records': 25033, 'file': 'SEVM2021029920230808173742.jvd'}
+[01:07:50] read: {'dataspec': 'RACE', 'files_done': 30, 'records': 28649, 'file': 'H1VM2021039920230808173749.jvd'}
+[01:07:55] read: {'dataspec': 'RACE', 'files_done': 34, 'records': 32189, 'file': 'JGVM2021039920230808173755.jvd'}
+[01:08:00] read: {'dataspec': 'RACE', 'files_done': 42, 'records': 35633, 'file': 'RAVM2021039920230808173803.jvd'}
+[01:08:05] read: {'dataspec': 'RACE', 'files_done': 43, 'records': 39366, 'file': 'SEVM2021039920230808173804.jvd'}
+[01:08:10] read: {'dataspec': 'RACE', 'files_done': 46, 'records': 42977, 'file': 'H6VM2021049920230808173812.jvd'}
+[01:08:15] read: {'dataspec': 'RACE', 'files_done': 49, 'records': 46541, 'file': 'JGVM2021049920230808173817.jvd'}
+[01:08:20] read: {'dataspec': 'RACE', 'files_done': 58, 'records': 50010, 'file': 'SEVM2021049920230808173826.jvd'}
+[01:08:25] read: {'dataspec': 'RACE', 'files_done': 58, 'records': 53744, 'file': 'SEVM2021049920230808173826.jvd'}
+[01:08:30] read: {'dataspec': 'RACE', 'files_done': 65, 'records': 57185, 'file': 'JGVM2021059920230808173840.jvd'}
+[01:08:35] read: {'dataspec': 'RACE', 'files_done': 65, 'records': 60869, 'file': 'JGVM2021059920230808173840.jvd'}
+[01:08:40] read: {'dataspec': 'RACE', 'files_done': 74, 'records': 64312, 'file': 'SEVM2021059920230808173849.jvd'}
+[01:08:45] read: {'dataspec': 'RACE', 'files_done': 74, 'records': 68027, 'file': 'SEVM2021059920230808173849.jvd'}
+[01:08:50] read: {'dataspec': 'RACE', 'files_done': 77, 'records': 71648, 'file': 'H6VM2021069920230808173857.jvd'}
+[01:08:55] read: {'dataspec': 'RACE', 'files_done': 80, 'records': 75240, 'file': 'JGVM2021069920230808173902.jvd'}
+[01:09:00] read: {'dataspec': 'RACE', 'files_done': 89, 'records': 78577, 'file': 'SEVM2021069920230808173911.jvd'}
+[01:09:05] read: {'dataspec': 'RACE', 'files_done': 89, 'records': 82237, 'file': 'SEVM2021069920230808173911.jvd'}
+[01:09:10] read: {'dataspec': 'RACE', 'files_done': 95, 'records': 85731, 'file': 'JGVM2021079920230808173924.jvd'}
+[01:09:15] read: {'dataspec': 'RACE', 'files_done': 98, 'records': 89360, 'file': 'O3VM2021079920230808173927.jvd'}
+[01:09:20] read: {'dataspec': 'RACE', 'files_done': 104, 'records': 92896, 'file': 'SEVM2021079920230808173933.jvd'}
+[01:09:25] read: {'dataspec': 'RACE', 'files_done': 109, 'records': 96430, 'file': 'HRVM2021089920230808173946.jvd'}
+[01:09:30] read: {'dataspec': 'RACE', 'files_done': 110, 'records': 100120, 'file': 'JGVM2021089920230808173947.jvd'}
+[01:09:35] read: {'dataspec': 'RACE', 'files_done': 119, 'records': 103634, 'file': 'SEVM2021089920230808173956.jvd'}
+[01:09:40] read: {'dataspec': 'RACE', 'files_done': 119, 'records': 107363, 'file': 'SEVM2021089920230808173956.jvd'}
+[01:09:45] read: {'dataspec': 'RACE', 'files_done': 125, 'records': 110853, 'file': 'JGVM2021099920230808174010.jvd'}
+[01:09:50] read: {'dataspec': 'RACE', 'files_done': 128, 'records': 114521, 'file': 'O3VM2021099920230808174013.jvd'}
+[01:09:55] read: {'dataspec': 'RACE', 'files_done': 134, 'records': 118050, 'file': 'SEVM2021099920230808174019.jvd'}
+[01:10:00] read: {'dataspec': 'RACE', 'files_done': 137, 'records': 121561, 'file': 'H6VM2021109920230808174028.jvd'}
+[01:10:05] read: {'dataspec': 'RACE', 'files_done': 141, 'records': 125125, 'file': 'JGVM2021109920230808174034.jvd'}
+[01:10:10] read: {'dataspec': 'RACE', 'files_done': 147, 'records': 128748, 'file': 'O6VM2021109920230808174040.jvd'}
+[01:10:15] read: {'dataspec': 'RACE', 'files_done': 150, 'records': 132382, 'file': 'SEVM2021109920230808174043.jvd'}
+[01:10:20] read: {'dataspec': 'RACE', 'files_done': 150, 'records': 136125, 'file': 'SEVM2021109920230808174043.jvd'}
+[01:10:25] read: {'dataspec': 'RACE', 'files_done': 156, 'records': 139668, 'file': 'JGVM2021119920230808174057.jvd'}
+[01:10:30] read: {'dataspec': 'RACE', 'files_done': 163, 'records': 143136, 'file': 'O6VM2021119920230808174104.jvd'}
+[01:10:35] read: {'dataspec': 'RACE', 'files_done': 165, 'records': 146775, 'file': 'SEVM2021119920230808174106.jvd'}
+[01:10:40] read: {'dataspec': 'RACE', 'files_done': 167, 'records': 150422, 'file': 'H1VM2021129920230808174114.jvd'}
+[01:10:45] read: {'dataspec': 'RACE', 'files_done': 171, 'records': 153984, 'file': 'JGVM2021129920230808174120.jvd'}
+[01:10:50] read: {'dataspec': 'RACE', 'files_done': 179, 'records': 157500, 'file': 'RAVM2021129920230808174128.jvd'}
+[01:10:55] read: {'dataspec': 'RACE', 'files_done': 180, 'records': 161196, 'file': 'SEVM2021129920230808174129.jvd'}
+[01:11:00] read: {'dataspec': 'RACE', 'files_done': 180, 'records': 164924, 'file': 'SEVM2021129920230808174129.jvd'}
+[01:11:05] read: {'dataspec': 'RACE', 'files_done': 186, 'records': 168397, 'file': 'JGVM2022019920230808174144.jvd'}
+[01:11:10] read: {'dataspec': 'RACE', 'files_done': 188, 'records': 172124, 'file': 'O2VM2022019920230808174146.jvd'}
+[01:11:15] read: {'dataspec': 'RACE', 'files_done': 195, 'records': 175639, 'file': 'SEVM2022019920230808174153.jvd'}
+[01:11:20] read: {'dataspec': 'RACE', 'files_done': 195, 'records': 179368, 'file': 'SEVM2022019920230808174153.jvd'}
+[01:11:25] read: {'dataspec': 'RACE', 'files_done': 195, 'records': 183084, 'file': 'SEVM2022019920230808174153.jvd'}
+[01:11:30] read: {'dataspec': 'RACE', 'files_done': 201, 'records': 186623, 'file': 'JGVM2022029920230808174207.jvd'}
+[01:11:35] read: {'dataspec': 'RACE', 'files_done': 205, 'records': 190171, 'file': 'O4VM2022029920230808174211.jvd'}
+[01:11:40] read: {'dataspec': 'RACE', 'files_done': 210, 'records': 193652, 'file': 'SEVM2022029920230808174216.jvd'}
+[01:11:45] read: {'dataspec': 'RACE', 'files_done': 213, 'records': 197309, 'file': 'H6VM2022039920230808174225.jvd'}
+[01:11:50] read: {'dataspec': 'RACE', 'files_done': 216, 'records': 201122, 'file': 'JGVM2022039920230808174230.jvd'}
+[01:11:55] read: {'dataspec': 'RACE', 'files_done': 225, 'records': 204630, 'file': 'SEVM2022039920230808174239.jvd'}
+[01:12:00] read: {'dataspec': 'RACE', 'files_done': 225, 'records': 208352, 'file': 'SEVM2022039920230808174239.jvd'}
+[01:12:05] read: {'dataspec': 'RACE', 'files_done': 231, 'records': 211781, 'file': 'JGVM2022049920230808174253.jvd'}
+[01:12:10] read: {'dataspec': 'RACE', 'files_done': 233, 'records': 215465, 'file': 'O2VM2022049920230808174255.jvd'}
+[01:12:15] read: {'dataspec': 'RACE', 'files_done': 240, 'records': 218947, 'file': 'SEVM2022049920230808174302.jvd'}
+[01:12:20] read: {'dataspec': 'RACE', 'files_done': 240, 'records': 222546, 'file': 'SEVM2022049920230808174302.jvd'}
+[01:12:25] read: {'dataspec': 'RACE', 'files_done': 246, 'records': 226040, 'file': 'JGVM2022059920230808174316.jvd'}
+[01:12:30] read: {'dataspec': 'RACE', 'files_done': 249, 'records': 229747, 'file': 'O3VM2022059920230808174319.jvd'}
+[01:12:35] read: {'dataspec': 'RACE', 'files_done': 255, 'records': 233246, 'file': 'SEVM2022059920230808174325.jvd'}
+[01:12:40] read: {'dataspec': 'RACE', 'files_done': 255, 'records': 236955, 'file': 'SEVM2022059920230808174325.jvd'}
+[01:12:45] read: {'dataspec': 'RACE', 'files_done': 261, 'records': 240459, 'file': 'JGVM2022069920230808174339.jvd'}
+[01:12:50] read: {'dataspec': 'RACE', 'files_done': 266, 'records': 244104, 'file': 'O5VM2022069920230808174344.jvd'}
+[01:12:55] read: {'dataspec': 'RACE', 'files_done': 270, 'records': 247662, 'file': 'SEVM2022069920230808174348.jvd'}
+[01:13:00] read: {'dataspec': 'RACE', 'files_done': 275, 'records': 251138, 'file': 'H6VM2022079920230808174359.jvd'}
+[01:13:05] read: {'dataspec': 'RACE', 'files_done': 277, 'records': 254832, 'file': 'JGVM2022079920230808174403.jvd'}
+[01:13:10] read: {'dataspec': 'RACE', 'files_done': 285, 'records': 258310, 'file': 'RAVM2022079920230808174411.jvd'}
+[01:13:15] read: {'dataspec': 'RACE', 'files_done': 286, 'records': 261986, 'file': 'SEVM2022079920230808174412.jvd'}
+[01:13:20] read: {'dataspec': 'RACE', 'files_done': 292, 'records': 265548, 'file': 'JGVM2022089920230808174426.jvd'}
+[01:13:25] read: {'dataspec': 'RACE', 'files_done': 292, 'records': 269120, 'file': 'JGVM2022089920230808174426.jvd'}
+[01:13:30] read: {'dataspec': 'RACE', 'files_done': 301, 'records': 272650, 'file': 'SEVM2022089920230808174435.jvd'}
+[01:13:35] read: {'dataspec': 'RACE', 'files_done': 301, 'records': 276330, 'file': 'SEVM2022089920230808174435.jvd'}
+[01:13:40] read: {'dataspec': 'RACE', 'files_done': 307, 'records': 279872, 'file': 'JGVM2022099920230808174449.jvd'}
+[01:13:45] read: {'dataspec': 'RACE', 'files_done': 315, 'records': 283381, 'file': 'RAVM2022099920230808174457.jvd'}
+[01:13:50] read: {'dataspec': 'RACE', 'files_done': 316, 'records': 287072, 'file': 'SEVM2022099920230808174458.jvd'}
+[01:13:55] read: {'dataspec': 'RACE', 'files_done': 323, 'records': 290475, 'file': 'JGVM2022109920230808174513.jvd'}
+[01:14:00] read: {'dataspec': 'RACE', 'files_done': 325, 'records': 294161, 'file': 'O2VM2022109920230808174515.jvd'}
+[01:14:05] read: {'dataspec': 'RACE', 'files_done': 332, 'records': 297635, 'file': 'SEVM2022109920230808174522.jvd'}
+[01:14:10] read: {'dataspec': 'RACE', 'files_done': 332, 'records': 301356, 'file': 'SEVM2022109920230808174522.jvd'}
+[01:14:15] read: {'dataspec': 'RACE', 'files_done': 338, 'records': 304861, 'file': 'JGVM2022119920230808174536.jvd'}
+[01:14:20] read: {'dataspec': 'RACE', 'files_done': 338, 'records': 308555, 'file': 'JGVM2022119920230808174536.jvd'}
+[01:14:25] read: {'dataspec': 'RACE', 'files_done': 347, 'records': 311994, 'file': 'SEVM2022119920230808174545.jvd'}
+[01:14:30] read: {'dataspec': 'RACE', 'files_done': 347, 'records': 315623, 'file': 'SEVM2022119920230808174545.jvd'}
+[01:14:35] read: {'dataspec': 'RACE', 'files_done': 353, 'records': 319122, 'file': 'JGVM2022129920230808174559.jvd'}
+[01:14:40] read: {'dataspec': 'RACE', 'files_done': 353, 'records': 322862, 'file': 'JGVM2022129920230808174559.jvd'}
+[01:14:45] read: {'dataspec': 'RACE', 'files_done': 362, 'records': 326360, 'file': 'SEVM2022129920230808174608.jvd'}
+[01:14:50] read: {'dataspec': 'RACE', 'files_done': 362, 'records': 330042, 'file': 'SEVM2022129920230808174608.jvd'}
+[01:14:55] read: {'dataspec': 'RACE', 'files_done': 366, 'records': 333564, 'file': 'H6VM2023019920230808174619.jvd'}
+[01:15:00] read: {'dataspec': 'RACE', 'files_done': 368, 'records': 337191, 'file': 'JGVM2023019920230808174623.jvd'}
+[01:15:05] read: {'dataspec': 'RACE', 'files_done': 376, 'records': 340660, 'file': 'RAVM2023019920230808174631.jvd'}
+[01:15:10] read: {'dataspec': 'RACE', 'files_done': 377, 'records': 344363, 'file': 'SEVM2023019920230808174632.jvd'}
+[01:15:15] read: {'dataspec': 'RACE', 'files_done': 377, 'records': 348068, 'file': 'SEVM2023019920230808174632.jvd'}
+[01:15:20] read: {'dataspec': 'RACE', 'files_done': 383, 'records': 351650, 'file': 'JGVM2023029920230808174646.jvd'}
+[01:15:25] read: {'dataspec': 'RACE', 'files_done': 385, 'records': 355340, 'file': 'O2VM2023029920230808174648.jvd'}
+[01:15:30] read: {'dataspec': 'RACE', 'files_done': 392, 'records': 358739, 'file': 'SEVM2023029920230808174655.jvd'}
+[01:15:35] read: {'dataspec': 'RACE', 'files_done': 392, 'records': 362520, 'file': 'SEVM2023029920230808174655.jvd'}
+[01:15:40] read: {'dataspec': 'RACE', 'files_done': 398, 'records': 366045, 'file': 'JGVM2023039920230808174709.jvd'}
+[01:15:45] read: {'dataspec': 'RACE', 'files_done': 404, 'records': 369619, 'file': 'O6VM2023039920230808174715.jvd'}
+[01:15:50] read: {'dataspec': 'RACE', 'files_done': 407, 'records': 373235, 'file': 'SEVM2023039920230808174718.jvd'}
+[01:15:55] read: {'dataspec': 'RACE', 'files_done': 407, 'records': 376983, 'file': 'SEVM2023039920230808174718.jvd'}
+[01:16:00] read: {'dataspec': 'RACE', 'files_done': 414, 'records': 380431, 'file': 'JGVM2023049920230808174733.jvd'}
+[01:16:05] read: {'dataspec': 'RACE', 'files_done': 416, 'records': 384155, 'file': 'O2VM2023049920230808174735.jvd'}
+[01:16:10] read: {'dataspec': 'RACE', 'files_done': 423, 'records': 387651, 'file': 'SEVM2023049920230808174742.jvd'}
+[01:16:15] read: {'dataspec': 'RACE', 'files_done': 423, 'records': 391386, 'file': 'SEVM2023049920230808174742.jvd'}
+[01:16:20] read: {'dataspec': 'RACE', 'files_done': 429, 'records': 394924, 'file': 'JGVM2023059920230808174756.jvd'}
+[01:16:25] read: {'dataspec': 'RACE', 'files_done': 437, 'records': 398478, 'file': 'RAVM2023059920230808174804.jvd'}
+[01:16:30] read: {'dataspec': 'RACE', 'files_done': 438, 'records': 402149, 'file': 'SEVM2023059920230808174805.jvd'}
+[01:16:35] read: {'dataspec': 'RACE', 'files_done': 443, 'records': 405714, 'file': 'HRVM2023069920230808174818.jvd'}
+[01:16:40] read: {'dataspec': 'RACE', 'files_done': 444, 'records': 409309, 'file': 'JGVM2023069920230808174819.jvd'}
+[01:16:45] read: {'dataspec': 'RACE', 'files_done': 453, 'records': 412711, 'file': 'SEVM2023069920230808174828.jvd'}
+[01:16:50] read: {'dataspec': 'RACE', 'files_done': 453, 'records': 416502, 'file': 'SEVM2023069920230808174828.jvd'}
+[01:16:55] read: {'dataspec': 'RACE', 'files_done': 460, 'records': 420145, 'file': 'JGVM2023079920230808174843.jvd'}
+[01:17:00] read: {'dataspec': 'RACE', 'files_done': 465, 'records': 423927, 'file': 'O5VM2023079920230808174848.jvd'}
+[01:17:05] read: {'dataspec': 'RACE', 'files_done': 469, 'records': 427620, 'file': 'SEVM2023079920230808174852.jvd'}
+[01:17:10] read: {'dataspec': 'RACE', 'files_done': 473, 'records': 431257, 'file': 'H6VM2023089920230901144304.jvd'}
+[01:17:15] read: {'dataspec': 'RACE', 'files_done': 475, 'records': 435102, 'file': 'JGVM2023089920230901144421.jvd'}
+[01:17:20] read: {'dataspec': 'RACE', 'files_done': 484, 'records': 438728, 'file': 'SEVM2023089920230901144431.jvd'}
+[01:17:25] read: {'dataspec': 'RACE', 'files_done': 484, 'records': 442407, 'file': 'SEVM2023089920230901144431.jvd'}
+[01:17:30] read: {'dataspec': 'RACE', 'files_done': 490, 'records': 445886, 'file': 'JGVM2023099920231002151951.jvd'}
+[01:17:35] read: {'dataspec': 'RACE', 'files_done': 494, 'records': 449537, 'file': 'O4VM2023099920231002151953.jvd'}
+[01:17:40] read: {'dataspec': 'RACE', 'files_done': 499, 'records': 453002, 'file': 'SEVM2023099920231002152000.jvd'}
+[01:17:45] read: {'dataspec': 'RACE', 'files_done': 499, 'records': 456706, 'file': 'SEVM2023099920231002152000.jvd'}
+[01:17:50] read: {'dataspec': 'RACE', 'files_done': 505, 'records': 460243, 'file': 'JGVM2023109920231103142109.jvd'}
+[01:17:55] read: {'dataspec': 'RACE', 'files_done': 510, 'records': 463897, 'file': 'O5VM2023109920231103142111.jvd'}
+[01:18:00] read: {'dataspec': 'RACE', 'files_done': 514, 'records': 467472, 'file': 'SEVM2023109920231103142120.jvd'}
+[01:18:05] read: {'dataspec': 'RACE', 'files_done': 514, 'records': 471172, 'file': 'SEVM2023109920231103142120.jvd'}
+[01:18:10] read: {'dataspec': 'RACE', 'files_done': 520, 'records': 474612, 'file': 'JGVM2023119920231201145613.jvd'}
+[01:18:15] read: {'dataspec': 'RACE', 'files_done': 528, 'records': 478039, 'file': 'RAVM2023119920231201145622.jvd'}
+[01:18:20] read: {'dataspec': 'RACE', 'files_done': 529, 'records': 481712, 'file': 'SEVM2023119920231201145623.jvd'}
+[01:18:25] read: {'dataspec': 'RACE', 'files_done': 536, 'records': 485148, 'file': 'HRVM2023129920231229143329.jvd'}
+[01:18:30] read: {'dataspec': 'RACE', 'files_done': 537, 'records': 488835, 'file': 'JGVM2023129920231229143443.jvd'}
+[01:18:35] read: {'dataspec': 'RACE', 'files_done': 546, 'records': 492322, 'file': 'SEVM2023129920231229143454.jvd'}
+[01:18:40] read: {'dataspec': 'RACE', 'files_done': 546, 'records': 496185, 'file': 'SEVM2023129920231229143454.jvd'}
+[01:18:45] read: {'dataspec': 'RACE', 'files_done': 546, 'records': 500082, 'file': 'SEVM2023129920231229143454.jvd'}
+[01:18:50] read: {'dataspec': 'RACE', 'files_done': 553, 'records': 503701, 'file': 'JGVM2024019920240202135931.jvd'}
+[01:18:55] read: {'dataspec': 'RACE', 'files_done': 554, 'records': 507589, 'file': 'O1VM2024019920240202135932.jvd'}
+[01:19:00] read: {'dataspec': 'RACE', 'files_done': 562, 'records': 511252, 'file': 'SEVM2024019920240202135942.jvd'}
+[01:19:05] read: {'dataspec': 'RACE', 'files_done': 562, 'records': 515121, 'file': 'SEVM2024019920240202135942.jvd'}
+[01:19:10] read: {'dataspec': 'RACE', 'files_done': 569, 'records': 518779, 'file': 'JGVM2024029920240301134341.jvd'}
+[01:19:15] read: {'dataspec': 'RACE', 'files_done': 572, 'records': 522596, 'file': 'O3VM2024029920240301134342.jvd'}
+[01:19:20] read: {'dataspec': 'RACE', 'files_done': 578, 'records': 525995, 'file': 'SEVM2024029920240301134351.jvd'}
+[01:19:25] read: {'dataspec': 'RACE', 'files_done': 578, 'records': 529817, 'file': 'SEVM2024029920240301134351.jvd'}
+[01:19:30] read: {'dataspec': 'RACE', 'files_done': 585, 'records': 533442, 'file': 'JGVM2024039920240401144911.jvd'}
+[01:19:35] read: {'dataspec': 'RACE', 'files_done': 588, 'records': 537290, 'file': 'O3VM2024039920240401144912.jvd'}
+[01:19:40] read: {'dataspec': 'RACE', 'files_done': 594, 'records': 540934, 'file': 'SEVM2024039920240401144922.jvd'}
+[01:19:45] read: {'dataspec': 'RACE', 'files_done': 594, 'records': 544806, 'file': 'SEVM2024039920240401144922.jvd'}
+[01:19:50] read: {'dataspec': 'RACE', 'files_done': 601, 'records': 548401, 'file': 'JGVM2024049920240503140106.jvd'}
+[01:19:55] read: {'dataspec': 'RACE', 'files_done': 604, 'records': 552062, 'file': 'O3VM2024049920240503140107.jvd'}
+[01:20:00] read: {'dataspec': 'RACE', 'files_done': 610, 'records': 555504, 'file': 'SEVM2024049920240503140117.jvd'}
+[01:20:05] read: {'dataspec': 'RACE', 'files_done': 610, 'records': 559154, 'file': 'SEVM2024049920240503140117.jvd'}
+[01:20:10] read: {'dataspec': 'RACE', 'files_done': 616, 'records': 562632, 'file': 'JGVM2024059920240531151418.jvd'}
+[01:20:15] read: {'dataspec': 'RACE', 'files_done': 625, 'records': 566133, 'file': 'SEVM2024059920240531151428.jvd'}
+[01:20:20] read: {'dataspec': 'RACE', 'files_done': 625, 'records': 569769, 'file': 'SEVM2024059920240531151428.jvd'}
+[01:20:25] read: {'dataspec': 'RACE', 'files_done': 633, 'records': 573400, 'file': 'JGVM2024069920240701144825.jvd'}
+[01:20:30] read: {'dataspec': 'RACE', 'files_done': 633, 'records': 577283, 'file': 'JGVM2024069920240701144825.jvd'}
+[01:20:35] read: {'dataspec': 'RACE', 'files_done': 642, 'records': 580916, 'file': 'SEVM2024069920240701144836.jvd'}
+[01:20:40] read: {'dataspec': 'RACE', 'files_done': 642, 'records': 584780, 'file': 'SEVM2024069920240701144836.jvd'}
+[01:20:45] read: {'dataspec': 'RACE', 'files_done': 648, 'records': 588320, 'file': 'JGVM2024079920240802135049.jvd'}
+[01:20:50] read: {'dataspec': 'RACE', 'files_done': 654, 'records': 591869, 'file': 'O6VM2024079920240802135053.jvd'}
+[01:20:55] read: {'dataspec': 'RACE', 'files_done': 657, 'records': 595399, 'file': 'SEVM2024079920240802135058.jvd'}
+[01:21:00] read: {'dataspec': 'RACE', 'files_done': 663, 'records': 598839, 'file': 'JGVM2024089920240902150200.jvd'}
+[01:21:05] read: {'dataspec': 'RACE', 'files_done': 663, 'records': 602476, 'file': 'JGVM2024089920240902150200.jvd'}
+[01:21:10] read: {'dataspec': 'RACE', 'files_done': 672, 'records': 605913, 'file': 'SEVM2024089920240902150210.jvd'}
+[01:21:15] read: {'dataspec': 'RACE', 'files_done': 672, 'records': 609639, 'file': 'SEVM2024089920240902150210.jvd'}
+[01:21:20] read: {'dataspec': 'RACE', 'files_done': 679, 'records': 613180, 'file': 'JGVM2024099920240930143005.jvd'}
+[01:21:25] read: {'dataspec': 'RACE', 'files_done': 685, 'records': 616724, 'file': 'O6VM2024099920240930143009.jvd'}
+[01:21:30] read: {'dataspec': 'RACE', 'files_done': 688, 'records': 620392, 'file': 'SEVM2024099920240930143013.jvd'}
+[01:21:35] read: {'dataspec': 'RACE', 'files_done': 695, 'records': 623871, 'file': 'JGVM2024109920241101135404.jvd'}
+[01:21:40] read: {'dataspec': 'RACE', 'files_done': 697, 'records': 627613, 'file': 'O2VM2024109920241101135405.jvd'}
+[01:21:45] read: {'dataspec': 'RACE', 'files_done': 704, 'records': 631106, 'file': 'SEVM2024109920241101135413.jvd'}
+[01:21:50] read: {'dataspec': 'RACE', 'files_done': 704, 'records': 634850, 'file': 'SEVM2024109920241101135413.jvd'}
+[01:21:55] read: {'dataspec': 'RACE', 'files_done': 710, 'records': 638243, 'file': 'JGVM2024119920241202150549.jvd'}
+[01:22:00] read: {'dataspec': 'RACE', 'files_done': 716, 'records': 641783, 'file': 'O6VM2024119920241202150553.jvd'}
+[01:22:05] read: {'dataspec': 'RACE', 'files_done': 719, 'records': 645368, 'file': 'SEVM2024119920241202150559.jvd'}
+[01:22:10] read: {'dataspec': 'RACE', 'files_done': 719, 'records': 649015, 'file': 'SEVM2024119920241202150559.jvd'}
+[01:22:15] read: {'dataspec': 'RACE', 'files_done': 726, 'records': 652410, 'file': 'JGVM2024129920241229143614.jvd'}
+[01:22:20] read: {'dataspec': 'RACE', 'files_done': 730, 'records': 656086, 'file': 'O4VM2024129920241229143615.jvd'}
+[01:22:25] read: {'dataspec': 'RACE', 'files_done': 735, 'records': 659641, 'file': 'SEVM2024129920241229143624.jvd'}
+[01:22:30] read: {'dataspec': 'RACE', 'files_done': 735, 'records': 663343, 'file': 'SEVM2024129920241229143624.jvd'}
+[01:22:35] read: {'dataspec': 'RACE', 'files_done': 741, 'records': 666963, 'file': 'JGVM2025019920250131140819.jvd'}
+[01:22:40] read: {'dataspec': 'RACE', 'files_done': 741, 'records': 670847, 'file': 'JGVM2025019920250131140819.jvd'}
+[01:22:45] read: {'dataspec': 'RACE', 'files_done': 750, 'records': 674437, 'file': 'SEVM2025019920250131140828.jvd'}
+[01:22:50] read: {'dataspec': 'RACE', 'files_done': 750, 'records': 678103, 'file': 'SEVM2025019920250131140828.jvd'}
+[01:22:55] read: {'dataspec': 'RACE', 'files_done': 756, 'records': 681487, 'file': 'JGVM2025029920250228135005.jvd'}
+[01:23:00] read: {'dataspec': 'RACE', 'files_done': 757, 'records': 685091, 'file': 'O1VM2025029920250228135005.jvd'}
+[01:23:05] read: {'dataspec': 'RACE', 'files_done': 765, 'records': 688418, 'file': 'SEVM2025029920250228135015.jvd'}
+[01:23:10] read: {'dataspec': 'RACE', 'files_done': 765, 'records': 692068, 'file': 'SEVM2025029920250228135015.jvd'}
+[01:23:15] read: {'dataspec': 'RACE', 'files_done': 772, 'records': 695496, 'file': 'JGVM2025039920250331142642.jvd'}
+[01:23:20] read: {'dataspec': 'RACE', 'files_done': 772, 'records': 699034, 'file': 'JGVM2025039920250331142642.jvd'}
+[01:23:25] read: {'dataspec': 'RACE', 'files_done': 780, 'records': 702378, 'file': 'RAVM2025039920250331142653.jvd'}
+[01:23:30] read: {'dataspec': 'RACE', 'files_done': 781, 'records': 705983, 'file': 'SEVM2025039920250331142653.jvd'}
+[01:23:35] read: {'dataspec': 'RACE', 'files_done': 787, 'records': 709409, 'file': 'JGVM2025049920250502152832.jvd'}
+[01:23:40] read: {'dataspec': 'RACE', 'files_done': 787, 'records': 712979, 'file': 'JGVM2025049920250502152832.jvd'}
+[01:23:45] read: {'dataspec': 'RACE', 'files_done': 796, 'records': 716280, 'file': 'SEVM2025049920250502152842.jvd'}
+[01:23:50] read: {'dataspec': 'RACE', 'files_done': 796, 'records': 719880, 'file': 'SEVM2025049920250502152842.jvd'}
+[01:23:55] read: {'dataspec': 'RACE', 'files_done': 801, 'records': 723237, 'file': 'HRVM2025059920250602143946.jvd'}
+[01:24:00] read: {'dataspec': 'RACE', 'files_done': 802, 'records': 726824, 'file': 'JGVM2025059920250602144111.jvd'}
+[01:24:05] read: {'dataspec': 'RACE', 'files_done': 810, 'records': 730171, 'file': 'RAVM2025059920250602144122.jvd'}
+[01:24:10] read: {'dataspec': 'RACE', 'files_done': 811, 'records': 733799, 'file': 'SEVM2025059920250602144122.jvd'}
+[01:24:15] read: {'dataspec': 'RACE', 'files_done': 813, 'records': 737237, 'file': 'H1VM2025069920250630141943.jvd'}
+[01:24:20] read: {'dataspec': 'RACE', 'files_done': 817, 'records': 740686, 'file': 'JGVM2025069920250630142113.jvd'}
+[01:24:25] read: {'dataspec': 'RACE', 'files_done': 825, 'records': 744074, 'file': 'RAVM2025069920250630142123.jvd'}
+[01:24:30] read: {'dataspec': 'RACE', 'files_done': 826, 'records': 747658, 'file': 'SEVM2025069920250630142123.jvd'}
+[01:24:35] read: {'dataspec': 'RACE', 'files_done': 826, 'records': 751274, 'file': 'SEVM2025069920250630142123.jvd'}
+[01:24:40] read: {'dataspec': 'RACE', 'files_done': 832, 'records': 754673, 'file': 'JGVM2025079920250801141302.jvd'}
+[01:24:45] read: {'dataspec': 'RACE', 'files_done': 836, 'records': 758249, 'file': 'O4VM2025079920250801141303.jvd'}
+[01:24:50] read: {'dataspec': 'RACE', 'files_done': 841, 'records': 761662, 'file': 'SEVM2025079920250801141311.jvd'}
+[01:24:55] read: {'dataspec': 'RACE', 'files_done': 841, 'records': 765119, 'file': 'SEVM2025079920250801141311.jvd'}
+[01:25:00] read: {'dataspec': 'RACE', 'files_done': 848, 'records': 768520, 'file': 'JGVM2025089920250901143515.jvd'}
+[01:25:05] read: {'dataspec': 'RACE', 'files_done': 849, 'records': 772082, 'file': 'O1VM2025089920250901143516.jvd'}
+[01:25:10] read: {'dataspec': 'RACE', 'files_done': 857, 'records': 775454, 'file': 'SEVM2025089920250901143526.jvd'}
+[01:25:15] read: {'dataspec': 'RACE', 'files_done': 857, 'records': 779145, 'file': 'SEVM2025089920250901143526.jvd'}
+[01:25:20] read: {'dataspec': 'RACE', 'files_done': 863, 'records': 782757, 'file': 'JGVM2025099920251003140412.jvd'}
+[01:25:25] read: {'dataspec': 'RACE', 'files_done': 871, 'records': 786353, 'file': 'RAVM2025099920251003140420.jvd'}
+[01:25:30] read: {'dataspec': 'RACE', 'files_done': 872, 'records': 790052, 'file': 'SEVM2025099920251003140420.jvd'}
+[01:25:35] read: {'dataspec': 'RACE', 'files_done': 879, 'records': 793650, 'file': 'JGVM2025109920251031162617.jvd'}
+[01:25:40] read: {'dataspec': 'RACE', 'files_done': 883, 'records': 797397, 'file': 'O4VM2025109920251031162618.jvd'}
+[01:25:45] read: {'dataspec': 'RACE', 'files_done': 888, 'records': 800787, 'file': 'SEVM2025109920251031162626.jvd'}
+[01:25:50] read: {'dataspec': 'RACE', 'files_done': 888, 'records': 804410, 'file': 'SEVM2025109920251031162626.jvd'}
+[01:25:55] read: {'dataspec': 'RACE', 'files_done': 894, 'records': 807879, 'file': 'JGVM2025119920251201145124.jvd'}
+[01:26:00] read: {'dataspec': 'RACE', 'files_done': 897, 'records': 811327, 'file': 'O3VM2025119920251201145125.jvd'}
+[01:26:05] read: {'dataspec': 'RACE', 'files_done': 903, 'records': 814776, 'file': 'SEVM2025119920251201145135.jvd'}
+[01:26:10] read: {'dataspec': 'RACE', 'files_done': 903, 'records': 818461, 'file': 'SEVM2025119920251201145135.jvd'}
+[01:26:15] read: {'dataspec': 'RACE', 'files_done': 910, 'records': 821964, 'file': 'JGVM2025129920251229143344.jvd'}
+[01:26:20] read: {'dataspec': 'RACE', 'files_done': 915, 'records': 825421, 'file': 'O5VM2025129920251229143346.jvd'}
+[01:26:25] read: {'dataspec': 'RACE', 'files_done': 919, 'records': 828928, 'file': 'SEVM2025129920251229143354.jvd'}
+[01:26:30] read: {'dataspec': 'RACE', 'files_done': 919, 'records': 832604, 'file': 'SEVM2025129920251229143354.jvd'}
+[01:26:35] read: {'dataspec': 'RACE', 'files_done': 925, 'records': 836230, 'file': 'JGVM2026019920260202142802.jvd'}
+[01:26:40] read: {'dataspec': 'RACE', 'files_done': 930, 'records': 839987, 'file': 'O5VM2026019920260202142804.jvd'}
+[01:26:45] read: {'dataspec': 'RACE', 'files_done': 934, 'records': 843673, 'file': 'SEVM2026019920260202142812.jvd'}
+[01:26:50] read: {'dataspec': 'RACE', 'files_done': 934, 'records': 847496, 'file': 'SEVM2026019920260202142812.jvd'}
+[01:26:55] read: {'dataspec': 'RACE', 'files_done': 940, 'records': 851113, 'file': 'JGVM2026029920260302153023.jvd'}
+[01:27:00] read: {'dataspec': 'RACE', 'files_done': 942, 'records': 854851, 'file': 'O2VM2026029920260302153023.jvd'}
+[01:27:05] read: {'dataspec': 'RACE', 'files_done': 949, 'records': 858480, 'file': 'SEVM2026029920260302153033.jvd'}
+[01:27:10] read: {'dataspec': 'RACE', 'files_done': 949, 'records': 862298, 'file': 'SEVM2026029920260302153033.jvd'}
+[01:27:15] read: {'dataspec': 'RACE', 'files_done': 955, 'records': 865930, 'file': 'JGVM2026039920260403135343.jvd'}
+[01:27:20] read: {'dataspec': 'RACE', 'files_done': 956, 'records': 869727, 'file': 'O1VM2026039920260403135344.jvd'}
+[01:27:25] read: {'dataspec': 'RACE', 'files_done': 964, 'records': 873329, 'file': 'SEVM2026039920260403135353.jvd'}
+[01:27:30] read: {'dataspec': 'RACE', 'files_done': 964, 'records': 877104, 'file': 'SEVM2026039920260403135353.jvd'}
+[01:27:35] read: {'dataspec': 'RACE', 'files_done': 971, 'records': 880717, 'file': 'JGVM2026049920260501143203.jvd'}
+[01:27:40] read: {'dataspec': 'RACE', 'files_done': 974, 'records': 884507, 'file': 'O3VM2026049920260501143204.jvd'}
+[01:27:45] read: {'dataspec': 'RACE', 'files_done': 980, 'records': 888151, 'file': 'SEVM2026049920260501143212.jvd'}
+[01:27:50] read: {'dataspec': 'RACE', 'files_done': 985, 'records': 891907, 'file': 'H6SW2026050220260504133947.jvd'}
+[01:27:55] read: {'dataspec': 'RACE', 'files_done': 1027, 'records': 895305, 'file': 'RASW2026051020260511133750.jvd'}
+[01:27:57] open: {'dataspec': 'DIFN', 'readcount': 48, 'downloadcount': 33, 'last_timestamp': '20260511133754'}
+[01:27:57] download: {'dataspec': 'DIFN', 'remaining': 33}
+[01:27:58] download: {'dataspec': 'DIFN', 'remaining': 26}
+[01:27:59] download: {'dataspec': 'DIFN', 'remaining': 23}
+[01:28:00] download: {'dataspec': 'DIFN', 'remaining': 19}
+[01:28:01] download: {'dataspec': 'DIFN', 'remaining': 14}
+[01:28:02] download: {'dataspec': 'DIFN', 'remaining': 10}
+[01:28:03] download: {'dataspec': 'DIFN', 'remaining': 0}
+[01:28:08] read: {'dataspec': 'DIFN', 'files_done': 25, 'records': 213841, 'file': 'UMXM2026049920260501143428.jvd'}
+[01:28:09] open: {'dataspec': 'HOSE', 'readcount': 2, 'downloadcount': 1, 'last_timestamp': '20230804131655'}
+[01:28:09] download: {'dataspec': 'HOSE', 'remaining': 1}
+[01:28:10] download: {'dataspec': 'HOSE', 'remaining': 0}
+[01:28:10] open: {'dataspec': 'BLOD', 'readcount': 63, 'downloadcount': 0, 'last_timestamp': '20230731143940'}
+[01:28:11] open: {'dataspec': 'SLOP', 'readcount': 89, 'downloadcount': 72, 'last_timestamp': '20260512143617'}
+[01:28:11] download: {'dataspec': 'SLOP', 'remaining': 72}
+[01:28:12] download: {'dataspec': 'SLOP', 'remaining': 56}
+[01:28:13] download: {'dataspec': 'SLOP', 'remaining': 39}
+[01:28:14] download: {'dataspec': 'SLOP', 'remaining': 22}
+[01:28:15] download: {'dataspec': 'SLOP', 'remaining': 11}
+[01:28:16] download: {'dataspec': 'SLOP', 'remaining': 0}
+[01:28:21] read: {'dataspec': 'SLOP', 'files_done': 9, 'records': 360296, 'file': 'HCVM2021109920230808174031.jvd'}
+[01:28:26] read: {'dataspec': 'SLOP', 'files_done': 19, 'records': 738383, 'file': 'HCVM2022089920230808174423.jvd'}
+[01:28:31] read: {'dataspec': 'SLOP', 'files_done': 28, 'records': 1097114, 'file': 'HCVM2023059920230808174753.jvd'}
+[01:28:36] read: {'dataspec': 'SLOP', 'files_done': 38, 'records': 1470137, 'file': 'HCVM2024039920240401144754.jvd'}
+[01:28:41] read: {'dataspec': 'SLOP', 'files_done': 42, 'records': 1619879, 'file': 'HCVM2024079920240802134928.jvd'}
+[01:28:46] read: {'dataspec': 'SLOP', 'files_done': 46, 'records': 1777240, 'file': 'HCVM2024119920241202150429.jvd'}
+[01:28:51] read: {'dataspec': 'SLOP', 'files_done': 51, 'records': 1933376, 'file': 'HCVM2025039920250331142522.jvd'}
+[01:28:56] read: {'dataspec': 'SLOP', 'files_done': 54, 'records': 2088609, 'file': 'HCVM2025069920250630141952.jvd'}
+[01:29:01] read: {'dataspec': 'SLOP', 'files_done': 60, 'records': 2235562, 'file': 'HCVM2025109920251031162512.jvd'}
+[01:29:06] read: {'dataspec': 'SLOP', 'files_done': 64, 'records': 2394559, 'file': 'HCVM2026029920260302152917.jvd'}
+[01:29:11] open: {'dataspec': 'WOOD', 'readcount': 79, 'downloadcount': 65, 'last_timestamp': '20260512143617'}
+[01:29:11] download: {'dataspec': 'WOOD', 'remaining': 65}
+[01:29:12] download: {'dataspec': 'WOOD', 'remaining': 49}
+[01:29:13] download: {'dataspec': 'WOOD', 'remaining': 31}
+[01:29:14] download: {'dataspec': 'WOOD', 'remaining': 10}
+[01:29:15] download: {'dataspec': 'WOOD', 'remaining': 0}
+[01:29:20] read: {'dataspec': 'WOOD', 'files_done': 15, 'records': 157394, 'file': 'WCVM2022109920230808174525.jvd'}
+[01:29:25] read: {'dataspec': 'WOOD', 'files_done': 26, 'records': 313603, 'file': 'WCVM2023099920231002152239.jvd'}
+[01:29:30] read: {'dataspec': 'WOOD', 'files_done': 39, 'records': 473559, 'file': 'WCVM2024109920241101135651.jvd'}
+[01:29:35] read: {'dataspec': 'WOOD', 'files_done': 51, 'records': 633900, 'file': 'WCVM2025109920251031162852.jvd'}
+[01:29:39] open: {'dataspec': 'HOYU', 'readcount': 4, 'downloadcount': 3, 'last_timestamp': '20260512142914'}
+[01:29:39] download: {'dataspec': 'HOYU', 'remaining': 3}
+[01:29:40] download: {'dataspec': 'HOYU', 'remaining': 0}
+[01:29:45] open: {'dataspec': 'YSCH', 'readcount': 7, 'downloadcount': 7, 'last_timestamp': '20260511133754'}
+[01:29:45] download: {'dataspec': 'YSCH', 'remaining': 7}
+[01:29:46] download: {'dataspec': 'YSCH', 'remaining': 0}
+[01:29:46] open: {'dataspec': 'TOKU', 'readcount': 1, 'downloadcount': 1, 'last_timestamp': '20260511155133'}
+[01:29:46] download: {'dataspec': 'TOKU', 'remaining': 1}
+[01:29:47] download: {'dataspec': 'TOKU', 'remaining': 0}
+[01:29:47] open: {'dataspec': 'COMM', 'readcount': 1, 'downloadcount': 1, 'last_timestamp': '20260501143046'}
+[01:29:47] download: {'dataspec': 'COMM', 'remaining': 1}
+[01:29:48] download: {'dataspec': 'COMM', 'remaining': 0}
+[01:29:48] open: {'dataspec': 'MING', 'readcount': 136, 'downloadcount': 132, 'last_timestamp': '20260511133754'}
+[01:29:48] download: {'dataspec': 'MING', 'remaining': 132}
+[01:29:49] download: {'dataspec': 'MING', 'remaining': 104}
+[01:29:50] download: {'dataspec': 'MING', 'remaining': 80}
+[01:29:51] download: {'dataspec': 'MING', 'remaining': 53}
+[01:29:52] download: {'dataspec': 'MING', 'remaining': 27}
+[01:29:53] download: {'dataspec': 'MING', 'remaining': 0}
+
+=== fetch summaries ===
+  {'dataspec': 'RACE', 'files_written': 1031, 'records_total': 896334, 'last_timestamp': '20260511133754', 'bad_files': []}
+  {'dataspec': 'DIFN', 'files_written': 48, 'records_total': 244302, 'last_timestamp': '20260511133754', 'bad_files': []}
+  {'dataspec': 'HOSE', 'files_written': 2, 'records_total': 45246, 'last_timestamp': '20230804131655', 'bad_files': []}
+  {'dataspec': 'BLOD', 'files_written': 63, 'records_total': 22052, 'last_timestamp': '20230731143940', 'bad_files': []}
+  {'dataspec': 'SLOP', 'files_written': 89, 'records_total': 2531870, 'last_timestamp': '20260512143617', 'bad_files': []}
+  {'dataspec': 'WOOD', 'files_written': 79, 'records_total': 729964, 'last_timestamp': '20260512143617', 'bad_files': []}
+  {'dataspec': 'HOYU', 'files_written': 4, 'records_total': 176819, 'last_timestamp': '20260512142914', 'bad_files': []}
+  {'dataspec': 'YSCH', 'files_written': 7, 'records_total': 2020, 'last_timestamp': '20260511133754', 'bad_files': []}
+  {'dataspec': 'TOKU', 'files_written': 1, 'records_total': 21, 'last_timestamp': '20260511155133', 'bad_files': []}
+  {'dataspec': 'COMM', 'files_written': 1, 'records_total': 119, 'last_timestamp': '20260501143046', 'bad_files': []}
+  {'dataspec': 'MING', 'files_written': 136, 'records_total': 36415, 'last_timestamp': '20260511133754', 'bad_files': []}
+
+=== ingest into SQLite ===
+（現状 RA / SE のみ DB 投入。他の dataspec は raw のみ保存）
+  {'files_processed': 370, 'files_skipped': 6059, 'files_errored': 0, 'RA': 444, 'SE': 5768, 'HR': 264, 'O1': 264, 'UM': 214927, 'records_skipped': 3508505, 'errors': []}
+
+=== bootstrap 完了: 所要 00:23:30 ===

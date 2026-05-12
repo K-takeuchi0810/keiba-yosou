@@ -60,7 +60,11 @@
     "sire_going_top3_rate",
     "sire_going_samples",
     "dam_sire_going_top3_rate",
-    "dam_sire_going_samples"
+    "dam_sire_going_samples",
+    "mining_dm_rank",
+    "mining_dm_time",
+    "mining_tm_rank",
+    "mining_tm_score"
   ],
   "boolean": [
     "leg_quality_available",
@@ -186,6 +190,10 @@
     "sire_going_samples",
     "dam_sire_going_top3_rate",
     "dam_sire_going_samples",
+    "mining_dm_rank",
+    "mining_dm_time",
+    "mining_tm_rank",
+    "mining_tm_score",
     "leg_quality_available",
     "same_day_bias_available",
     "had_grade_run",

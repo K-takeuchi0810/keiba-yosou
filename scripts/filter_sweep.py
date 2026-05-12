@@ -190,7 +190,7 @@ def main() -> int:
         "--walk-forward",
         action="store_true",
         help="config.DATA_PERIODS の train / test 2 期間並列 sweep。"
-        "両期間とも 80%+ かを比較表示。HOLDOUT は別途 --holdout で。",
+        "両期間とも 80%% 以上かを比較表示。HOLDOUT は別途 --holdout で。",
     )
     ap.add_argument(
         "--holdout",
@@ -201,9 +201,9 @@ def main() -> int:
     ap.add_argument(
         "--walk-forward-3fold",
         action="store_true",
-        help="Phase 4: 3-fold walk-forward。TEST 期間を年単位 3 fold に分け、"
-             "全 fold で 80%+ を出す filter のみ robust 認定。"
-             "1 年単位の noise に強い真ロバスト確認用 (2026-05-13 追加)。",
+        help="Phase 4: 3-fold walk-forward. TEST split into year-folds. "
+             "Filter is robust only if all folds reach 80%% return. "
+             "Year-noise robust check (2026-05-13).",
     )
     ap.add_argument("--db", default=None, help="SQLite DB path")
     args = ap.parse_args()

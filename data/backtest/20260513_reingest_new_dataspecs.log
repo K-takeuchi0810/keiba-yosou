@@ -1,0 +1,14 @@
+re-ingesting raw/ with new dispatch (force=True for new dataspecs)...
+elapsed: 93.0s
+{
+  "files_processed": 392,
+  "files_skipped": 0,
+  "files_errored": 0,
+  "RA": 0,
+  "SE": 0,
+  "HR": 0,
+  "O1": 0,
+  "UM": 0,
+  "records_skipped": 3261926,
+  "errors": []
+}
