@@ -22,7 +22,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from db import open_db
-from predictor.calibration import calibration_report, fit_bin_calibrator
+from predictor.calibration import (
+    calibration_report,
+    fit_bin_calibrator,
+    fit_isotonic_calibrator,
+)
 from predictor.rules import is_tentative, predict_race
 
 
@@ -155,25 +159,50 @@ def get_payout(conn, race: dict, horse_num: str, bet_type: str) -> int:
 
 
 def _empty_bet_stats() -> dict:
-    return {"bets": 0, "hits": 0, "bet_total": 0, "return_total": 0}
+    return {
+        "bets": 0,
+        "hits": 0,
+        "bet_total": 0,
+        "return_total": 0,
+        "_payouts": [],
+        "_stakes": [],
+    }
 
 
 def _add_bet(stats: dict, payout: int) -> None:
     stats["bets"] += 1
     stats["bet_total"] += 100
+    stats["_stakes"].append(100)
+    stats["_payouts"].append(payout if payout > 0 else 0)
     if payout > 0:
         stats["hits"] += 1
         stats["return_total"] += payout
 
 
 def _finish_bet_stats(stats: dict) -> dict:
+    """終了処理: hit_rate / return_rate / profit + Phase 4 (2026-05-13) CI を計算。
+
+    n=41 戦 4 ヒット (旧 wl_odds_8_20 採用判断) の点推定 116.1% は CI 下限が
+    8% / 上限 224% と幅広く、本番投入判断に不適。Wilson 95% CI と
+    bootstrap return rate CI を必ず添えるようにする。
+    """
+    from predictor.stats import wilson_ci, bootstrap_return_rate
     bets = stats["bets"]
     bet_total = stats["bet_total"]
+    payouts = stats.pop("_payouts", []) or []
+    stakes = stats.pop("_stakes", []) or []
+    hit_lo, hit_hi = wilson_ci(stats["hits"], bets) if bets else (0.0, 0.0)
+    if bets and payouts and stakes:
+        ret_point, ret_lo, ret_hi = bootstrap_return_rate(payouts, stakes, n_resample=1000)
+    else:
+        ret_point, ret_lo, ret_hi = (0.0, 0.0, 0.0)
     return {
         **stats,
         "hit_rate": (stats["hits"] / bets) if bets else 0,
         "return_rate": (stats["return_total"] / bet_total) if bet_total else 0,
         "profit": stats["return_total"] - bet_total,
+        "hit_rate_ci95": [round(hit_lo, 4), round(hit_hi, 4)],
+        "return_rate_ci95": [round(ret_lo, 4), round(ret_hi, 4)],
     }
 
 
@@ -397,11 +426,17 @@ def run_backtest(
         "all_hit_rate": all_stats["hit_rate"],
         "all_return_total": all_stats["return_total"],
         "all_return_rate": all_stats["return_rate"],
+        "all_hit_rate_ci95": all_stats.get("hit_rate_ci95"),
+        "all_return_rate_ci95": all_stats.get("return_rate_ci95"),
         "buy_only_bets": buy_only_stats["bets"],
         "buy_only_hits": buy_only_stats["hits"],
         "buy_only_hit_rate": buy_only_stats["hit_rate"],
         "buy_only_return_total": buy_only_stats["return_total"],
         "buy_only_return_rate": buy_only_stats["return_rate"],
+        # Phase 4 (2026-05-13): Wilson hit_rate / bootstrap return_rate の 95% CI。
+        # n が小さいほど CI 広く、点推定だけでの本番投入判断を防ぐ。
+        "buy_only_hit_rate_ci95": buy_only_stats.get("hit_rate_ci95"),
+        "buy_only_return_rate_ci95": buy_only_stats.get("return_rate_ci95"),
         # ホワイトリスト単独 (EV/Odds フィルタ無視) で◎単勝ベタ買いの結果。
         # 「重賞 + 中山 + 京都だけで普通に買えば勝てるか」の指標。
         "whitelist_only_bets": whitelist_only_stats["bets"],
@@ -409,8 +444,11 @@ def run_backtest(
         "whitelist_only_hit_rate": whitelist_only_stats["hit_rate"],
         "whitelist_only_return_total": whitelist_only_stats["return_total"],
         "whitelist_only_return_rate": whitelist_only_stats["return_rate"],
+        "whitelist_only_hit_rate_ci95": whitelist_only_stats.get("hit_rate_ci95"),
+        "whitelist_only_return_rate_ci95": whitelist_only_stats.get("return_rate_ci95"),
         "calibration": calibration_report(calibration_records),
         "calibrator": fit_bin_calibrator(calibration_records),
+        "_calibration_records": calibration_records,  # 内部用 (--save 時には除外したい)
         "by_confidence": by_confidence,
         "filters": {
             "min_odds": min_odds,
@@ -580,6 +618,11 @@ def main() -> int:
     )
     ap.add_argument("--save-calibrator", action="store_true")
     ap.add_argument(
+        "--calibrator-type", choices=["bin", "isotonic"], default="bin",
+        help="--save-calibrator 時の校正アルゴリズム。isotonic は単調制約付き "
+             "(Phase 3 / 2026-05-13 追加、scikit-learn 必須)",
+    )
+    ap.add_argument(
         "--rule-version", default="v1",
         help="保存時のルールバージョン名 (例: v1, v2-track-condition)",
     )
@@ -606,8 +649,10 @@ def main() -> int:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         suffix = "-all" if args.no_filter_from_config else "-filtered"
         out = out_dir / f"{ts}_{args.bet}_{args.rule_version}{suffix}.json"
+        # 巨大な _calibration_records (10 万行レベル) は JSON 保存対象外
+        saveable = {k: v for k, v in result.items() if not k.startswith("_")}
         out.write_text(
-            json.dumps({"rule_version": args.rule_version, **result},
+            json.dumps({"rule_version": args.rule_version, **saveable},
                        indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
@@ -616,18 +661,26 @@ def main() -> int:
         out = Path(__file__).resolve().parent.parent / "predictor" / "calibrator.json"
         # 後追い監査用に「いつ・何のデータで fit したか」を必ず記録する
         # (2026-05-12 まで欠落、再現性不能だったため)
+        if args.calibrator_type == "isotonic":
+            calib_obj = fit_isotonic_calibrator(result["_calibration_records"])
+        else:
+            calib_obj = result["calibrator"]
         calib_with_meta = {
-            **result["calibrator"],
+            **calib_obj,
             "trained_from": args.from_date,
             "trained_to": args.to_date,
             "generated_at": datetime.now().isoformat(timespec="seconds"),
             "rule_version": args.rule_version,
+            "calibrator_type": args.calibrator_type,
         }
         out.write_text(
             json.dumps(calib_with_meta, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
-        print(f"calibrator saved: {out} (trained {args.from_date}-{args.to_date})")
+        print(
+            f"calibrator saved: {out} type={args.calibrator_type} "
+            f"trained {args.from_date}-{args.to_date}"
+        )
 
     return 0
 

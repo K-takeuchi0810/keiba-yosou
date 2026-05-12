@@ -787,12 +787,23 @@ def _apply_calibrator(probabilities: dict[str, float]) -> dict[str, float]:
     calibrator = _load_calibrator()
     if not calibrator:
         return probabilities
-    if calibrator.get("type") != "bin":
-        # calibrator.json は存在するが想定外の type → サイレント無効化を避け
-        # 警告を 1 度出して raw 確率にフォールバック。
+    ctype = calibrator.get("type")
+    if ctype == "isotonic":
+        # Phase 3 (2026-05-13): Isotonic regression による単調校正。
+        # bin の段差問題を解消。x_knots / y_knots の線形補間を `apply_isotonic`
+        # で実装 (純 Python、numpy 不要)。
+        from predictor.calibration import apply_isotonic
+        adjusted_iso: dict[str, float] = {}
+        for num, p in probabilities.items():
+            adjusted_iso[num] = max(0.0, min(1.0, apply_isotonic(calibrator, p)))
+        total = sum(adjusted_iso.values())
+        if total <= 0:
+            return probabilities
+        return {num: p / total for num, p in adjusted_iso.items()}
+    if ctype != "bin":
         logger.warning(
             "calibrator disabled: unsupported type=%r in calibrator.json",
-            calibrator.get("type"),
+            ctype,
         )
         return probabilities
     bins = calibrator.get("bins") or []
@@ -1010,7 +1021,25 @@ def predict_race(
             scored[0][2].append(f"上位再評価(安定性差{stability_gap:.1f})")
 
     confidence, gap, all_tied = _confidence(scored)
-    probability_by_num = _apply_calibrator(_score_probabilities(scored, confidence))
+    raw_rule_prob = _score_probabilities(scored, confidence)
+    # LightGBM Ensemble: rule prob と LGBM prob を重み blend。
+    # LGBM model 不在時は ml_model.predict_lgbm_probs が空 dict を返し、blend は
+    # rule prob をそのまま返す。重みは PRED_BLEND_W_RULE 環境変数で上書き可
+    # (既定 0.5)。LGBM 信頼度確立後は 0.3 等に下げる。
+    if use_features:
+        try:
+            from predictor.ml_model import blend as _blend, predict_lgbm_probs
+            raw_lgbm_prob = predict_lgbm_probs(
+                horses, race, conn=conn, feature_cache=feature_cache,
+            )
+            w_rule = float(os.environ.get("PRED_BLEND_W_RULE", "0.5"))
+            blended = _blend(raw_rule_prob, raw_lgbm_prob, w_rule=w_rule)
+        except Exception as e:
+            logger.warning("LGBM blend failed, falling back to rule-only: %s", e)
+            blended = raw_rule_prob
+    else:
+        blended = raw_rule_prob
+    probability_by_num = _apply_calibrator(blended)
     market_probability_by_num = _market_probabilities(scored)
 
     out: list[Prediction] = []

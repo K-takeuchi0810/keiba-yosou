@@ -198,6 +198,13 @@ def main() -> int:
         help="config.DATA_PERIODS['holdout'] のみで 1 回限り検証。"
         "採用済み filter を本番投入前に sanity check する用途。",
     )
+    ap.add_argument(
+        "--walk-forward-3fold",
+        action="store_true",
+        help="Phase 4: 3-fold walk-forward。TEST 期間を年単位 3 fold に分け、"
+             "全 fold で 80%+ を出す filter のみ robust 認定。"
+             "1 年単位の noise に強い真ロバスト確認用 (2026-05-13 追加)。",
+    )
     ap.add_argument("--db", default=None, help="SQLite DB path")
     args = ap.parse_args()
 
@@ -252,6 +259,65 @@ def main() -> int:
                 f"{name},{d['bets']},{d['hit_rate']*100:.1f},{d['return_rate']*100:.1f},"
                 f"{e['bets']},{e['hit_rate']*100:.1f},{e['return_rate']*100:.1f},{robust}"
             )
+        print(f"sec,{time.time() - started:.1f}", file=sys.stderr)
+        return 0
+
+    if args.walk_forward_3fold:
+        # Phase 4: 3-fold walk-forward
+        # config.DATA_PERIODS["test"] = 2024-2025 だが、ここでは TRAIN 後半 (2023) +
+        # TEST (2024, 2025) の 3 fold を取って year-noise を平均化する。
+        # robust 認定: 全 3 fold で >= 80% を要求 (1 fold でも 80% 未満なら脱落)。
+        train_to = DATA_PERIODS["train"]["to"]
+        test_from = DATA_PERIODS["test"]["from"]
+        test_to = DATA_PERIODS["test"]["to"]
+        train_last_year = train_to[:4]
+        test_first_year = test_from[:4]
+        test_last_year = test_to[:4]
+        # 3 fold = [TRAIN末年, TEST_前半, TEST_末年]
+        fold_years = [train_last_year, test_first_year, test_last_year]
+        # 重複除去 & 順序維持
+        seen = set()
+        fold_years = [y for y in fold_years if not (y in seen or seen.add(y))]
+        if len(fold_years) < 3:
+            print(
+                f"WARN: only {len(fold_years)} unique years for 3-fold "
+                f"({fold_years}). Need TRAIN_to + TEST_from + TEST_to に "
+                f"3 異なる年が必要。",
+                file=sys.stderr,
+            )
+        period_picks_3fold: dict[str, list[Pick]] = {}
+        for y in fold_years:
+            fr = f"{y}0101"
+            to = f"{y}1231"
+            if y == test_last_year:
+                to = test_to
+            period_picks_3fold[y] = collect_picks(fr, to, db_path=args.db)
+            print(
+                f"  collected fold {y} ({fr}-{to}): {len(period_picks_3fold[y])} picks",
+                file=sys.stderr,
+            )
+        cols = ",".join(f"{y}_bets,{y}_hit_rate,{y}_return_rate" for y in fold_years)
+        print(f"filter,{cols},robust_3fold")
+        rows_3f: list[tuple[str, list[dict]]] = []
+        for name, spec in FILTERS:
+            results = [summarize(period_picks_3fold[y], args.bet, spec) for y in fold_years]
+            rows_3f.append((name, results))
+        rows_3f.sort(
+            key=lambda x: (
+                all(r["return_rate"] >= 0.80 for r in x[1]),
+                min(r["return_rate"] for r in x[1]),
+            ),
+            reverse=True,
+        )
+        for name, results in rows_3f:
+            robust = "Y" if all(r["return_rate"] >= 0.80 for r in results) else "n"
+            parts = [name]
+            for r in results:
+                parts.append(str(r["bets"]))
+                parts.append(f"{r['hit_rate']*100:.1f}")
+                parts.append(f"{r['return_rate']*100:.1f}")
+            parts.append(robust)
+            print(",".join(parts))
         print(f"sec,{time.time() - started:.1f}", file=sys.stderr)
         return 0
 

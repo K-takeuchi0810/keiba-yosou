@@ -83,3 +83,77 @@ def fit_bin_calibrator(records: list[dict], bin_size: float = 0.05, min_count: i
         "log_loss": report.get("log_loss"),
         "bins": bins,
     }
+
+
+def fit_isotonic_calibrator(records: list[dict]) -> dict:
+    """Isotonic regression による単調校正器 (Phase 3 / 2026-05-13)。
+
+    bin calibrator は隣接 bin 間で非単調になり得る (例: 0.10 bin が 0.08、
+    0.15 bin が 0.18) ため、odds × calibrated_prob の EV が段差で暴れる。
+    Isotonic は単調制約付きで滑らかな写像を学習し、点推定の信頼性を上げる。
+
+    依存: scikit-learn (.venv64)。未 install 時は ModuleNotFoundError → caller で
+    fit_bin_calibrator にフォールバック想定。
+    """
+    try:
+        from sklearn.isotonic import IsotonicRegression  # type: ignore[import-not-found]
+    except ModuleNotFoundError as e:
+        raise RuntimeError(
+            "fit_isotonic_calibrator requires scikit-learn. Run from .venv64."
+        ) from e
+    ps: list[float] = []
+    ys: list[int] = []
+    for r in records:
+        try:
+            p = max(0.0, min(1.0, float(r.get("probability", 0.0))))
+        except (TypeError, ValueError):
+            continue
+        ps.append(p)
+        ys.append(1 if r.get("actual") else 0)
+    if not ps:
+        return {
+            "type": "isotonic",
+            "x_knots": [],
+            "y_knots": [],
+            "source_count": 0,
+            "brier_score": None,
+            "log_loss": None,
+        }
+    iso = IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0)
+    iso.fit(ps, ys)
+    base_report = calibration_report(records)
+    x_knots = iso.X_thresholds_.tolist() if hasattr(iso, "X_thresholds_") else []
+    y_knots = iso.y_thresholds_.tolist() if hasattr(iso, "y_thresholds_") else []
+    return {
+        "type": "isotonic",
+        "x_knots": x_knots,
+        "y_knots": y_knots,
+        "source_count": len(ps),
+        "brier_score": base_report.get("brier_score"),
+        "log_loss": base_report.get("log_loss"),
+    }
+
+
+def apply_isotonic(calibrator: dict, prob: float) -> float:
+    """Isotonic calibrator の x_knots / y_knots を線形補間で適用。
+
+    rules.py:_apply_calibrator から呼ばれる純 Python 実装 (numpy 不要)。
+    32-bit / 64-bit どちらでも動作。
+    """
+    xs = calibrator.get("x_knots") or []
+    ys = calibrator.get("y_knots") or []
+    if not xs or not ys:
+        return prob
+    p = max(0.0, min(1.0, float(prob)))
+    if p <= xs[0]:
+        return float(ys[0])
+    if p >= xs[-1]:
+        return float(ys[-1])
+    for i in range(len(xs) - 1):
+        if xs[i] <= p <= xs[i + 1]:
+            x0, x1 = xs[i], xs[i + 1]
+            y0, y1 = ys[i], ys[i + 1]
+            if x1 == x0:
+                return float(y0)
+            return float(y0 + (y1 - y0) * (p - x0) / (x1 - x0))
+    return float(ys[-1])
