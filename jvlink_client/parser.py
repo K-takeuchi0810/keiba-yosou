@@ -558,9 +558,24 @@ def _race_id_fields(rec: bytes) -> tuple[str, str, str, str, str, str, str, str]
 def parse_dm(rec: bytes) -> list[MiningPrediction]:
     """DM (タイム型データマイニング予想) 303 byte → 1 record 内に 18 頭分。
 
-    仕様書 §28 (PDF page 26)。**byte offset は実データで再検証必要**。
-    現状は race_id + 各馬の (horse_num, predicted_time, error_+, error_-) を
-    保守的に取り出す。スコア欄が無い (= DM はタイム型) ので score=0。
+    仕様書 §28 (docs/JV-Data4901.pdf page 26):
+      1-2:   record_type "DM"
+      3:     data_div
+      4-11:  data_created (yyyymmdd)
+      12-15: year (yyyy)
+      16-19: month_day (mmdd)
+      20-21: track_code
+      22-23: kaiji
+      24-25: nichiji
+      26-27: race_num
+      28-31: data_created_time (hhmm) ← 旧コードは見落としていた
+      32-301: <マイニング予想> 18 horses × 15 bytes:
+              1-2:   horse_num (sp 詰め "01"〜"18")
+              3-7:   predicted_time (5 bytes, sp 詰め, 9分99秒99 = "MMSS9" 形式)
+              8-11:  error_plus (4 bytes, +側誤差 99秒99)
+              12-15: error_minus (4 bytes, -側誤差 99秒99)
+      302-303: CRLF
+
     予測順位 (predicted_rank) は predicted_time の昇順から事後計算。
     """
     if len(rec) < DM_LENGTH:
@@ -569,19 +584,17 @@ def parse_dm(rec: bytes) -> list[MiningPrediction]:
         rec = rec[:DM_LENGTH]
     rec_type, data_div, data_created, year, month_day, track_code, kaiji, nichiji = _race_id_fields(rec)
     race_num = _ascii(rec, 26, 2)
-    # 28 以降に 18 頭分のエントリ (1 頭 15 byte 仮定: horse_num(2) + time(4) + err+(3) + err-(3) + reserve(3))
-    # 18 * 15 = 270 byte (303 - 28 - 5 (CRLF + reserve) = 270 でちょうど合う)
     entries: list[MiningPrediction] = []
-    base = 28
-    block = 15
+    base = 32       # 1-indexed: position 32 (was 28 in broken version)
+    block = 15      # 2 (馬番) + 5 (タイム) + 4 (誤差+) + 4 (誤差-) = 15
     for i in range(18):
         pos = base + i * block
         horse_num = _ascii(rec, pos, 2).strip("\x00 ")
         if not horse_num or horse_num == "00":
             continue
-        pred_time = _int(rec, pos + 2, 4)
-        err_plus = _int(rec, pos + 6, 3)
-        err_minus = _int(rec, pos + 9, 3)
+        pred_time = _int(rec, pos + 2, 5)
+        err_plus = _int(rec, pos + 7, 4)
+        err_minus = _int(rec, pos + 11, 4)
         entries.append(
             MiningPrediction(
                 record_type=rec_type,
@@ -595,7 +608,6 @@ def parse_dm(rec: bytes) -> list[MiningPrediction]:
                 error_minus=err_minus,
             )
         )
-    # predicted_time 昇順から rank を計算 (1=最速)。0 は除外して並べる。
     timed = [e for e in entries if e.predicted_time > 0]
     timed.sort(key=lambda e: e.predicted_time)
     for r, e in enumerate(timed, start=1):
@@ -606,8 +618,18 @@ def parse_dm(rec: bytes) -> list[MiningPrediction]:
 def parse_tm(rec: bytes) -> list[MiningPrediction]:
     """TM (対戦型データマイニング予想) 141 byte → 1 record 内に 18 頭分。
 
-    仕様書 §29 (PDF page 26)。**byte offset は実データで再検証必要**。
-    score (対戦評価点) + rank を per-horse 抽出。
+    仕様書 §29 (docs/JV-Data4901.pdf page 26):
+      1-27:  race_id 共通エリア (DM と同じ)
+      28-31: data_created_time (hhmm)
+      32-139: <マイニング予想> 18 horses × 6 bytes:
+              1-2: horse_num (sp 詰め)
+              3-6: 予想スコア (4 bytes, 00.0 〜 100.0 を小数点表示で表現)
+      140-141: CRLF
+
+    score は 4 byte ASCII (例 "12.5" "100.0" "85.3")。`_int` は decimal point を
+    含む文字列で ValueError → 0 fallback するため、別途 float 解釈する必要あり。
+    ここでは ASCII 全部を取り出して float 解析、内部 storage は 10 倍した整数
+    (= 1/10 点単位) で扱う。
     """
     if len(rec) < TM_LENGTH:
         rec = rec.ljust(TM_LENGTH, b"\x00")
@@ -615,17 +637,22 @@ def parse_tm(rec: bytes) -> list[MiningPrediction]:
         rec = rec[:TM_LENGTH]
     rec_type, data_div, data_created, year, month_day, track_code, kaiji, nichiji = _race_id_fields(rec)
     race_num = _ascii(rec, 26, 2)
-    # 28 以降に 18 頭分 (1 頭 6 byte 仮定: horse_num(2) + score(3) + reserve(1))
-    # 18 * 6 = 108 byte (141 - 28 - 5 = 108)
     entries: list[MiningPrediction] = []
-    base = 28
-    block = 6
+    base = 32       # 1-indexed (was 28 in broken version)
+    block = 6       # 2 (馬番) + 4 (スコア) = 6
     for i in range(18):
         pos = base + i * block
         horse_num = _ascii(rec, pos, 2).strip("\x00 ")
         if not horse_num or horse_num == "00":
             continue
-        score = _int(rec, pos + 2, 3)
+        score_text = _ascii(rec, pos + 2, 4).strip()
+        score_int = 0
+        if score_text:
+            try:
+                # "12.5" → 125, "100.0" → 1000、整数表記 "85" → 850
+                score_int = int(round(float(score_text) * 10))
+            except ValueError:
+                score_int = 0
         entries.append(
             MiningPrediction(
                 record_type=rec_type,
@@ -634,10 +661,9 @@ def parse_tm(rec: bytes) -> list[MiningPrediction]:
                 year=year, month_day=month_day, track_code=track_code,
                 kaiji=kaiji, nichiji=nichiji, race_num=race_num,
                 horse_num=horse_num,
-                score=score,
+                score=score_int,
             )
         )
-    # score 降順 (= 評価点が高い順) で rank。
     scored = [e for e in entries if e.score > 0]
     scored.sort(key=lambda e: -e.score)
     for r, e in enumerate(scored, start=1):
