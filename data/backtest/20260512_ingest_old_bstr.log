@@ -1,0 +1,14 @@
+starting ingest from data/raw_old_bstr ...
+elapsed: 137.3s
+{
+  "files_processed": 1445,
+  "files_skipped": 12,
+  "files_errored": 0,
+  "RA": 61083,
+  "SE": 720479,
+  "HR": 42114,
+  "O1": 21634,
+  "UM": 44975,
+  "records_skipped": 497562,
+  "errors": []
+}
