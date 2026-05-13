@@ -7,7 +7,7 @@ description: keiba-yosou プロジェクトの **現状スナップショット*
 
 ## 1 行サマリ
 
-JRA-VAN JV-Link を使うローカル競馬予想 GUI。**2026-05-12 wl_odds_8_20 採用で初の +収支到達** (EVAL 41 戦 / 116.1% / +660 円)。同日 **5 年分割を正規化** (`config.DATA_PERIODS`: train 2021-2023 / test 2024-2025 / production 2026)、raw_old_bstr から過去データ ingest 完了 (RA +61,083 / SE +720,479)、calibrator は TRAIN で再 fit 中。
+JRA-VAN JV-Link を使うローカル競馬予想 GUI。**2026-05-13 LightGBM ensemble 完成** で TEST 2024-25 ベタ買い回収率 **81.2%** (CI [66.9%, 98.0%]) を達成し、**控除率 80% の構造的天井を初めて全レース平均で突破**。3-fold walk-forward で 5 つの真ロバスト filter (`wl_pop_1_2` 88-196%, `wl_odds_9_25` 97-155%, `wl_odds_8_25` 88-141%, `wl_odds_7_22` 85-132%, `wl_odds_20_50` 84-187%) を検出。.venv64 (Python 3.14 64-bit) で ML スタック稼働。
 
 ## データ期間の正規分割 (`config.DATA_PERIODS`)
 
