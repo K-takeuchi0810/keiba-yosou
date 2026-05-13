@@ -438,7 +438,8 @@ def run_backtest(
         "buy_only_hit_rate_ci95": buy_only_stats.get("hit_rate_ci95"),
         "buy_only_return_rate_ci95": buy_only_stats.get("return_rate_ci95"),
         # ホワイトリスト単独 (EV/Odds フィルタ無視) で◎単勝ベタ買いの結果。
-        # 「重賞 + 中山 + 京都だけで普通に買えば勝てるか」の指標。
+        # config.BUY_FILTER_DEFAULT.whitelist_tracks の場 (現 07=中京 / 09=阪神)
+        # で重賞のみ買ったときの結果。「特定 2 場の重賞ベタ買いで勝てるか」の指標。
         "whitelist_only_bets": whitelist_only_stats["bets"],
         "whitelist_only_hits": whitelist_only_stats["hits"],
         "whitelist_only_hit_rate": whitelist_only_stats["hit_rate"],
@@ -519,7 +520,7 @@ def format_report(r: dict) -> str:
     )
     lines.append(
         f"  WL単独:     {r.get('whitelist_only_bets', 0):,} 点  的中 {r.get('whitelist_only_hits', 0):,}  "
-        f"回収率 {r.get('whitelist_only_return_rate', 0) * 100:.1f}%  (重賞+中山+京都ベタ買い)"
+        f"回収率 {r.get('whitelist_only_return_rate', 0) * 100:.1f}%  (重賞+WL場ベタ買い)"
     )
     cal = r.get("calibration") or {}
     if cal.get("count"):

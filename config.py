@@ -83,9 +83,18 @@ BUY_FILTER_DEFAULT: dict = {
     "exclude_confidence": [],      # 8-20 帯では混戦ラベル不可避なので解除
     "max_odds_age_min": 30,
     # ----- 重賞ホワイトリストモード -----
+    # whitelist_tracks の場コードは web/codes.py 準拠 (JV-Data 2001 場コード):
+    #   01=札幌 / 02=函館 / 03=福島 / 04=新潟 / 05=東京 / 06=中山 /
+    #   07=中京 / 08=京都 / 09=阪神 / 10=小倉
+    # 2026-05-13 修正: 過去のコメントで "07=中山, 09=京都" と誤記されていた
+    # (web/codes.py と矛盾)。実際には 07=中京 / 09=阪神 が正しい。
+    # 「中京 + 阪神」がなぜ選ばれたかは P0-3 wl 採用時の旧 calibrator + rule 上
+    # で robust だったため。LGBM ensemble (2026-05-13) では阪神が 10 場中
+    # 最下位 (52.5%) となるため、whitelist 自体の再選定を要検討
+    # (data/scorecards/20260513_0445_p10_lgbm_ensemble.md 参照)。
     "whitelist_mode": True,
     "whitelist_grades": ["A", "B", "C", "F"],   # G1=A / G2=B / G3=C / 重賞=F
-    "whitelist_tracks": ["07", "09"],            # 中山 / 京都
+    "whitelist_tracks": ["07", "09"],            # 中京 / 阪神 (再選定要検討)
 }
 
 

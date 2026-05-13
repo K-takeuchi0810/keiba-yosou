@@ -64,7 +64,7 @@ BUY_FILTER_DEFAULT = {
     "max_odds_age_min": 30,
     "whitelist_mode": True,
     "whitelist_grades": ["A", "B", "C", "F"],  # G1/G2/G3/重賞
-    "whitelist_tracks": ["07", "09"],           # 中山 / 京都
+    "whitelist_tracks": ["07", "09"],           # 中京 / 阪神 (2026-05-13 修正: 中山/京都 と誤記していた)
 }
 ```
 
