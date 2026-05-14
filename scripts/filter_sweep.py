@@ -205,6 +205,14 @@ def main() -> int:
              "Filter is robust only if all folds reach 80%% return. "
              "Year-noise robust check (2026-05-13).",
     )
+    ap.add_argument(
+        "--by-track-3fold",
+        action="store_true",
+        help="Phase 6: per-track 3-fold sweep. Each of 10 JRA tracks "
+             "evaluated across 3 year-folds for whitelist re-selection. "
+             "Robust = all 3 folds reach the configurable threshold "
+             "(default 80%%) under LGBM ensemble (2026-05-13).",
+    )
     ap.add_argument("--db", default=None, help="SQLite DB path")
     args = ap.parse_args()
 
@@ -317,6 +325,64 @@ def main() -> int:
                 parts.append(f"{r['hit_rate']*100:.1f}")
                 parts.append(f"{r['return_rate']*100:.1f}")
             parts.append(robust)
+            print(",".join(parts))
+        print(f"sec,{time.time() - started:.1f}", file=sys.stderr)
+        return 0
+
+    if args.by_track_3fold:
+        # Phase 6 (2026-05-13): 場別 3-fold sweep。
+        # whitelist 再選定のため、10 場 × 3 年 (2023/2024/2025) の return_rate
+        # マトリクスを出力。LGBM ensemble の場別パフォーマンスを年単位で確認し、
+        # 全 3 fold で >= 80% を出す場のみ採用候補にする。
+        # filter は「全レース rank-1 ベタ買い」(spec={}) を基準にし、別途
+        # popularity/odds との組合せ感度は --walk-forward-3fold で見る。
+        train_to = DATA_PERIODS["train"]["to"]
+        test_from = DATA_PERIODS["test"]["from"]
+        test_to = DATA_PERIODS["test"]["to"]
+        fold_years = [train_to[:4], test_from[:4], test_to[:4]]
+        seen_y: set[str] = set()
+        fold_years = [y for y in fold_years if not (y in seen_y or seen_y.add(y))]
+        # 各 fold で picks 収集
+        period_picks_t: dict[str, list[Pick]] = {}
+        for y in fold_years:
+            fr = f"{y}0101"
+            to = f"{y}1231"
+            if y == test_to[:4]:
+                to = test_to
+            period_picks_t[y] = collect_picks(fr, to, db_path=args.db)
+            print(
+                f"  collected fold {y} ({fr}-{to}): {len(period_picks_t[y])} picks",
+                file=sys.stderr,
+            )
+        TRACK_NAMES = {
+            "01": "札幌", "02": "函館", "03": "福島", "04": "新潟", "05": "東京",
+            "06": "中山", "07": "中京", "08": "京都", "09": "阪神", "10": "小倉",
+        }
+        threshold = 0.80
+        cols = ",".join(f"{y}_bets,{y}_hit_rate,{y}_return_rate" for y in fold_years)
+        print(f"track,name,{cols},min_return,robust_3fold")
+        rows_t: list[tuple[str, str, list[dict], float, bool]] = []
+        for tc in sorted(TRACK_NAMES.keys()):
+            name = TRACK_NAMES[tc]
+            results = [
+                summarize(period_picks_t[y], args.bet, {"tracks": {tc}})
+                for y in fold_years
+            ]
+            if any(r["bets"] == 0 for r in results):
+                continue
+            min_ret = min(r["return_rate"] for r in results)
+            is_robust = all(r["return_rate"] >= threshold for r in results)
+            rows_t.append((tc, name, results, min_ret, is_robust))
+        # robust 優先、その中で min_return 降順
+        rows_t.sort(key=lambda x: (x[4], x[3]), reverse=True)
+        for tc, name, results, min_ret, is_robust in rows_t:
+            parts = [tc, name]
+            for r in results:
+                parts.append(str(r["bets"]))
+                parts.append(f"{r['hit_rate']*100:.1f}")
+                parts.append(f"{r['return_rate']*100:.1f}")
+            parts.append(f"{min_ret*100:.1f}")
+            parts.append("Y" if is_robust else "n")
             print(",".join(parts))
         print(f"sec,{time.time() - started:.1f}", file=sys.stderr)
         return 0
