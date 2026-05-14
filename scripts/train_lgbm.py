@@ -66,6 +66,12 @@ NUMERIC_FEATURES: list[str] = [
     "dam_sire_going_top3_rate", "dam_sire_going_samples",
     # Phase 1 MING (2026-05-13): JRA-VAN マイニング予想を baseline 信号として追加
     "mining_dm_rank", "mining_dm_time", "mining_tm_rank", "mining_tm_score",
+    # Phase 6 Tier 1 (2026-05-14): 場 × エンティティの文脈特徴量
+    "jockey_track_top3_rate", "jockey_track_samples",
+    "trainer_track_top3_rate", "trainer_track_samples",
+    "horse_track_top3_rate", "horse_track_samples",
+    "sire_track_top3_rate", "sire_track_samples",
+    "race_month",
 ]
 
 BOOLEAN_FEATURES: list[str] = [

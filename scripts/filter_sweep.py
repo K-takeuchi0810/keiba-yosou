@@ -34,6 +34,12 @@ class Pick:
     confidence: str          # 信頼度ラベル
     tan_payout: int
     fuku_payout: int
+    # Phase 6 expansion (2026-05-14): MING (JRA-VAN プロ予想) シグナル
+    win_probability: float = 0.0   # LGBM ensemble 後の校正済み確率 (P(win))
+    kelly_fraction: float = 0.0    # Kelly 賭金率
+    mining_tm_score: int = 0       # TM スコア (10x 内部表現、0-1000)
+    mining_tm_rank: int = 0        # TM 推定順位 (1=最有力)
+    mining_dm_rank: int = 0        # DM 推定順位
 
     @property
     def is_whitelisted(self) -> bool:
@@ -67,6 +73,7 @@ def collect_picks(
             horse = next((h for h in horses if h.get("horse_num") == top.horse_num), None)
             if not horse:
                 continue
+            top_feat = horse.get("_features") or {}
             picks.append(
                 Pick(
                     track_code=race["track_code"],
@@ -77,6 +84,11 @@ def collect_picks(
                     confidence=top.confidence,
                     tan_payout=get_payout(conn, race, top.horse_num, "tan"),
                     fuku_payout=get_payout(conn, race, top.horse_num, "fuku"),
+                    win_probability=float(top.win_probability or 0),
+                    kelly_fraction=float(top.kelly_fraction or 0),
+                    mining_tm_score=int(top_feat.get("mining_tm_score") or 0),
+                    mining_tm_rank=int(top_feat.get("mining_tm_rank") or 0),
+                    mining_dm_rank=int(top_feat.get("mining_dm_rank") or 0),
                 )
             )
     return picks
@@ -98,6 +110,17 @@ def match_filter(p: Pick, spec: dict) -> bool:
     if spec.get("whitelist") and not p.is_whitelisted:
         return False
     if "exclude_conf" in spec and p.confidence in spec["exclude_conf"]:
+        return False
+    # Phase 6 expansion (2026-05-14)
+    if "min_prob" in spec and p.win_probability < spec["min_prob"]:
+        return False
+    if "min_kelly" in spec and p.kelly_fraction < spec["min_kelly"]:
+        return False
+    if "min_tm_score" in spec and p.mining_tm_score < spec["min_tm_score"]:
+        return False
+    if "max_tm_rank" in spec and (p.mining_tm_rank <= 0 or p.mining_tm_rank > spec["max_tm_rank"]):
+        return False
+    if "max_dm_rank" in spec and (p.mining_dm_rank <= 0 or p.mining_dm_rank > spec["max_dm_rank"]):
         return False
     return True
 
@@ -160,6 +183,68 @@ FILTERS = [
     # 旧バリアント (参考)
     ("odds_2_5", {"min_odds": 2.0, "max_odds": 5.0}),
     ("odds_10_20", {"min_odds": 10.0, "max_odds": 20.0}),
+
+    # ========== Phase 6 (2026-05-14) 戦略カタログ拡張 ==========
+    # 「いくつもの検証を行い良いものを伸ばす」方針。LGBM ensemble 後の確率と
+    # MING (DM/TM) を活用した EV / Kelly / 確率ベース戦略を追加。
+    #
+    # EV ベース戦略 (LGBM 確率 × オッズ - 1 が閾値超え)
+    ("ev_ge_105", {"min_ev": 1.05}),
+    ("ev_ge_110", {"min_ev": 1.10}),
+    ("ev_ge_120", {"min_ev": 1.20}),
+    ("ev_ge_150", {"min_ev": 1.50}),
+    ("ev_ge_200", {"min_ev": 2.00}),
+    # EV + whitelist 複合 (重賞 + 中京/阪神 + EV エッジ)
+    ("wl_ev_105", {"whitelist": True, "min_ev": 1.05}),
+    ("wl_ev_110", {"whitelist": True, "min_ev": 1.10}),
+    ("wl_ev_120", {"whitelist": True, "min_ev": 1.20}),
+    ("wl_ev_150", {"whitelist": True, "min_ev": 1.50}),
+    # 確率ベース戦略 (校正後 P(win) が閾値超え = 本命系)
+    ("prob_ge_20", {"min_prob": 0.20}),
+    ("prob_ge_30", {"min_prob": 0.30}),
+    ("wl_prob_ge_20", {"whitelist": True, "min_prob": 0.20}),
+    ("wl_prob_ge_30", {"whitelist": True, "min_prob": 0.30}),
+    # Kelly 賭金率ベース (= 内部的に「EV プラス + 確率十分」を意味するので堅実)
+    ("kelly_ge_01", {"min_kelly": 0.01}),
+    ("kelly_ge_05", {"min_kelly": 0.05}),
+    ("wl_kelly_ge_01", {"whitelist": True, "min_kelly": 0.01}),
+    ("wl_kelly_ge_05", {"whitelist": True, "min_kelly": 0.05}),
+
+    # ========== MING (JRA-VAN プロ予想) 単独 / 自モデル併用 ==========
+    # TM score の高さで絞る (TM > 80 等)
+    ("tm_score_ge_700", {"min_tm_score": 700}),   # = 内部 700 = score 70.0
+    ("tm_score_ge_800", {"min_tm_score": 800}),
+    ("tm_score_ge_900", {"min_tm_score": 900}),
+    # TM rank の上位
+    ("tm_rank_1", {"max_tm_rank": 1}),       # TM 本命と一致
+    ("tm_rank_1_3", {"max_tm_rank": 3}),     # TM 上位 3 頭
+    # DM rank の上位
+    ("dm_rank_1", {"max_dm_rank": 1}),
+    ("dm_rank_1_3", {"max_dm_rank": 3}),
+    # WL 内で MING 高評価
+    ("wl_tm_score_ge_700", {"whitelist": True, "min_tm_score": 700}),
+    ("wl_tm_score_ge_800", {"whitelist": True, "min_tm_score": 800}),
+    ("wl_tm_rank_1_3", {"whitelist": True, "max_tm_rank": 3}),
+    # MING + EV 複合 (プロ予想と自モデルが一致する馬を狙う)
+    ("tm_rank_1_3_ev_ge_105", {"max_tm_rank": 3, "min_ev": 1.05}),
+    ("tm_score_ge_700_ev_ge_110", {"min_tm_score": 700, "min_ev": 1.10}),
+    ("wl_tm_rank_1_3_ev_ge_105", {"whitelist": True, "max_tm_rank": 3, "min_ev": 1.05}),
+
+    # ========== 多面複合 (Phase 6 仮説検証) ==========
+    # 本命厚切り: WL + 1-2 人気 + 高オッズ域カット
+    ("wl_pop_1_2_ev_ge_105", {"whitelist": True, "min_pop": 1, "max_pop": 2, "min_ev": 1.05}),
+    ("wl_pop_1_2_kelly_ge_01", {"whitelist": True, "min_pop": 1, "max_pop": 2, "min_kelly": 0.01}),
+    # 中穴堅切り: 8-25 倍 + 中位人気 + EV 閾値
+    ("odds_8_25_ev_ge_110", {"min_odds": 8.0, "max_odds": 25.0, "min_ev": 1.10}),
+    ("wl_odds_8_25_ev_ge_110", {"whitelist": True, "min_odds": 8.0, "max_odds": 25.0, "min_ev": 1.10}),
+    # 大穴 robust 探索: 20-50 倍 + EV >= 1.5 (高 EV のみ)
+    ("odds_20_50_ev_ge_150", {"min_odds": 20.0, "max_odds": 50.0, "min_ev": 1.50}),
+    ("wl_odds_20_50_ev_ge_150", {"whitelist": True, "min_odds": 20.0, "max_odds": 50.0, "min_ev": 1.50}),
+    # 信頼度高い × 本命の絶対安全策
+    ("wl_pop_1_2_ex_unsure", {"whitelist": True, "min_pop": 1, "max_pop": 2, "exclude_conf": ["暫定", "混戦", "接戦"]}),
+    # WL 拡張 (TEST 2024-25 集約で >80% を出した 5 場で再評価)
+    ("wl5_pop_1_2", {"tracks": {"01", "02", "03", "06", "07"}, "min_pop": 1, "max_pop": 2}),
+    ("wl5_ev_ge_110", {"tracks": {"01", "02", "03", "06", "07"}, "min_ev": 1.10}),
 ]
 
 

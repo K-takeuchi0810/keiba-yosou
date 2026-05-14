@@ -616,6 +616,164 @@ def _bloodline_stats_uncached(
     return top3 / len(rows), len(rows)
 
 
+def _jockey_track_stats(
+    conn: sqlite3.Connection,
+    jockey_code: str,
+    track_code: str,
+    before_date: str,
+    cache: dict | None = None,
+    limit: int = 300,
+) -> tuple[float | None, int]:
+    """騎手 × 場 の past 着順 top3 rate と sample 数を返す (Phase 6 Tier 1)。
+
+    リーク防止: race_date < before_date のみ集計。
+    """
+    if not jockey_code or not track_code:
+        return None, 0
+    key = ("jockey_track", jockey_code, track_code, before_date, limit)
+    if cache is not None and key in cache:
+        return cache[key]
+    rows = conn.execute(
+        """
+        SELECT confirmed_order FROM horse_races
+         WHERE jockey_code = ? AND track_code = ?
+           AND (race_year || race_month_day) < ?
+           AND confirmed_order > 0
+         ORDER BY (race_year || race_month_day) DESC
+         LIMIT ?
+        """,
+        (jockey_code, track_code, before_date, limit),
+    ).fetchall()
+    if not rows:
+        result = (None, 0)
+    else:
+        top3 = sum(1 for r in rows if r[0] in (1, 2, 3))
+        result = (top3 / len(rows), len(rows))
+    if cache is not None:
+        cache[key] = result
+    return result
+
+
+def _trainer_track_stats(
+    conn: sqlite3.Connection,
+    trainer_code: str,
+    track_code: str,
+    before_date: str,
+    cache: dict | None = None,
+    limit: int = 300,
+) -> tuple[float | None, int]:
+    """厩舎 × 場 の past 着順 top3 rate と sample 数 (Phase 6 Tier 1)。"""
+    if not trainer_code or not track_code:
+        return None, 0
+    key = ("trainer_track", trainer_code, track_code, before_date, limit)
+    if cache is not None and key in cache:
+        return cache[key]
+    rows = conn.execute(
+        """
+        SELECT confirmed_order FROM horse_races
+         WHERE trainer_code = ? AND track_code = ?
+           AND (race_year || race_month_day) < ?
+           AND confirmed_order > 0
+         ORDER BY (race_year || race_month_day) DESC
+         LIMIT ?
+        """,
+        (trainer_code, track_code, before_date, limit),
+    ).fetchall()
+    if not rows:
+        result = (None, 0)
+    else:
+        top3 = sum(1 for r in rows if r[0] in (1, 2, 3))
+        result = (top3 / len(rows), len(rows))
+    if cache is not None:
+        cache[key] = result
+    return result
+
+
+def _horse_track_stats(
+    conn: sqlite3.Connection,
+    blood_register_num: str,
+    track_code: str,
+    before_date: str,
+    cache: dict | None = None,
+    limit: int = 50,
+) -> tuple[float | None, int]:
+    """馬 × 場 の past 着順 top3 rate と sample 数 (Phase 6 Tier 1)。
+
+    `same_course_*` は同芝・同ダートかつ track 一致時のみカウント。これは
+    芝/ダート問わず純粋に「この場経験」全数で集計。
+    """
+    if not blood_register_num or not track_code:
+        return None, 0
+    key = ("horse_track", blood_register_num, track_code, before_date, limit)
+    if cache is not None and key in cache:
+        return cache[key]
+    rows = conn.execute(
+        """
+        SELECT confirmed_order FROM horse_races
+         WHERE blood_register_num = ? AND track_code = ?
+           AND (race_year || race_month_day) < ?
+           AND confirmed_order > 0
+         ORDER BY (race_year || race_month_day) DESC
+         LIMIT ?
+        """,
+        (blood_register_num, track_code, before_date, limit),
+    ).fetchall()
+    if not rows:
+        result = (None, 0)
+    else:
+        top3 = sum(1 for r in rows if r[0] in (1, 2, 3))
+        result = (top3 / len(rows), len(rows))
+    if cache is not None:
+        cache[key] = result
+    return result
+
+
+def _sire_track_stats(
+    conn: sqlite3.Connection,
+    horse: dict,
+    track_code: str,
+    before_date: str,
+    cache: dict | None = None,
+    limit: int = 200,
+) -> tuple[float | None, int]:
+    """父 × 場 の産駒過去 top3 rate と sample 数 (Phase 6 Tier 1)。"""
+    if not track_code:
+        return None, 0
+    blood = horse.get("blood_register_num", "") or ""
+    # 父の breeding_num を horse_masters から
+    sire_row = conn.execute(
+        "SELECT sire_breeding_num FROM horse_masters WHERE blood_register_num = ?",
+        (blood,),
+    ).fetchone()
+    sire_num = sire_row[0] if sire_row else None
+    if not sire_num:
+        return None, 0
+    key = ("sire_track", sire_num, track_code, before_date, limit)
+    if cache is not None and key in cache:
+        return cache[key]
+    rows = conn.execute(
+        """
+        SELECT hr.confirmed_order
+          FROM horse_races hr
+          JOIN horse_masters hm ON hm.blood_register_num = hr.blood_register_num
+         WHERE hm.sire_breeding_num = ? AND hr.track_code = ?
+           AND (hr.race_year || hr.race_month_day) < ?
+           AND hr.confirmed_order > 0
+         ORDER BY (hr.race_year || hr.race_month_day) DESC
+         LIMIT ?
+        """,
+        (sire_num, track_code, before_date, limit),
+    ).fetchall()
+    if not rows:
+        result = (None, 0)
+    else:
+        top3 = sum(1 for r in rows if r[0] in (1, 2, 3))
+        result = (top3 / len(rows), len(rows))
+    if cache is not None:
+        cache[key] = result
+    return result
+
+
 def compute_features(
     conn: sqlite3.Connection,
     horse: dict,
@@ -986,5 +1144,52 @@ def compute_features(
         feat["mining_dm_time"] = None
         feat["mining_tm_rank"] = None
         feat["mining_tm_score"] = None
+
+    # Phase 6 Tier 1 (2026-05-14): 文脈特徴量 (場 × 各エンティティの相性)
+    track_code = (race.get("track_code") or "").strip()
+    if track_code and conn is not None:
+        # 騎手 × 場
+        jt_rate, jt_n = _jockey_track_stats(
+            conn, horse.get("jockey_code", "") or "", track_code, before, cache=cache,
+        )
+        feat["jockey_track_top3_rate"] = jt_rate
+        feat["jockey_track_samples"] = jt_n
+        # 厩舎 × 場
+        tt_rate, tt_n = _trainer_track_stats(
+            conn, horse.get("trainer_code", "") or "", track_code, before, cache=cache,
+        )
+        feat["trainer_track_top3_rate"] = tt_rate
+        feat["trainer_track_samples"] = tt_n
+        # 馬 × 場 (= 芝/ダート問わずこの場での累積成績)
+        ht_rate, ht_n = _horse_track_stats(
+            conn, horse.get("blood_register_num", "") or "", track_code, before, cache=cache,
+        )
+        feat["horse_track_top3_rate"] = ht_rate
+        feat["horse_track_samples"] = ht_n
+        # 父 × 場 (= 父系のこの場での産駒実績)
+        st_rate, st_n = _sire_track_stats(
+            conn, horse, track_code, before, cache=cache,
+        )
+        feat["sire_track_top3_rate"] = st_rate
+        feat["sire_track_samples"] = st_n
+    else:
+        feat["jockey_track_top3_rate"] = None
+        feat["jockey_track_samples"] = 0
+        feat["trainer_track_top3_rate"] = None
+        feat["trainer_track_samples"] = 0
+        feat["horse_track_top3_rate"] = None
+        feat["horse_track_samples"] = 0
+        feat["sire_track_top3_rate"] = None
+        feat["sire_track_samples"] = 0
+
+    # 季節シグナル (1-12)。LightGBM で月別バイアスを学習させる。
+    md = race.get("race_month_day") or ""
+    if md and len(md) >= 2:
+        try:
+            feat["race_month"] = int(md[:2])
+        except ValueError:
+            feat["race_month"] = 0
+    else:
+        feat["race_month"] = 0
 
     return feat
