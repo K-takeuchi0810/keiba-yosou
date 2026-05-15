@@ -72,6 +72,13 @@ NUMERIC_FEATURES: list[str] = [
     "horse_track_top3_rate", "horse_track_samples",
     "sire_track_top3_rate", "sire_track_samples",
     "race_month",
+    # Phase 6 Tier 2.3 (2026-05-16): rolling 統計 30/90 日 (時系列適応)
+    "track_recent_30d_top3_rate", "track_recent_30d_samples", "track_recent_30d_avg_winning_pop",
+    "track_recent_90d_top3_rate", "track_recent_90d_samples", "track_recent_90d_avg_winning_pop",
+    "jockey_recent_30d_top3_rate", "jockey_recent_30d_samples",
+    "jockey_recent_90d_top3_rate", "jockey_recent_90d_samples",
+    "trainer_recent_30d_top3_rate", "trainer_recent_30d_samples",
+    "horse_recent_90d_top3_rate", "horse_recent_90d_samples",
 ]
 
 BOOLEAN_FEATURES: list[str] = [

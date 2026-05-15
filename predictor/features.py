@@ -616,6 +616,107 @@ def _bloodline_stats_uncached(
     return top3 / len(rows), len(rows)
 
 
+def _date_minus_days(date_str: str, days: int) -> str:
+    """YYYYMMDD 文字列を days 日前にスライド (純 Python、leak 防止用)。"""
+    from datetime import datetime, timedelta
+    try:
+        dt = datetime.strptime(date_str, "%Y%m%d")
+    except ValueError:
+        return date_str
+    return (dt - timedelta(days=days)).strftime("%Y%m%d")
+
+
+def _track_recent_stats(
+    conn: sqlite3.Connection,
+    track_code: str,
+    before_date: str,
+    days: int,
+    cache: dict | None = None,
+) -> tuple[float | None, int, float | None]:
+    """場の直近 N 日 (race-level) 統計。
+
+    Phase 6 Tier 2.3 (2026-05-16):
+    馬場改修 / 開催プロモーション変動に追従するための「直近の場の傾向」を
+    captre。同じレース内のすべての horse で同じ値になる (race-level prior)。
+
+    戻り: (top3_rate, sample_count, avg_winning_popularity)
+    - top3_rate は 1-3 着の頻度 / 出走馬総数。常に ~3/N ≈ 21%% 付近で固定値
+      ぽいが、過去走で着外多発時に値が下がる (= レース荒れている場)
+    - avg_winning_popularity は 1 着馬の平均人気。低い = 本命堅め、高い = 荒れ気味
+    """
+    if not track_code:
+        return None, 0, None
+    key = ("track_recent", track_code, before_date, days)
+    if cache is not None and key in cache:
+        return cache[key]
+    since_date = _date_minus_days(before_date, days)
+    rows = conn.execute(
+        """
+        SELECT confirmed_order, win_popularity FROM horse_races
+         WHERE track_code = ?
+           AND (race_year || race_month_day) < ?
+           AND (race_year || race_month_day) >= ?
+           AND confirmed_order > 0
+        """,
+        (track_code, before_date, since_date),
+    ).fetchall()
+    if not rows:
+        result = (None, 0, None)
+    else:
+        n = len(rows)
+        top3 = sum(1 for r in rows if r[0] in (1, 2, 3))
+        winning_pops = [r[1] for r in rows if r[0] == 1 and r[1] and r[1] > 0]
+        avg_win_pop = sum(winning_pops) / len(winning_pops) if winning_pops else None
+        result = (top3 / n, n, avg_win_pop)
+    if cache is not None:
+        cache[key] = result
+    return result
+
+
+def _entity_recent_stats(
+    conn: sqlite3.Connection,
+    entity_col: str,
+    entity_value: str,
+    before_date: str,
+    days: int,
+    cache: dict | None = None,
+) -> tuple[float | None, int]:
+    """騎手 / 厩舎 / 馬 の直近 N 日 top3 率 (entity-level)。
+
+    entity_col: 'jockey_code' / 'trainer_code' / 'blood_register_num'
+    Phase 6 Tier 2.3 (2026-05-16):
+    場特性は変動するが、「個人の調子」も時系列的に変動する。
+    直近 N 日の成績が現在の調子を最も反映する。
+    """
+    if not entity_value:
+        return None, 0
+    # SQL injection safety: entity_col must be from known whitelist
+    if entity_col not in ("jockey_code", "trainer_code", "blood_register_num"):
+        return None, 0
+    key = ("entity_recent", entity_col, entity_value, before_date, days)
+    if cache is not None and key in cache:
+        return cache[key]
+    since_date = _date_minus_days(before_date, days)
+    rows = conn.execute(
+        f"""
+        SELECT confirmed_order FROM horse_races
+         WHERE {entity_col} = ?
+           AND (race_year || race_month_day) < ?
+           AND (race_year || race_month_day) >= ?
+           AND confirmed_order > 0
+        """,
+        (entity_value, before_date, since_date),
+    ).fetchall()
+    if not rows:
+        result = (None, 0)
+    else:
+        top3 = sum(1 for r in rows if r[0] in (1, 2, 3))
+        result = (top3 / len(rows), len(rows))
+    if cache is not None:
+        cache[key] = result
+    return result
+
+
 def _jockey_track_stats(
     conn: sqlite3.Connection,
     jockey_code: str,
@@ -1191,5 +1292,61 @@ def compute_features(
             feat["race_month"] = 0
     else:
         feat["race_month"] = 0
+
+    # Phase 6 Tier 2.3 (2026-05-16): rolling 統計 (30/90 日)。
+    # 「直近の場の傾向」「直近の調子」を時系列適応的に取得。
+    # P14 が「直近 trend で robust」だった事実を支える信号として期待。
+    if track_code and conn is not None:
+        # 場の直近 30 日 (race-level)
+        t30_rate, t30_n, t30_pop = _track_recent_stats(conn, track_code, before, 30, cache=cache)
+        feat["track_recent_30d_top3_rate"] = t30_rate
+        feat["track_recent_30d_samples"] = t30_n
+        feat["track_recent_30d_avg_winning_pop"] = t30_pop
+        # 場の直近 90 日 (race-level、安定指標)
+        t90_rate, t90_n, t90_pop = _track_recent_stats(conn, track_code, before, 90, cache=cache)
+        feat["track_recent_90d_top3_rate"] = t90_rate
+        feat["track_recent_90d_samples"] = t90_n
+        feat["track_recent_90d_avg_winning_pop"] = t90_pop
+    else:
+        feat["track_recent_30d_top3_rate"] = None
+        feat["track_recent_30d_samples"] = 0
+        feat["track_recent_30d_avg_winning_pop"] = None
+        feat["track_recent_90d_top3_rate"] = None
+        feat["track_recent_90d_samples"] = 0
+        feat["track_recent_90d_avg_winning_pop"] = None
+
+    if conn is not None:
+        # 騎手の直近調子 (30/90 日)
+        jr30_rate, jr30_n = _entity_recent_stats(
+            conn, "jockey_code", horse.get("jockey_code", "") or "", before, 30, cache=cache,
+        )
+        feat["jockey_recent_30d_top3_rate"] = jr30_rate
+        feat["jockey_recent_30d_samples"] = jr30_n
+        jr90_rate, jr90_n = _entity_recent_stats(
+            conn, "jockey_code", horse.get("jockey_code", "") or "", before, 90, cache=cache,
+        )
+        feat["jockey_recent_90d_top3_rate"] = jr90_rate
+        feat["jockey_recent_90d_samples"] = jr90_n
+        # 厩舎の直近調子
+        tr30_rate, tr30_n = _entity_recent_stats(
+            conn, "trainer_code", horse.get("trainer_code", "") or "", before, 30, cache=cache,
+        )
+        feat["trainer_recent_30d_top3_rate"] = tr30_rate
+        feat["trainer_recent_30d_samples"] = tr30_n
+        # 馬自身の直近調子 (= 賞味期限の検出)
+        hr90_rate, hr90_n = _entity_recent_stats(
+            conn, "blood_register_num", horse.get("blood_register_num", "") or "", before, 90, cache=cache,
+        )
+        feat["horse_recent_90d_top3_rate"] = hr90_rate
+        feat["horse_recent_90d_samples"] = hr90_n
+    else:
+        feat["jockey_recent_30d_top3_rate"] = None
+        feat["jockey_recent_30d_samples"] = 0
+        feat["jockey_recent_90d_top3_rate"] = None
+        feat["jockey_recent_90d_samples"] = 0
+        feat["trainer_recent_30d_top3_rate"] = None
+        feat["trainer_recent_30d_samples"] = 0
+        feat["horse_recent_90d_top3_rate"] = None
+        feat["horse_recent_90d_samples"] = 0
 
     return feat
