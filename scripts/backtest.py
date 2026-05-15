@@ -42,8 +42,8 @@ def buy_filter_from_generator() -> dict:
         return float(v) if v is not None else None
 
     return {
-        "min_odds": float(BUY_FILTER_DEFAULT["min_odds"]),
-        "max_odds": float(BUY_FILTER_DEFAULT["max_odds"]),
+        "min_odds": _maybe_float(BUY_FILTER_DEFAULT.get("min_odds")),
+        "max_odds": _maybe_float(BUY_FILTER_DEFAULT.get("max_odds")),
         "min_value": _maybe_float(BUY_FILTER_DEFAULT.get("min_value")),
         "min_ev": _maybe_float(BUY_FILTER_DEFAULT.get("min_ev")),
         "min_popularity": BUY_FILTER_DEFAULT.get("min_popularity"),

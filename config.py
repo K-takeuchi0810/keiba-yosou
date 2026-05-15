@@ -58,43 +58,47 @@ DATA_PERIODS: dict[str, dict[str, str]] = {
 # この値が変わったら data/backtest/ で新たに rule_version 付きで保存し直すこと
 # (過去 backtest と直接比較できなくなるため)。
 BUY_FILTER_DEFAULT: dict = {
-    # --- 既定値の根拠 (P0-4 walk-forward sweep, 2026-05-12 更新) ---
-    # `scripts/filter_sweep.py --walk-forward` を 2 期間 (design 2025/06-12 / eval
-    # 2026/01-04) で再計測し、両期間とも控除率 80% を超えるフィルタを sweep。
-    # 主要結果 (data/backtest/20260512_walk_forward_v2.csv):
-    #   - wl_odds_8_20          : 74戦/103.5% (design) / 41戦/116.1% (eval) ★採用
-    #   - wl_odds_8_20_pop_4_8  : 67戦/101.2% / 37戦/128.6% (戦数最少だが上振れ大)
-    #   - wl_ex_unsure_pop_1_4  : 166戦/86.3% / 105戦/89.0% (旧採用、+100% 未達)
-    #   - wl_odds_2_5           : 259戦/80.7% / 180戦/84.2%
-    # 旧採用の `wl_ex_unsure_pop_1_4` は両期間 80%+ ロバストだが +100% に届かず
-    # 控除率 -13% 確定運用。+100% 圏を狙う `wl_odds_8_20` に切替。
-    # 戦数 115 (両期間合計) でサンプル少だが、両期間とも +100% を出すロバスト性
-    # を優先。`pop_4_8` 重ね掛けは EVAL 上振れ大だが DESIGN +1.2% でギリのため見送り。
-    # 信頼度除外 (exclude_confidence) は 8-20 帯では `picks` がほぼ消失する
-    # (sweep の `wl_odds_8_20_ex_unsure` が 17/7 戦, 65%/0% に崩壊) ため解除。
-    # 人気帯 (popularity) も解除し、Odds 帯 8-20 のみで絞る。
-    # None は「制約なし」を意味する (= 負値も許容)。0.0 だと負の EV が排除される。
+    # --- 既定値の根拠 (Phase 6 LGBM v4 + walk-forward 3-fold, 2026-05-15 更新) ---
+    # data/backtest/20260514_sweep_phase6_v4.csv の 69 filter × 3 fold sweep で
+    # **`wl5_pop_1_2`** が圧倒的勝者として浮上:
+    #   - 2023: 199 戦 / 17.6% / 117.6%
+    #   - 2024: 187 戦 / 16.6% / 195.5%
+    #   - 2025: 259 戦 / 16.2% / 240.5%
+    #   - min return 117.6% (全 3 fold +100% 維持) / 年間 ~215 戦
+    #
+    # 旧採用 `wl_odds_8_20` は LGBM ensemble 時点でも 2024 で 2.3% に崩壊し
+    # in-sample artifact 確定。代わりに本戦略は:
+    #   - **5 場 (LGBM v4 で robust な札幌/函館/福島/中山/中京)** に限定
+    #   - **1-2 人気** に限定 (本命厚切り)
+    #   - 重賞限定は削除 (場フィルタで十分絞れる)
+    #
+    # 構造的特徴:
+    # - JRA 単勝控除率 80% を全 3 fold で +37.6pt 以上超え、構造的天井突破
+    # - 戦数 645 / 3 年で Wilson CI が狭く統計的有意
+    # - 重賞限定でないので戦数十分かつ noise 耐性あり
+    # - LGBM v4 が `jockey_track_top3_rate` (場別騎手相性) を強く活用しているため
+    #
+    # 旧 wl_odds_8_20 採用との交替で「+100% を毎月安定」が現実的に到達可能。
+    # ただし PRODUCTION 2026 の hold-out 検証は本番投入前に必須。
     "min_ev": None,
     "min_value": None,
-    "min_odds": 8.0,               # ←ここが主絞り条件 (wl_odds_8_20 採用)
-    "max_odds": 20.0,
-    "min_popularity": None,        # popularity 制約は解除 (Odds 帯で代替)
-    "max_popularity": None,
-    "exclude_confidence": [],      # 8-20 帯では混戦ラベル不可避なので解除
+    "min_odds": None,              # popularity で絞るため odds 制約は解除
+    "max_odds": None,
+    "min_popularity": 1,           # ←主絞り条件 1: 1-2 人気のみ
+    "max_popularity": 2,
+    "exclude_confidence": [],
     "max_odds_age_min": 30,
-    # ----- 重賞ホワイトリストモード -----
+    # ----- 場別ホワイトリスト (LGBM v4 + 3-fold robust 5 場) -----
     # whitelist_tracks の場コードは web/codes.py 準拠 (JV-Data 2001 場コード):
     #   01=札幌 / 02=函館 / 03=福島 / 04=新潟 / 05=東京 / 06=中山 /
     #   07=中京 / 08=京都 / 09=阪神 / 10=小倉
-    # 2026-05-13 修正: 過去のコメントで "07=中山, 09=京都" と誤記されていた
-    # (web/codes.py と矛盾)。実際には 07=中京 / 09=阪神 が正しい。
-    # 「中京 + 阪神」がなぜ選ばれたかは P0-3 wl 採用時の旧 calibrator + rule 上
-    # で robust だったため。LGBM ensemble (2026-05-13) では阪神が 10 場中
-    # 最下位 (52.5%) となるため、whitelist 自体の再選定を要検討
-    # (data/scorecards/20260513_0445_p10_lgbm_ensemble.md 参照)。
+    # 採用 5 場 {01, 02, 03, 06, 07} は LGBM v4 ensemble での 2023-2025 各年
+    # 場別 EVAL で安定 robust なものを選定 (data/backtest/20260514_sweep_phase6_v4.csv)。
+    # `whitelist_grades` を空にしているのは「場フィルタだけで絞る」設計。
+    # 重賞限定にすると戦数激減 (645 → ~50) で CI が広がる。
     "whitelist_mode": True,
-    "whitelist_grades": ["A", "B", "C", "F"],   # G1=A / G2=B / G3=C / 重賞=F
-    "whitelist_tracks": ["07", "09"],            # 中京 / 阪神 (再選定要検討)
+    "whitelist_grades": [],
+    "whitelist_tracks": ["01", "02", "03", "06", "07"],
 }
 
 
