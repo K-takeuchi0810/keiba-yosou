@@ -245,6 +245,24 @@ FILTERS = [
     # WL 拡張 (TEST 2024-25 集約で >80% を出した 5 場で再評価)
     ("wl5_pop_1_2", {"tracks": {"01", "02", "03", "06", "07"}, "min_pop": 1, "max_pop": 2}),
     ("wl5_ev_ge_110", {"tracks": {"01", "02", "03", "06", "07"}, "min_ev": 1.10}),
+
+    # ========== 2026-05-15 緊急探索: 単独場 × 様々な絞り条件 ==========
+    # P13 PRODUCTION hold-out で「採用 5 場崩壊 / 除外 09 阪神 137%」と逆転
+    # していたため、場別 robust を recent-3fold で再評価する。
+    # 各場 × 全レース (絞りなし) + popularity 帯絞り版を網羅。
+    *[(f"only_t{tc}", {"tracks": {tc}})
+      for tc in ("01", "02", "03", "04", "05", "06", "07", "08", "09", "10")],
+    *[(f"only_t{tc}_pop_1_2", {"tracks": {tc}, "min_pop": 1, "max_pop": 2})
+      for tc in ("01", "02", "03", "04", "05", "06", "07", "08", "09", "10")],
+    *[(f"only_t{tc}_pop_1_3", {"tracks": {tc}, "min_pop": 1, "max_pop": 3})
+      for tc in ("01", "02", "03", "04", "05", "06", "07", "08", "09", "10")],
+    # 阪神 + 新潟 (PRODUCTION 2026 で逆転 robust だった 2 場)
+    ("only_t04_09", {"tracks": {"04", "09"}}),
+    ("only_t04_09_pop_1_2", {"tracks": {"04", "09"}, "min_pop": 1, "max_pop": 2}),
+    ("only_t04_09_pop_1_3", {"tracks": {"04", "09"}, "min_pop": 1, "max_pop": 3}),
+    ("only_t04_09_ev_ge_110", {"tracks": {"04", "09"}, "min_ev": 1.10}),
+    # 阪神 + 新潟 + (旧 採用) 中京: PRODUCTION mid-tier 含む
+    ("only_t04_07_09", {"tracks": {"04", "07", "09"}, "min_pop": 1, "max_pop": 2}),
 ]
 
 
@@ -297,6 +315,14 @@ def main() -> int:
              "evaluated across 3 year-folds for whitelist re-selection. "
              "Robust = all 3 folds reach the configurable threshold "
              "(default 80%%) under LGBM ensemble (2026-05-13).",
+    )
+    ap.add_argument(
+        "--recent-3fold",
+        action="store_true",
+        help="2026-05-15 emergency: recent-period 3-fold sweep "
+             "(2025-H1 / 2025-H2 / 2026-Q1+) to find robust filters "
+             "after P12 hold-out failure. Year-noise robust under recent "
+             "track / jockey / class composition.",
     )
     ap.add_argument("--db", default=None, help="SQLite DB path")
     args = ap.parse_args()
@@ -410,6 +436,64 @@ def main() -> int:
                 parts.append(f"{r['hit_rate']*100:.1f}")
                 parts.append(f"{r['return_rate']*100:.1f}")
             parts.append(robust)
+            print(",".join(parts))
+        print(f"sec,{time.time() - started:.1f}", file=sys.stderr)
+        return 0
+
+    if args.recent_3fold:
+        # 2026-05-15 緊急: 直近 1.5 年を 3 fold に分割した sweep。
+        # fold 1: 2025-01〜2025-06 (前半)
+        # fold 2: 2025-07〜2025-12 (後半)
+        # fold 3: 2026-01〜直近実データ末日 (PRODUCTION 前半)
+        # P12 hold-out 失敗の原因 (場特性変動) に対し、直近 trend に合う robust
+        # 戦略を探す目的。「全 3 fold で >= 80%%」を robust 認定。
+        prod_to = DATA_PERIODS["production"]["to"]
+        # 実データの末日を取得 (race_year='2026' の最新)
+        with open_db(args.db) if args.db else open_db() as conn:
+            row = conn.execute(
+                "SELECT MAX(race_year || race_month_day) FROM races "
+                "WHERE race_year='2026' AND CAST(track_code AS INTEGER) BETWEEN 1 AND 10"
+            ).fetchone()
+            actual_end = row[0] if row and row[0] else prod_to
+        fold_periods = [
+            ("2025H1", "20250101", "20250630"),
+            ("2025H2", "20250701", "20251231"),
+            ("2026P", "20260101", actual_end),
+        ]
+        period_picks_r: dict[str, list[Pick]] = {}
+        for name, fr, to in fold_periods:
+            period_picks_r[name] = collect_picks(fr, to, db_path=args.db)
+            print(
+                f"  collected fold {name} ({fr}-{to}): {len(period_picks_r[name])} picks",
+                file=sys.stderr,
+            )
+        cols = ",".join(f"{name}_bets,{name}_hit_rate,{name}_return_rate"
+                        for name, _, _ in fold_periods)
+        print(f"filter,{cols},min_return,robust_3fold")
+        rows_r: list[tuple[str, list[dict], float, bool]] = []
+        for fname, spec in FILTERS:
+            results = [
+                summarize(period_picks_r[name], args.bet, spec)
+                for name, _, _ in fold_periods
+            ]
+            if all(r["bets"] == 0 for r in results):
+                continue
+            non_zero = [r for r in results if r["bets"] > 0]
+            min_ret = min(r["return_rate"] for r in non_zero) if non_zero else 0
+            is_robust = (
+                all(r["bets"] >= 10 for r in results)
+                and all(r["return_rate"] >= 0.80 for r in results)
+            )
+            rows_r.append((fname, results, min_ret, is_robust))
+        rows_r.sort(key=lambda x: (x[3], x[2]), reverse=True)
+        for fname, results, min_ret, is_robust in rows_r:
+            parts = [fname]
+            for r in results:
+                parts.append(str(r["bets"]))
+                parts.append(f"{r['hit_rate']*100:.1f}")
+                parts.append(f"{r['return_rate']*100:.1f}")
+            parts.append(f"{min_ret*100:.1f}")
+            parts.append("Y" if is_robust else "n")
             print(",".join(parts))
         print(f"sec,{time.time() - started:.1f}", file=sys.stderr)
         return 0
