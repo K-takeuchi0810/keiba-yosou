@@ -58,47 +58,39 @@ DATA_PERIODS: dict[str, dict[str, str]] = {
 # この値が変わったら data/backtest/ で新たに rule_version 付きで保存し直すこと
 # (過去 backtest と直接比較できなくなるため)。
 BUY_FILTER_DEFAULT: dict = {
-    # --- 既定値の根拠 (Phase 6 LGBM v4 + walk-forward 3-fold, 2026-05-15 更新) ---
-    # data/backtest/20260514_sweep_phase6_v4.csv の 69 filter × 3 fold sweep で
-    # **`wl5_pop_1_2`** が圧倒的勝者として浮上:
-    #   - 2023: 199 戦 / 17.6% / 117.6%
-    #   - 2024: 187 戦 / 16.6% / 195.5%
-    #   - 2025: 259 戦 / 16.2% / 240.5%
-    #   - min return 117.6% (全 3 fold +100% 維持) / 年間 ~215 戦
+    # --- 緊急退避状態 (2026-05-15 hold-out 失敗を受けての撤回) ---
+    # P12 で採用した `wl5_pop_1_2` は PRODUCTION 2026 hold-out で大暴落 (
+    # data/backtest/20260515_201342_tan_p13-production-holdout-filtered.json):
+    #   - TEST 2024-25: 659 戦 / 184.0% (CI [116.4%, 266.5%]) / +55,360 円
+    #   - PRODUCTION 2026: 115 戦 / 45.1% (CI [20.8%, 75.0%]) / -6,310 円
+    # 戦略の出口性能が -139pt 大暴落。場別が逆転:
+    #   - 福島 137% → 22.6% / 中山 93.5% → 28.7% / 中京 91.4% → 22.4%
+    #   - 一方除外した 阪神 52.5% → 137.2% / 新潟 77.1% → 99.2%
+    # Calibration Brier も 0.022 → 0.033 と +50% 悪化 = 大規模 distribution shift。
     #
-    # 旧採用 `wl_odds_8_20` は LGBM ensemble 時点でも 2024 で 2.3% に崩壊し
-    # in-sample artifact 確定。代わりに本戦略は:
-    #   - **5 場 (LGBM v4 で robust な札幌/函館/福島/中山/中京)** に限定
-    #   - **1-2 人気** に限定 (本命厚切り)
-    #   - 重賞限定は削除 (場フィルタで十分絞れる)
+    # 根本原因 (推定): 馬場改修 / 開催プロモーション変更 / 騎手成績変動などで
+    # 「場特性」が 2026 春で大きく変化したため、TEST 2024-2025 で robust だった
+    # 場選定が PRODUCTION に転送できなかった。
     #
-    # 構造的特徴:
-    # - JRA 単勝控除率 80% を全 3 fold で +37.6pt 以上超え、構造的天井突破
-    # - 戦数 645 / 3 年で Wilson CI が狭く統計的有意
-    # - 重賞限定でないので戦数十分かつ noise 耐性あり
-    # - LGBM v4 が `jockey_track_top3_rate` (場別騎手相性) を強く活用しているため
-    #
-    # 旧 wl_odds_8_20 採用との交替で「+100% を毎月安定」が現実的に到達可能。
-    # ただし PRODUCTION 2026 の hold-out 検証は本番投入前に必須。
+    # 緊急退避方針: whitelist_grades / whitelist_tracks を空にすることで
+    # 「is_whitelisted_race が常に False」=「buy_only に該当する horse がゼロ」に。
+    # この状態では予想生成 (◎・○・▲ の印付け) は通常通り行われるが、
+    # 「買い候補マーキング (bet_candidate=True)」は誰にも付かない = 自動投入を停止。
+    # 本番ベット判断は手動で行う、PRODUCTION 2026 で robust な戦略を再探索するまで。
     "min_ev": None,
     "min_value": None,
-    "min_odds": None,              # popularity で絞るため odds 制約は解除
+    "min_odds": None,
     "max_odds": None,
-    "min_popularity": 1,           # ←主絞り条件 1: 1-2 人気のみ
-    "max_popularity": 2,
+    "min_popularity": None,
+    "max_popularity": None,
     "exclude_confidence": [],
     "max_odds_age_min": 30,
-    # ----- 場別ホワイトリスト (LGBM v4 + 3-fold robust 5 場) -----
-    # whitelist_tracks の場コードは web/codes.py 準拠 (JV-Data 2001 場コード):
-    #   01=札幌 / 02=函館 / 03=福島 / 04=新潟 / 05=東京 / 06=中山 /
-    #   07=中京 / 08=京都 / 09=阪神 / 10=小倉
-    # 採用 5 場 {01, 02, 03, 06, 07} は LGBM v4 ensemble での 2023-2025 各年
-    # 場別 EVAL で安定 robust なものを選定 (data/backtest/20260514_sweep_phase6_v4.csv)。
-    # `whitelist_grades` を空にしているのは「場フィルタだけで絞る」設計。
-    # 重賞限定にすると戦数激減 (645 → ~50) で CI が広がる。
+    # ----- 退避モード -----
+    # whitelist_mode=True + grades=[] + tracks=[] で is_whitelisted_race が
+    # 常に False。buy_only に該当する horse がゼロになる。
     "whitelist_mode": True,
     "whitelist_grades": [],
-    "whitelist_tracks": ["01", "02", "03", "06", "07"],
+    "whitelist_tracks": [],
 }
 
 
