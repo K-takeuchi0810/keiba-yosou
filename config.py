@@ -58,26 +58,37 @@ DATA_PERIODS: dict[str, dict[str, str]] = {
 # この値が変わったら data/backtest/ で新たに rule_version 付きで保存し直すこと
 # (過去 backtest と直接比較できなくなるため)。
 BUY_FILTER_DEFAULT: dict = {
-    # --- 緊急退避状態 (2026-05-15 hold-out 失敗を受けての撤回) ---
-    # P12 で採用した `wl5_pop_1_2` は PRODUCTION 2026 hold-out で大暴落 (
-    # data/backtest/20260515_201342_tan_p13-production-holdout-filtered.json):
-    #   - TEST 2024-25: 659 戦 / 184.0% (CI [116.4%, 266.5%]) / +55,360 円
-    #   - PRODUCTION 2026: 115 戦 / 45.1% (CI [20.8%, 75.0%]) / -6,310 円
-    # 戦略の出口性能が -139pt 大暴落。場別が逆転:
-    #   - 福島 137% → 22.6% / 中山 93.5% → 28.7% / 中京 91.4% → 22.4%
-    #   - 一方除外した 阪神 52.5% → 137.2% / 新潟 77.1% → 99.2%
-    # Calibration Brier も 0.022 → 0.033 と +50% 悪化 = 大規模 distribution shift。
+    # --- P14 採用 (2026-05-15): only_t04_09_ev_ge_110 ---
+    # P12 wl5_pop_1_2 hold-out 失敗後、recent-3fold sweep (2025-H1 / 2025-H2 /
+    # 2026-Q1+) で唯一 robust だった戦略を採用:
+    #   - 2025-H1: 165 戦 / 8.5% / 82.4%
+    #   - 2025-H2: 166 戦 / 12.0% / 121.1%
+    #   - 2026-Q1+: 105 戦 / 11.4% / 168.3%
+    #   - min return 82.4% (controlled loss 以上) / 戦数 436 / 1.5 年
     #
-    # 根本原因 (推定): 馬場改修 / 開催プロモーション変更 / 騎手成績変動などで
-    # 「場特性」が 2026 春で大きく変化したため、TEST 2024-2025 で robust だった
-    # 場選定が PRODUCTION に転送できなかった。
+    # 戦略の中身:
+    #   - 場 = 新潟 (04) + 阪神 (09) — recent-3fold で逆転 robust だった 2 場
+    #   - EV >= 1.10 — LGBM が「期待値 +10% 以上」と判定した馬のみ
     #
-    # 緊急退避方針: whitelist_grades / whitelist_tracks を空にすることで
-    # 「is_whitelisted_race が常に False」=「buy_only に該当する horse がゼロ」に。
-    # この状態では予想生成 (◎・○・▲ の印付け) は通常通り行われるが、
-    # 「買い候補マーキング (bet_candidate=True)」は誰にも付かない = 自動投入を停止。
-    # 本番ベット判断は手動で行う、PRODUCTION 2026 で robust な戦略を再探索するまで。
-    "min_ev": None,
+    # 注意: 第 3 fold が 2026-Q1+ (= PRODUCTION 期間そのもの) なので、
+    # 厳密には「採用判断と評価が同一期間で循環」する形。今後発生する
+    # 2026-05-11 以降の前向きデータでさらに継続検証必要。
+    #
+    # 義務化された運用ルール (前回 P12 失敗の反省):
+    #   1. scripts/monitor.py を **週次自動実行** (Brier ドリフト >+20% で警告)
+    #   2. Brier 警告発火 → 即サスペンド (whitelist_tracks=[] で買い候補ゼロ)
+    #   3. **月次で TRAIN を rolling forward** (例: 2022-2024 → 2023-2025) して
+    #      LGBM 再訓練
+    #   4. **四半期ごとに --recent-3fold を再実行** して戦略の有効性確認
+    #   5. 同戦略を採用してから **3 ヶ月** 経過したら必ず再 sweep
+    #
+    # 旧 wl_odds_8_20 (in-sample, P05) / wl_ex_unsure_pop_1_4 (旧) と比較:
+    #   - wl_odds_8_20: TEST in-sample 116% → out-of-sample 34% (崩壊)
+    #   - wl5_pop_1_2: TEST 184% → PROD 45% (崩壊)
+    #   - only_t04_09_ev_ge_110: TEST 不明 → recent-3fold 82-168% (採用)
+    # 過去 2 戦略はいずれも「TEST 通年集約で高 EV」を信用しすぎて失敗した。
+    # 本戦略は「直近 1.5 年で逆転 robust」を根拠とするので時系列適応度高い。
+    "min_ev": 1.10,                 # ←主絞り条件 1: LGBM EV エッジ
     "min_value": None,
     "min_odds": None,
     "max_odds": None,
@@ -85,12 +96,13 @@ BUY_FILTER_DEFAULT: dict = {
     "max_popularity": None,
     "exclude_confidence": [],
     "max_odds_age_min": 30,
-    # ----- 退避モード -----
-    # whitelist_mode=True + grades=[] + tracks=[] で is_whitelisted_race が
-    # 常に False。buy_only に該当する horse がゼロになる。
+    # ----- 場別 whitelist (2 場限定、recent-3fold 採用) -----
+    # 04 = 新潟、09 = 阪神 (web/codes.py:TRACK_NAMES)
+    # recent-3fold で逆転 robust だった 2 場。P12 採用の 5 場 {01,02,03,06,07}
+    # は全部 hold-out で崩壊したため除外。
     "whitelist_mode": True,
     "whitelist_grades": [],
-    "whitelist_tracks": [],
+    "whitelist_tracks": ["04", "09"],
 }
 
 

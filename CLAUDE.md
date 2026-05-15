@@ -35,6 +35,30 @@
 
 JV-Link COM は 32bit。`.venv32/Scripts/python.exe` を使う。詳細は `.claude/skills/jvlink-com/SKILL.md`。
 
+### 4. 戦略採用後の月次 rolling 監視義務 (2026-05-15 P12 失敗からの学び)
+
+`config.BUY_FILTER_DEFAULT` に新戦略を採用したら **必ず** 以下を運用化:
+
+1. **`weekly_monitor.bat` を Windows Task Scheduler に登録** (毎週日曜実行)
+   - 内部で `scripts.monitor --days 30 --threshold 0.20` 実行
+   - 直近 30 日 Brier が baseline 比 +20% 劣化で警告 (exit 1)
+
+2. **Brier 警告発火時の対応**
+   - 即サスペンド (`whitelist_tracks=[]` で買い候補ゼロにする)
+   - `scripts.filter_sweep --recent-3fold` で robust 戦略再選定
+   - 必要なら `scripts.train_lgbm` で LGBM 再訓練 (TRAIN 期間 rolling forward)
+
+3. **採用戦略の "賞味期限" = 3 ヶ月**
+   - 3 ヶ月経過時に必ず `--recent-3fold` を再実行
+   - 結果が依然 robust なら継続、崩壊していたら退避
+
+**理由**: P12 で `wl5_pop_1_2` を TEST 通年 184% (CI [116%, 266%]) で採用したが、
+PRODUCTION 2026 hold-out で **45% に大暴落** (収支 -6,310 円)。
+原因は「採用判断 (通年集約) と実運用期間 (春のみ) の季節 / 開催ミスマッチ」と
+「馬場特性が 2026 春で大規模 shift」。
+**「TEST robust = PRODUCTION robust」は成立しないことを実証**。月次監視 +
+四半期再選定でしか継続運用は不可能。
+
 ## 専門家 7 名
 
 | ID | 担当 |
