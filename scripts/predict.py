@@ -4,6 +4,16 @@ Examples:
     python -m scripts.predict
     python -m scripts.predict --date 20260503 --only-bets
     python -m scripts.predict --from 20260501 --to 20260503 --format csv
+    python -m scripts.predict --only-bets --bet-size-mode third
+    python -m scripts.predict --only-bets --bet-size-mode kelly_quarter --bet-unit 1000
+
+Bet sizing (2026-05-16 added):
+- `flat`: bet_unit per pick (default 100 円)
+- `third`: bet_unit / 3 (= 小口モード、P14 採用後の安全運用用)
+- `half`: bet_unit / 2
+- `kelly_quarter`: bet_unit × (kelly_fraction / 4)、capped at bet_unit
+
+買い目フィルタは `config.BUY_FILTER_DEFAULT` を参照 (UI / GUI / backtest と統一)。
 """
 
 from __future__ import annotations
@@ -16,14 +26,74 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from config import BUY_FILTER_DEFAULT, is_whitelisted_race
 from db import open_db
 from predictor.rules import is_tentative, predict_race
 from scripts.backtest import horses_for_race, list_races
 from web.codes import track_name
 
-DEFAULT_MIN_ODDS = 10.0
-DEFAULT_MAX_ODDS = 20.0
-DEFAULT_MIN_VALUE = 0.0
+
+def compute_bet_size(
+    pred,
+    mode: str,
+    bet_unit: int,
+) -> int:
+    """賭金サイズを mode に応じて算出。
+
+    `pred` は predictor.rules.Prediction (kelly_fraction フィールドを持つ)。
+    `bet_unit` は基準単位 (100 / 1000 / 10000 円等)。
+    戻り: 円単位の整数 (10 円単位に丸める)。
+    """
+    if mode == "flat":
+        size = bet_unit
+    elif mode == "third":
+        size = bet_unit / 3
+    elif mode == "half":
+        size = bet_unit / 2
+    elif mode == "kelly_quarter":
+        # 1/4 Kelly: f* / 4 を bet_unit に掛ける。f* > 1 はあり得ないので cap。
+        kelly = max(0.0, min(1.0, float(pred.kelly_fraction or 0)))
+        size = bet_unit * kelly * 0.25
+        size = min(size, bet_unit)  # 念のため bet_unit 上限
+    else:
+        raise ValueError(f"unknown bet-size-mode: {mode!r}")
+    # 10 円単位丸め (最低 10 円)
+    rounded = max(10, int(round(size / 10)) * 10)
+    return rounded
+
+
+def _is_bet_candidate(pred, horse: dict, tentative: bool, race: dict) -> bool:
+    """config.BUY_FILTER_DEFAULT に従って買い候補かを判定。
+
+    UI / backtest と統一の判定条件。ホワイトリスト・人気・odds・EV/value・
+    信頼度・kelly>0 などを一気にチェック。
+    """
+    if tentative or pred.rank != 1 or not pred.mark:
+        return False
+    if race is not None and not is_whitelisted_race(race):
+        return False
+    spec = BUY_FILTER_DEFAULT
+    odds = (horse.get("win_odds") or 0) / 10.0
+    popularity = horse.get("win_popularity") or 0
+    if pred.confidence in (spec.get("exclude_confidence") or []):
+        return False
+    if spec.get("min_value") is not None and pred.value_score < spec["min_value"]:
+        return False
+    if spec.get("min_ev") is not None and pred.expected_value < spec["min_ev"]:
+        return False
+    if spec.get("min_odds") is not None and (odds <= 0 or odds < spec["min_odds"]):
+        return False
+    if spec.get("max_odds") is not None and (odds <= 0 or odds > spec["max_odds"]):
+        return False
+    if spec.get("min_popularity") is not None:
+        if popularity <= 0 or popularity < spec["min_popularity"]:
+            return False
+    if spec.get("max_popularity") is not None:
+        if popularity <= 0 or popularity > spec["max_popularity"]:
+            return False
+    if pred.kelly_fraction <= 0:
+        return False
+    return True
 
 
 def latest_race_date(conn) -> str | None:
@@ -69,18 +139,9 @@ def collect_predictions(args) -> list[dict]:
                 horse = horse_by_num.get(pred.horse_num, {})
                 odds = (horse.get("win_odds") or 0) / 10.0
                 popularity = horse.get("win_popularity") or 0
-                min_odds = args.min_odds
-                max_odds = args.max_odds
-                is_bet = (
-                    pred.rank == 1
-                    and pred.mark
-                    and not tentative
-                    and min_odds <= odds <= max_odds
-                    and pred.value_score >= args.min_value
-                    and pred.expected_value >= args.min_ev
-                    and pred.kelly_fraction > 0
-                    and pred.confidence not in ("暫定", "混戦", "接戦")
-                )
+                # config.BUY_FILTER_DEFAULT を参照 (UI / GUI / backtest と統一)
+                is_bet = _is_bet_candidate(pred, horse, tentative, race)
+                bet_size = compute_bet_size(pred, args.bet_size_mode, args.bet_unit) if is_bet else 0
                 if args.only_bets and not is_bet:
                     continue
                 rows.append(
@@ -107,6 +168,8 @@ def collect_predictions(args) -> list[dict]:
                         "expected_value": pred.expected_value,
                         "kelly_fraction": round(pred.kelly_fraction * 100, 2),
                         "bet_candidate": is_bet,
+                        "bet_size_yen": bet_size,
+                        "bet_size_mode": args.bet_size_mode if is_bet else "",
                         "tentative": tentative,
                         "reason": pred.rationale,
                     }
@@ -119,6 +182,7 @@ def print_table(rows: list[dict]) -> None:
         print("予想対象がありません")
         return
     current = None
+    total_bet = 0
     for r in rows:
         key = (r["date"], r["track_code"], r["race_num"])
         if key != current:
@@ -126,15 +190,24 @@ def print_table(rows: list[dict]) -> None:
             flag = " [暫定]" if r["tentative"] else ""
             print()
             print(f"{r['date']} {r['track']} {r['race_num']}R {r['race_name']}{flag}")
-        bet = "買い" if r["bet_candidate"] else ""
+        bet_part = (
+            f"買い {r['bet_size_yen']:>4}円 ({r['bet_size_mode']})"
+            if r["bet_candidate"] else ""
+        )
+        if r["bet_candidate"]:
+            total_bet += r["bet_size_yen"]
         print(
             f"  {r['mark'] or '-':2} {r['rank']:>2}位 "
             f"{r['horse_num']:>2} {r['horse_name']:<18} "
             f"{r['odds']:>5.1f}倍 人気{r['popularity']:>2} "
             f"score={r['score']:>5.1f} 信頼={r['confidence']} "
             f"勝率={r['win_probability']:>4.1f}% EV={r['expected_value']:>4.2f} "
-            f"K={r['kelly_fraction']:>4.2f}% value={r['value_score']:>5.1f} {bet}"
+            f"K={r['kelly_fraction']:>4.2f}% value={r['value_score']:>5.1f} {bet_part}"
         )
+    bet_rows = [r for r in rows if r["bet_candidate"]]
+    if bet_rows:
+        print()
+        print(f"=== 投資合計: {total_bet:,} 円 ({len(bet_rows)} 点) ===")
 
 
 def main() -> int:
@@ -143,11 +216,21 @@ def main() -> int:
     ap.add_argument("--from", dest="from_date", help="YYYYMMDD")
     ap.add_argument("--to", dest="to_date", help="YYYYMMDD")
     ap.add_argument("--top", type=int, default=5)
-    ap.add_argument("--only-bets", action="store_true", help="show only top picks matching the odds filter")
-    ap.add_argument("--min-odds", type=float, default=DEFAULT_MIN_ODDS)
-    ap.add_argument("--max-odds", type=float, default=DEFAULT_MAX_ODDS)
-    ap.add_argument("--min-value", type=float, default=DEFAULT_MIN_VALUE)
-    ap.add_argument("--min-ev", type=float, default=1.05)
+    ap.add_argument(
+        "--only-bets", action="store_true",
+        help="show only buy_only picks (= matching config.BUY_FILTER_DEFAULT)",
+    )
+    ap.add_argument(
+        "--bet-size-mode",
+        choices=["flat", "third", "half", "kelly_quarter"],
+        default="third",
+        help="P14 後の安全運用は 'third' (1/3 size) を推奨。Kelly fraction 本実装後は "
+             "'kelly_quarter' (= 1/4 Kelly) を default に。",
+    )
+    ap.add_argument(
+        "--bet-unit", type=int, default=100,
+        help="基準賭金単位 (default 100 円、flat なら 1 件 100 円、third なら 33 円)",
+    )
     ap.add_argument("--all-tracks", action="store_true")
     ap.add_argument("--db", default=None, help="SQLite DB path")
     ap.add_argument("--format", choices=["table", "csv", "json"], default="table")
