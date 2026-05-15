@@ -1,0 +1,1521 @@
+{
+  "trained_from": "20210101",
+  "trained_to": "20231231",
+  "eval_from": "20250101",
+  "eval_to": "20251231",
+  "n_samples": 5000,
+  "global_importance_rank": [
+    {
+      "feature": "jockey_win_rate",
+      "mean_abs_shap": 1.90415,
+      "median_abs_shap": 1.953256,
+      "shap_pct": 48.033,
+      "gain_pct": 38.423,
+      "gain_minus_shap": -9.61
+    },
+    {
+      "feature": "jockey_track_top3_rate",
+      "mean_abs_shap": 0.627348,
+      "median_abs_shap": 0.61478,
+      "shap_pct": 15.825,
+      "gain_pct": 24.298,
+      "gain_minus_shap": 8.472
+    },
+    {
+      "feature": "jockey_rides",
+      "mean_abs_shap": 0.241804,
+      "median_abs_shap": 0.00949,
+      "shap_pct": 6.1,
+      "gain_pct": 0.992,
+      "gain_minus_shap": -5.108
+    },
+    {
+      "feature": "days_since_last",
+      "mean_abs_shap": 0.102144,
+      "median_abs_shap": 0.08006,
+      "shap_pct": 2.577,
+      "gain_pct": 2.919,
+      "gain_minus_shap": 0.342
+    },
+    {
+      "feature": "trainer_track_samples",
+      "mean_abs_shap": 0.07068,
+      "median_abs_shap": 0.042115,
+      "shap_pct": 1.783,
+      "gain_pct": 1.573,
+      "gain_minus_shap": -0.21
+    },
+    {
+      "feature": "recent_trend_delta",
+      "mean_abs_shap": 0.057236,
+      "median_abs_shap": 0.051279,
+      "shap_pct": 1.444,
+      "gain_pct": 0.947,
+      "gain_minus_shap": -0.496
+    },
+    {
+      "feature": "mining_tm_score",
+      "mean_abs_shap": 0.056217,
+      "median_abs_shap": 0.032696,
+      "shap_pct": 1.418,
+      "gain_pct": 2.538,
+      "gain_minus_shap": 1.12
+    },
+    {
+      "feature": "recent_avg_finish_rate",
+      "mean_abs_shap": 0.048521,
+      "median_abs_shap": 0.035587,
+      "shap_pct": 1.224,
+      "gain_pct": 1.915,
+      "gain_minus_shap": 0.691
+    },
+    {
+      "feature": "current_starter_count",
+      "mean_abs_shap": 0.046368,
+      "median_abs_shap": 0.040649,
+      "shap_pct": 1.17,
+      "gain_pct": 0.833,
+      "gain_minus_shap": -0.337
+    },
+    {
+      "feature": "recent_best_finish",
+      "mean_abs_shap": 0.044879,
+      "median_abs_shap": 0.021296,
+      "shap_pct": 1.132,
+      "gain_pct": 1.33,
+      "gain_minus_shap": 0.197
+    },
+    {
+      "feature": "trainer_track_top3_rate",
+      "mean_abs_shap": 0.043919,
+      "median_abs_shap": 0.03653,
+      "shap_pct": 1.108,
+      "gain_pct": 2.015,
+      "gain_minus_shap": 0.908
+    },
+    {
+      "feature": "leg_code",
+      "mean_abs_shap": 0.041323,
+      "median_abs_shap": 0.030975,
+      "shap_pct": 1.042,
+      "gain_pct": 0,
+      "gain_minus_shap": -1.042
+    },
+    {
+      "feature": "trainer_win_rate",
+      "mean_abs_shap": 0.035782,
+      "median_abs_shap": 0.026393,
+      "shap_pct": 0.903,
+      "gain_pct": 1.446,
+      "gain_minus_shap": 0.544
+    },
+    {
+      "feature": "recent_avg_finish",
+      "mean_abs_shap": 0.035367,
+      "median_abs_shap": 0.031179,
+      "shap_pct": 0.892,
+      "gain_pct": 0.925,
+      "gain_minus_shap": 0.033
+    },
+    {
+      "feature": "sire_track_samples",
+      "mean_abs_shap": 0.033617,
+      "median_abs_shap": 0.026234,
+      "shap_pct": 0.848,
+      "gain_pct": 0.957,
+      "gain_minus_shap": 0.109
+    },
+    {
+      "feature": "best_time_per_100m",
+      "mean_abs_shap": 0.030303,
+      "median_abs_shap": 0.01282,
+      "shap_pct": 0.764,
+      "gain_pct": 0.899,
+      "gain_minus_shap": 0.135
+    },
+    {
+      "feature": "jockey_track_samples",
+      "mean_abs_shap": 0.029621,
+      "median_abs_shap": 0.016291,
+      "shap_pct": 0.747,
+      "gain_pct": 1.667,
+      "gain_minus_shap": 0.92
+    },
+    {
+      "feature": "sire_distance_top3_rate",
+      "mean_abs_shap": 0.028626,
+      "median_abs_shap": 0.021024,
+      "shap_pct": 0.722,
+      "gain_pct": 1.521,
+      "gain_minus_shap": 0.799
+    },
+    {
+      "feature": "sire_surface_top3_rate",
+      "mean_abs_shap": 0.026096,
+      "median_abs_shap": 0.020733,
+      "shap_pct": 0.658,
+      "gain_pct": 0.937,
+      "gain_minus_shap": 0.279
+    },
+    {
+      "feature": "best_relative_time_diff",
+      "mean_abs_shap": 0.026092,
+      "median_abs_shap": 0.014788,
+      "shap_pct": 0.658,
+      "gain_pct": 1.263,
+      "gain_minus_shap": 0.605
+    },
+    {
+      "feature": "dam_sire_distance_top3_rate",
+      "mean_abs_shap": 0.025829,
+      "median_abs_shap": 0.020068,
+      "shap_pct": 0.652,
+      "gain_pct": 1.161,
+      "gain_minus_shap": 0.509
+    },
+    {
+      "feature": "mining_tm_rank",
+      "mean_abs_shap": 0.024745,
+      "median_abs_shap": 0.017636,
+      "shap_pct": 0.624,
+      "gain_pct": 0.801,
+      "gain_minus_shap": 0.176
+    },
+    {
+      "feature": "last_finish",
+      "mean_abs_shap": 0.022712,
+      "median_abs_shap": 0.016636,
+      "shap_pct": 0.573,
+      "gain_pct": 0.961,
+      "gain_minus_shap": 0.389
+    },
+    {
+      "feature": "mining_dm_time",
+      "mean_abs_shap": 0.021934,
+      "median_abs_shap": 0.015765,
+      "shap_pct": 0.553,
+      "gain_pct": 1.245,
+      "gain_minus_shap": 0.692
+    },
+    {
+      "feature": "dam_sire_going_top3_rate",
+      "mean_abs_shap": 0.021798,
+      "median_abs_shap": 0.015597,
+      "shap_pct": 0.55,
+      "gain_pct": 1.631,
+      "gain_minus_shap": 1.081
+    },
+    {
+      "feature": "dam_sire_surface_top3_rate",
+      "mean_abs_shap": 0.019802,
+      "median_abs_shap": 0.015965,
+      "shap_pct": 0.5,
+      "gain_pct": 1.175,
+      "gain_minus_shap": 0.675
+    },
+    {
+      "feature": "past_count",
+      "mean_abs_shap": 0.019678,
+      "median_abs_shap": 0.012874,
+      "shap_pct": 0.496,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.496
+    },
+    {
+      "feature": "sire_track_top3_rate",
+      "mean_abs_shap": 0.018443,
+      "median_abs_shap": 0.013232,
+      "shap_pct": 0.465,
+      "gain_pct": 1.671,
+      "gain_minus_shap": 1.206
+    },
+    {
+      "feature": "horse_track_top3_rate",
+      "mean_abs_shap": 0.017613,
+      "median_abs_shap": 0.013527,
+      "shap_pct": 0.444,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.444
+    },
+    {
+      "feature": "dam_sire_going_samples",
+      "mean_abs_shap": 0.017092,
+      "median_abs_shap": 0.012825,
+      "shap_pct": 0.431,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.431
+    },
+    {
+      "feature": "dam_sire_distance_samples",
+      "mean_abs_shap": 0.016558,
+      "median_abs_shap": 0.013035,
+      "shap_pct": 0.418,
+      "gain_pct": 1.02,
+      "gain_minus_shap": 0.602
+    },
+    {
+      "feature": "current_track_code",
+      "mean_abs_shap": 0.016513,
+      "median_abs_shap": 0.014784,
+      "shap_pct": 0.417,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.417
+    },
+    {
+      "feature": "sire_going_samples",
+      "mean_abs_shap": 0.016406,
+      "median_abs_shap": 0.012675,
+      "shap_pct": 0.414,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.414
+    },
+    {
+      "feature": "mining_dm_rank",
+      "mean_abs_shap": 0.014617,
+      "median_abs_shap": 0.010565,
+      "shap_pct": 0.369,
+      "gain_pct": 0.879,
+      "gain_minus_shap": 0.51
+    },
+    {
+      "feature": "sire_going_top3_rate",
+      "mean_abs_shap": 0.014349,
+      "median_abs_shap": 0.010476,
+      "shap_pct": 0.362,
+      "gain_pct": 1.11,
+      "gain_minus_shap": 0.748
+    },
+    {
+      "feature": "recent_win_count",
+      "mean_abs_shap": 0.013892,
+      "median_abs_shap": 0.005972,
+      "shap_pct": 0.35,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.35
+    },
+    {
+      "feature": "sire_distance_samples",
+      "mean_abs_shap": 0.011647,
+      "median_abs_shap": 0.008619,
+      "shap_pct": 0.294,
+      "gain_pct": 0.947,
+      "gain_minus_shap": 0.654
+    },
+    {
+      "feature": "class_level_wins",
+      "mean_abs_shap": 0.011618,
+      "median_abs_shap": 0.005797,
+      "shap_pct": 0.293,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.293
+    },
+    {
+      "feature": "sire_surface_samples",
+      "mean_abs_shap": 0.010528,
+      "median_abs_shap": 0.005835,
+      "shap_pct": 0.266,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.266
+    },
+    {
+      "feature": "race_month",
+      "mean_abs_shap": 0.008976,
+      "median_abs_shap": 0.006205,
+      "shap_pct": 0.226,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.226
+    },
+    {
+      "feature": "current_surface_family",
+      "mean_abs_shap": 0.007613,
+      "median_abs_shap": 0.004878,
+      "shap_pct": 0.192,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.192
+    },
+    {
+      "feature": "trainer_runs",
+      "mean_abs_shap": 0.007164,
+      "median_abs_shap": 0.002461,
+      "shap_pct": 0.181,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.181
+    },
+    {
+      "feature": "same_track_type_runs",
+      "mean_abs_shap": 0.007024,
+      "median_abs_shap": 0.003824,
+      "shap_pct": 0.177,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.177
+    },
+    {
+      "feature": "dam_sire_surface_samples",
+      "mean_abs_shap": 0.006832,
+      "median_abs_shap": 0.004916,
+      "shap_pct": 0.172,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.172
+    },
+    {
+      "feature": "same_bucket_runs",
+      "mean_abs_shap": 0.006416,
+      "median_abs_shap": 0.002718,
+      "shap_pct": 0.162,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.162
+    },
+    {
+      "feature": "same_going_runs",
+      "mean_abs_shap": 0.005823,
+      "median_abs_shap": 0.002318,
+      "shap_pct": 0.147,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.147
+    },
+    {
+      "feature": "current_distance",
+      "mean_abs_shap": 0.004405,
+      "median_abs_shap": 0.003166,
+      "shap_pct": 0.111,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.111
+    },
+    {
+      "feature": "class_level_top3",
+      "mean_abs_shap": 0.004073,
+      "median_abs_shap": 0.001751,
+      "shap_pct": 0.103,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.103
+    },
+    {
+      "feature": "best_top3_race_level",
+      "mean_abs_shap": 0.003883,
+      "median_abs_shap": 0.001183,
+      "shap_pct": 0.098,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.098
+    },
+    {
+      "feature": "current_going",
+      "mean_abs_shap": 0.003703,
+      "median_abs_shap": 0.002858,
+      "shap_pct": 0.093,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.093
+    },
+    {
+      "feature": "class_level_runs",
+      "mean_abs_shap": 0.003673,
+      "median_abs_shap": 0.002184,
+      "shap_pct": 0.093,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.093
+    },
+    {
+      "feature": "same_bucket_top3",
+      "mean_abs_shap": 0.003163,
+      "median_abs_shap": 0.001241,
+      "shap_pct": 0.08,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.08
+    },
+    {
+      "feature": "estimated_leg_code",
+      "mean_abs_shap": 0.00285,
+      "median_abs_shap": 0.001447,
+      "shap_pct": 0.072,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.072
+    },
+    {
+      "feature": "same_distance_runs",
+      "mean_abs_shap": 0.002848,
+      "median_abs_shap": 0.001506,
+      "shap_pct": 0.072,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.072
+    },
+    {
+      "feature": "same_track_type_top3",
+      "mean_abs_shap": 0.002492,
+      "median_abs_shap": 0.000989,
+      "shap_pct": 0.063,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.063
+    },
+    {
+      "feature": "same_distance_top3",
+      "mean_abs_shap": 0.00211,
+      "median_abs_shap": 0.000982,
+      "shap_pct": 0.053,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.053
+    },
+    {
+      "feature": "horse_track_samples",
+      "mean_abs_shap": 0.002099,
+      "median_abs_shap": 0.00038,
+      "shap_pct": 0.053,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.053
+    },
+    {
+      "feature": "current_bucket",
+      "mean_abs_shap": 0.001893,
+      "median_abs_shap": 0.001198,
+      "shap_pct": 0.048,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.048
+    },
+    {
+      "feature": "class_rise_points",
+      "mean_abs_shap": 0.001829,
+      "median_abs_shap": 0.001183,
+      "shap_pct": 0.046,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.046
+    },
+    {
+      "feature": "same_course_wins",
+      "mean_abs_shap": 0.001599,
+      "median_abs_shap": 0.000587,
+      "shap_pct": 0.04,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.04
+    },
+    {
+      "feature": "same_course_runs",
+      "mean_abs_shap": 0.001537,
+      "median_abs_shap": 0.000565,
+      "shap_pct": 0.039,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.039
+    },
+    {
+      "feature": "same_going_top3",
+      "mean_abs_shap": 0.001144,
+      "median_abs_shap": 0.000434,
+      "shap_pct": 0.029,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.029
+    },
+    {
+      "feature": "same_day_bias_available",
+      "mean_abs_shap": 0.001143,
+      "median_abs_shap": 0.000642,
+      "shap_pct": 0.029,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.029
+    },
+    {
+      "feature": "class_drop_points",
+      "mean_abs_shap": 0.001032,
+      "median_abs_shap": 0.000409,
+      "shap_pct": 0.026,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.026
+    },
+    {
+      "feature": "estimated_leg_samples",
+      "mean_abs_shap": 0.000904,
+      "median_abs_shap": 0.000461,
+      "shap_pct": 0.023,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.023
+    },
+    {
+      "feature": "same_course_distance_top3",
+      "mean_abs_shap": 0.000746,
+      "median_abs_shap": 0.000295,
+      "shap_pct": 0.019,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.019
+    },
+    {
+      "feature": "same_track_type_wins",
+      "mean_abs_shap": 0.00044,
+      "median_abs_shap": 0.000125,
+      "shap_pct": 0.011,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.011
+    },
+    {
+      "feature": "current_race_level",
+      "mean_abs_shap": 0.000388,
+      "median_abs_shap": 0.000101,
+      "shap_pct": 0.01,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.01
+    },
+    {
+      "feature": "best_final_3f",
+      "mean_abs_shap": 0.000369,
+      "median_abs_shap": 0.000171,
+      "shap_pct": 0.009,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.009
+    },
+    {
+      "feature": "same_bucket_wins",
+      "mean_abs_shap": 0.000181,
+      "median_abs_shap": 8.3e-05,
+      "shap_pct": 0.005,
+      "gain_pct": 0,
+      "gain_minus_shap": -0.005
+    },
+    {
+      "feature": "recent_top3_count",
+      "mean_abs_shap": 0.0,
+      "median_abs_shap": 0.0,
+      "shap_pct": 0.0,
+      "gain_pct": 0,
+      "gain_minus_shap": 0.0
+    },
+    {
+      "feature": "burden_delta",
+      "mean_abs_shap": 0.0,
+      "median_abs_shap": 0.0,
+      "shap_pct": 0.0,
+      "gain_pct": 0,
+      "gain_minus_shap": 0.0
+    },
+    {
+      "feature": "class_condition_top3",
+      "mean_abs_shap": 0.0,
+      "median_abs_shap": 0.0,
+      "shap_pct": 0.0,
+      "gain_pct": 0,
+      "gain_minus_shap": 0.0
+    },
+    {
+      "feature": "high_grade_close_loss",
+      "mean_abs_shap": 0.0,
+      "median_abs_shap": 0.0,
+      "shap_pct": 0.0,
+      "gain_pct": 0,
+      "gain_minus_shap": 0.0
+    },
+    {
+      "feature": "high_grade_midfield_close",
+      "mean_abs_shap": 0.0,
+      "median_abs_shap": 0.0,
+      "shap_pct": 0.0,
+      "gain_pct": 0,
+      "gain_minus_shap": 0.0
+    },
+    {
+      "feature": "same_course_top3",
+      "mean_abs_shap": 0.0,
+      "median_abs_shap": 0.0,
+      "shap_pct": 0.0,
+      "gain_pct": 0,
+      "gain_minus_shap": 0.0
+    },
+    {
+      "feature": "same_course_distance_runs",
+      "mean_abs_shap": 0.0,
+      "median_abs_shap": 0.0,
+      "shap_pct": 0.0,
+      "gain_pct": 0,
+      "gain_minus_shap": 0.0
+    },
+    {
+      "feature": "avg_final_3f",
+      "mean_abs_shap": 0.0,
+      "median_abs_shap": 0.0,
+      "shap_pct": 0.0,
+      "gain_pct": 0,
+      "gain_minus_shap": 0.0
+    },
+    {
+      "feature": "best_final_3f_rank",
+      "mean_abs_shap": 0.0,
+      "median_abs_shap": 0.0,
+      "shap_pct": 0.0,
+      "gain_pct": 0,
+      "gain_minus_shap": 0.0
+    },
+    {
+      "feature": "same_day_bias_score",
+      "mean_abs_shap": 0.0,
+      "median_abs_shap": 0.0,
+      "shap_pct": 0.0,
+      "gain_pct": 0,
+      "gain_minus_shap": 0.0
+    },
+    {
+      "feature": "same_day_gate_bias_score",
+      "mean_abs_shap": 0.0,
+      "median_abs_shap": 0.0,
+      "shap_pct": 0.0,
+      "gain_pct": 0,
+      "gain_minus_shap": 0.0
+    },
+    {
+      "feature": "leg_quality_available",
+      "mean_abs_shap": 0.0,
+      "median_abs_shap": 0.0,
+      "shap_pct": 0.0,
+      "gain_pct": 0,
+      "gain_minus_shap": 0.0
+    },
+    {
+      "feature": "had_grade_run",
+      "mean_abs_shap": 0.0,
+      "median_abs_shap": 0.0,
+      "shap_pct": 0.0,
+      "gain_pct": 0,
+      "gain_minus_shap": 0.0
+    },
+    {
+      "feature": "bloodline_data_available",
+      "mean_abs_shap": 0.0,
+      "median_abs_shap": 0.0,
+      "shap_pct": 0.0,
+      "gain_pct": 0,
+      "gain_minus_shap": 0.0
+    }
+  ],
+  "weak_signals": [
+    {
+      "feature": "jockey_win_rate",
+      "mean_abs_shap": 1.90415,
+      "median_abs_shap": 1.953256,
+      "shap_pct": 48.033,
+      "gain_pct": 38.423,
+      "gain_minus_shap": -9.61,
+      "category": "underused (predicts much but few splits)"
+    },
+    {
+      "feature": "jockey_rides",
+      "mean_abs_shap": 0.241804,
+      "median_abs_shap": 0.00949,
+      "shap_pct": 6.1,
+      "gain_pct": 0.992,
+      "gain_minus_shap": -5.108,
+      "category": "underused (predicts much but few splits)"
+    },
+    {
+      "feature": "leg_code",
+      "mean_abs_shap": 0.041323,
+      "median_abs_shap": 0.030975,
+      "shap_pct": 1.042,
+      "gain_pct": 0,
+      "gain_minus_shap": -1.042,
+      "category": "underused (predicts much but few splits)"
+    },
+    {
+      "feature": "jockey_track_top3_rate",
+      "mean_abs_shap": 0.627348,
+      "median_abs_shap": 0.61478,
+      "shap_pct": 15.825,
+      "gain_pct": 24.298,
+      "gain_minus_shap": 8.472,
+      "category": "overhyped (split used but predicts little)"
+    },
+    {
+      "feature": "mining_tm_score",
+      "mean_abs_shap": 0.056217,
+      "median_abs_shap": 0.032696,
+      "shap_pct": 1.418,
+      "gain_pct": 2.538,
+      "gain_minus_shap": 1.12,
+      "category": "overhyped (split used but predicts little)"
+    },
+    {
+      "feature": "recent_avg_finish_rate",
+      "mean_abs_shap": 0.048521,
+      "median_abs_shap": 0.035587,
+      "shap_pct": 1.224,
+      "gain_pct": 1.915,
+      "gain_minus_shap": 0.691,
+      "category": "overhyped (split used but predicts little)"
+    },
+    {
+      "feature": "trainer_track_top3_rate",
+      "mean_abs_shap": 0.043919,
+      "median_abs_shap": 0.03653,
+      "shap_pct": 1.108,
+      "gain_pct": 2.015,
+      "gain_minus_shap": 0.908,
+      "category": "overhyped (split used but predicts little)"
+    },
+    {
+      "feature": "trainer_win_rate",
+      "mean_abs_shap": 0.035782,
+      "median_abs_shap": 0.026393,
+      "shap_pct": 0.903,
+      "gain_pct": 1.446,
+      "gain_minus_shap": 0.544,
+      "category": "overhyped (split used but predicts little)"
+    },
+    {
+      "feature": "jockey_track_samples",
+      "mean_abs_shap": 0.029621,
+      "median_abs_shap": 0.016291,
+      "shap_pct": 0.747,
+      "gain_pct": 1.667,
+      "gain_minus_shap": 0.92,
+      "category": "overhyped (split used but predicts little)"
+    },
+    {
+      "feature": "sire_distance_top3_rate",
+      "mean_abs_shap": 0.028626,
+      "median_abs_shap": 0.021024,
+      "shap_pct": 0.722,
+      "gain_pct": 1.521,
+      "gain_minus_shap": 0.799,
+      "category": "overhyped (split used but predicts little)"
+    },
+    {
+      "feature": "best_relative_time_diff",
+      "mean_abs_shap": 0.026092,
+      "median_abs_shap": 0.014788,
+      "shap_pct": 0.658,
+      "gain_pct": 1.263,
+      "gain_minus_shap": 0.605,
+      "category": "overhyped (split used but predicts little)"
+    },
+    {
+      "feature": "dam_sire_distance_top3_rate",
+      "mean_abs_shap": 0.025829,
+      "median_abs_shap": 0.020068,
+      "shap_pct": 0.652,
+      "gain_pct": 1.161,
+      "gain_minus_shap": 0.509,
+      "category": "overhyped (split used but predicts little)"
+    },
+    {
+      "feature": "mining_dm_time",
+      "mean_abs_shap": 0.021934,
+      "median_abs_shap": 0.015765,
+      "shap_pct": 0.553,
+      "gain_pct": 1.245,
+      "gain_minus_shap": 0.692,
+      "category": "overhyped (split used but predicts little)"
+    },
+    {
+      "feature": "dam_sire_going_top3_rate",
+      "mean_abs_shap": 0.021798,
+      "median_abs_shap": 0.015597,
+      "shap_pct": 0.55,
+      "gain_pct": 1.631,
+      "gain_minus_shap": 1.081,
+      "category": "overhyped (split used but predicts little)"
+    },
+    {
+      "feature": "dam_sire_surface_top3_rate",
+      "mean_abs_shap": 0.019802,
+      "median_abs_shap": 0.015965,
+      "shap_pct": 0.5,
+      "gain_pct": 1.175,
+      "gain_minus_shap": 0.675,
+      "category": "overhyped (split used but predicts little)"
+    },
+    {
+      "feature": "sire_track_top3_rate",
+      "mean_abs_shap": 0.018443,
+      "median_abs_shap": 0.013232,
+      "shap_pct": 0.465,
+      "gain_pct": 1.671,
+      "gain_minus_shap": 1.206,
+      "category": "overhyped (split used but predicts little)"
+    },
+    {
+      "feature": "dam_sire_distance_samples",
+      "mean_abs_shap": 0.016558,
+      "median_abs_shap": 0.013035,
+      "shap_pct": 0.418,
+      "gain_pct": 1.02,
+      "gain_minus_shap": 0.602,
+      "category": "overhyped (split used but predicts little)"
+    },
+    {
+      "feature": "mining_dm_rank",
+      "mean_abs_shap": 0.014617,
+      "median_abs_shap": 0.010565,
+      "shap_pct": 0.369,
+      "gain_pct": 0.879,
+      "gain_minus_shap": 0.51,
+      "category": "overhyped (split used but predicts little)"
+    },
+    {
+      "feature": "sire_going_top3_rate",
+      "mean_abs_shap": 0.014349,
+      "median_abs_shap": 0.010476,
+      "shap_pct": 0.362,
+      "gain_pct": 1.11,
+      "gain_minus_shap": 0.748,
+      "category": "overhyped (split used but predicts little)"
+    },
+    {
+      "feature": "sire_distance_samples",
+      "mean_abs_shap": 0.011647,
+      "median_abs_shap": 0.008619,
+      "shap_pct": 0.294,
+      "gain_pct": 0.947,
+      "gain_minus_shap": 0.654,
+      "category": "overhyped (split used but predicts little)"
+    }
+  ],
+  "partial_dependence": {
+    "jockey_win_rate": [
+      [
+        0.0,
+        0.006499713125400119
+      ],
+      [
+        0.009999999776482582,
+        0.006499713125400119
+      ],
+      [
+        0.019999999552965164,
+        0.006499713125400119
+      ],
+      [
+        0.029999999329447746,
+        0.08249785110072887
+      ],
+      [
+        0.03999999910593033,
+        0.08547315146562462
+      ],
+      [
+        0.04999999701976776,
+        0.08765375150023173
+      ],
+      [
+        0.05999999865889549,
+        0.08740871350197349
+      ],
+      [
+        0.07000000029802322,
+        0.08584408929431747
+      ],
+      [
+        0.07999999821186066,
+        0.08818741547381218
+      ],
+      [
+        0.08999999612569809,
+        0.0885795789214238
+      ],
+      [
+        0.09999999403953552,
+        0.08743872142372232
+      ],
+      [
+        0.10999999940395355,
+        0.08706955622860615
+      ],
+      [
+        0.11999999731779099,
+        0.08757180524901827
+      ],
+      [
+        0.12999999523162842,
+        0.10028408845588296
+      ],
+      [
+        0.14000000059604645,
+        0.10014275036963838
+      ],
+      [
+        0.14999999105930328,
+        0.10014275036963838
+      ],
+      [
+        0.1599999964237213,
+        0.10071457037580041
+      ],
+      [
+        0.17000000178813934,
+        0.10664353023854688
+      ],
+      [
+        0.17999999225139618,
+        0.10763072019146691
+      ],
+      [
+        0.1899999976158142,
+        0.10803705794901833
+      ]
+    ],
+    "jockey_track_top3_rate": [
+      [
+        0.0,
+        0.04646549823279836
+      ],
+      [
+        0.01859649084508419,
+        0.04646549823279836
+      ],
+      [
+        0.03719298169016838,
+        0.04646549823279836
+      ],
+      [
+        0.05578947067260742,
+        0.04648285230413175
+      ],
+      [
+        0.07438596338033676,
+        0.04585029768285156
+      ],
+      [
+        0.0929824560880661,
+        0.04819979981910369
+      ],
+      [
+        0.11157894134521484,
+        0.06896439789110023
+      ],
+      [
+        0.13017544150352478,
+        0.06896439789110023
+      ],
+      [
+        0.14877192676067352,
+        0.06896439789110023
+      ],
+      [
+        0.16736841201782227,
+        0.07109598396970586
+      ],
+      [
+        0.1859649121761322,
+        0.06220274334346956
+      ],
+      [
+        0.20456139743328094,
+        0.07375316206926445
+      ],
+      [
+        0.2231578826904297,
+        0.0736926169841054
+      ],
+      [
+        0.24175438284873962,
+        0.07390742789726622
+      ],
+      [
+        0.26035088300704956,
+        0.07183848328113697
+      ],
+      [
+        0.2789473533630371,
+        0.07154683665492459
+      ],
+      [
+        0.29754385352134705,
+        0.07032889741977008
+      ],
+      [
+        0.316140353679657,
+        0.0701689054352849
+      ],
+      [
+        0.33473682403564453,
+        0.07063890189517735
+      ],
+      [
+        0.35333332419395447,
+        0.07062428944835272
+      ]
+    ],
+    "jockey_rides": [
+      [
+        0.0,
+        0.07068702923322369
+      ],
+      [
+        5.263157844543457,
+        0.06865299289196869
+      ],
+      [
+        10.526315689086914,
+        0.07097533642729702
+      ],
+      [
+        15.789473533630371,
+        0.07085377019577754
+      ],
+      [
+        21.052631378173828,
+        0.0704768926829339
+      ],
+      [
+        26.31578826904297,
+        0.07069423292233347
+      ],
+      [
+        31.578947067260742,
+        0.07063389219947325
+      ],
+      [
+        36.842105865478516,
+        0.07063389219947325
+      ],
+      [
+        42.105262756347656,
+        0.07025729484169162
+      ],
+      [
+        47.3684196472168,
+        0.07007175187114421
+      ],
+      [
+        52.63157653808594,
+        0.07007175187114421
+      ],
+      [
+        57.894737243652344,
+        0.07007175187114421
+      ],
+      [
+        63.157894134521484,
+        0.06956850661566645
+      ],
+      [
+        68.42105102539062,
+        0.06956850661566645
+      ],
+      [
+        73.68421173095703,
+        0.06956850661566645
+      ],
+      [
+        78.9473648071289,
+        0.06956850661566645
+      ],
+      [
+        84.21052551269531,
+        0.06956850661566645
+      ],
+      [
+        89.47368621826172,
+        0.06956850661566645
+      ],
+      [
+        94.7368392944336,
+        0.06956850661566645
+      ],
+      [
+        100.0,
+        0.07000746325638876
+      ]
+    ],
+    "days_since_last": [
+      [
+        14.0,
+        0.04867079515344582
+      ],
+      [
+        37.94736862182617,
+        0.056572330855287255
+      ],
+      [
+        61.894737243652344,
+        0.06457257620902533
+      ],
+      [
+        85.84210205078125,
+        0.07360589458302792
+      ],
+      [
+        109.78947448730469,
+        0.07347729583538753
+      ],
+      [
+        133.73684692382812,
+        0.07334386417074118
+      ],
+      [
+        157.6842041015625,
+        0.07624276526043755
+      ],
+      [
+        181.63157653808594,
+        0.07619571172482231
+      ],
+      [
+        205.57894897460938,
+        0.0763954899615067
+      ],
+      [
+        229.5263214111328,
+        0.07597532205207122
+      ],
+      [
+        253.47369384765625,
+        0.07452525046149325
+      ],
+      [
+        277.4210510253906,
+        0.07435437237667171
+      ],
+      [
+        301.368408203125,
+        0.07439201101645307
+      ],
+      [
+        325.3157958984375,
+        0.07385399682613633
+      ],
+      [
+        349.2631530761719,
+        0.07346675818114543
+      ],
+      [
+        373.2105407714844,
+        0.07107404498008484
+      ],
+      [
+        397.15789794921875,
+        0.07020944348152987
+      ],
+      [
+        421.1052551269531,
+        0.07020944348152987
+      ],
+      [
+        445.0526428222656,
+        0.06869426045916283
+      ],
+      [
+        469.0,
+        0.06247950640427683
+      ]
+    ],
+    "trainer_track_samples": [
+      [
+        5.0,
+        0.07183554086493905
+      ],
+      [
+        20.526315689086914,
+        0.07139280677637495
+      ],
+      [
+        36.05263137817383,
+        0.07041394391882164
+      ],
+      [
+        51.578948974609375,
+        0.07080074814358273
+      ],
+      [
+        67.10526275634766,
+        0.06626495329498515
+      ],
+      [
+        82.63157653808594,
+        0.06575103649883712
+      ],
+      [
+        98.15789794921875,
+        0.06575103649883712
+      ],
+      [
+        113.68421173095703,
+        0.06574526185007161
+      ],
+      [
+        129.2105255126953,
+        0.06574526185007161
+      ],
+      [
+        144.73684692382812,
+        0.06521752011194874
+      ],
+      [
+        160.26315307617188,
+        0.06380050270727927
+      ],
+      [
+        175.7894744873047,
+        0.0636711902249863
+      ],
+      [
+        191.3157958984375,
+        0.0636711902249863
+      ],
+      [
+        206.84210205078125,
+        0.06316996815776146
+      ],
+      [
+        222.36842346191406,
+        0.06316996815776146
+      ],
+      [
+        237.8947296142578,
+        0.06316996815776146
+      ],
+      [
+        253.42105102539062,
+        0.06316996815776146
+      ],
+      [
+        268.9473571777344,
+        0.05986069020571747
+      ],
+      [
+        284.47369384765625,
+        0.05623747739379934
+      ],
+      [
+        300.0,
+        0.05623747739379934
+      ]
+    ],
+    "recent_trend_delta": [
+      [
+        -46.0,
+        0.07052152784702534
+      ],
+      [
+        -40.900001525878906,
+        0.07052152784702534
+      ],
+      [
+        -35.79999923706055,
+        0.07061182852854066
+      ],
+      [
+        -30.700000762939453,
+        0.07061182852854066
+      ],
+      [
+        -25.600000381469727,
+        0.07061182852854066
+      ],
+      [
+        -20.5,
+        0.07061182852854066
+      ],
+      [
+        -15.400001525878906,
+        0.07042105337370046
+      ],
+      [
+        -10.299999237060547,
+        0.06996863247453183
+      ],
+      [
+        -5.200000762939453,
+        0.06999454393018635
+      ],
+      [
+        -0.10000228881835938,
+        0.06419596454821062
+      ],
+      [
+        5.0,
+        0.06110567136129037
+      ],
+      [
+        10.099998474121094,
+        0.07155871694781138
+      ],
+      [
+        15.199996948242188,
+        0.0675473274522042
+      ],
+      [
+        20.29999542236328,
+        0.066269098165802
+      ],
+      [
+        25.400001525878906,
+        0.06639442257581979
+      ],
+      [
+        30.5,
+        0.06639442257581979
+      ],
+      [
+        35.599998474121094,
+        0.06639442257581979
+      ],
+      [
+        40.69999694824219,
+        0.06467720360631508
+      ],
+      [
+        45.79999542236328,
+        0.06465153623677782
+      ],
+      [
+        50.900001525878906,
+        0.06471707015362937
+      ]
+    ],
+    "mining_tm_score": [
+      [
+        2340.0,
+        0.09806450802795183
+      ],
+      [
+        2608.105224609375,
+        0.0808886635857277
+      ],
+      [
+        2876.21044921875,
+        0.08065215232513132
+      ],
+      [
+        3144.31591796875,
+        0.07690070955854562
+      ],
+      [
+        3412.4208984375,
+        0.07198377834922857
+      ],
+      [
+        3680.5263671875,
+        0.07166272099809153
+      ],
+      [
+        3948.631591796875,
+        0.07154639803036286
+      ],
+      [
+        4216.73681640625,
+        0.07032382343570323
+      ],
+      [
+        4484.841796875,
+        0.06919079090464439
+      ],
+      [
+        4752.947265625,
+        0.0696802961137978
+      ],
+      [
+        5021.052734375,
+        0.06985616386764809
+      ],
+      [
+        5289.15771484375,
+        0.06674357772124266
+      ],
+      [
+        5557.26318359375,
+        0.06466806900988506
+      ],
+      [
+        5825.3681640625,
+        0.06413414777280275
+      ],
+      [
+        6093.4736328125,
+        0.06737993257695232
+      ],
+      [
+        6361.5791015625,
+        0.060678982661732016
+      ],
+      [
+        6629.68408203125,
+        0.060976645095783
+      ],
+      [
+        6897.78955078125,
+        0.05972644288310538
+      ],
+      [
+        7165.89453125,
+        0.06080248655795982
+      ],
+      [
+        7434.0,
+        0.06129070218031606
+      ]
+    ],
+    "recent_avg_finish_rate": [
+      [
+        0.06098439544439316,
+        0.0731526734097995
+      ],
+      [
+        0.36982983350753784,
+        0.06663917204897414
+      ],
+      [
+        0.6786752343177795,
+        0.06906590359397136
+      ],
+      [
+        0.987520694732666,
+        0.07028536289126554
+      ],
+      [
+        1.2963660955429077,
+        0.06976554058229002
+      ],
+      [
+        1.6052114963531494,
+        0.06754370449563273
+      ],
+      [
+        1.9140570163726807,
+        0.06754370449563273
+      ],
+      [
+        2.222902297973633,
+        0.06679784890045366
+      ],
+      [
+        2.531747817993164,
+        0.06462465852378305
+      ],
+      [
+        2.8405933380126953,
+        0.06465002216177157
+      ],
+      [
+        3.1494386196136475,
+        0.06365862612189374
+      ],
+      [
+        3.4582841396331787,
+        0.061767829293299124
+      ],
+      [
+        3.76712965965271,
+        0.061660883582550494
+      ],
+      [
+        4.07597541809082,
+        0.055547762680322355
+      ],
+      [
+        4.384820461273193,
+        0.054299009261344316
+      ],
+      [
+        4.693665981292725,
+        0.054299009261344316
+      ],
+      [
+        5.002511501312256,
+        0.054299009261344316
+      ],
+      [
+        5.311357021331787,
+        0.054299009261344316
+      ],
+      [
+        5.620202541351318,
+        0.05498468252599695
+      ],
+      [
+        5.929047584533691,
+        0.05968871103039804
+      ]
+    ]
+  }
+}

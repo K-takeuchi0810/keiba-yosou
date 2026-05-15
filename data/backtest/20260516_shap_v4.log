@@ -1,0 +1,24 @@
+=== build eval dataset 20250101-20251231 ===
+  shape: X=(5000, 84), y_mean=0.0706
+=== computing SHAP values ===
+  shap shape: (5000, 85)
+=== partial dependence on top 8 ===
+
+=== TOP 15 features by mean |SHAP| ===
+  jockey_win_rate                SHAP=48.03%% gain=38.42%% diff= -9.61%%  [underused: predict>split]
+  jockey_track_top3_rate         SHAP=15.82%% gain=24.30%% diff= +8.47%%  [overhyped: split>predict]
+  jockey_rides                   SHAP= 6.10%% gain= 0.99%% diff= -5.11%%  [underused: predict>split]
+  days_since_last                SHAP= 2.58%% gain= 2.92%% diff= +0.34%%
+  trainer_track_samples          SHAP= 1.78%% gain= 1.57%% diff= -0.21%%
+  recent_trend_delta             SHAP= 1.44%% gain= 0.95%% diff= -0.50%%
+  mining_tm_score                SHAP= 1.42%% gain= 2.54%% diff= +1.12%%  [overhyped: split>predict]
+  recent_avg_finish_rate         SHAP= 1.22%% gain= 1.92%% diff= +0.69%%  [overhyped: split>predict]
+  current_starter_count          SHAP= 1.17%% gain= 0.83%% diff= -0.34%%
+  recent_best_finish             SHAP= 1.13%% gain= 1.33%% diff= +0.20%%
+  trainer_track_top3_rate        SHAP= 1.11%% gain= 2.02%% diff= +0.91%%  [overhyped: split>predict]
+  leg_code                       SHAP= 1.04%% gain= 0.00%% diff= -1.04%%  [underused: predict>split]
+  trainer_win_rate               SHAP= 0.90%% gain= 1.45%% diff= +0.54%%  [overhyped: split>predict]
+  recent_avg_finish              SHAP= 0.89%% gain= 0.93%% diff= +0.03%%
+  sire_track_samples             SHAP= 0.85%% gain= 0.96%% diff= +0.11%%
+
+saved: data\backtest\20260516_shap_v4.json
