@@ -28,7 +28,9 @@ desktop.ini
 *.local
 
 # JV-Data 仕様書 PDF など、再配布制限のあるドキュメント
-docs/
+docs/*
+# ただし運用ドキュメント (Markdown) は追跡対象
+!docs/*.md
 
 # Claude Code (worktree 状態 / ローカル設定は共有しない)
 .claude/worktrees/

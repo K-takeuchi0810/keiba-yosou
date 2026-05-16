@@ -875,6 +875,92 @@ def _sire_track_stats(
     return result
 
 
+def compute_race_relative_features(
+    conn: sqlite3.Connection,
+    horses: list[dict],
+    race: dict,
+    cache: dict | None = None,
+) -> dict[str, dict]:
+    """Phase 6 Tier 2.4 (2026-05-16): race-internal な相対 features を一括算出。
+
+    各 horse の (個別 value - race 内平均) を計算し、horse_num → {feature: value}
+    の dict を返す。compute_features の呼び出しの中で個別に集計するよりも、
+    レース全体を見渡してから差分を計算するほうが SQL 1 回で済むので効率的。
+
+    呼び出し側 (predict_race or build_dataset) が:
+      rel_map = compute_race_relative_features(conn, horses, race, cache)
+      feat = compute_features(...)
+      feat.update(rel_map.get(horse_num, {}))
+
+    狙い: SHAP v4 で判明した「馬個体シグナルが弱い」問題に対し、
+    既存の absolute 値 (recent_avg_finish_rate 等) と独立な「同レース内
+    偏差」を提供。jockey_win_rate との相関が低い純粋な horse signal。
+    """
+    before = _date_key(race.get("race_year"), race.get("race_month_day"))
+
+    # 各 horse の絶対値を取得 → race 内平均を計算 → 偏差を返す
+    horse_recent_top3: list[tuple[str, float | None]] = []
+    horse_recent_avg_finish: list[tuple[str, float | None]] = []
+    jockey_recent_top3: list[tuple[str, float | None]] = []
+    for h in horses:
+        hn = h.get("horse_num") or ""
+        # 馬の直近 90 日 top3 率
+        ht_rate, _ = _entity_recent_stats(
+            conn, "blood_register_num",
+            h.get("blood_register_num", "") or "",
+            before, 90, cache=cache,
+        )
+        horse_recent_top3.append((hn, ht_rate))
+        # 馬の通算 recent_avg_finish_rate 風 (5 走平均)
+        blood = h.get("blood_register_num", "") or ""
+        if blood:
+            past_rows = conn.execute(
+                """
+                SELECT confirmed_order FROM horse_races
+                 WHERE blood_register_num = ?
+                   AND (race_year || race_month_day) < ?
+                   AND confirmed_order > 0
+                 ORDER BY (race_year || race_month_day) DESC LIMIT 5
+                """,
+                (blood, before),
+            ).fetchall()
+            if past_rows:
+                avg_fin = sum(r[0] for r in past_rows) / len(past_rows)
+            else:
+                avg_fin = None
+        else:
+            avg_fin = None
+        horse_recent_avg_finish.append((hn, avg_fin))
+        # 騎手の直近 90 日 top3 率
+        jr_rate, _ = _entity_recent_stats(
+            conn, "jockey_code",
+            h.get("jockey_code", "") or "",
+            before, 90, cache=cache,
+        )
+        jockey_recent_top3.append((hn, jr_rate))
+
+    def _race_mean(items: list[tuple[str, float | None]]) -> float | None:
+        vals = [v for _, v in items if v is not None]
+        return (sum(vals) / len(vals)) if vals else None
+
+    h_rt_mean = _race_mean(horse_recent_top3)
+    h_af_mean = _race_mean(horse_recent_avg_finish)
+    j_rt_mean = _race_mean(jockey_recent_top3)
+
+    result: dict[str, dict] = {}
+    for hn, v in horse_recent_top3:
+        diff = (v - h_rt_mean) if (v is not None and h_rt_mean is not None) else None
+        result.setdefault(hn, {})["horse_recent_top3_rel"] = diff
+    for hn, v in horse_recent_avg_finish:
+        diff = (v - h_af_mean) if (v is not None and h_af_mean is not None) else None
+        result.setdefault(hn, {})["horse_recent_avg_finish_rel"] = diff
+    for hn, v in jockey_recent_top3:
+        diff = (v - j_rt_mean) if (v is not None and j_rt_mean is not None) else None
+        result.setdefault(hn, {})["jockey_recent_top3_rel"] = diff
+
+    return result
+
+
 def compute_features(
     conn: sqlite3.Connection,
     horse: dict,
