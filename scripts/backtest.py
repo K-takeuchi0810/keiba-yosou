@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import time
 from collections import defaultdict
@@ -28,6 +29,50 @@ from predictor.calibration import (
     fit_isotonic_calibrator,
 )
 from predictor.rules import is_tentative, predict_race
+
+
+def _snapshot_meta() -> dict:
+    """backtest 実行時の calibrator / LGBM / git の version snapshot を返す。
+
+    P17 A2 Step 0 (2026-05-17): backtest JSON top-level に `meta` フィールドを
+    保存し、「この backtest 結果は どの calibrator と LGBM で出した数値か」
+    を後追いで再現可能にする。validation-process-auditor の S1 1st review
+    での指摘 (rule_version は管理されているが配下バージョンが追跡できない)
+    への対応。
+    """
+    root = Path(__file__).resolve().parent.parent
+    meta: dict = {}
+    # calibrator
+    try:
+        cal = json.loads((root / "predictor" / "calibrator.json").read_text(encoding="utf-8"))
+        meta["calibrator_type"] = cal.get("type")
+        meta["calibrator_rule_version"] = cal.get("rule_version")
+        meta["calibrator_generated_at"] = cal.get("generated_at")
+        meta["calibrator_trained_from"] = cal.get("trained_from")
+        meta["calibrator_trained_to"] = cal.get("trained_to")
+        meta["calibrator_source_count"] = cal.get("source_count")
+    except (OSError, json.JSONDecodeError):
+        meta["calibrator_type"] = None
+    # LGBM
+    try:
+        lgbm = json.loads((root / "predictor" / "lgbm_meta.json").read_text(encoding="utf-8"))
+        meta["lgbm_rule_version"] = lgbm.get("rule_version")
+        meta["lgbm_generated_at"] = lgbm.get("generated_at")
+        meta["lgbm_trained_from"] = lgbm.get("trained_from")
+        meta["lgbm_trained_to"] = lgbm.get("trained_to")
+        meta["lgbm_val_brier"] = lgbm.get("val_brier")
+    except (OSError, json.JSONDecodeError):
+        meta["lgbm_rule_version"] = None
+    # git
+    try:
+        sha = subprocess.check_output(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            stderr=subprocess.DEVNULL,
+        ).strip().decode("ascii")
+        meta["git_sha"] = sha
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        meta["git_sha"] = None
+    return meta
 
 
 def buy_filter_from_generator() -> dict:
@@ -415,6 +460,9 @@ def run_backtest(
         "to_date": to_date,
         "bet_type": bet_type,
         "elapsed_sec": round(elapsed, 1),
+        # P17 A2 Step 0: 実行時の calibrator / LGBM / git_sha を snapshot。
+        # backtest 結果単体で「どの校正器・モデルで出した数字か」を再現可能。
+        "meta": _snapshot_meta(),
         "races_total": n_total_races,
         "races_no_horses": n_no_horses,
         "races_no_pick": n_no_pick,
