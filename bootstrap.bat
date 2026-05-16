@@ -2,12 +2,12 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 
-REM ===== fromtime ここを編集すれば期間が変わります =====
-REM   20160101000000 = 過去 10 年
-REM   20200101000000 = 過去 5 年（推奨）
-REM   20210101000000 = 過去 4 年
+REM ===== Edit FROMTIME below to change fetch period =====
+REM   20160101000000 = past 10 years
+REM   20200101000000 = past 5 years (recommended)
+REM   20210101000000 = past 4 years
 set FROMTIME=20200101000000
-REM ====================================================
+REM ======================================================
 
 echo ============================================================
 echo  Bootstrap: past JV-Data setup-fetch

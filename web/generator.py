@@ -32,14 +32,17 @@ TEMPLATES = Path(__file__).resolve().parent / "templates"
 # 買い目フィルタの既定値は `config.BUY_FILTER_DEFAULT` が唯一の出典。
 # 既存コード (gui / backtest 等) が `BET_MIN_*` を import している関係で、
 # シンボル名はそのまま残し、実体を config からたどる薄いシムにしている。
-BET_MIN_ODDS: float = float(BUY_FILTER_DEFAULT["min_odds"])
-BET_MAX_ODDS: float = float(BUY_FILTER_DEFAULT["max_odds"])
-# None なら「制約なし」を意味するため、それぞれ -inf へフォールバック (>= 比較で常に True)
+# None なら「制約なし」を意味するため、odds は (-inf, +inf) へフォールバック、
+# value / ev も -inf。2026-05-16 P15 採用以降は min_odds / max_odds 共に None。
+_mo = BUY_FILTER_DEFAULT.get("min_odds")
+BET_MIN_ODDS: float = float(_mo) if _mo is not None else float("-inf")
+_xo = BUY_FILTER_DEFAULT.get("max_odds")
+BET_MAX_ODDS: float = float(_xo) if _xo is not None else float("inf")
 _mv = BUY_FILTER_DEFAULT.get("min_value")
 BET_MIN_VALUE: float = float(_mv) if _mv is not None else float("-inf")
 _me = BUY_FILTER_DEFAULT.get("min_ev")
 BET_MIN_EV: float = float(_me) if _me is not None else float("-inf")
-BET_MAX_ODDS_AGE_MIN: int = int(BUY_FILTER_DEFAULT["max_odds_age_min"])
+BET_MAX_ODDS_AGE_MIN: int = int(BUY_FILTER_DEFAULT.get("max_odds_age_min") or 30)
 
 
 def _surface_class(t: str) -> str:
