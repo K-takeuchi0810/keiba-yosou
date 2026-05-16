@@ -26,16 +26,22 @@ MODEL_PATH = _MODEL_DIR / "lgbm_model.txt"
 FEATURES_PATH = _MODEL_DIR / "lgbm_features.json"
 META_PATH = _MODEL_DIR / "lgbm_meta.json"
 
-# (mtime, booster, features_dict, meta_dict) のキャッシュ
+# (mtime, booster, features_dict, meta_dict) のキャッシュ。
+# None も「失敗状態のキャッシュ」として記憶し、繰り返し警告/import を抑止する。
 _CACHE: tuple | None = None
+_LGBM_UNAVAILABLE_WARNED = False
 
 
 def load_lgbm() -> tuple[object, dict, dict] | None:
     """LightGBM model を読み込む。失敗時は None。
 
     戻り: (booster, features_dict, meta_dict) または None。
+
+    LightGBM が install されていない (.venv32 等) 環境では None を返し、
+    警告は **プロセス全体で 1 回だけ** ログ出力する (dashboard 等で
+    predict_race が連発される際の log spam を防ぐ)。
     """
-    global _CACHE
+    global _CACHE, _LGBM_UNAVAILABLE_WARNED
     if os.environ.get("PRED_DISABLE_LGBM") == "1":
         return None
     if not MODEL_PATH.exists() or not FEATURES_PATH.exists():
@@ -49,7 +55,13 @@ def load_lgbm() -> tuple[object, dict, dict] | None:
     try:
         import lightgbm as lgb  # type: ignore[import-not-found]
     except ModuleNotFoundError:
-        logger.warning("lightgbm not installed; LGBM disabled. Run from .venv64.")
+        if not _LGBM_UNAVAILABLE_WARNED:
+            logger.info(
+                "lightgbm not available in this process (likely .venv32). "
+                "Predictions will use rule-only fallback. Dashboard accuracy "
+                "may differ from .venv64 backtest. This message is shown once."
+            )
+            _LGBM_UNAVAILABLE_WARNED = True
         return None
     try:
         booster = lgb.Booster(model_file=str(MODEL_PATH))
