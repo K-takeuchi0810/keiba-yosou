@@ -102,9 +102,15 @@ BUY_FILTER_DEFAULT: dict = {
     # kelly_fraction は uncap 連続値 (0-1) になった。閾値 0.05 = フル Kelly で
     # 資金 5% を賭けるべきとモデルが判断したエッジ。bet sizing は
     # kelly_quarter モードで内部 cap を掛けつつ Kelly に比例した賭金になる。
-    # 注意: kelly_quarter モードでは bet_unit >= 1000 円を推奨。bet_unit=100 円
-    # のままだと 10 円単位丸めで全員 10 円固定になり Kelly 解像度が消える。
-    # 適切な閾値は A1 マージ後に backtest で kelly_uncapped 分布を見て再 sweep。
+    #
+    # 注意 (2026-05-17 実測で更新): kelly_quarter モードでは bet_unit >= 10000 円
+    # を強く推奨。当初 plan の「>= 1000 円推奨」は理論計算ベースで楽観的すぎた。
+    # 現状の calibrator 状態 (TRAIN 21-23 で fit された旧 bin、A2 で Isotonic
+    # 再 fit 予定) では Kelly は 0.05〜0.15 帯に集中するため、bet_unit=1000 で
+    # も Kelly 0.05〜0.10 が一律 20 円に縮退する。bet_unit=10000 で Kelly 0.05
+    # → 130 円、0.10 → 250 円、0.20 → 500 円の解像度が得られる。
+    # 適切な閾値は Phase A2 (calibrator 再 fit) 完了後に backtest で kelly_uncapped
+    # 分布を見て再 sweep する (Phase A1 完了条件からは外し、独立フェーズへ移動)。
     "min_kelly": 0.05,
     "min_popularity": None,
     "max_popularity": None,

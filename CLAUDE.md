@@ -25,6 +25,17 @@
 
 ドキュメントだけの修正 (`*.md`) はスキップしてよい。
 
+#### 1-bis. worktree 改修について expert-review を呼ぶ前の前提条件
+
+worktree branch (例: `.claude/worktrees/<name>/`) で改修して expert-review を呼ぶ場合、subagent の CWD は **親リポ (`C:\Users\kizun\dev\keiba-yosou`)** を向くため、worktree 上の未反映改修は subagent から **不可視** となる。validation-process-auditor / code-quality-reviewer 等が `git log` `git diff` を実行する系の判定は CWD 仕様の影響を強く受け、未反映だと「改修が存在しない」と誤評価する (2026-05-16 P16 A1 で validation-auditor が 1.6 を出して GATE_FAILED 推奨した実例あり)。
+
+そのため expert-review 実行前に、以下のいずれかを必ず完了させる:
+
+- **(a) worktree commit + 親リポへの cherry-pick / merge を完了** (最も安全、推奨)
+- **(b) subagent prompt に worktree 絶対パスを明示** し、すべての `git` 操作を `git -C "<worktree-path>" <subcommand>` 形式で行うよう指示。Read / Bash / Grep もすべて worktree 絶対パスで指定
+
+(a) と (b) のどちらを選ぶかは「親リポ反映を本セッションでやるか / 次セッションへ持ち越すか」で決める。時間制約 (重い backtest と並走中など) で (a) が間に合わない場合のみ (b) を採るが、その場合は scorecard に「subagent CWD 限定運用での評価」と明記する。
+
 ### 2. `gui/app.py` の HTML/JS を編集したら必ず `python-embedded-js` 検証
 
 詳細: `.claude/skills/python-embedded-js/SKILL.md`
