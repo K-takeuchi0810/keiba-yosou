@@ -81,6 +81,13 @@ class Prediction:
     expected_value: float = 0.0
     kelly_fraction: float = 0.0
     feature_warnings: list[str] = field(default_factory=list)
+    # P17 A2 c1 (2026-05-17): LGBM blend 直後 + calibrator 適用前の確率
+    # (race 内 Σ=1 に正規化済み)。calibrator fit 入力に使う。
+    # win_probability は calibrator + market_blend + odds_discount 適用後の
+    # 投資確率で race 内非正規化、確率として解釈不能。Phase A2 で fit 入力
+    # を raw_blended_probability に切替え、校正位置不整合と確率正規化問題を
+    # 同時解消する。
+    raw_blended_probability: float = 0.0
 
 
 def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
@@ -1067,9 +1074,10 @@ def predict_race(
             rationale = "; ".join(reasons) if reasons else "情報不足"
             if rank == 1:
                 rationale = f"{rationale}; 信頼度={confidence}(2位差{gap:.1f})"
+        horse_num_key = h.get("horse_num") or ""
         out.append(
             Prediction(
-                horse_num=h.get("horse_num") or "",
+                horse_num=horse_num_key,
                 score=score,
                 rank=rank,
                 mark=mark,
@@ -1082,6 +1090,9 @@ def predict_race(
                 expected_value=expected_value,
                 kelly_fraction=kelly_fraction,
                 feature_warnings=list(h.get("_feature_warnings") or []),
+                # P17 A2 c1: LGBM blend 直後 + calibrator 適用前の正規化済み確率。
+                # calibrator fit 入力として使う (race 内 Σ=1)。
+                raw_blended_probability=round(blended.get(horse_num_key, 0.0), 6),
             )
         )
     return out

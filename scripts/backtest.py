@@ -395,9 +395,17 @@ def run_backtest(
                 horse = horse_by_num.get(pred.horse_num)
                 if not horse:
                     continue
+                # P17 A2 c1 (2026-05-17): calibrator fit 入力を切替え。
+                # 旧: `pred.win_probability` (= investment_probability、
+                #     calibrator + market_blend + odds_discount 適用後、race 内非正規化)
+                # 新: `pred.raw_blended_probability` (= LGBM blend 直後、calibrator
+                #     適用前、race 内 Σ=1 正規化済)
+                # 旧 win_probability は `investment_probability` フィールドに保持
+                # (後方互換・後追い分析用)。
                 calibration_records.append(
                     {
-                        "probability": pred.win_probability,
+                        "probability": pred.raw_blended_probability,
+                        "investment_probability": pred.win_probability,
                         "actual": 1 if horse.get("confirmed_order") == 1 else 0,
                         "confidence": pred.confidence,
                     }
