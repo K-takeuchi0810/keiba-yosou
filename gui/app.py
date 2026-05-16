@@ -62,9 +62,12 @@ def _run_render_in_venv64(from_date: str | None, to_date: str | None,
         cmd += ["--to", to_date]
     if not publish:
         cmd += ["--no-publish"]
+    # PYTHONIOENCODING=utf-8 を child に渡し、Windows console の cp932 default
+    # で stdout が encode されないようにする (日本語パス文字化け防止)。
+    child_env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     result = subprocess.run(
         cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
-        cwd=str(_PROJECT_ROOT),
+        cwd=str(_PROJECT_ROOT), env=child_env,
     )
     if result.returncode != 0:
         raise RuntimeError(

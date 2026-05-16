@@ -310,10 +310,13 @@ if __name__ == "__main__":
         except FileNotFoundError as e:
             print(f"publish skipped: {e}", file=sys.stderr)
     if args.json:
+        # ensure_ascii=True: 日本語パス (例: iCloudDrive/競馬予想/) を Unicode
+        # escape にし、Windows console (cp932) と utf-8 parent の codec 差で
+        # 壊れる JSONDecodeError を防ぐ (2026-05-16 修正)。
         print(_json.dumps({
             "rendered": str(p),
             "published": str(published) if published else None,
-        }, ensure_ascii=False))
+        }, ensure_ascii=True))
     else:
         print(f"wrote {p}")
         if published:
