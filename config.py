@@ -58,48 +58,53 @@ DATA_PERIODS: dict[str, dict[str, str]] = {
 # この値が変わったら data/backtest/ で新たに rule_version 付きで保存し直すこと
 # (過去 backtest と直接比較できなくなるため)。
 BUY_FILTER_DEFAULT: dict = {
-    # --- P14 採用 (2026-05-15): only_t04_09_ev_ge_110 ---
-    # P12 wl5_pop_1_2 hold-out 失敗後、recent-3fold sweep (2025-H1 / 2025-H2 /
-    # 2026-Q1+) で唯一 robust だった戦略を採用:
-    #   - 2025-H1: 165 戦 / 8.5% / 82.4%
-    #   - 2025-H2: 166 戦 / 12.0% / 121.1%
-    #   - 2026-Q1+: 105 戦 / 11.4% / 168.3%
-    #   - min return 82.4% (controlled loss 以上) / 戦数 436 / 1.5 年
+    # --- P15 採用 (2026-05-16): wl_kelly_ge_05 ---
+    # LGBM v5 (Tier 2.3 込 98 features) で recent-3fold sweep し直し、
+    # 8 つの robust 戦略 (v4 sweep の 1 個から大幅増) のうち、min return が
+    # 最高の wl_kelly_ge_05 を採用。
     #
     # 戦略の中身:
-    #   - 場 = 新潟 (04) + 阪神 (09) — recent-3fold で逆転 robust だった 2 場
-    #   - EV >= 1.10 — LGBM が「期待値 +10% 以上」と判定した馬のみ
+    #   - 場 = 新潟 (04) + 阪神 (09) — P14 と同じ場 (recent-3fold で逆転 robust)
+    #   - Kelly fraction >= 0.05 — LGBM の信頼度 + EV 内包条件
     #
-    # 注意: 第 3 fold が 2026-Q1+ (= PRODUCTION 期間そのもの) なので、
-    # 厳密には「採用判断と評価が同一期間で循環」する形。今後発生する
-    # 2026-05-11 以降の前向きデータでさらに継続検証必要。
+    # 直近 1.5 年 3-fold:
+    #   - 2025-H1: 112 戦 / 9.8% / 104.7%
+    #   - 2025-H2: 120 戦 / 13.3% / 152.8%
+    #   - 2026-Q1+: 56 戦 / 12.5% / 86.4%
+    #   - min return 86.4% (P14 81.4% から +5pt)
+    #   - 戦数 288 / 1.5 年 (P14 437 より少なめだが、最低保証が高い)
     #
-    # 義務化された運用ルール (前回 P12 失敗の反省):
-    #   1. scripts/monitor.py を **週次自動実行** (Brier ドリフト >+20% で警告)
-    #   2. Brier 警告発火 → 即サスペンド (whitelist_tracks=[] で買い候補ゼロ)
-    #   3. **月次で TRAIN を rolling forward** (例: 2022-2024 → 2023-2025) して
-    #      LGBM 再訓練
-    #   4. **四半期ごとに --recent-3fold を再実行** して戦略の有効性確認
-    #   5. 同戦略を採用してから **3 ヶ月** 経過したら必ず再 sweep
+    # P14 (only_t04_09_ev_ge_110) との違い:
+    #   - P14: min_ev >= 1.10 だけで絞る
+    #   - P15: min_kelly >= 0.05 で絞る (Kelly は EV と確率信頼度を内包)
+    #   → Kelly のほうがモデル的に「賭けるべき」を直接示し、min が +5pt 改善
     #
-    # 旧 wl_odds_8_20 (in-sample, P05) / wl_ex_unsure_pop_1_4 (旧) と比較:
-    #   - wl_odds_8_20: TEST in-sample 116% → out-of-sample 34% (崩壊)
-    #   - wl5_pop_1_2: TEST 184% → PROD 45% (崩壊)
-    #   - only_t04_09_ev_ge_110: TEST 不明 → recent-3fold 82-168% (採用)
-    # 過去 2 戦略はいずれも「TEST 通年集約で高 EV」を信用しすぎて失敗した。
-    # 本戦略は「直近 1.5 年で逆転 robust」を根拠とするので時系列適応度高い。
-    "min_ev": 1.10,                 # ←主絞り条件 1: LGBM EV エッジ
+    # 義務化された運用ルール (CLAUDE.md 必須ルール 4 参照):
+    #   1. weekly_monitor.bat 週次自動実行 (Brier drift >+20% で警告)
+    #   2. Brier 警告 → 即サスペンド (whitelist_tracks=[])
+    #   3. 月次で TRAIN を rolling forward して LGBM 再訓練
+    #   4. 四半期ごとに --recent-3fold を再実行
+    #   5. 採用後 3 ヶ月で必ず再選定 (賞味期限管理)
+    #
+    # 採用後の hold-out 検証は 2026-05-11 以降の前向きデータで継続実施。
+    #
+    # 過去採用変遷:
+    #   - wl_odds_8_20 (P05): TEST in-sample 116% → out-of-sample 34% (崩壊)
+    #   - wl5_pop_1_2 (P12): TEST 184% → PROD 45% (崩壊)
+    #   - only_t04_09_ev_ge_110 (P14): recent-3fold 82-168% (採用 → P15 に移行)
+    #   - wl_kelly_ge_05 (P15): recent-3fold 86-153% (現採用)
+    "min_ev": None,                 # min_kelly が EV エッジを内包
     "min_value": None,
     "min_odds": None,
     "max_odds": None,
+    "min_kelly": 0.05,              # ←主絞り条件: LGBM Kelly fraction >= 5%
     "min_popularity": None,
     "max_popularity": None,
     "exclude_confidence": [],
     "max_odds_age_min": 30,
-    # ----- 場別 whitelist (2 場限定、recent-3fold 採用) -----
+    # ----- 場別 whitelist (2 場限定、P14 と同じ) -----
     # 04 = 新潟、09 = 阪神 (web/codes.py:TRACK_NAMES)
-    # recent-3fold で逆転 robust だった 2 場。P12 採用の 5 場 {01,02,03,06,07}
-    # は全部 hold-out で崩壊したため除外。
+    # recent-3fold で逆転 robust だった 2 場。継続採用。
     "whitelist_mode": True,
     "whitelist_grades": [],
     "whitelist_tracks": ["04", "09"],

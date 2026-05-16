@@ -46,6 +46,7 @@ def buy_filter_from_generator() -> dict:
         "max_odds": _maybe_float(BUY_FILTER_DEFAULT.get("max_odds")),
         "min_value": _maybe_float(BUY_FILTER_DEFAULT.get("min_value")),
         "min_ev": _maybe_float(BUY_FILTER_DEFAULT.get("min_ev")),
+        "min_kelly": _maybe_float(BUY_FILTER_DEFAULT.get("min_kelly")),
         "min_popularity": BUY_FILTER_DEFAULT.get("min_popularity"),
         "max_popularity": BUY_FILTER_DEFAULT.get("max_popularity"),
         "exclude_confidence": list(BUY_FILTER_DEFAULT.get("exclude_confidence") or []),
@@ -245,6 +246,10 @@ def _matches_buy_filter(
     if min_odds is not None and (odds <= 0 or odds < min_odds):
         return False
     if max_odds is not None and (odds <= 0 or odds > max_odds):
+        return False
+    # Phase 7 (2026-05-16): min_kelly チェック (P15 候補 wl_kelly_ge_05 採用準備)
+    min_kelly = spec.get("min_kelly")
+    if min_kelly is not None and (pred.kelly_fraction or 0) < min_kelly:
         return False
     min_pop = spec.get("min_popularity")
     max_pop = spec.get("max_popularity")

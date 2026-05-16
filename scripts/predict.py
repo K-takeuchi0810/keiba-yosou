@@ -85,6 +85,9 @@ def _is_bet_candidate(pred, horse: dict, tentative: bool, race: dict) -> bool:
         return False
     if spec.get("max_odds") is not None and (odds <= 0 or odds > spec["max_odds"]):
         return False
+    # Phase 7 (2026-05-16): min_kelly チェック (P15 候補 wl_kelly_ge_05)
+    if spec.get("min_kelly") is not None and (pred.kelly_fraction or 0) < spec["min_kelly"]:
+        return False
     if spec.get("min_popularity") is not None:
         if popularity <= 0 or popularity < spec["min_popularity"]:
             return False
