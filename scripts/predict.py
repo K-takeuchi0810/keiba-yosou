@@ -232,7 +232,10 @@ def main() -> int:
     )
     ap.add_argument(
         "--bet-unit", type=int, default=100,
-        help="基準賭金単位 (default 100 円、flat なら 1 件 100 円、third なら 33 円)",
+        help="基準賭金単位 (default 100 円、flat なら 1 件 100 円、third なら 33 円)。"
+             "kelly_quarter モード使用時は bet_unit >= 1000 円を推奨。"
+             "P16 A1 後の Kelly uncap で kelly_fraction は連続値 (0-1) となり、"
+             "bet_unit=100 円のままだと 10 円単位丸めで全員 10 円固定になる。",
     )
     ap.add_argument("--all-tracks", action="store_true")
     ap.add_argument("--db", default=None, help="SQLite DB path")

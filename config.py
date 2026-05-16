@@ -97,7 +97,15 @@ BUY_FILTER_DEFAULT: dict = {
     "min_value": None,
     "min_odds": None,
     "max_odds": None,
-    "min_kelly": 0.05,              # ←主絞り条件: LGBM Kelly fraction >= 5%
+    # ----- min_kelly: 主絞り条件 -----
+    # P16 A1 (2026-05-16) で Kelly cap を 0.05 → 1.0 に撤廃したため、
+    # kelly_fraction は uncap 連続値 (0-1) になった。閾値 0.05 = フル Kelly で
+    # 資金 5% を賭けるべきとモデルが判断したエッジ。bet sizing は
+    # kelly_quarter モードで内部 cap を掛けつつ Kelly に比例した賭金になる。
+    # 注意: kelly_quarter モードでは bet_unit >= 1000 円を推奨。bet_unit=100 円
+    # のままだと 10 円単位丸めで全員 10 円固定になり Kelly 解像度が消える。
+    # 適切な閾値は A1 マージ後に backtest で kelly_uncapped 分布を見て再 sweep。
+    "min_kelly": 0.05,
     "min_popularity": None,
     "max_popularity": None,
     "exclude_confidence": [],

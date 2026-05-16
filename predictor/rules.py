@@ -907,7 +907,13 @@ def _bet_metrics(horse: dict, win_probability: float) -> tuple[float, float, flo
     expected_value = win_probability * odds
     b = odds - 1.0
     kelly = (b * win_probability - (1.0 - win_probability)) / b
-    return round(fair_odds, 2), round(expected_value, 3), round(max(0.0, min(kelly, 0.05)), 4)
+    # P16 A1 (2026-05-16): Kelly cap を 0.05 → 1.0 へ。cap 後の値で
+    # min_kelly フィルタを掛けると候補全員が cap 張り付き = 二値に縮退し
+    # kelly_quarter モードの bet_size が解像度を持たなくなる。Kelly は
+    # uncap 連続値として保持し、bet sizing 段階 (compute_bet_size の
+    # min(1.0, ...) と min(size, bet_unit)) で改めて cap を掛ける。
+    # 1.0 上限は理論上の最大値 = NaN/異常入力に対する数値安全弁。
+    return round(fair_odds, 2), round(expected_value, 3), round(max(0.0, min(kelly, 1.0)), 4)
 
 
 def _value_score(
