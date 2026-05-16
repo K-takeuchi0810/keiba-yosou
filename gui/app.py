@@ -32,6 +32,57 @@ from web.generator import BET_MAX_ODDS, BET_MIN_EV, BET_MIN_ODDS, BET_MIN_VALUE,
 
 ensure_dirs()
 
+# .venv64 (Python 3.14 64-bit) Python のパス。LightGBM v5 ensemble 予測のため
+# GUI (.venv32) から subprocess 経由で render を呼ぶ。詳細は
+# scripts/predict.py や docs/OPERATION.md の "2 venvs" アーキテクチャ参照。
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_VENV64_PYTHON = _PROJECT_ROOT / ".venv64" / "Scripts" / "python.exe"
+
+
+def _run_render_in_venv64(from_date: str | None, to_date: str | None,
+                         publish: bool = True) -> dict:
+    """render() を .venv64 subprocess で実行し、結果 dict を返す。
+
+    なぜ subprocess: GUI は pywebview 制約で .venv32 (Python 3.13 32-bit) で
+    動くが、LightGBM は .venv64 にしか install されていない。同一プロセスで
+    render() を呼ぶと predictor.ml_model.load_lgbm() が失敗し、rule-only
+    予測になってしまう (backtest と乖離)。subprocess で .venv64 を kick
+    すれば LightGBM v5 ensemble が正しく適用される。
+    """
+    if not _VENV64_PYTHON.exists():
+        # フォールバック: .venv64 が無い環境では in-process render (rule-only)
+        path = render(from_date=from_date, to_date=to_date)
+        pub = publish_to_icloud() if publish else None
+        return {"rendered": str(path), "published": str(pub) if pub else None,
+                "warning": "venv64 not found, fell back to rule-only render"}
+    cmd = [str(_VENV64_PYTHON), "-m", "web.generator", "--json"]
+    if from_date:
+        cmd += ["--from", from_date]
+    if to_date:
+        cmd += ["--to", to_date]
+    if not publish:
+        cmd += ["--no-publish"]
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+        cwd=str(_PROJECT_ROOT),
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"venv64 render failed (exit {result.returncode}):\n"
+            f"stderr: {result.stderr[-2000:]}"
+        )
+    # 最終行から JSON を取り出す (途中の INFO log 等を skip)
+    last_json_line = ""
+    for line in result.stdout.strip().split("\n"):
+        line = line.strip()
+        if line.startswith("{") and line.endswith("}"):
+            last_json_line = line
+    if not last_json_line:
+        raise RuntimeError(
+            f"venv64 render did not emit JSON. stdout: {result.stdout[-2000:]}"
+        )
+    return json.loads(last_json_line)
+
 
 class CancelledError(Exception):
     pass
@@ -776,15 +827,18 @@ class Api:
 
     @_safe
     def run_prediction(self, options: dict | None = None) -> dict:
-        """DB を読んで予想込み HTML を生成。"""
+        """DB を読んで予想込み HTML を生成 (LightGBM v5 ensemble、subprocess 経由)。"""
         self._begin_run()
         options = options or {}
         from_date = _normalize_date(options.get("from_date")) or None
         to_date = _normalize_date(options.get("to_date")) or from_date
-        self._set_status("予想HTMLを生成中...", "prediction", running=True)
-        path = render(from_date=from_date, to_date=to_date)
+        self._set_status("予想HTMLを生成中... (.venv64 で LightGBM 実行)", "prediction", running=True)
+        result = _run_render_in_venv64(from_date, to_date, publish=False)
+        msg = f"生成: {result.get('rendered')}"
+        if result.get("warning"):
+            msg = f"{msg} (警告: {result['warning']})"
         self._set_status("予想生成が完了しました。", "done", running=False)
-        return {"ok": True, "message": f"生成: {path}"}
+        return {"ok": True, "message": msg, **result}
 
     @_safe
     def publish(self, options: dict | None = None) -> dict:
@@ -850,10 +904,11 @@ class Api:
         options = options or {}
         from_date = _normalize_date(options.get("from_date")) or None
         to_date = _normalize_date(options.get("to_date")) or from_date
-        self._set_status("一括実行: 予想生成中...", "prediction", running=True)
-        rendered = render(from_date=from_date, to_date=to_date)
-        self._set_status("一括実行: 公開中...", "publish", running=True)
-        published = publish_to_icloud()
+        self._set_status("一括実行: 予想生成 + 公開中... (.venv64 で LightGBM)", "prediction", running=True)
+        # subprocess で .venv64 を呼び LightGBM v5 ensemble 予測 + iCloud 公開を一括実行
+        result = _run_render_in_venv64(from_date, to_date, publish=True)
+        rendered = result.get("rendered")
+        published = result.get("published") or "(skipped)"
         now = datetime.now().strftime("%H:%M:%S")
         self._set_status("一括実行が完了しました。", "done", running=False)
         return {
@@ -864,6 +919,7 @@ class Api:
             "odds": odds_summary,
             "rendered": str(rendered),
             "published": str(published),
+            "lgbm_warning": result.get("warning"),
             "note": "公開時刻は HTML 先頭にも表示されます。"
                     "iPhone Files で開いた時に時刻が一致すれば同期済み。"
                     "反映には数十秒〜数分。Explorer で ☁→✓ 変化も目視可。",

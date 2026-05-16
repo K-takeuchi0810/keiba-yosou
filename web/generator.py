@@ -289,7 +289,32 @@ def publish_to_icloud() -> Path:
 
 
 if __name__ == "__main__":
-    p = render()
-    print(f"wrote {p}")
-    pub = publish_to_icloud()
-    print(f"published {pub}")
+    # 2026-05-16: CLI 化。GUI (.venv32) から subprocess 経由でこのモジュールを
+    # .venv64 として呼ぶことで LightGBM v5 ensemble 予測を反映させる。
+    # 詳細は gui/app.py:_run_render_in_venv64 を参照。
+    import argparse
+    import json as _json
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--from", dest="from_date", default=None, help="YYYYMMDD")
+    ap.add_argument("--to", dest="to_date", default=None, help="YYYYMMDD")
+    ap.add_argument("--no-publish", action="store_true",
+                    help="iCloud Drive へのコピーをスキップ")
+    ap.add_argument("--json", action="store_true",
+                    help="結果を JSON で stdout に 1 行出力")
+    args = ap.parse_args()
+    p = render(from_date=args.from_date, to_date=args.to_date)
+    published = None
+    if not args.no_publish:
+        try:
+            published = publish_to_icloud()
+        except FileNotFoundError as e:
+            print(f"publish skipped: {e}", file=sys.stderr)
+    if args.json:
+        print(_json.dumps({
+            "rendered": str(p),
+            "published": str(published) if published else None,
+        }, ensure_ascii=False))
+    else:
+        print(f"wrote {p}")
+        if published:
+            print(f"published {published}")
