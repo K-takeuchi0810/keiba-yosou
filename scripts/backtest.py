@@ -688,6 +688,12 @@ def main() -> int:
         "--rule-version", default="v1",
         help="保存時のルールバージョン名 (例: v1, v2-track-condition)",
     )
+    ap.add_argument(
+        "--save-records",
+        action="store_true",
+        help="_calibration_records を data/backtest/<ts>_<rule>_records.json に保存。"
+             "P17 A2 c2-b の refit_calibrator.py で Isotonic fit の入力に使う。",
+    )
     args = ap.parse_args()
 
     result = run_backtest(
@@ -719,6 +725,23 @@ def main() -> int:
             encoding="utf-8",
         )
         print(f"\nsaved: {out}")
+        if args.save_records:
+            # P17 A2 c2-a (2026-05-17): _calibration_records を別ファイルに保存し、
+            # 後追いで Isotonic fit (scripts.refit_calibrator) に流せるようにする。
+            # 各 record は {probability, investment_probability, actual, confidence}
+            # を持つ (probability は raw_blended_probability、c1 以降の意味)。
+            records_out = out_dir / f"{ts}_{args.bet}_{args.rule_version}_records.json"
+            records_out.write_text(
+                json.dumps({
+                    "rule_version": args.rule_version,
+                    "from_date": args.from_date,
+                    "to_date": args.to_date,
+                    "meta": result.get("meta", {}),
+                    "records": result["_calibration_records"],
+                }, ensure_ascii=False),  # indent なし (records が数万-10万行のため)
+                encoding="utf-8",
+            )
+            print(f"records saved: {records_out}  n={len(result['_calibration_records'])}")
     if args.save_calibrator:
         out = Path(__file__).resolve().parent.parent / "predictor" / "calibrator.json"
         # 後追い監査用に「いつ・何のデータで fit したか」を必ず記録する
