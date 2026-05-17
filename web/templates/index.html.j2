@@ -103,6 +103,51 @@
   .buy-card strong { font-size: 1rem; }
   .buy-meta { color: var(--fg-mute); font-size: 0.82rem; margin-top: 0.15rem; }
   .buy-metrics { margin-top: 0.25rem; font-size: 0.82rem; font-weight: 700; color: var(--buy-board-fg); }
+  /* S7-β-3: Kelly>=10% で「★強い買い」バッジ。買い候補内の重要度を一目で示す */
+  .strong-buy-badge {
+    display: inline-block;
+    padding: 0.1em 0.4em;
+    margin-right: 0.3em;
+    background: var(--buy-board-fg);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border-radius: 3px;
+    vertical-align: middle;
+  }
+  /* S7-β-4: ヘッダーのフィルタ条件表示 */
+  .filter-summary {
+    margin-top: 0.3rem;
+    padding: 0.2rem 0.5rem;
+    background: var(--bg-mute, rgba(127,127,127,.08));
+    border-left: 3px solid var(--buy-board-fg);
+    font-size: 0.72rem;
+    color: var(--fg-mute);
+    font-family: ui-monospace, monospace;
+  }
+  /* S7-β-5: footer の version snapshot 表示 */
+  footer .version-snapshot {
+    margin-top: 0.3rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.7rem;
+    color: var(--fg-mute);
+    opacity: 0.7;
+  }
+  /* S7-β-1: 買い候補ボードの折りたたみ用 (details/summary) */
+  details.buy-board > summary {
+    list-style: none;
+    cursor: pointer;
+    font-weight: 700;
+    color: var(--buy-board-fg);
+    padding: 0.5rem 0;
+  }
+  details.buy-board > summary::-webkit-details-marker { display: none; }
+  details.buy-board > summary::after {
+    content: " ▼";
+    font-size: 0.8rem;
+    color: var(--fg-mute);
+  }
+  details.buy-board[open] > summary::after { content: " ▲"; }
   .no-buy {
     margin: 0.5rem 0 1rem;
     padding: 0.75rem;
@@ -267,19 +312,37 @@
   <h1>競馬予想</h1>
   <div class="updated">更新 {{ generated_at }}</div>
   <div class="meta">全 {{ race_count }} レース / 買い候補 {{ buy_count }} 件</div>
+  {# S7-β-4: 現在のフィルタ条件を明示。ユーザーが「フィルタが効いていない」を即検知できる #}
+  {% if filter_summary %}
+  <div class="filter-summary">買い候補フィルタ: {{ filter_summary }}</div>
+  {% endif %}
 </header>
 <main>
 {% if buy_candidates %}
+  {# S7-β-1: 6 件以上で折りたたみ。Kelly 降順ソート済み (web/generator.py で sort) #}
+  {% if buy_count >= 6 %}
+  <details class="buy-board">
+    <summary>買い候補 {{ buy_count }} 件 (Kelly 降順)</summary>
+  {% else %}
   <section class="buy-board">
-    <h2>買い候補 {{ buy_count }}件</h2>
+    <h2>買い候補 {{ buy_count }}件 (Kelly 降順)</h2>
+  {% endif %}
     {% for b in buy_candidates %}
       <a class="buy-card" href="#{{ b.anchor }}">
-        <strong>{{ b.date }} {{ b.track }} {{ b.race_num }}R {% if b.race_name %}{{ b.race_name }}{% endif %}</strong>
+        <strong>
+          {# S7-β-3: Kelly>=10% で「★ 強い買い」バッジ表示 #}
+          {% if b.kelly_fraction >= 0.10 %}<span class="strong-buy-badge">★ 強い買い</span>{% endif %}
+          {{ b.date }} {{ b.track }} {{ b.race_num }}R {% if b.race_name %}{{ b.race_name }}{% endif %}
+        </strong>
         <div class="buy-meta">{{ b.start_time }} / {{ b.mark }} {{ b.num }} {{ b.name }} / {{ "%.1f"|format(b.odds) }}倍{% if b.popularity %} {{ b.popularity }}人気{% endif %}</div>
         <div class="buy-metrics">P {{ "%.1f"|format(b.win_probability * 100) }}% / EV {{ "%.2f"|format(b.expected_value) }} / K {{ "%.2f"|format(b.kelly_fraction * 100) }}%</div>
       </a>
     {% endfor %}
+  {% if buy_count >= 6 %}
+  </details>
+  {% else %}
   </section>
+  {% endif %}
 {% else %}
   <section class="no-buy">表示中の期間に買い候補はありません。予想印は下に表示していますが、EV/信頼度条件を満たすレースは見送り判定です。</section>
 {% endif %}
@@ -351,6 +414,16 @@
   </section>
 {% endfor %}
 </main>
-<footer>JRA-VAN Data Lab. 提供データに基づく個人用ローカル予想表</footer>
+<footer>
+  JRA-VAN Data Lab. 提供データに基づく個人用ローカル予想表
+  {# S7-β-5: 生成時の calibrator / LGBM / git_sha を表示。後追いで「どの状態の予想か」を再現可能に #}
+  {% if version_info %}
+  <div class="version-snapshot">
+    calibrator: {{ version_info.calibrator_type }} ({{ version_info.calibrator_rule_version }}, {{ version_info.calibrator_generated_at }}) /
+    lgbm: {{ version_info.lgbm_rule_version }} ({{ version_info.lgbm_generated_at }}) /
+    git: {{ version_info.git_sha }}
+  </div>
+  {% endif %}
+</footer>
 </body>
 </html>

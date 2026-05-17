@@ -241,13 +241,86 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
             "tentative": tentative_by_race.get(race_key, False),
         })
 
+    # S7-β-2 (2026-05-18): buy_candidates を kelly_fraction 降順でソート。
+    # 強いシグナル (Kelly 高) を最上位に表示することでユーザーが最初に目にする
+    # 情報の価値を高める。同 Kelly 内は発走時刻昇順。
+    buy_candidates.sort(
+        key=lambda b: (-(b.get("kelly_fraction") or 0), b.get("start_time") or "")
+    )
+
+    # S7-β-4 (2026-05-18): フィルタ条件の header 明示用 context。
+    # config.BUY_FILTER_DEFAULT を読み、None でない項目を表示文字列にまとめる。
+    # ユーザーが「フィルタが効いていない状態」を検知できるセンサーとして機能。
+    filter_summary = _build_filter_summary()
+    # S7-β-5 (2026-05-18): footer version snapshot 用 context。
+    version_info = _build_version_snapshot()
     return {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "race_count": len(races),
         "buy_count": len(buy_candidates),
         "buy_candidates": buy_candidates,
         "days": list(days.values()),
+        "filter_summary": filter_summary,
+        "version_info": version_info,
     }
+
+
+def _build_filter_summary() -> str:
+    """BUY_FILTER_DEFAULT の現状を 1 行文字列に。HTML header に表示する。"""
+    parts: list[str] = []
+    spec = BUY_FILTER_DEFAULT
+    if spec.get("min_kelly") is not None:
+        parts.append(f"min_kelly≥{spec['min_kelly']}")
+    if spec.get("max_predicted_p") is not None:
+        parts.append(f"max_predicted_p≤{spec['max_predicted_p']}")
+    if spec.get("min_ev") is not None:
+        parts.append(f"min_ev≥{spec['min_ev']}")
+    if spec.get("max_ev") is not None:
+        parts.append(f"max_ev≤{spec['max_ev']}")
+    if spec.get("min_odds") is not None:
+        parts.append(f"min_odds≥{spec['min_odds']}")
+    if spec.get("max_odds") is not None:
+        parts.append(f"max_odds≤{spec['max_odds']}")
+    wl_mode = spec.get("whitelist_mode")
+    wl_tracks = spec.get("whitelist_tracks") or []
+    if wl_mode and wl_tracks:
+        parts.append(f"WL={'/'.join(wl_tracks)}")
+    elif wl_mode is False or not wl_tracks:
+        parts.append("全場開放")
+    excl = spec.get("exclude_confidence") or []
+    if excl:
+        parts.append(f"除外={'/'.join(excl)}")
+    return " / ".join(parts) if parts else "フィルタなし"
+
+
+def _build_version_snapshot() -> dict:
+    """calibrator / LGBM / git の version snapshot。footer 表示用。"""
+    import json
+    import subprocess
+    root = Path(__file__).resolve().parent.parent
+    info: dict = {}
+    try:
+        cal = json.loads((root / "predictor" / "calibrator.json").read_text(encoding="utf-8"))
+        info["calibrator_type"] = cal.get("type", "?")
+        info["calibrator_generated_at"] = (cal.get("generated_at") or "?")[:10]
+        info["calibrator_rule_version"] = cal.get("rule_version", "?")
+    except (OSError, ValueError):
+        info["calibrator_type"] = "?"
+    try:
+        lgbm = json.loads((root / "predictor" / "lgbm_meta.json").read_text(encoding="utf-8"))
+        info["lgbm_rule_version"] = lgbm.get("rule_version", "?")
+        info["lgbm_generated_at"] = (lgbm.get("generated_at") or "?")[:10]
+    except (OSError, ValueError):
+        info["lgbm_rule_version"] = "?"
+    try:
+        sha = subprocess.check_output(
+            ["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
+            stderr=subprocess.DEVNULL,
+        ).strip().decode("ascii")
+        info["git_sha"] = sha
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        info["git_sha"] = "?"
+    return info
 
 
 def render(
