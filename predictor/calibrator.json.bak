@@ -1,0 +1,154 @@
+{
+  "type": "bin",
+  "bin_size": 0.05,
+  "min_count": 20,
+  "source_count": 142713,
+  "brier_score": 0.021864,
+  "log_loss": 0.120761,
+  "bins": [
+    {
+      "lower": 0.0,
+      "upper": 0.05,
+      "count": 70165,
+      "avg_probability": 0.0375,
+      "calibrated_probability": 0.0175
+    },
+    {
+      "lower": 0.05,
+      "upper": 0.1,
+      "count": 47390,
+      "avg_probability": 0.0691,
+      "calibrated_probability": 0.0116
+    },
+    {
+      "lower": 0.1,
+      "upper": 0.15,
+      "count": 13175,
+      "avg_probability": 0.1201,
+      "calibrated_probability": 0.0133
+    },
+    {
+      "lower": 0.15,
+      "upper": 0.2,
+      "count": 5213,
+      "avg_probability": 0.1721,
+      "calibrated_probability": 0.0238
+    },
+    {
+      "lower": 0.2,
+      "upper": 0.25,
+      "count": 3128,
+      "avg_probability": 0.2227,
+      "calibrated_probability": 0.0253
+    },
+    {
+      "lower": 0.25,
+      "upper": 0.3,
+      "count": 1830,
+      "avg_probability": 0.2734,
+      "calibrated_probability": 0.0372
+    },
+    {
+      "lower": 0.3,
+      "upper": 0.35,
+      "count": 1177,
+      "avg_probability": 0.3192,
+      "calibrated_probability": 0.0323
+    },
+    {
+      "lower": 0.35,
+      "upper": 0.4,
+      "count": 525,
+      "avg_probability": 0.3729,
+      "calibrated_probability": 0.0286
+    },
+    {
+      "lower": 0.4,
+      "upper": 0.45,
+      "count": 93,
+      "avg_probability": 0.4168,
+      "calibrated_probability": 0.0538
+    },
+    {
+      "lower": 0.45,
+      "upper": 0.5,
+      "count": 15,
+      "avg_probability": 0.4689,
+      "calibrated_probability": 0.4689
+    },
+    {
+      "lower": 0.5,
+      "upper": 0.55,
+      "count": 2,
+      "avg_probability": 0.5063,
+      "calibrated_probability": 0.5063
+    },
+    {
+      "lower": 0.55,
+      "upper": 0.6,
+      "count": 0,
+      "avg_probability": 0.0,
+      "calibrated_probability": 0.0
+    },
+    {
+      "lower": 0.6,
+      "upper": 0.65,
+      "count": 0,
+      "avg_probability": 0.0,
+      "calibrated_probability": 0.0
+    },
+    {
+      "lower": 0.65,
+      "upper": 0.7,
+      "count": 0,
+      "avg_probability": 0.0,
+      "calibrated_probability": 0.0
+    },
+    {
+      "lower": 0.7,
+      "upper": 0.75,
+      "count": 0,
+      "avg_probability": 0.0,
+      "calibrated_probability": 0.0
+    },
+    {
+      "lower": 0.75,
+      "upper": 0.8,
+      "count": 0,
+      "avg_probability": 0.0,
+      "calibrated_probability": 0.0
+    },
+    {
+      "lower": 0.8,
+      "upper": 0.85,
+      "count": 0,
+      "avg_probability": 0.0,
+      "calibrated_probability": 0.0
+    },
+    {
+      "lower": 0.85,
+      "upper": 0.9,
+      "count": 0,
+      "avg_probability": 0.0,
+      "calibrated_probability": 0.0
+    },
+    {
+      "lower": 0.9,
+      "upper": 0.95,
+      "count": 0,
+      "avg_probability": 0.0,
+      "calibrated_probability": 0.0
+    },
+    {
+      "lower": 0.95,
+      "upper": 1.0,
+      "count": 0,
+      "avg_probability": 0.0,
+      "calibrated_probability": 0.0
+    }
+  ],
+  "trained_from": "20210101",
+  "trained_to": "20231231",
+  "generated_at": "2026-05-12T23:12:38",
+  "rule_version": "p07-train-21-23"
+}
