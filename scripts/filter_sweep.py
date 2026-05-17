@@ -116,6 +116,9 @@ def match_filter(p: Pick, spec: dict) -> bool:
         return False
     if "min_kelly" in spec and p.kelly_fraction < spec["min_kelly"]:
         return False
+    # S6 (2026-05-17): max_predicted_p — Phase A2 高 p 帯破綻防御 (S5-3 で BUY_FILTER に追加済)
+    if "max_predicted_p" in spec and p.win_probability > spec["max_predicted_p"]:
+        return False
     if "min_tm_score" in spec and p.mining_tm_score < spec["min_tm_score"]:
         return False
     if "max_tm_rank" in spec and (p.mining_tm_rank <= 0 or p.mining_tm_rank > spec["max_tm_rank"]):
@@ -209,6 +212,26 @@ FILTERS = [
     ("kelly_ge_05", {"min_kelly": 0.05}),
     ("wl_kelly_ge_01", {"whitelist": True, "min_kelly": 0.01}),
     ("wl_kelly_ge_05", {"whitelist": True, "min_kelly": 0.05}),
+
+    # ========== S6 (2026-05-17): min_kelly grid + max_predicted_p 組み合わせ ==========
+    # Phase A2 + S5-3 で BUY_FILTER に max_predicted_p 0.40 が追加されたので、
+    # その採用設定 (kelly_ge_05 + max_pp 0.40) を recent-3fold で評価する。
+    # min_kelly grid (0.03 〜 0.10) で「閾値が緩いほど候補多いが質薄い」のトレード
+    # オフを見て、3 fold すべてで 80% 超えの最大閾値を S6-4 で採用。
+    ("s6_kelly_ge_03", {"min_kelly": 0.03}),
+    ("s6_kelly_ge_04", {"min_kelly": 0.04}),
+    ("s6_kelly_ge_06", {"min_kelly": 0.06}),
+    ("s6_kelly_ge_08", {"min_kelly": 0.08}),
+    ("s6_kelly_ge_10", {"min_kelly": 0.10}),
+    # S5-3 採用設定 (max_predicted_p 0.40 込み)
+    ("s6_kelly_03_mp40", {"min_kelly": 0.03, "max_predicted_p": 0.40}),
+    ("s6_kelly_04_mp40", {"min_kelly": 0.04, "max_predicted_p": 0.40}),
+    ("s6_kelly_05_mp40", {"min_kelly": 0.05, "max_predicted_p": 0.40}),  # ← S5-3 採用
+    ("s6_kelly_06_mp40", {"min_kelly": 0.06, "max_predicted_p": 0.40}),
+    ("s6_kelly_08_mp40", {"min_kelly": 0.08, "max_predicted_p": 0.40}),
+    # max_predicted_p の閾値感度 (0.30 / 0.50)
+    ("s6_kelly_05_mp30", {"min_kelly": 0.05, "max_predicted_p": 0.30}),
+    ("s6_kelly_05_mp50", {"min_kelly": 0.05, "max_predicted_p": 0.50}),
 
     # ========== MING (JRA-VAN プロ予想) 単独 / 自モデル併用 ==========
     # TM score の高さで絞る (TM > 80 等)
