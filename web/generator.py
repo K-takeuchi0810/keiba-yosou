@@ -50,6 +50,52 @@ def _surface_class(t: str) -> str:
     return {"芝": "turf", "ダート": "dirt", "障害": "jump"}.get(t, "")
 
 
+# S7-γ (2026-05-18): pick-reason トリミング
+# predict_race の rationale は 10-15 シグナル並列で、ほぼ全馬に含まれる無情報
+# シグナル ("当日傾向: データなし"、"同脚質過多"、"父系/母父...低調 %") が
+# ユーザーの認知負荷を増やすだけになっている。除外リストでこれらを落とし、
+# 残ったシグナルから先頭 4 つだけを表示する。
+# Phase B1 後の feature 構造変化を待ってメタ情報追加 (重要度タグ) を検討する
+# 余地はあるが、S7 では表面的トリミングで足りる。
+_RATIONALE_EXCLUDE_PREFIXES = (
+    "当日傾向: データなし",
+    "同脚質過多",
+    "父系同馬場低調",
+    "父系距離帯低調",
+    "母父同馬場低調",
+    "母父距離帯低調",
+    "父系道悪低調",
+    "母父道悪低調",
+    "脚質推定",  # "脚質推定3(15走)" 等、レース予想の中核ではない補足情報
+)
+
+
+def _trim_rationale(rationale: str, max_signals: int = 4) -> str:
+    """rationale を除外リスト + 先頭 N シグナル の方式でトリミング。
+
+    元の rationale は "; " 区切りで複数シグナルが並ぶ。"; 信頼度=..." の
+    付加情報は最後尾に保持。
+    """
+    if not rationale:
+        return rationale
+    parts = [s.strip() for s in rationale.split(";") if s.strip()]
+    # 信頼度行 (rank=1 の馬で末尾に付く "信頼度=...(2位差...)") は別途保持
+    confidence_part: str | None = None
+    others: list[str] = []
+    for p in parts:
+        if p.startswith("信頼度="):
+            confidence_part = p
+        else:
+            others.append(p)
+    # 除外リスト
+    kept = [p for p in others if not p.startswith(_RATIONALE_EXCLUDE_PREFIXES)]
+    # 先頭 N シグナル
+    kept = kept[:max_signals]
+    if confidence_part:
+        kept.append(confidence_part)
+    return "; ".join(kept)
+
+
 def build_view_model(from_date: str | None = None, to_date: str | None = None) -> dict:
     """DB → テンプレートに渡す dict 構造。
 
@@ -135,8 +181,9 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
                     "popularity": h["win_popularity"] or 0,
                     "mark": mark_by_num.get(h["horse_num"]).mark
                         if h["horse_num"] in mark_by_num else "",
-                    "rationale": mark_by_num.get(h["horse_num"]).rationale
-                        if h["horse_num"] in mark_by_num else "",
+                    "rationale": _trim_rationale(
+                        mark_by_num.get(h["horse_num"]).rationale
+                    ) if h["horse_num"] in mark_by_num else "",
                     "confidence": mark_by_num.get(h["horse_num"]).confidence
                         if h["horse_num"] in mark_by_num else "",
                     "value_score": mark_by_num.get(h["horse_num"]).value_score
@@ -172,7 +219,7 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
                     "bet_candidate": is_buy_candidate(
                         p, horse_for_pred, tent, race=race_dict
                     ),
-                    "rationale": p.rationale,
+                    "rationale": _trim_rationale(p.rationale),
                     "confidence": p.confidence,
                     "confidence_gap": p.confidence_gap,
                     "value_score": p.value_score,
