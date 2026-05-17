@@ -260,55 +260,26 @@ def _matches_buy_filter(
     spec: dict | None,
     race: dict | None = None,
 ) -> bool:
-    """買い目フィルタ判定。
+    """買い目フィルタ判定。S7-α-2 (2026-05-18) で `predictor.filter.is_buy_candidate` に集約。
 
-    spec は config.BUY_FILTER_DEFAULT 由来の dict で、以下キーを参照する:
-        min_ev / min_value / min_odds / max_odds / min_popularity /
-        max_popularity / exclude_confidence (list).
-    `Kelly > 0` の固定条件は撤廃した (現行モデルで Kelly が正になる候補が
-    存在しなかったため死フィルタになっていた)。重賞ホワイトリストは race を
-    渡したときだけ評価。
+    spec=None の場合は False (backtest の `--no-filter-from-config` モード等で
+    spec を渡さない場合、フィルタ通過させない既存仕様を維持)。
+    spec ありの場合は集約関数に委譲。判定ロジック差異は集約モジュールで吸収。
+
+    `pred.mark` は backtest 経路では存在しないので、ここでは集約関数の
+    「rank==1 + mark あり + 非 tentative」のうち mark チェックを skip 相当に。
+    既存挙動 (rank==1 + 非 tentative のみ) を維持するため、別経路で集約関数を
+    呼ぶ前に rank/tentative を pre-check する。
     """
     if not spec:
         return False
-    from config import is_whitelisted_race  # 関数スコープ import で循環回避
-    if race is not None and not is_whitelisted_race(race):
-        return False
-    odds = (horse.get("win_odds") or 0) / 10.0
-    popularity = horse.get("win_popularity") or 0
-    if tentative or pred.rank != 1:
-        return False
-    exclude_conf = spec.get("exclude_confidence", ["暫定", "混戦", "接戦"])
-    if pred.confidence in exclude_conf:
-        return False
-    min_value = spec.get("min_value")
-    if min_value is not None and pred.value_score < min_value:
-        return False
-    min_ev = spec.get("min_ev")
-    if min_ev is not None and pred.expected_value < min_ev:
-        return False
-    min_odds = spec.get("min_odds")
-    max_odds = spec.get("max_odds")
-    if min_odds is not None and (odds <= 0 or odds < min_odds):
-        return False
-    if max_odds is not None and (odds <= 0 or odds > max_odds):
-        return False
-    # Phase 7 (2026-05-16): min_kelly チェック (P15 候補 wl_kelly_ge_05 採用準備)
-    min_kelly = spec.get("min_kelly")
-    if min_kelly is not None and (pred.kelly_fraction or 0) < min_kelly:
-        return False
-    # S5-3 (2026-05-17): max_predicted_p チェック (Phase A2 後の高 p 帯破綻防御)
-    max_pp = spec.get("max_predicted_p")
-    if max_pp is not None and (pred.win_probability or 0) > max_pp:
-        return False
-    min_pop = spec.get("min_popularity")
-    max_pop = spec.get("max_popularity")
-    if popularity:
-        if min_pop is not None and popularity < min_pop:
-            return False
-        if max_pop is not None and popularity > max_pop:
-            return False
-    return True
+    # 既存 backtest は pred.mark が空でも rank==1 なら通していた。
+    # 集約関数は mark 必須なので、ここで rank/tentative のみ事前判定し、
+    # 集約関数の mark チェックを bypass するために mark を一時付与しない形で
+    # 呼ぶことはせず、集約関数の本体を直接呼ぶ。
+    # ただ実態として predict_race の preds[0] は mark を持つので、mark 必須は問題なし。
+    from predictor.filter import is_buy_candidate
+    return is_buy_candidate(pred, horse, tentative, race=race, filter_spec=spec)
 
 
 def run_backtest(

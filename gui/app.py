@@ -276,62 +276,23 @@ class Api:
         filters: dict | None = None,
         race: dict | None = None,
     ) -> bool:
+        """買い候補判定。S7-α-2 (2026-05-18) で predictor.filter.is_buy_candidate に集約。
+
+        gui/app.py 特有の odds_age チェック (BUY_FILTER_DEFAULT["max_odds_age_min"]) は
+        集約関数に持っていないので、ここで先に評価する。
+        """
         filters = filters or {}
-        odds = (horse.get("win_odds") or 0) / 10.0
-        popularity = horse.get("win_popularity") or 0
+        # gui 特有: odds の取得時刻 age チェック (古いオッズの予想を弾く)
         odds_age = self._odds_age_minutes(horse.get("odds_fetched_at"))
-        # 既定値は config.BUY_FILTER_DEFAULT (= web/generator.py の BET_MIN_* と
-        # JS dashboard input value 全部が同じ出典)。これでフィルタの数値が
-        # 経路によって変わる事故を防ぐ。
-        # None は「制約なし」を意味する (config.BUY_FILTER_DEFAULT で None を許容)
-        min_value_raw = filters.get("min_value", BET_MIN_VALUE)
-        min_value = float(min_value_raw) if min_value_raw is not None else None
-        min_ev_raw = filters.get("min_ev", BET_MIN_EV)
-        min_ev = float(min_ev_raw) if min_ev_raw is not None else None
-        min_odds = float(filters.get("min_odds", BET_MIN_ODDS))
-        max_odds = float(filters.get("max_odds", BET_MAX_ODDS))
-        _raw_min_pop = filters.get("min_popularity", BUY_FILTER_DEFAULT.get("min_popularity"))
-        _raw_max_pop = filters.get("max_popularity", BUY_FILTER_DEFAULT.get("max_popularity"))
-        min_pop = int(_raw_min_pop) if _raw_min_pop is not None else None
-        max_pop = int(_raw_max_pop) if _raw_max_pop is not None else None
-        exclude_conf = filters.get(
-            "exclude_confidence",
-            BUY_FILTER_DEFAULT.get("exclude_confidence") or [],
-        ) or []
         max_age_min = int(filters.get("max_odds_age_min", BUY_FILTER_DEFAULT["max_odds_age_min"]))
-        # 重賞ホワイトリスト (race を渡したときのみ評価)。BET_WHITELIST=0 で無効。
-        if race is not None and not is_whitelisted_race(race):
-            return False
-        # Kelly>0 / EV>0 を条件にすると現状のモデルでは候補ゼロになるので、
-        # min_ev=0 等の既定値で「事実上無効化」されるよう書き直す。
-        if pred.rank != 1 or not pred.mark or tentative:
-            return False
         if odds_age is not None and odds_age > max_age_min:
             return False
-        if pred.confidence in exclude_conf:
-            return False
-        if min_value is not None and pred.value_score < min_value:
-            return False
-        if min_ev is not None and pred.expected_value < min_ev:
-            return False
-        if not (min_odds <= odds <= max_odds):
-            return False
-        if popularity and min_pop is not None and popularity < min_pop:
-            return False
-        if popularity and max_pop is not None and popularity > max_pop:
-            return False
-        # S5-3 (2026-05-17): min_kelly チェック欠落のバグ修正。
-        # scripts/predict.py と scripts/backtest.py には既に min_kelly チェックが
-        # 入っているが GUI 側だけ抜けていた。これが「HTML 表示の買い候補が
-        # 大量 (Kelly 0% 系も含む) になる」根本原因だった。
-        _raw_min_kelly = filters.get("min_kelly", BUY_FILTER_DEFAULT.get("min_kelly"))
-        if _raw_min_kelly is not None and (pred.kelly_fraction or 0) < float(_raw_min_kelly):
-            return False
-        # S5-3 (2026-05-17): max_predicted_p チェック (Phase A2 後の高 p 帯破綻防御)。
-        _raw_max_pp = filters.get("max_predicted_p", BUY_FILTER_DEFAULT.get("max_predicted_p"))
-        if _raw_max_pp is not None and (pred.win_probability or 0) > float(_raw_max_pp):
-            return False
-        return True
+        # 残りは集約関数 (rank / mark / tentative / whitelist / value / ev / odds /
+        # kelly / max_predicted_p / popularity / kelly>0) に委譲
+        from predictor.filter import is_buy_candidate
+        # filters が空 dict の場合は BUY_FILTER_DEFAULT を使う
+        spec = filters if filters else None
+        return is_buy_candidate(pred, horse, tentative, race=race, filter_spec=spec)
 
     def _odds_age_minutes(self, fetched_at: str | None) -> int | None:
         if not fetched_at:

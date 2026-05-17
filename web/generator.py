@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import BUY_FILTER_DEFAULT, ICLOUD_PUBLISH_DIR, WEB_DIST, is_whitelisted_race
 from db import open_db
 from predictor import is_tentative, predict_race
+from predictor.filter import is_buy_candidate
 from web.codes import (
     grade_name,
     ground_name,
@@ -148,40 +149,28 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
                 for h in raws_sorted
             ]
             # 印つきトップ 3 を抜粋（根拠付き）
-            # 重賞ホワイトリストモードでは、race が whitelist 条件を満たさない
-            # 場合 bet_candidate を False に強制する。
-            race_whitelisted = is_whitelisted_race(race_dict)
-            # 人気帯 / 信頼度除外も config から読む (P0-4 の sweep 結果反映)
-            # None = 制約なし (wl_odds_8_20 採用後は popularity 制約解除中)
-            _raw_min_pop = BUY_FILTER_DEFAULT.get("min_popularity")
-            _raw_max_pop = BUY_FILTER_DEFAULT.get("max_popularity")
-            wl_min_pop = int(_raw_min_pop) if _raw_min_pop is not None else 1
-            wl_max_pop = int(_raw_max_pop) if _raw_max_pop is not None else 99
-            wl_exclude_conf = BUY_FILTER_DEFAULT.get("exclude_confidence") or []
-            top_picks_by_race[key] = [
-                {
+            # S7-α-2 (2026-05-18): bet_candidate 判定は predictor.filter.is_buy_candidate
+            # に集約。以前は web/generator.py が独立した判定ロジック (172-185 行) を
+            # 持ち、S5-3 で追加した min_kelly / max_predicted_p が反映されず、HTML に
+            # 全 ◎ 馬が買い候補として表示される重大バグの原因だった。
+            top_picks_for_race = []
+            for p in preds[:3]:
+                if not p.mark:
+                    continue
+                horse_for_pred = next(
+                    (r for r in raws if r["horse_num"] == p.horse_num), None
+                )
+                if horse_for_pred is None:
+                    continue
+                tent = tentative_by_race.get(key, False)
+                top_picks_for_race.append({
                     "mark": p.mark,
                     "num": p.horse_num.lstrip("0") or "0",
-                    "name": next((r["horse_name"] for r in raws
-                                  if r["horse_num"] == p.horse_num), ""),
-                    "odds": (next((r["win_odds"] for r in raws
-                                   if r["horse_num"] == p.horse_num), 0) or 0) / 10.0,
-                    "popularity": next((r["win_popularity"] for r in raws
-                                        if r["horse_num"] == p.horse_num), 0) or 0,
-                    "bet_candidate": (
-                        race_whitelisted
-                        and p.rank == 1 and not tentative_by_race.get(key, False)
-                        and p.confidence not in wl_exclude_conf
-                        and p.value_score >= BET_MIN_VALUE
-                        and p.expected_value >= BET_MIN_EV
-                        and BET_MIN_ODDS <= (
-                            (next((r["win_odds"] for r in raws
-                                   if r["horse_num"] == p.horse_num), 0) or 0) / 10.0
-                        ) <= BET_MAX_ODDS
-                        and wl_min_pop <= (
-                            next((r["win_popularity"] for r in raws
-                                  if r["horse_num"] == p.horse_num), 0) or 0
-                        ) <= wl_max_pop
+                    "name": horse_for_pred.get("horse_name", ""),
+                    "odds": (horse_for_pred.get("win_odds", 0) or 0) / 10.0,
+                    "popularity": horse_for_pred.get("win_popularity", 0) or 0,
+                    "bet_candidate": is_buy_candidate(
+                        p, horse_for_pred, tent, race=race_dict
                     ),
                     "rationale": p.rationale,
                     "confidence": p.confidence,
@@ -191,9 +180,8 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
                     "fair_odds": p.fair_odds,
                     "expected_value": p.expected_value,
                     "kelly_fraction": p.kelly_fraction,
-                }
-                for p in preds[:3] if p.mark
-            ]
+                })
+            top_picks_by_race[key] = top_picks_for_race
 
     days: dict[tuple, dict] = {}
     buy_candidates: list[dict] = []
@@ -212,7 +200,17 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
             r["kaiji"], r["nichiji"], r["race_num"],
         )
         top_picks = top_picks_by_race.get(race_key, [])
-        bet_picks = [p for p in top_picks if p.get("bet_candidate")]
+        # S7-α-3 (2026-05-18): 二重防御ガード。
+        # bet_candidate が True でも kelly_fraction が 0 近傍の馬は HTML
+        # 買い候補ボードから除外する。is_buy_candidate 側で kelly_fraction > 0
+        # は既にチェック済みだが、過去 1 ヶ月で「フィルタ漏れで Kelly 0% 馬が
+        # 候補表示」事故が 2 回発生 (S5-3 GUI 欠落、S7-α web/generator.py 欠落)
+        # しているため、表示層での明示ガードを追加。is_buy_candidate の責務と
+        # 二重になるが、防御の冗長性として正当化。
+        bet_picks = [
+            p for p in top_picks
+            if p.get("bet_candidate") and (p.get("kelly_fraction") or 0) >= 0.0001
+        ]
         anchor = f"race-{r['race_year']}{r['race_month_day']}-{r['track_code']}-{int(r['race_num'])}"
         for p in bet_picks:
             buy_candidates.append({

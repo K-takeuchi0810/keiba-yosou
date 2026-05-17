@@ -63,43 +63,13 @@ def compute_bet_size(
 
 
 def _is_bet_candidate(pred, horse: dict, tentative: bool, race: dict) -> bool:
-    """config.BUY_FILTER_DEFAULT に従って買い候補かを判定。
+    """買い候補判定。S7-α-2 (2026-05-18) で `predictor.filter.is_buy_candidate` に集約。
 
-    UI / backtest と統一の判定条件。ホワイトリスト・人気・odds・EV/value・
-    信頼度・kelly>0 などを一気にチェック。
+    本関数は後方互換のためのラッパー (scripts/predict.py 外から `_is_bet_candidate` で
+    参照されていたかもしれないため残す)。新規コードは `is_buy_candidate` を直接呼ぶ。
     """
-    if tentative or pred.rank != 1 or not pred.mark:
-        return False
-    if race is not None and not is_whitelisted_race(race):
-        return False
-    spec = BUY_FILTER_DEFAULT
-    odds = (horse.get("win_odds") or 0) / 10.0
-    popularity = horse.get("win_popularity") or 0
-    if pred.confidence in (spec.get("exclude_confidence") or []):
-        return False
-    if spec.get("min_value") is not None and pred.value_score < spec["min_value"]:
-        return False
-    if spec.get("min_ev") is not None and pred.expected_value < spec["min_ev"]:
-        return False
-    if spec.get("min_odds") is not None and (odds <= 0 or odds < spec["min_odds"]):
-        return False
-    if spec.get("max_odds") is not None and (odds <= 0 or odds > spec["max_odds"]):
-        return False
-    # Phase 7 (2026-05-16): min_kelly チェック (P15 候補 wl_kelly_ge_05)
-    if spec.get("min_kelly") is not None and (pred.kelly_fraction or 0) < spec["min_kelly"]:
-        return False
-    # S5-3 (2026-05-17): max_predicted_p チェック (Phase A2 後の高 p 帯破綻防御)
-    if spec.get("max_predicted_p") is not None and (pred.win_probability or 0) > spec["max_predicted_p"]:
-        return False
-    if spec.get("min_popularity") is not None:
-        if popularity <= 0 or popularity < spec["min_popularity"]:
-            return False
-    if spec.get("max_popularity") is not None:
-        if popularity <= 0 or popularity > spec["max_popularity"]:
-            return False
-    if pred.kelly_fraction <= 0:
-        return False
-    return True
+    from predictor.filter import is_buy_candidate
+    return is_buy_candidate(pred, horse, tentative, race=race)
 
 
 def latest_race_date(conn) -> str | None:
