@@ -105,23 +105,37 @@ BUY_FILTER_DEFAULT: dict = {
     #
     # 注意 (2026-05-17 実測で更新): kelly_quarter モードでは bet_unit >= 10000 円
     # を強く推奨。当初 plan の「>= 1000 円推奨」は理論計算ベースで楽観的すぎた。
-    # 現状の calibrator 状態 (TRAIN 21-23 で fit された旧 bin、A2 で Isotonic
-    # 再 fit 予定) では Kelly は 0.05〜0.15 帯に集中するため、bet_unit=1000 で
-    # も Kelly 0.05〜0.10 が一律 20 円に縮退する。bet_unit=10000 で Kelly 0.05
-    # → 130 円、0.10 → 250 円、0.20 → 500 円の解像度が得られる。
-    # 適切な閾値は Phase A2 (calibrator 再 fit) 完了後に backtest で kelly_uncapped
-    # 分布を見て再 sweep する (Phase A1 完了条件からは外し、独立フェーズへ移動)。
+    # Phase A2 後 Kelly は 0.05〜0.27 帯に広がったが、丸めで縮退する区間は残る。
+    # 適切な閾値は S6 で `filter_sweep --recent-3fold` (最新 fold は 2026
+    # PRODUCTION を含む) で grid 評価する。
     "min_kelly": 0.05,
+    # ----- max_predicted_p: 高 p 帯破綻防御 (S5-3 で追加、2026-05-17) -----
+    # Phase A2 完了後の Step 3 holdout で、bin [0.50, 0.55) actual=5.4% /
+    # bin [0.70+] actual=0% という reliability 破綻が観測された。S5-1 の
+    # Isotonic mapping 解析で「LGBM v5 の高 p 帯予測は構造的に楽観的、
+    # Isotonic はダウンマップしているが race-internal 正規化で再び高 p 帯に
+    # 浮かび上がる」構造が判明。
+    # この破綻区間を運用上カットする防御策。Phase B/C で LGBM v6 再訓練
+    # するまでの暫定対処。0.40 は「[0.35, 0.40) で gap -0.24 まで許容、
+    # それ以上は不安定すぎる」という Step 3 reliability bins からの判断。
+    "max_predicted_p": 0.40,
     "min_popularity": None,
     "max_popularity": None,
     "exclude_confidence": [],
     "max_odds_age_min": 30,
-    # ----- 場別 whitelist (2 場限定、P14 と同じ) -----
-    # 04 = 新潟、09 = 阪神 (web/codes.py:TRACK_NAMES)
-    # recent-3fold で逆転 robust だった 2 場。継続採用。
-    "whitelist_mode": True,
+    # ----- 場別 whitelist (S5-3 で全場開放、2026-05-17) -----
+    # 旧 P15 では `whitelist_tracks=["04", "09"]` (新潟+阪神) としていたが、
+    # Step 3 holdout (PRODUCTION 1,380 races) の場別実測で:
+    #   - 阪神 (09): 13.0% hit / 137.2% return (CI [9.1%, 18.1%]、唯一統計有意)
+    #   - 新潟 (04):  9.7% hit /  66.1% return (CI [4.8%, 18.7%]、東京と差ナシ)
+    # 新潟は P15 採用時の recent-3fold の偶然性 (1.5 ヶ月 smoke で 161% だった)
+    # で WL に入っていたが、PRODUCTION では他場と差なく控除率以下。
+    # 阪神は本物の好成績だが、阪神のみに絞ると機会が極めて薄くなる。
+    # 「全場開放 + max_predicted_p + min_kelly で絞る」方針に転換。
+    # 場別の優位性は S6 で `filter_sweep --recent-3fold` 場別解析で再評価。
+    "whitelist_mode": False,
     "whitelist_grades": [],
-    "whitelist_tracks": ["04", "09"],
+    "whitelist_tracks": [],
 }
 
 

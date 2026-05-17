@@ -320,6 +320,17 @@ class Api:
             return False
         if popularity and max_pop is not None and popularity > max_pop:
             return False
+        # S5-3 (2026-05-17): min_kelly チェック欠落のバグ修正。
+        # scripts/predict.py と scripts/backtest.py には既に min_kelly チェックが
+        # 入っているが GUI 側だけ抜けていた。これが「HTML 表示の買い候補が
+        # 大量 (Kelly 0% 系も含む) になる」根本原因だった。
+        _raw_min_kelly = filters.get("min_kelly", BUY_FILTER_DEFAULT.get("min_kelly"))
+        if _raw_min_kelly is not None and (pred.kelly_fraction or 0) < float(_raw_min_kelly):
+            return False
+        # S5-3 (2026-05-17): max_predicted_p チェック (Phase A2 後の高 p 帯破綻防御)。
+        _raw_max_pp = filters.get("max_predicted_p", BUY_FILTER_DEFAULT.get("max_predicted_p"))
+        if _raw_max_pp is not None and (pred.win_probability or 0) > float(_raw_max_pp):
+            return False
         return True
 
     def _odds_age_minutes(self, fetched_at: str | None) -> int | None:

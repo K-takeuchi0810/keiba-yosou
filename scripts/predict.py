@@ -88,6 +88,9 @@ def _is_bet_candidate(pred, horse: dict, tentative: bool, race: dict) -> bool:
     # Phase 7 (2026-05-16): min_kelly チェック (P15 候補 wl_kelly_ge_05)
     if spec.get("min_kelly") is not None and (pred.kelly_fraction or 0) < spec["min_kelly"]:
         return False
+    # S5-3 (2026-05-17): max_predicted_p チェック (Phase A2 後の高 p 帯破綻防御)
+    if spec.get("max_predicted_p") is not None and (pred.win_probability or 0) > spec["max_predicted_p"]:
+        return False
     if spec.get("min_popularity") is not None:
         if popularity <= 0 or popularity < spec["min_popularity"]:
             return False
