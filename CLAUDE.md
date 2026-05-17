@@ -36,6 +36,18 @@ worktree branch (例: `.claude/worktrees/<name>/`) で改修して expert-review
 
 (a) と (b) のどちらを選ぶかは「親リポ反映を本セッションでやるか / 次セッションへ持ち越すか」で決める。時間制約 (重い backtest と並走中など) で (a) が間に合わない場合のみ (b) を採るが、その場合は scorecard に「subagent CWD 限定運用での評価」と明記する。
 
+#### 1-ter. 重い計算 (30 分以上の bg 実行) を起動する前の前提条件
+
+`scripts.backtest` の TEST 全期 (3-4 時間) や Isotonic 再 fit など、**bg 実行 30 分以上の重い計算** を起動する前に、必ず以下を確認する:
+
+1. **実行 cwd の整合性**: 親リポ (`/c/Users/kizun/dev/keiba-yosou`) で `.venv64/Scripts/python.exe -m scripts.backtest ...` を呼ぶ場合、worktree branch の最新 commit が親リポ master に **ff merge 済み** であること。`git -C /c/Users/kizun/dev/keiba-yosou log -3 --oneline master` で worktree の最新 commit hash が含まれているかを確認。
+2. **コード反映の事前検証**: 改修した dataclass フィールド / 関数 / フラグが、実行直前に 1 行スクリプトで確認可能。例: `python -c "from predictor.rules import Prediction; import dataclasses; print([f.name for f in dataclasses.fields(Prediction)])"` で新フィールドの存在を確認。
+3. **コミット境界の明示**: 重い計算の結果を baseline JSON として保存する場合、その時点の `git rev-parse HEAD` を `--rule-version` に込めるか、`meta.git_sha` (P17 A2 c0 で追加済) として記録。
+
+**理由**: 2026-05-17 P17 A2 Step 1 で、worktree commit `0e30621` (c1) を親リポ master に ff merge しないまま親リポで TEST 全期 backtest を起動した結果、c1 適用前のコードで 3.6 時間動き、生成された `p17_A2_pos_fix` baseline が p16_A1_test と完全一致する重複データになった事故あり (3.6 時間の計算時間ロス、コードや計画への影響はゼロ)。subagent CWD 問題 (ルール 1-bis) と同質の「親リポ↔worktree 同期の見落とし」事故。
+
+これを防ぐため、重い計算前のチェックリスト 3 項目を必須化する。短時間 backtest (< 30 分) や local テストはこの対象外。
+
 ### 2. `gui/app.py` の HTML/JS を編集したら必ず `python-embedded-js` 検証
 
 詳細: `.claude/skills/python-embedded-js/SKILL.md`
