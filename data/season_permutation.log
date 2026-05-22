@@ -1,0 +1,11 @@
+observed: 2025 avg = 1046.8%, 2026 avg = 1109.7%, delta = +62.9 pp
+n_total months = 10 (5 + 5)
+
+permutations enumerated: 252
+null delta range: [-124.1, +124.1] pp
+null delta median: +0.3 pp
+
+two-sided p-value (|delta| >= 62.9): 0.1984  (50/252)
+one-sided p-value (delta >= +62.9): 0.0992  (25/252)
+
+observed at percentile 90.5% of null distribution (one-sided)
