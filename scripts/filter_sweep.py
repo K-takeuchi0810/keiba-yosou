@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import BUY_FILTER_DEFAULT, DATA_PERIODS
 from db import open_db
 from predictor.rules import is_tentative, predict_race
+from predictor.stats import bootstrap_return_rate
 from scripts.backtest import get_payout, horses_for_race, list_races
 
 WHITELIST_GRADES = frozenset(BUY_FILTER_DEFAULT["whitelist_grades"])
@@ -132,14 +133,24 @@ def summarize(picks: list[Pick], bet: str, spec: dict) -> dict:
     payout_attr = f"{bet}_payout"
     selected = [p for p in picks if match_filter_extended(p, spec)]
     bet_total = len(selected) * 100
-    returns = sum(getattr(p, payout_attr) for p in selected)
-    hits = sum(1 for p in selected if getattr(p, payout_attr) > 0)
+    payouts = [getattr(p, payout_attr) for p in selected]
+    stakes = [100] * len(selected)
+    returns = sum(payouts)
+    hits = sum(1 for v in payouts if v > 0)
+    # _payouts / _stakes は bootstrap CI 計算用の内部フィールド。
+    # TODO: 現状は filter_sweep が 1 race 1 pick (rank=1 かつ mark) 前提なので
+    # bet-level resample = race-level resample と一致する。複数 pick 戦略 (例:
+    # 同レース内で複数頭 / mark 違いを許す) を将来追加するときは、bootstrap
+    # の resample を race-level または day-level に変更する必要がある
+    # (predictor/stats.py bootstrap_return_rate)。
     return {
         "bets": len(selected),
         "hits": hits,
         "hit_rate": hits / len(selected) if selected else 0,
         "return_rate": returns / bet_total if bet_total else 0,
         "profit": returns - bet_total,
+        "_payouts": payouts,
+        "_stakes": stakes,
     }
 
 
@@ -490,10 +501,18 @@ def main() -> int:
                 f"  collected fold {name} ({fr}-{to}): {len(period_picks_r[name])} picks",
                 file=sys.stderr,
             )
-        cols = ",".join(f"{name}_bets,{name}_hit_rate,{name}_return_rate"
-                        for name, _, _ in fold_periods)
-        print(f"filter,{cols},min_return,robust_3fold")
-        rows_r: list[tuple[str, list[dict], float, bool]] = []
+        # CSV: fold ごとに bets,hit_rate,return_rate,lo (CI 下限) の 4 列。
+        # 末尾に min_return / min_lo / robust (Y / hold / n) を追加。
+        # robust 判定 (案 Z, 2026-05-20):
+        #   Y    = 点推定 ≥ 0.80 かつ CI 下限 ≥ 0.50 を 3 fold すべてで満たす
+        #   hold = 点推定 ≥ 0.80 だが CI 下限 < 0.50 (サンプル不足、PRODUCTION で再判定)
+        #   n    = 点推定で控除率超え未達
+        cols = ",".join(
+            f"{name}_bets,{name}_hit_rate,{name}_return_rate,{name}_lo"
+            for name, _, _ in fold_periods
+        )
+        print(f"filter,{cols},min_return,min_lo,robust_3fold")
+        rows_r: list[tuple[str, list[dict], list[float], float, float, str]] = []
         for fname, spec in FILTERS:
             results = [
                 summarize(period_picks_r[name], args.bet, spec)
@@ -501,23 +520,56 @@ def main() -> int:
             ]
             if all(r["bets"] == 0 for r in results):
                 continue
+            ci_los: list[float] = []
+            for r in results:
+                if r["bets"] >= 1:
+                    _, lo, _ = bootstrap_return_rate(
+                        r["_payouts"], r["_stakes"], n_resample=1000
+                    )
+                else:
+                    lo = 0.0
+                ci_los.append(lo)
             non_zero = [r for r in results if r["bets"] > 0]
             min_ret = min(r["return_rate"] for r in non_zero) if non_zero else 0
-            is_robust = (
+            non_zero_los = [
+                lo for r, lo in zip(results, ci_los) if r["bets"] > 0
+            ]
+            min_lo = min(non_zero_los) if non_zero_los else 0.0
+            point_robust = (
                 all(r["bets"] >= 10 for r in results)
                 and all(r["return_rate"] >= 0.80 for r in results)
             )
-            rows_r.append((fname, results, min_ret, is_robust))
-        rows_r.sort(key=lambda x: (x[3], x[2]), reverse=True)
-        for fname, results, min_ret, is_robust in rows_r:
+            ci_robust = min_lo >= 0.50
+            if point_robust and ci_robust:
+                label = "Y"
+            elif point_robust:
+                label = "hold"
+            else:
+                label = "n"
+            rows_r.append((fname, results, ci_los, min_ret, min_lo, label))
+        # ソート: Y > hold > n、その中で min_lo 降順、続いて min_ret 降順。
+        rank = {"Y": 2, "hold": 1, "n": 0}
+        rows_r.sort(key=lambda x: (rank[x[5]], x[4], x[3]), reverse=True)
+        for fname, results, ci_los, min_ret, min_lo, label in rows_r:
             parts = [fname]
-            for r in results:
+            for r, lo in zip(results, ci_los):
                 parts.append(str(r["bets"]))
                 parts.append(f"{r['hit_rate']*100:.1f}")
                 parts.append(f"{r['return_rate']*100:.1f}")
+                parts.append(f"{lo*100:.1f}")
             parts.append(f"{min_ret*100:.1f}")
-            parts.append("Y" if is_robust else "n")
+            parts.append(f"{min_lo*100:.1f}")
+            parts.append(label)
             print(",".join(parts))
+        # サマリを stderr に: ラベル別件数。
+        counts = {"Y": 0, "hold": 0, "n": 0}
+        for row in rows_r:
+            counts[row[5]] += 1
+        print(
+            f"summary: robust_Y={counts['Y']}, hold={counts['hold']}, "
+            f"n={counts['n']}, total={len(rows_r)}",
+            file=sys.stderr,
+        )
         print(f"sec,{time.time() - started:.1f}", file=sys.stderr)
         return 0
 
