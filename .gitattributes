@@ -1,0 +1,14 @@
+# LightGBM model files: text-looking but LightGBM's parser does NOT handle CRLF
+# correctly. core.autocrlf=true on Windows had been silently breaking these
+# every time a new worktree was created. Treat as binary so git stores them
+# verbatim regardless of platform line endings.
+#
+# Pattern covers v5, v6, ... and any other "*_model.txt" we add later.
+predictor/*model*.txt -text
+
+# Calibrator / weights are JSON: line endings don't matter for parsers, but
+# pinning to LF avoids spurious diffs.
+predictor/calibrator.json text eol=lf
+predictor/weights.json text eol=lf
+predictor/lgbm_features.json text eol=lf
+predictor/lgbm_meta.json text eol=lf
