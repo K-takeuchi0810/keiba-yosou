@@ -1,0 +1,192 @@
+H3-1 MING dynamics changelog 検証 log
+======================================
+日時: 2026-05-24 11:50 (= B1-S0 Step 1)
+所要: ~25 分 (= handoff 見積もり 30 分 within budget)
+
+調査目的
+--------
+
+v4 §1.3 N2 の観察 = MING (dm_rank_1_3) が picking する horse の odds median が
+fold 間で **40.4 → 7.7** (= 5.2 倍 shift) と崩れた現象が、
+  (a) ingest 層変更 (raw → SQLite で MING fields の column mapping 変わった)
+  (b) features 層変更 (MING signal の derivation logic 変わった)
+  (c) 両方とも変更なし (= データ自身の shift)
+のいずれに起因するかを git log + diff で特定する。
+
+H2 dump CSV (= data/dump_picks_h2.csv) は 2026-05-23 12:17 (commit e8ea17e) に
+1 度の dump_predictions.py 実行で 2025-01-05 〜 2026-05-10 の picks を出力した
+ものなので、生成時点で master HEAD コードと SQLite DB state は固定。3 folds
+(2025H1 / 2025H2 / 2026P) の picks は 同一コード + 同一 DB で評価された。
+
+調査コマンドと結果
+------------------
+
+(1) jvlink_client/ingest.py + predictor/features.py 全変更 list:
+
+    $ git log --oneline --all -- jvlink_client/ingest.py predictor/features.py
+    f601f32 2026-05-16 09:35  Tier 2.4 design: compute_race_relative_features
+    e9ae595 2026-05-16 07:12  Phase 6 Tier 2.3: rolling stats (30/90 day)
+    d631e98 2026-05-14 19:35  Phase 6: extend FILTERS catalog + Tier 1
+    60d884a 2026-05-13 01:40  Phase 1: Ingest 5 unused JV-Data dataspecs + MING
+    [pre-MING era: 2026-05-09 〜 2026-05-12 (5 commits, MING 未導入)]
+
+(2) MING ingest 関連 (mining_predictions table) commits:
+
+    $ git log -S"mining_predictions"
+    0f895d9 2026-05-13 07:01  P10 LGBM ensemble (= MING feature を消費する側)
+    60d884a 2026-05-13 01:40  Phase 1: Ingest 5 unused JV-Data dataspecs + MING
+
+    → mining_predictions table は **60d884a 1 commit で作成、以降変更なし**。
+
+(3) parser.py 内 parse_dm / parse_tm 全変更:
+
+    $ git log -S"parse_dm" -- jvlink_client/parser.py
+    60d884a 2026-05-13 01:40  (single commit)
+    $ git log -S"parse_tm" -- jvlink_client/parser.py
+    60d884a 2026-05-13 01:40  (single commit)
+
+    → DM/TM parser logic は **60d884a 1 commit で固定、以降変更なし**。
+
+(4) ingest.py の DM/TM dispatch 関連:
+
+    $ git log 60d884a..HEAD -- jvlink_client/ingest.py
+    (出力なし)
+
+    → 60d884a 以降 ingest.py は **完全に変更なし**。
+
+(5) features.py の mining_dm_rank / mining_tm_rank / mining_dm_time /
+    mining_tm_score 派生 logic (= L1313-1333 周辺):
+
+    post-60d884a commits: f601f32 / e9ae595 / d631e98
+
+    $ git show d631e98 -- predictor/features.py | grep mining
+    feat["mining_tm_rank"] = None        ← default None 初期化分岐の追加のみ
+    feat["mining_tm_score"] = None       ← (= cache miss path への追加)
+    $ git show e9ae595 -- predictor/features.py | grep mining
+    (出力なし)
+    $ git show f601f32 -- predictor/features.py | grep mining
+    (出力なし)
+
+    → mining_dm_rank の **SQL JOIN 派生 logic (L1300-1328) は 60d884a 以降
+    変更なし**。d631e98 で None default 初期化分岐 (= horse_num or conn 不在時)
+    が追加されたが、これは「mining_predictions に rowなし」のときの動作で
+    あり、データ存在時の派生 logic には影響しない。
+
+(6) FILTER strategy dm_rank_1_3 の定義 (= scripts/filter_sweep.py L257):
+
+    $ grep -n "dm_rank_1_3" scripts/filter_sweep.py
+    257:    ("dm_rank_1_3", {"max_dm_rank": 3}),
+        # → max_dm_rank <= 3 = MING の DM ランクが 1〜3 位の馬を選ぶ
+
+    $ git log -S"max_dm_rank" -- scripts/filter_sweep.py
+    d631e98 2026-05-14 19:35  Phase 6 で定義、以降変更なし
+
+    → FILTER ルールは d631e98 以降変更なし、3 folds 評価で完全に同一閾値。
+
+(7) 2eef203 (= P11 commit、message に "fixed MING parser" を含む) の確認:
+
+    $ git show 2eef203 --stat
+    (修正 file: data/backtest/*.csv, predictor/lgbm_meta.json, lgbm_model.txt,
+     scripts/filter_sweep.py のみ)
+
+    → 2eef203 は **parser.py / ingest.py / features.py を 1 文字も触っていない**。
+       commit message の "fixed MING parser" は 60d884a 時点で書いた parser を
+       前提とし、LightGBM v3 (LGBM 再訓練) を行った変更で、parser コード自身の
+       修正ではない。
+
+verdict
+-------
+
+(a) ingest 層変更: **NO** (= 60d884a 以降 ingest.py / parser.py / schema.sql
+    の DM/TM 関連は 1 文字も変更なし、commit 0 件)
+
+(b) features 層変更: **NO** (= 60d884a 以降 features.py の mining_dm_rank /
+    mining_tm_rank / mining_tm_score / mining_dm_time の派生 SQL JOIN logic
+    は完全不変、commit 0 件。d631e98 で追加された分岐は cache miss path の
+    None 初期化のみで実値派生に影響なし)
+
+(c) データ自身の shift: **YES** (= 残された唯一の可能性)
+
+(c) を支持する内部証拠
+----------------------
+
+- H2 dump CSV は 2026-05-23 の 1 回実行で 2025H1 / 2025H2 / 2026P 全 picks を
+  出力。同一コード + 同一 DB state での評価
+- 同一 FILTER (dm_rank_1_3 = max_dm_rank <= 3) を 3 folds に適用、にも関わらず
+  picked horses の odds median が 40.4 → 7.7 と shift
+- v4 §1.3 N2 観察: MING (dm_rank_1_3) で 2026P の picked horses の p25 が
+  3.4、p75 が 30.3 (= 全体が favorite 寄り)、2025 では p25=6/7、p75=101 (= 大穴
+  含む) と全く異なる分布
+
+(c) の下位仮説 (= JV-VAN 側で何が起きたか、推定):
+
+  (c1) **JV-VAN side MING algorithm update** in late 2025 / early 2026.
+       JV-VAN がマイニング予想の出力傾向 (favorite 寄り or 大穴含む) を
+       internal model update で shift させた可能性。
+       検証方法: data/raw/*.jvd の DM/TM records を 2025H1 / 2025H2 / 2026P
+                の同じレース日付で抜き、predicted_rank 分布を比較
+                (= data 自体で確認、code 不要)
+
+  (c2) **DM/TM-eligible 馬集団 shift**. JV-VAN が MING 予想対象とする馬の
+       条件 (= 出走頭数 / 重賞限定 / 新馬除外 etc.) を 2026 で変更し、
+       対象馬の odds 分布が shift。
+       検証方法: 同上 + race-level の race_grade / head_count 分布も含めて
+                stratified 比較
+
+  (c3) **Market structure shift**. 2026 春に競馬市場全体で odds 形成が
+       favorite 寄りになった (= 大衆購買の集中、AI 予想の普及等の外的要因)、
+       それが MING ranking 結果に間接的に reflect。
+       検証方法: JV-VAN 非依存の市場全体の odds 分布 (= 全レース全馬の
+                win_odds median) を 2025 と 2026 で比較
+
+(c1)-(c3) は H3-1 単独では分離不能、ただし Phase B1 plan では (c1) を最有力
+仮説として扱う (= JV-VAN side algorithm shift が最も直接的な説明)。
+
+事前予想との照合
+----------------
+
+事前予想 (session notes §B1-S0.1):
+  「Step 1 H3-1 で MING ingest/features 変更が「両方とも変更なし」(= c) 結果
+   確率: 0.45-0.60」
+
+実観察: **(c) verdict 完全一致**、確率上限 0.60 を上回る確信度で (c) 確定。
+方向 ✓ 強度 ✓ = 事前予想 hit。事故クラス再発なし (= 二重構造遵守)。
+
+Phase B1 設計への含意
+---------------------
+
+1. **MING data 自体を feature として消費する LGBM v6 の安定性は JV-VAN 側
+   dynamics に依存**。Phase B1 で features に MING を追加採用しても、JV-VAN が
+   ロジック update したら predict 性能が shift する risk あり
+
+2. **Tier 2.1b expected_pace_index (上がり 3F race-internal 推定)** 等の
+   「raw race 数値由来」features は JV-VAN dynamics に独立。Phase B1 の
+   robustness 確保のため、MING 系より race-internal features に重み寄せ推奨
+
+3. **multi-fold 採否補助 row** (= plan v2.1 OP-1 で追加した §5.2 row) の
+   存在意義: MING dynamics shift のような JV-VAN side regime shift を fold 別
+   robustness check で間接的に検出可能。今回の dm_rank_1_3 picking shift は
+   3 scheme (quarterly + rolling 12m + 季節別) のどれかで pick 不一致として
+   表れるはず
+
+4. **Gate-2 (a)(b)(c) との関係**:
+   - Gate-2 (a) season selection bias: H3-1 と独立、Step 2 で評価
+   - Gate-2 (b) multi-fold row: H3-1 は v2.1 OP-1 で組込済を補強、(b) 通過
+   - Gate-2 (c) causal candidate: H3-1 の (c) verdict だけでは「2026Q1 LGBM
+     崩壊の causal candidate」を 1 個も特定していない。Step 3 H3-3 で別軸
+     causal candidate 探索が必要
+
+訂正履歴
+--------
+
+(本 step で訂正なし。事前予想と evidence 完全一致)
+
+完了判定
+--------
+
+[x] git log + diff で MING 関連 commits 全数追跡 (= 7 commits 検索範囲、
+    実質的変更は 60d884a 1 件のみ確認)
+[x] (a)(b)(c) 3 verdict 明確化 (= NO / NO / YES)
+[x] data/h3_1_ming_changelog.log 出力 (= 本 file)
+[x] 事前予想との照合: hit
+[x] Phase B1 設計への含意 4 項目記録

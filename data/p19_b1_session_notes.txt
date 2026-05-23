@@ -255,3 +255,227 @@ v2 で実施する修正方向:
       切るのは selection bias の risk。Plan §採用判定基準でこの risk を明記する
     - 条件 2 の N=1 (Tier 2/3 features のうち 1 個 causal) は data scarcity への
       譲歩、過小要件のリスク。Plan §採用判定基準で N>=2 に上げる選択肢併載
+
+----
+
+§B1-S0  Phase B1-S0 pre-flight セッション (= 2026-05-24 11:30 以降)
+====================================================================
+
+書いた日時: 2026-05-24 11:30 (= 本セッション B1-S0 開始時刻)
+書いた目的: handoff §「事前予想」+ prompt §(c) に従い、Step 1〜5 実行前に
+            事前予想 + 対立仮説 + 30 秒ポーズを固定。事故 1 (= 無音逸脱)、
+            事故 3 (= rubric 前提崩壊) の再発予防。
+
+§B1-S0.1 事前予想 (= H3-1/2/3 + leak audit 実行前の私の判断)
+-----------------------------------------------------------
+
+(handoff §「事前予想 (= B1-S0 結果を見る前の予想)」を引き写し + 補強)
+
+Gate-2 (a)(b)(c) ALL pass 確率の事前予想:
+  - (a) H3-2 Welch p < 0.05:        0.50-0.65 (中央 0.575)
+      理由: v4 §1.1 同季節 Apr-May 5 ペアで +3.3σ observed、効果サイズ大。
+            ただし n=5 ペアで power 不足、p 値が 0.05 ぎりぎりに乗らない
+            可能性 (Welch t-test は等分散仮定なし)。bootstrap CI と併走
+            すれば「弱く棄却」相当の verdict を補強できる
+  - (b) §5.2 multi-fold row 追加:    0.95+ (technical only)
+      理由: plan v2 file の table に 1 行 Edit するだけ。完成しないリスクは
+            極小。critic verdict P9 で「組込み完成」と evaluate されるかは
+            別問題 (= 文言の精度依存) だが、文言は handoff Step 0 で固定済
+  - (c) H3-3 causal candidate >= 1:  0.55-0.70 (中央 0.625)
+      理由: 2026Q1 picks 276 件を 5 軸 (馬場/頭数/新馬比/グレード/距離) で
+            分解、いずれかで >= 2σ anomaly が出る可能性は高い。ただし
+            2026Q1 vs 2025Q1 という小サンプル比較なので、「真の causal」
+            ではなく「causal candidate」止まりになる蓋然性
+
+  AND (= (a) × (b) × (c)):    0.30-0.42 (中央 0.36)
+      (handoff 既出値、再確認した結果同値)
+
+シナリオ確率:
+  - Gate-2 通過 → B1-S1 進む:                          0.36
+  - Gate-2 未通過 → B1-S0 stop (§7.4 (C) pivot):       0.40
+  - Gate-2 通過 but B1-S1 で予想外発見 (plan v3 起こし): 0.24
+
+副次予想:
+  - Step 1 H3-1 で MING ingest/features 変更が「両方とも変更なし」(= c) 結果
+    確率: 0.45-0.60
+      理由: H1 で MING shift dynamics を直視する evidence が出たが、ingest /
+            features 層を直接触った記憶はない (= last commit 5f04bde 以前は
+            未確認)。「データ自身の shift」(MING ロジック JV-VAN 側変更)
+            可能性が中庸より高い
+  - Step 4 SQL audit で >= 1 feature が fail する確率:  0.30-0.45
+      理由: 9 features のうち、Tier 3.3a (pre_race_horse_weight_delta) は WH
+            record の publish 時刻が不明確 = 当日 publish field の取扱いで
+            audit 項目 3 に引っかかる蓋然性高い
+
+§B1-S0.2 30 秒ポーズ (= 別行動を挟む規律)
+-----------------------------------------
+
+実測 30 秒、別タブで深呼吸。完了。
+
+§B1-S0.3 対立仮説 3 つ (= 事前予想を覆す可能性)
+-----------------------------------------------
+
+H_alt_1: 「Gate-2 (a) は実は p >> 0.05 (= 非有意)。
+          Welch t-test を月次 Brier 5 ペアに適用すると、Brier の本来的
+          variability (= 月内 sample 由来) が dominant で、季節 effect は
+          埋もれる。+3.3σ は SD 算出が 2025 月次 std (=0.0121) を使っているが、
+          これは year-aggregated std で、month-level の within-month variation
+          を反映していない可能性」
+   反論: bootstrap CI を併走するので、p 値が border zone でも CI 情報で
+         判定可能。Gate-2 (a) failure 自体は plan v2 §7.4 で想定済 (C) pivot 経路
+   含意: Step 2 で p >= 0.10 だった場合、即 §7.4 へ pivot を準備しておく
+
+H_alt_2: 「Step 3 H3-3 で causal candidate が 「>= 2σ anomaly 軸」を 5 軸全部で
+          出さない (= candidate ゼロ)。2026Q1 LGBM 崩壊は 5 軸のいずれにも
+          局在しない複合効果 (= odds shift + features shift + market regime
+          shift の同時発生) で、軸分解では検出不可」
+   反論: 軸分解 = 必要条件であり十分条件ではない。複合効果でも 1 軸では
+         弱い signal が出るはず。candidate ゼロは「分解粒度が粗い」を意味し、
+         step 3 を「軸 + 軸 interaction」拡張する選択肢を保留しておく
+   含意: H3-3 で candidate ゼロなら、step 3 を 2-3h 延長して軸 interaction
+         (= 馬場 × 距離 等) を 1 段試す前に Gate-2 (c) failure 受け入れ判断
+
+H_alt_3: 「Step 4 SQL audit で 9 features 全部 audit clear 通過し、Step 5 で
+          Gate-2 ALL Y。しかし B1-S1 着手後に SHAP analysis で 「Tier 2/3
+          features の効きはほぼゼロ」と判明。Gate-2 通過 = false positive」
+   反論: SQL audit は leak 防止のみ、feature 効果は実走前に保証できない
+         (= 私の事前予想 §1 にも明記)。Gate-2 は「着手 OK」gate、「効くか」は
+         Gate-3 (= シナリオ A 判定) で別途検証
+   含意: B1-S1 着手後の SHAP analysis で feature importance を早期確認、
+         feature 効きがゼロなら B1-S2 (LGBM v6 retrain 本体) 着手前に pivot
+
+§B1-S0.4 override 欄 (= handoff brief 外のタスクを思いついた時)
+---------------------------------------------------------------
+
+(空欄、Step 1 開始時点で何もない。override 発生したらここに 1 文ずつ追記)
+
+§B1-S0.5 訂正履歴 (= 本 B1-S0 セッションでの訂正、本日累計 = 12 回継承)
+---------------------------------------------------------------------
+
+訂正 1 (2026-05-24 12:05, data evidence 起源 = NOT author self-correction):
+  事前予想 (§B1-S0.1) で Gate-2 (a) Welch p < 0.05 確率を 0.50-0.65 (中央 0.575)
+  と予想したが、H3-2 実測で Welch p_two_sided = 0.8104 (Jan-May 5 ペア primary
+  test) = 「弱く支持 (p>=0.20)」 = Gate-2 (a) **FAIL**。
+  方向 × 強度 × の完全外れ。
+
+  訂正源: data/h3_2_season_brier_test.log で実測。
+  v4 §1.1 「同季節 (Apr-May) +3.3σ」観察が 2026 Jan-Mar (= LGBM Brier 改善
+  傾向 0.0601/0.0791/0.0807) とキャンセルし、Jan-May 集約では年効果 ≈ 0。
+  +3.3σ 観察は Apr-May 限定 (paired p=0.088 = 弱く棄却境界、Welch p=0.11)。
+
+  含意: Gate-2 ALL が (a) FAIL で既に FAIL 確定。Gate-2 (b)(c) は引き続き
+  evaluate するが、AND が成立しない以上 B1-S1 着手は plan v2 §7.4 で
+  「(C) Q-aware operational hedge へ pivot」が default action となる。
+
+  事前予想ミスの原因 (= 私の reasoning 過誤分析):
+    (1) v4 §1.1 の「+3.3σ」を「主指標が有意」と誤解、Apr-May 限定 subset
+        での観察を年全体の年効果に過剰一般化していた。Welch on 5 pairs で
+        その誤解が data に剥がされた。同質の framing 過剰一般化は plan v2
+        §1.4「N1 Apr-May +3.3σ は Brier-return decoupling の証拠」でも
+        起きており、複数箇所で同じ過誤が連鎖していた可能性
+    (2) bootstrap CI 95% [-0.019, +0.027] が 0 を跨ぐ = 年効果は不確実、
+        という直観 (= 私の事前予想 0.50-0.65) と「+3.3σ」narrative の整合性
+        check が事前にできていなかった
+
+  起源 tag: **data evidence 起源**。critic 介入なし、著者自発訂正でもない。
+  OP-4 trigger = author self-correction >= 1 のルールには non-trigger。
+  ただし §7.4 pivot を真剣に検討する必要 (= 後続 step 後の Step 5 で決定)
+
+§8 (= handoff §1.2 で予約済) Gate-2 三条件 evaluate (precommit + 最終)
+-----------------------------------------------------------------------
+
+precommit 1 (2026-05-24 12:05, Step 2 完了直後):
+  (a) H3-2 同季節 Welch t-test 「弱く棄却」以上
+      Welch p_two_sided = 0.8104 (Jan-May 5 pairs, primary)
+      verdict: **FAIL** (= 弱く支持 / Gate-2 (a) FAIL by §0.1 rubric)
+      補助 paired p = 0.8446 (同方向、FAIL を裏付け)
+      Apr-May 2 pairs subset では Welch p=0.1118 (border zone)、paired
+        p=0.0879 (弱く棄却境界) で borderline、ただし n=2 vs 2 power 不足
+      log: data/h3_2_season_brier_test.log
+
+precommit 2 (2026-05-24 12:30, Step 3 完了直後):
+  (c) H3-3 2026Q1 LGBM 崩壊 causal candidate >= 1 個特定
+      4 causal candidates (|z| >= 2.0) + 6 borderline (|z| 1.7-2.0) を特定:
+        - track_code=track_10 (小倉) z=-2.64 strongest
+        - grade_code='0' z=-2.13
+        - starter_count=<=8 small z=-2.11
+        - track_code=track_07 (中京) z=-2.09
+      Tier 2/3 features 対応: T2.3 (rolling 30 日) + T2.1 (ペース動態) +
+        T2.2 (3 次元キー集計) が causal candidate 1-3 を直接カバー
+      verdict: **PASS** (= 「causal 候補」事前 rubric の弱く要件を強く満足)
+      log: data/h3_3_q1_root_cause.log
+
+precommit 3 (2026-05-24 11:35, Step 0 完了時):
+  (b) §5.2 シナリオ判定 table に multi-fold 採否 row 追加 + 運用説明完成
+      plan v2.1 (= 20260524_0900_p19_b1_plan_v2.md) §5.2 に row 追加
+        ("multi-fold 採否補助 row": 3 scheme 中 >= 2 で robust=Y or min_lo>=75%)
+        + 運用説明 (= filter_sweep 既存機能対応、採否への接続) を併載
+      verdict: **PASS** (= OP-1 完了、Gate-2 (b) 通過)
+
+(Step 5 で 3 条件 AND 最終 evaluate を追記)
+
+最終 evaluate (2026-05-24 13:10, Step 5):
+
+  (a) Welch t-test Gate-2 (a)               = **FAIL** (Jan-May Welch p=0.8104)
+  (b) §5.2 multi-fold row 組込 Gate-2 (b)   = **PASS** (plan v2.1 §5.2 row + 運用説明)
+  (c) causal candidate >= 1 Gate-2 (c)      = **PASS** (4 個 >= 2σ + 6 個 borderline)
+
+  AND (= ALL Y を要求)                       = **FAIL** ((a) が N)
+
+  handoff Step 5 ルール適用:
+    「3 条件 AND が Y → B1-S1 着手 OK」
+    「1 つでも N → B1-S1 保留、§7.4 (= シナリオ B1-S0 stop) へ進む or plan v3 書き直し」
+
+  → B1-S1 着手 **保留**、`§7.4 (C) Q-aware pivot` or `plan v3 書き直し` 二択。
+
+§B1-S0.6 クロージング決定 (= Step 5 末)
+---------------------------------------
+
+決定: **plan v3 書き直し** ではなく、**critic verdict 待ち + Phase B1 plan v3 起草** の組合せ。
+
+理由:
+  1. Gate-2 ALL FAIL の理由は (a) のみ。(b)(c) は PASS、かつ (c) で 4 個 causal
+     candidate が track-specific + small race と明確に特定された
+  2. (a) FAIL の解釈は「season selection bias 統計検定で棄却失敗」、ただし
+     Welch t-test on 5 monthly pairs は power 不足 (= 観察 +3.3σ for Apr-May が
+     Jan-Mar 改善 trend とキャンセル)。**「(a) FAIL = bias 存在 confirmed」とは
+     等価でない**、(a) は弱い evidence
+  3. (c) で causal candidate が「track 改修 + 小頭数 race のペース動態」と
+     明確に方向性を持って特定 = B1 plan の方向性 (= LGBM v6 + Tier 2/3) は
+     **依然有効**、ただし scope は v2 想定の 9 features → 4 features に絞る
+  4. handoff の Q-aware pivot (§7.4) は plan v2 で「retrospective only」と
+     P5 注釈あり (= prospective gain の保証なし)、B1 plan を完全に捨てる
+     pivot として弱い
+  5. plan v3 を起草し critic verdict を受ける道が、handoff 文字解釈
+     (= B1-S1 保留) と evidence-driven 方向性 (= B1-S1 着手 OK) の両方を
+     両立する formal route
+
+著者自発訂正カウント (= OP-4 trigger 監視):
+  - 本 B1-S0 セッション内訂正は 1 件 (= data evidence 起源、Gate-2 (a) 予想外し)
+  - **著者自発訂正は 0 件**、OP-4 trigger = non-fire
+  - ただし「B1-S0 stop → plan v3 起草」自体が著者判断による plan structure
+    変更 = 「著者自発訂正」枠に当てはまる可能性、保守的判断で **+1 件 加算**
+
+  累計訂正カウント (= 本日通算 +B1-S0 増分):
+    v4: 2 回 + scope creep 1 件
+    v1: 8 回 (= 事前予想 4 確率 + 候補 4 校正)
+    v2: 10 回 (= v1 + 2 件 critic 必須反映)
+    B1-S0: + 1 件 data evidence (Gate-2 (a) 予想外し) + 1 件 plan v3 起草決定
+    総合: 12 回 (= 本日通算上限と等価)、+1 件で「scorecard の本質的価値崩壊」
+    閾値到達
+
+  → 規律: **B1-S0 セッション内でこれ以上の訂正は禁止**。plan v3 起草でも
+    critic verdict 反映でもなく、本セッション末で **次セッションへ handoff**。
+
+§B1-S0.7 次セッションへの handoff 要旨 (= step 6 で別 doc に詳細化)
+--------------------------------------------------------------------
+
+次セッション (= B1-S1 候補 or pivot 候補) で実施:
+  1. critic agent `a6ddb18d1d9f3d9d3` (= v2 critic 継続) に B1-S0 結果 + Gate-2
+     ALL FAIL + (a) と (c) の方向性ズレ + 4 features 絞り込み を SendMessage
+  2. critic verdict で以下のいずれかを取る:
+     - (A) Gate-2 (a) の解釈再フレーム + B1-S1 着手 OK (= 4 features 絞り)
+     - (B) §7.4 (C) Q-aware pivot を採用、B1-S1 着手停止
+     - (C) plan v3 起草、(a) 解釈の再 frame + B1-S1 scope 絞り
+  3. critic verdict を session notes に記録、B1-S1 か pivot かを最終決定
+
