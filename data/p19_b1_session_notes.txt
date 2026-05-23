@@ -1,0 +1,257 @@
+P19 B1 plan 書き直し セッション notes
+====================================
+
+書いた日時: 2026-05-24 07:00 (= v4 scorecard 05:30 の翌セッション)
+書いた理由: 事前予想を data 校正前に固定。v4 §4 事故 1 (N9 scope creep) と
+事故 3 (rubric 前提崩壊 with N2) の再発予防。
+
+----
+
+§0 (運用ルール)
+----------------
+
+A. 本セッションは「実験を走らせるセッション」ではなく「plan を書くセッション」。
+   よって「事前予想 → 30s ポーズ → 事後判定」の二重構造は以下に読み替える:
+     - 事前予想: v4 までの evidence を見る *前* に問い (i)(ii)(iii) の答えを書く
+     - 30s ポーズ: 予想を書き終えた後、v4 §1〜§5 の数値を見直す前に最低 30 秒、
+                   別のことを考える (3 つの対立仮説を口で挙げる)
+     - 事後判定: v4 evidence で予想を校正、ズレた部分を 1 文で明示
+
+B. handoff brief 外のタスクを思いついたら、実行前に必ず 1 文を override 欄に書く。
+   書かずに着手したら即停止して plan §メタに 1 件記録。
+
+C. v4 §5 SOME-PASS は「Phase B1 plan 書き直し着手 OK」を意味するが、
+   「LGBM v6 retrain 着手 OK」を意味しない。NO 条件 (規範外バイアス) に独立対策が
+   plan に含まれていることが必須条件。これを書き換え時の最重要規律とする。
+
+D. 事前固定 rubric の前提が data で支持されるかの sanity check を 1 行加える
+   (v4 §4 事故 3 予防)。本 plan §0 で実施。
+
+E. v4 §0 rubric (controlled-ness × dataset 限定性) を継承。plan の判定文に
+   「弱く / 強く / 確定」を書く時は rubric 行を引用してから書く。
+
+----
+
+§1 事前予想 (= v4 evidence 再読前の私の判断)
+----------------------------------------------
+
+問い (i): Phase B1 (LGBM v6 + Tier 2/3 features, 推定 25-30h) で利益化する確率は何 %か?
+
+  事前予想 (証拠を再読しない状態):
+    - P(val Brier ≤ 0.055) = 0.55-0.70
+        理由: 4 年 TRAIN + Tier 2/3 で Brier の数値改善は base rate で期待される
+    - P(reliability gap [0.3, 0.4) bin が 0.10+ に回復) = 0.40-0.55
+        理由: Isotonic 校正 + race 内 Σ=1 の二重正規化が calibrator 層では治らない
+              構造問題 = features 追加だけでは不十分の可能性大
+    - P(filter_sweep で robust=Y >= 1) = 0.20-0.35
+        理由: H1 N7 で cliff at R=80 観察 (H2 N9 で R=76 に修正)、73 戦略すべて未達
+              の現状から、val Brier 改善が即 robust=Y に転化する保証ない
+    - P(PRODUCTION holdout 2026 で絞り運用 >= 80%) = 0.20-0.30
+        理由: 上記 3 つの AND 条件 + 2026 hold-out 期間が小 (~5 ヶ月)
+              + Brier 改善が return_rate 改善に転化する transmission link 未検証
+
+  最終確率 (4 条件すべて満たして「利益化」と定義した場合): 0.15-0.25
+  「val Brier 改善だけ」を利益化のサインと取れば: 0.55-0.70
+
+  証拠ベース見積もり可能か:
+    - Yes (partially): v4 N1 月次 Brier 表 + reliability bin gap + N8 quarterly
+                       return_rate の組合せで、Brier vs return_rate transmission link
+                       の弱さを定量化可能 (= 2026Q1: Brier 良好 0.060-0.081, return 41-42%、
+                       2026Q2: Brier 悪化 0.117-0.125, return 84-91%)
+    - No (partially): Tier 2/3 features が新規追加された場合の val Brier 改善幅は
+                      実走前には base rate しか出せない (feature engineering 効果は
+                      実走で初めて分かる)
+
+問い (ii): 上げる最短経路は B1 か、別経路か?
+
+  事前予想 (証拠を再読しない状態):
+    候補:
+      (A) Phase B1 (LGBM v6 + Tier 2/3, 25-30h): P_profit 0.15-0.25
+      (B) calibration-only fix (Isotonic refit + Σ=1 規制, ~5h): P_profit 0.10-0.20
+      (C) operational hedge (Q-aware split: Q1 は MING, Q2-4 は LGBM, ~3h):
+          P_profit_change unclear (= 分散化、平均は変わらない可能性)
+      (D) 別 data source (パドック・血統 web API, 10-15h): P_profit 0.15-0.30、
+          ただし開発期間中 90 日のオッズ drift で評価不能化リスク
+      (E) v5 継続 + データ蓄積 (0h、6-12 ヶ月待ち): P_profit 0.10-0.20
+          (現状運用が継続的に -1% 程度回ると仮定)
+      (F) 採用判定基準を 80% → 76% に下げる (~1h): P_profit 0.20-0.30、
+          ただし基準を下げるだけで実体は改善しない (= cosmetic)
+      (G) 新 model architecture (CatBoost, neural ranking, 30-40h):
+          P_profit 0.15-0.25、開発期間最長
+
+    最短経路の解釈:
+      a. 「期待利益化確率 / 時間」での最短: (C) operational hedge or (B) calibration fix
+      b. 「最大利益化確率」での最短: (A) Phase B1 + (D) 別 data source の組合せ
+      c. 「リスク minimum」での最短: (E) v5 継続
+
+    私の事前推奨: (A) Phase B1 を採用するが、scope を絞った「B1-lite」に変更:
+      - Tier 2/3 を full 7 features ではなく "selected 3 features" に絞る (= H3-3
+        root cause 探索を 2-3h 実行 → 結果に基づき 3 features 選定)
+      - LambdaRank は採用、ただし binary CE と A/B 並列訓練
+      - 4 年 TRAIN は採用、ただし 2024 のみ追加 (= 3 → 4 年、5 年は cost 比メリット薄)
+      所要: 15-20h、P_profit 0.20-0.30 (full B1 より低いが時間効率が良い)
+
+問い (iii): Phase B1 scope を v6 再訓練のまま維持か、再定義か?
+
+  事前予想 (証拠を再読しない状態):
+    - **再定義**を推奨。理由:
+      1. v4 H2 N1 で「2026 全体 drift」narrative が「2026 Apr-May Brier 限定」に
+         refine された。「LGBM v5 の構造的限界」を full retrain の根拠とするのは
+         dataset 限定の証拠
+      2. v4 H2 N8 quarterly で「2026Q1 LGBM 単独崩壊 + 2026Q2 回復 + MING 逆相関」
+         が明らかになり、retrain で改善するか別軸の問題かが不明
+      3. v4 H2 N2 で MING shift dynamics が emerging question = retrain 前に
+         このダイナミクスを features に組み込めるかが先決
+      4. Brier vs return_rate 分離 dynamics が plan の transmission link を破壊する
+      5. v4 §5 SOME-PASS の NO 条件 (規範外バイアス未否定) は full retrain で
+         直接対応できる problem ではない (= 別途 multi-fold scheme 評価が必要)
+
+    - 推奨 scope:
+      B1-S0 (新規 pre-flight, ~3-4h):
+        - H3-1 (MING dynamics changelog 検証) 0.5h
+        - H3-2 (Apr-May Brier 悪化 statistical test) 0.5h
+        - H3-3 (2026Q1 LGBM 崩壊 root cause 探索) 2-3h
+        - results-driven gate: H3-3 で「Tier 2/3 のうち N 個が causal」と特定
+          できれば B1-S1 に進む、できなければ B1-S0 で plan stop
+      B1-S1〜S4 (条件付き、H3-3 で causal feature 特定後):
+        scope は H3-3 結果に依存して決定
+
+----
+
+§2 30 秒ポーズ + 対立仮説 3 つ
+----------------------------------
+
+(ストップウォッチで実測 30 秒、別タブの cat を撫でる行動を挿入。完了後に書く)
+
+対立仮説 3 つ (= 私の事前予想を覆す可能性のあるもの):
+
+  H_alt_1: 「B1 full retrain は実は計算量的に妥当な投資。事前予想で
+          P_profit 0.15-0.25 と低く見積もっているが、Tier 2/3 features の SHAP
+          analysis を別途やれば feature importance がはっきりして、Brier vs
+          return_rate transmission link の謎が解ける可能性」
+          → 反論: SHAP は計算後の解釈であり、retrain 後にしか得られない情報。
+                   事前に link を保証できない。私の予想は妥当範囲
+
+  H_alt_2: 「2026Q1 LGBM 崩壊は実は単一の外的要因 (例: 馬場改修、新馬制度変更、
+          オッズ計算ロジック変更) で説明可能。retrain で features を増やすより、
+          h3-1 / h3-3 結果次第で 1-2 features を data hot-fix するだけで足りる」
+          → 反論: 可能性あり。だからこそ B1-S0 (= H3-1 + H3-3) を pre-flight
+                   として推奨している。事前予想 (iii) と整合
+
+  H_alt_3: 「私の事前予想 P_profit が低すぎる (悲観バイアス)。実際は base rate で
+          LGBM retrain は profit を 5-10% 改善するし、Tier 2/3 features の中で
+          少なくとも 1 つは strong signal を持っている」
+          → 反論: P(val Brier 改善) は 0.55-0.70 と中央値で書いた。
+                   P(profit 改善) と P(val Brier 改善) の transmission link が
+                   weak なのは v4 H2 evidence (Q1/Q2 decoupling) で証明済。
+                   悲観バイアスではなく link 弱さを織り込んだ予想
+
+----
+
+§3 事後判定 (= v4 evidence で事前予想を校正)
+-----------------------------------------------
+
+(plan §1 (i)(ii)(iii) 確定後、ここに「予想と evidence の一致度」を書く)
+
+----
+
+§4 override 欄 (= handoff brief 外のタスクを思いついた時に書く)
+----------------------------------------------------------------
+
+2026-05-24 09:00 追記: critic からの必須 2 件 + 推奨 2 件への対応 = plan v2 書き直し。
+これは handoff brief 「v1 完了後 critic 依頼」の自然な続き = override ではなく
+本セッション継続。
+
+----
+
+§5 訂正履歴
+------------
+
+(訂正があれば 1 行ずつ追記。本日の許容上限 = 6 回 (= 本日値))
+
+訂正 1 (2026-05-24 09:00): v1 §1.2 P(reliability gap 縮小) 0.40-0.55 → 0.35-0.50
+  下方修正 を critic P1 verdict (= 「partial、逆方向校正が plausible」) に基づき
+  取り下げ。v2 で 0.35-0.55 (range 拡大) + 「上方校正が妥当な可能性」を明記。
+  訂正方向: 校正幅を縮小 (自分の judgement を弱める方向)。
+
+訂正 2 (2026-05-24 09:00): v1 §0.2 「SOME-PASS 着手 OK の operational 定義」が
+  handoff 著者意図 (= 3 条件 ALL clear が plan 着手条件) との整合不十分との
+  critic P7 verdict を受け、B1-S2 (LGBM v6 retrain 本体) 着手の gate を新規明文化
+  (= N3 弱く棄却以上 + multi-fold scheme 採用判定組込済との確認)。
+  訂正方向: handoff 厳格解釈への接続を強化。
+
+----
+
+§6 事前予想 (= v2 への校正方針)
+-------------------------------
+
+v2 で実施する修正方向:
+  - P1 reliability: 0.35-0.50 → 0.35-0.55 (range 拡大) + 上方校正可能性明記
+  - P7 SOME-PASS: §0.2 に B1-S2 gate を 1 段追加、ただし B1-S0 着手 OK は維持
+  - P3 SQL audit: §6.1 に B1-S0-step4 (1h) 追加、所要 17-24h → 18-25h
+  - P6 MING trace: §5.1 連続改善指標 A-E → A-G に拡張、F = MING odds median
+    shift, G = MING return_rate quarterly
+
+事前予想する数値変化:
+  - 4 条件 ALL 利益化確率: 0.12-0.20 → 0.13-0.21 (range 中央 +0.01 程度の微上方、
+    reliability 上方校正反映)
+  - シナリオ A 確率: 0.12-0.20 → 0.13-0.21 (同上)
+  - 採否決定までの時系列: 2026-06-06〜09 → 2026-06-07〜10 (= 1h 追加分微シフト)
+
+30 秒ポーズ (実測): 完了
+
+対立仮説 3 つ:
+  H_alt_1: 「critic P1 verdict 自体が悲観 (= critic が私の校正を過剰評価)。
+            実際は私の 0.35-0.50 下方校正は妥当」
+           反論: critic は v4 §1.1 evidence (mid-bin gap 2026 で改善方向) を
+                 dataset-specific evidence として §0 rubric で評価しており、
+                 私の校正より緻密。critic 採用が妥当
+  H_alt_2: 「P7 修正で B1-S2 gate を厳格化すると、結果的に B1 全体が
+            stuck し、利益化機会を逃す」
+           反論: B1-S2 gate は §5 採用判定 (binary 4 条件) と異なり「着手条件」、
+                 規範外バイアスへの独立対策が確認されたら開く ≠ Brier 改善要件
+                 と別 layer。stuck risk は限定的
+  H_alt_3: 「v2 は critic 修正を全部受け入れて over-correction しないか」
+           反論: critic 自身が「P2-P5 残置 OK」と明示、必須は 2 件のみ。
+                 受け入れ範囲は critic verdict の boundary 内
+
+----
+
+§7 v2 完了条件
+----------------
+
+(plan v2 書き終え時に check)
+  - [ ] P1 §1.2 reliability gap 校正取り下げ
+  - [ ] P7 §0.2 B1-S2 着手 gate 明文化
+  - [ ] P3 §6.1 B1-S0-step4 SQL audit 1h 追加
+  - [ ] P6 §5.1 連続改善指標に MING 系 2 個追加 (F, G)
+  - [ ] critic verdict §3 prospective 警告 (= self-aware は防御線ではない、
+        修正実施まで本文に反映) を §8 メタ §8.5 として新規追加
+  - [ ] v2 → v3 で critic 再確認依頼
+
+----
+
+§6 事前固定 rubric の data 適合性 sanity check (v4 §4 事故 3 予防)
+-----------------------------------------------------------------
+
+本 plan で採用する判定基準:
+  1. Phase B1 採用 = 4 条件 AND (val Brier, reliability gap, robust=Y >= 1, holdout >= 80%)
+  2. B1-S0 → B1-S1 gate = H3-3 で「Tier 2/3 features のうち N (>=1) 個が
+     2026Q1 LGBM 崩壊の causal explanation 候補」と特定
+  3. シナリオ A/B/C 分岐 = val Brier 改善 + reliability gap + filter_sweep の合成
+
+  Data 適合性 check:
+    - 条件 1 の「val Brier ≤ 0.055」は 2025 val data で計算可能、適合 OK
+    - 条件 1 の「holdout >= 80%」は 2026 Q3-onwards で計算可能、ただし時点で
+      ~4 ヶ月後のため fresh data 蓄積を待つ必要、適合 PARTIAL
+    - 条件 2 の「causal」は 2026Q1 small sample (3 ヶ月) で identifiability の
+      問題あり。「causal 候補」「妥当な correlation」程度に弱める必要、適合 PARTIAL
+    - 条件 3 の合成は閾値依存、§0 rubric の controlled-ness × dataset 限定性で
+      書き分け予定、適合 OK
+
+  事前 rubric が data で支持されないリスクの記録:
+    - 条件 1 の Brier 0.055 は v5 の 0.0606 と比較した 9% 改善目標。
+      本来 Brier 連続値で feature importance を見るべきところ、binary 採否で
+      切るのは selection bias の risk。Plan §採用判定基準でこの risk を明記する
+    - 条件 2 の N=1 (Tier 2/3 features のうち 1 個 causal) は data scarcity への
+      譲歩、過小要件のリスク。Plan §採用判定基準で N>=2 に上げる選択肢併載
