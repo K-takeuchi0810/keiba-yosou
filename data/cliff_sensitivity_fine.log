@@ -1,0 +1,52 @@
+loaded 73 strategies from recent_3fold_ci.csv
+
+=== R% sensitivity (fixed L%=50.0) ===
+R%, Y, hold, n, Y_strategies, hold_strategies
+60,2,11,60,dm_rank_1_3,tm_rank_1_3,tm_rank_1_3_ev_ge_105,dm_rank_1,ev_ge_120+8
+61,2,10,61,dm_rank_1_3,tm_rank_1_3,tm_rank_1_3_ev_ge_105,dm_rank_1,tm_score_ge_700_ev_ge_110+7
+62,2,7,64,dm_rank_1_3,tm_rank_1_3,tm_rank_1_3_ev_ge_105,dm_rank_1,only_t04_07_09+4
+63,2,6,65,dm_rank_1_3,tm_rank_1_3,tm_rank_1_3_ev_ge_105,only_t04_07_09,only_t04_09_ev_ge_110+3
+64,2,6,65,dm_rank_1_3,tm_rank_1_3,tm_rank_1_3_ev_ge_105,only_t04_07_09,only_t04_09_ev_ge_110+3
+65,2,6,65,dm_rank_1_3,tm_rank_1_3,tm_rank_1_3_ev_ge_105,only_t04_07_09,only_t04_09_ev_ge_110+3
+66,2,6,65,dm_rank_1_3,tm_rank_1_3,tm_rank_1_3_ev_ge_105,only_t04_07_09,only_t04_09_ev_ge_110+3
+67,2,3,68,dm_rank_1_3,tm_rank_1_3,only_t04_07_09,only_t04_09_ev_ge_110,odds_8_25_ev_ge_110
+68,2,3,68,dm_rank_1_3,tm_rank_1_3,only_t04_07_09,only_t04_09_ev_ge_110,odds_8_25_ev_ge_110
+69,1,3,69,dm_rank_1_3,only_t04_07_09,only_t04_09_ev_ge_110,odds_8_25_ev_ge_110
+70,1,3,69,dm_rank_1_3,only_t04_07_09,only_t04_09_ev_ge_110,odds_8_25_ev_ge_110
+71,1,2,70,dm_rank_1_3,only_t04_07_09,only_t04_09_ev_ge_110
+72,1,2,70,dm_rank_1_3,only_t04_07_09,only_t04_09_ev_ge_110
+73,1,2,70,dm_rank_1_3,only_t04_07_09,only_t04_09_ev_ge_110
+74,1,2,70,dm_rank_1_3,only_t04_07_09,only_t04_09_ev_ge_110
+75,1,2,70,dm_rank_1_3,only_t04_07_09,only_t04_09_ev_ge_110
+76,0,1,72,,only_t04_09_ev_ge_110
+77,0,1,72,,only_t04_09_ev_ge_110
+78,0,1,72,,only_t04_09_ev_ge_110
+79,0,0,73,,
+80,0,0,73,,
+81,0,0,73,,
+82,0,0,73,,
+83,0,0,73,,
+84,0,0,73,,
+85,0,0,73,,
+86,0,0,73,,
+87,0,0,73,,
+88,0,0,73,,
+89,0,0,73,,
+90,0,0,73,,
+
+=== verdict per U7 operational rubric ===
+Y at R=76,77,78,79,80,81,82,83,84,85:
+  R=76: Y=0, hold=1
+  R=77: Y=0, hold=1
+  R=78: Y=0, hold=1
+  R=79: Y=0, hold=0
+  R=80: Y=0, hold=0
+  R=81: Y=0, hold=0
+  R=82: Y=0, hold=0
+  R=83: Y=0, hold=0
+  R=84: Y=0, hold=0
+  R=85: Y=0, hold=0
+
+Y count smooth in 78-82 region (delta <= 2 each step): True
+Y at R=76: 0, R=79: 0, R=80: 0
+verdict: (b) 棄却: 78-82% で滑らか = 閾値偶然性ではない

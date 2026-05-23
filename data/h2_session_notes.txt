@@ -1,0 +1,401 @@
+Phase H2 セッション中の参照メモ (各 N の結果を見る直前に再読する)
+書いた日: 2026-05-24 H2 開始時
+v3 からの引き継ぎ: 3 懸念 (「弱く」の機械的使用 / U7 cliff edge operational / §5 weakly clear 総括の精度)
+
+================================================================
+解釈バイアス 3 ルール (H1 から継承、handoff §解釈バイアスへの注意)
+================================================================
+
+(1) 観察 = 解釈 と混同しない
+    結果が出たら、観察と解釈は別の段落で書く。
+
+(2) 対立仮説リストを必ず複数列挙
+    結果が出たら、その場で 3 つ挙げてから本文を書き始める。
+
+(3) 数字の方向ではなく強度に注意
+    H1 では 3 件中 2 件で強度予想を外し「弱く出しすぎた」傾向あり。
+    v4 では「弱く」「強く」「確定」を rubric (下記) で機械的に判定する。
+
+================================================================
+「弱く / 強く / 確定」判定強度 rubric (v4 新規、H1 反省から)
+================================================================
+
+H1 v3 では「弱く棄却」「弱く採用」「border zone」「weakly clear」を
+直感で書き分けた。v4 では下記 rubric で機械的に判定する。
+
+統計的検定 (permutation / bootstrap / t-test 等) の場合:
+
+| 強度ラベル | 判定基準 |
+|---|---|
+| 確定的に棄却 | p < 0.01 |
+| 強く棄却 | 0.01 ≤ p < 0.05 |
+| 弱く棄却 | 0.05 ≤ p < 0.10 |
+| border zone | 0.10 ≤ p < 0.20 |
+| 弱く支持 (= 棄却失敗 + 観察方向一致) | 0.20 ≤ p < 0.50 (片側) |
+| 判定不能 | sample size 不足 (N が p 計算自体を疑わせる) |
+| 強く支持 | 同 p < 0.05 で逆方向 |
+| 確定的に支持 | p < 0.01 で逆方向 |
+
+観察的判定 (fold 数、戦略数、bets 数等) の場合:
+
+| 強度ラベル | 判定基準 |
+|---|---|
+| 確定的に棄却 | 全 fold で 0 件 / 全 fold で反例 |
+| 強く棄却 | 全 fold で過半数反例 |
+| 弱く棄却 | 過半数 fold で反例 (= 2/3 以上) |
+| border zone | 半々 (1/3 で反例、2/3 で支持 等) |
+| 弱く支持 | 過半数 fold で支持 (= 2/3 以上) |
+| 強く支持 | 全 fold で支持 |
+| 確定的に支持 | 全 fold + 別 dataset で支持 |
+
+各判定で「rubric のどこに該当するか」を明示して書く。
+直感で「弱く」を書かない。
+
+================================================================
+U7 (cliff edge) operational 化ルール (v4 新規)
+================================================================
+
+v3 §3 U7: R%=80 cliff edge → 対立仮説 (a) point 性能構造的問題 / (b) 80%
+偶然 cliff edge / (c) JRA 控除率超え 80% が ambitious すぎる。
+
+operational 再評価条件 (Phase B1 後または定期 sweep で必ず実施):
+
+(1) R% を 1pp 刻みで振る (76, 77, 78, 79, 80, 81, 82, 83, 84, 85)
+    各 R% で robust=Y 件数を出す
+(2) 判定 rule:
+    - 78-82% で滑らか (各刻みで件数差 ≤ 2): cliff edge は閾値偶然性 (= b) 棄却
+    - 79% で 5 件以上、80% で 0 件: (b) 「偶然 cliff edge」採用
+    - 76% で 10 件以上、80% で 0 件: (c) 「JRA 控除率超え ambitious」採用
+    - 全 R% で 0 件: (a) 「point 能力構造的問題」採用
+    - それ以外: 「U7 mixed signal」未確定
+(3) 監視: 次の filter_sweep --recent-3fold 走行時に R% sensitivity を同時出力
+
+これは H2 では実施しない (Phase B1 後の sweep で扱う)。v4 §6 で「U7 operational
+monitoring ルールが書かれている」を operational 化済の証拠とする。
+
+================================================================
+§5 Phase B1 着手判定 ALL/SOME/NO-PASS rubric (v4 新規)
+================================================================
+
+v3 §5 では「weakly clear」「partially clear」「not strongly clear」と
+intuition で書いた。v4 では下記 3 条件をそれぞれ binary (PASS / NO) で
+判定し、合計で ALL-PASS / SOME-PASS (2/3) / NO-PASS (≤ 1/3) を出す。
+
+条件 1 (H1 完了 = U3, U4, U6 が「判定不能」を脱した)
+  PASS if: U3, U4, U6 のうち 3 つすべてに「弱く / 強く / 確定」のいずれか
+           の rubric ラベルが付いている
+  NO    if: 1 つでも「判定不能」のまま
+
+条件 2 (採用判定基準 0.80/0.50 が現実的に achievable)
+  PASS if: (a) N7 で R%=80 cliff edge の対立仮説 (a)(b)(c) のいずれかが
+           rubric で「弱く支持」以上 かつ
+           (b) N6 で favorite class achievable が「弱く支持」以上
+  NO    if: 上記 (a)(b) のいずれかが border zone 以下
+
+条件 3 (規範外バイアス: season + fold selection が H1+H2 で否定)
+  PASS if: N3 (season) で R1 棄却が rubric で「弱く棄却」以上 かつ
+           N8 (fold) で fold selection bias が rubric で「弱く棄却」以上
+  NO    if: いずれかが border zone 以上残置
+
+総合判定:
+  ALL-PASS (3/3): Phase B1 plan 書き直し着手可
+  SOME-PASS (2/3): 部分着手可 (PASS した条件を前提に、NO 条件は plan で
+                   独立に追加対策)
+  NO-PASS (≤ 1/3): 着手不可 (H1+H2 でも基準解けていない)
+
+================================================================
+H2 実行順序 (固定、結果見る前に決定)
+================================================================
+
+順序: N1 dump (background) → N8 analyze → N2 analyze → N1 analyze
+
+理由:
+- N1 dump (predict_race を 17 ヶ月走る) が 1.5-2.5h で最重い。最初に bg 投入
+- N1 dump が出した per-pick CSV を N8 と N2 が消費するので、dump 待ち中に
+  N8 / N2 の analyze スクリプトを書く
+- analyze 3 本は CSV 集計だけなので各 1-5 min
+- dump 完了後 N8 → N2 → N1 の順で分析 (N1 が最も判定が重いので最後に
+  鮮度高い頭で扱う)
+
+================================================================
+各 N の判定基準 (handoff §H2 + 上記 rubric、結果を見る前に固定)
+================================================================
+
+N1 (月次 LGBM Brier):
+  入力: scripts/dump_predictions.py の per-pick CSV (2025-01〜2026-05)
+        per-pick = filter_sweep の Pick + actual_winner ラベル
+  計算: 月次に Brier = mean[(p_predicted - y_actual)^2] for top-pick horses
+        + reliability: prob bin (0-10%, 10-20%, ...) ごとの hit_rate
+  事前予想 (確証バイアス対策): 2026 月次 Brier は 2025 平均 ± 1σ 内、
+                                drift は「弱く棄却」レンジ
+  判定基準:
+    - 2026 月次平均 Brier > 2025 月次平均 + 2σ: drift 強く支持 (U1-b 採用)
+    - 2026 月次平均 Brier > 2025 月次平均 + 1σ: drift 弱く支持
+    - 2026 月次平均 Brier ∈ 2025 平均 ± 1σ: drift 弱く棄却
+    - 2026 月次平均 Brier < 2025 平均 - 1σ: drift 強く棄却 (LGBM 改善)
+    - サンプル数不足 (< 100 picks/月): 判定不能
+
+N8 (fold 分割 sensitivity):
+  入力: scripts/dump_predictions.py の per-pick CSV
+  計算: 同じ pick データを 4 種類の fold 分割で再集計、dm_rank_1_3 戦略の
+        robust=Y 件数を見る
+  fold 分割案:
+    (i)   現状 = 2025H1 / 2025H2 / 2026P
+    (ii)  四半期 = 2025Q1-Q4 / 2026Q1-Q2 (6 fold)
+    (iii) 逆順 = 2026P / 2025H2 / 2025H1 (順序のみ)
+    (iv)  12-month rolling = [2025-01〜2025-12] / [2025-06〜2026-05] (2 fold)
+  事前予想: dm_rank_1_3 は (i) で 76.5% で 2026P 単独崩壊が観察された。
+            (iii) は順序だけなので結果同じ (sanity check)。
+            (ii) で 2026 春が単独崩壊なら U1-e 棄却 (= fold 選択ではなく
+            真の春崩壊)。崩壊が 2025-04〜2026-04 にまたがれば季節性
+  判定基準:
+    - (i) と (ii) と (iv) すべてで「直近 fold 単独崩壊」が現れる:
+      fold selection bias = 強く棄却 (= 崩壊は本物)
+    - (ii) または (iv) でパターン消失 (全 fold 平準): bias = 強く支持
+    - 一部分割で消失: bias = 弱く支持
+
+N2 (同オッズ帯 LGBM vs MING):
+  入力: scripts/dump_predictions.py の per-pick CSV
+  計算:
+    (a) 各 fold で MING dm_rank_1_3 picks の odds 分布: median, 25%, 75%
+    (b) その odds 帯 (= MING の IQR 範囲) で LGBM 戦略 (kelly_ge_05, ev_ge_105,
+        prob_ge_20) を絞り、bets / hit_rate / return_rate / CI 下限を計算
+    (c) MING と LGBM (同オッズ帯) の min_lo 比較
+  事前予想: MING dm_rank_1_3 の odds median は ~3-5 倍 (favorite 寄り)。
+            同オッズ帯の LGBM 戦略は bets が大幅減 (MING 同等水準で kelly
+            条件も pass する pick は少ない)。
+  判定基準:
+    - 同オッズ帯 LGBM の min_lo が MING ± 5pp 以内: U2-(d) 弱く支持 (class effect)
+    - 同オッズ帯 LGBM の min_lo が MING より 5-15pp 低い: border zone
+    - 同オッズ帯 LGBM の min_lo が MING より 15pp 以上低い: U2-(d) 弱く棄却
+      (= MING に LGBM が持っていない情報源)
+    - 同オッズ帯 LGBM の bets が < 30 (fold あたり): 判定不能
+
+================================================================
+30 秒ポーズ規律 (H1 から継承)
+================================================================
+
+CSV / log を開く前に、上記 3 ルールを再度読み返す。特に:
+- この数字を見て、最初に頭に浮かんだ解釈を、書く前に 1 度疑う
+- 対立仮説をその場で 3 つ挙げてから本文を書き始める
+- 「弱く」と書く前に上記 rubric の該当行を引用する
+
+================================================================
+全体に効く規律 (H1 から継承 + v4 追加)
+================================================================
+
+1. handoff / v2 / v3 は operational guide で絶対契約ではない。
+   逸脱判断は 1 文記録の上で OK
+2. 本セッションの H2 context を v4 scorecard 書く時に持ち越す。
+   ただし v4 では rubric 機械適用が原則。直感的「弱く」は禁止
+3. v3 4 回訂正パターンの再発有無を最後に必ずチェック
+4. v4 自体が次回再読時に「rubric 適用も誤り」と訂正される前提で書く
+
+================================================================
+各 N 三欄構造 (v4 critic 観点 1 採用、2026-05-24 追加)
+================================================================
+
+handoff brief 外のスコープ追加 (例: N9) を「無音逸脱」させないため、
+各 N の進行を 3 段階で明示的に記録する。**欄を埋めずに次の段階に進めない**。
+
+形式:
+  [事前予想]    : 結果を見る前に何を予想したか (1-2 文)
+  [30s ポーズ]  : 結果取得後、解釈執筆前にポーズした事実 (timestamp、思考)
+  [事後判定]    : rubric §0.x 引用 + 判定 + 確証バイアスチェック
+
+各 N の現状:
+----------------------------------------------------------------
+
+N1 月次 LGBM Brier:
+  [事前予想] 2026 月次平均 Brier は 2025 平均 ± 1σ 内に収まり、drift は
+            「弱く棄却」レンジ。confidence: 中
+  [30s ポーズ] 2026-05-24 結果 log を読んだ後 ~60 秒、v3 §4 t5 (単一観察での
+              確定的言明禁止) を再読、対立仮説 3 つ列挙してから判定執筆
+  [事後判定]
+    rubric 適用 (§0.1 統計検定 + §0.2 観察的混合):
+      - 主指標 (rubric 通り): 2026 月次平均 Brier 0.0923 vs 2025 平均 0.0871、
+        std 0.0121、delta +0.43σ → **drift 弱く棄却** (-1〜+1σ レンジ)
+    確証バイアスチェック: 事前予想と方向・強度ともに一致 (predicted: ±1σ
+                          内 弱く棄却 / observed: +0.43σ 弱く棄却)
+    ---
+    追加観察 (rubric 主指標外、要記録):
+      1. 月次 std shift: 2026 std 0.0274 = 2025 std 0.0121 の 2.26 倍。
+         分散シフトは drift 仮説 (1) と整合
+      2. 季節 controlled 比較 (2025 Apr-May vs 2026 Apr-May):
+         - 2025-04: 0.0712, 2025-05: 0.0906 → avg 0.0809
+         - 2026-04: 0.1167, 2026-05: 0.1250 → avg 0.1209
+         - delta +0.0400 = +3.3σ (2025 monthly std 基準)
+         - 同季節制御では **drift 強く支持** に転じる
+      3. 2026 Jan-Mar Brier (0.060/0.079/0.081) は 2025 平均より良好。
+         2026 全期間で一律 drift ではなく、Apr-May 集中
+      4. reliability bin: p∈[0.4,0.5] で gap -25〜-40pp (両年とも過信)、
+         2026 で n が増加 (33→37) かつ p_mean shift (Apr-May で 23-26%)
+    ---
+    対立仮説の整理:
+      (1) 真の drift Apr-May 集中: 主指標は弱く棄却、季節制御で強く支持。
+          **観察範囲内では「Apr-May 限定 drift」の証拠強、ただし n=2 ヶ月で
+          dataset 限定** (§0.0 ルール: 別年の Apr-May で再現が要件)
+      (2) 春開催 structural noise: 2025 Apr-May は 2025 内で normal、
+          2026 Apr-May が異常 → 「春構造一般」ではなく「2026 春特異」
+          が観察と整合
+      (3) calibrator drift: p_mean shift は観察事実だが、calibrator が
+          shift したか LGBM 出力が shift したかは N1 単独では分離不能
+    ---
+    U1-(b) 判定:
+      - 主指標 (年集約 Brier) 通り: **drift 弱く棄却**
+      - 季節制御副指標: 「2026 Apr-May 限定 drift」**観察範囲内強支持、
+        dataset 限定** (§0.0 適用: 1 dataset 上限のため確定的言明できず)
+      - 統合: U1-(b) は完全棄却できず、「2026 Apr-May 限定 drift」が
+        副仮説として浮上 (= 通年 LGBM 衰退ではなく、開催特異な勝因 shift)
+
+N8 fold 分割 sensitivity:
+  [事前予想] dm_rank_1_3 は current scheme で 2025H2 (75.2%) も既に 80% 未達
+            なので、「2026P 単独崩壊」narrative は v2/v3 framing 誤り
+            (2025H1 が単独成功) と判明する可能性高い。quarterly でも
+            2026 春 + 2025 H2 が共に低調で 2025H1 が異常値、と予想。
+            confidence: 中-高
+  [30s ポーズ] 2026-05-24 log 読了後 ~90 秒、recent_3fold_ci.csv との
+              数値差 (2025H2 dm: 71.7 vs 75.2、4 pick 差) を sanity check、
+              N1 結果との交差検証 (Brier ⇔ return_rate 逆相関) で時間使った
+  [事後判定]
+    rubric 適用 (§0.2 観察的):
+      U1-(e) 「fold selection bias」対立仮説の判定:
+      - (i) current で「2026P 単独崩壊」観察: all=54.5% 顕著、kelly/ev も悪
+      - (ii) quarterly で「2026P 単独崩壊」が **部分的に消失**:
+        - all: 2026Q1 (41.0) が単独最悪、2026Q2 (84.1) は normal
+        - kelly_ge_05: 2026Q1 (42.1) 単独最悪、2026Q2 (89.4) は normal
+        - ev_ge_105: 2026Q1 (41.9) 単独最悪、2026Q2 (91.4) は良好
+        - dm_rank_1_3: 2025Q1 (62.1) のほうが 2026Q2 (68.1) より悪い。
+          2026Q1 (85.9) は 2025Q4 (75.9) より良い
+      - (iv) rolling_12m: 2025_all と 2025-06_to_2026-05 ともに robust=Y 未達。
+        12 ヶ月 window では「単独崩壊」signal が消失 (どちらも 60-80% 帯)
+    ---
+    確証バイアスチェック:
+      事前予想: 「2025H1 単独成功」「quarterly でも 2026 春 + 2025H2 共に低調」
+      観察: 部分的に当たり (dm_rank_1_3 で 2025H1 が単独 robust=Y 候補)
+            しかし quarterly で 2026Q1 のみが LGBM 戦略単独最悪、2026Q2 は良好
+            は予想にない発見
+    ---
+    対立仮説の整理:
+      (1) 真の「2026 春 drift」: quarterly で 2026Q1 のみ単独最悪 = 2026 春の
+          一部 (Q1) で limited 崩壊、Q2 で回復 → **「春全体 drift」棄却、
+          「Q1 限定 drift」支持**
+      (2) fold selection bias: H1/H2/2026P 分割が 2026Q1 (悪) + 2026Q2 (良)
+          を「2026P」に collapse することで Q1 単独崩壊を見えにくくして
+          いた = **bias 観察範囲内で支持** (= 分割の選び方が「2026 全体悪」
+          という誤読を生んでいた)
+      (3) Q1 季節性: 2025Q1 (dm: 62.1) も 2026Q1 (kelly: 42.1) も「Q1 が
+          そのカテゴリの最悪四半期」になりやすい。**1月から3月の冬-早春は
+          LGBM/MING ともに不安定**
+      (4) Brier-return_rate 分離 dynamics (新規): 2026Q1 は Brier 良好
+          (0.060-0.081) なのに kelly/ev return_rate 41-42%。2026Q2 は
+          Brier 悪化 (0.117-0.125) なのに return_rate 84-91%。**確率校正
+          (calibration) と買い目戦略 (filter selection) は独立 dynamics**
+    ---
+    U1-(e) 判定:
+      rubric §0.2 「(ii) または (iv) でパターン消失」を厳密適用:
+      - (ii) quarterly: 2026P 単独崩壊 narrative が「2026Q1 限定」に refine
+        される。完全消失ではなく refinement = **fold selection bias 弱く支持**
+      - (iv) rolling_12m: 全 fold 60-80% 帯で robust=Y 不達 = bias 強く支持
+        ではないが、「単独 fold 崩壊」signal は消える
+      - 統合: **fold selection bias は弱く支持** (= 分割が narrative に
+        影響したが、依然 2026Q1 という「サブ fold 崩壊」は実在)
+      - §0.0 dataset 上限: 1 dataset 上限のため確定的言明不可
+    ---
+    付随する重要発見 (= v4 §1 で記録):
+      - U1 narrative の refine: 「2026P 全体崩壊」から「2026Q1 LGBM 戦略
+        単独最悪」へ更新が必要
+      - dm_rank_1_3 vs LGBM 戦略で崩壊四半期が異なる: dm は 2025Q1、
+        LGBM は 2026Q1 → これは N2 (同オッズ帯) の判定に影響
+
+N2 同オッズ帯 LGBM vs MING:
+  [事前予想] MING dm_rank_1_3 の odds median は 3-5 倍 (favorite 寄り)。
+            同オッズ帯 LGBM の bets は大幅減 (kelly + favorite 同時 pass
+            する pick は少ない)。delta vs MING は -10〜+5pp で border zone
+            付近に着地。confidence: 中
+  [30s ポーズ] 2026-05-24 log 読了後 ~120 秒、「MING ≠ favorite class」
+              発見の衝撃で確証バイアス傾向 (事前予想外れを縮小したく
+              なる) に意識的に対抗、3 fold 通読 + 2026P +4.5pp 逆転を
+              排除しないと決めた
+  [事後判定]
+    **事前予想完全外れ** (= confidence 中だったが実態:
+      MING dm_rank_1_3 odds median は 2025H1/H2 で 40.4 倍 (大穴含む)、
+      2026P で 7.7 倍 (favorite 寄り)。fold ごとに 5 倍も median 違う)
+    ---
+    rubric 適用前の重大な問題:
+      事前固定 rubric (h2_session_notes.txt N2) は「MING IQR の幅で
+      LGBM を絞る」という設計だったが、MING の IQR 自体が 2025H1/H2
+      [7, 101] と 2026P [3.4, 30.3] で全く異なる空間を覆っている。
+      同じ rubric を fold 間で機械的に適用すると、fold ごとに別空間の
+      LGBM 戦略を比較していることになる = **rubric の前提が data で
+      崩壊**
+    ---
+    rubric の機械適用結果 (procedural 完全性のため記録):
+      - kelly_ge_05: 2025H1 -24.6, 2025H2 -4.3, 2026P -4.7
+        max-below = 24.6 → rubric「>15pp below」→ **U2-(d) 弱く棄却**
+      - ev_ge_105: 2025H1 -13.8, 2025H2 -5.9, 2026P +1.2
+        max-below = 13.8 → rubric「5-15pp below」→ **border zone**
+      - prob_ge_20: 2025H1 -47.3, 2025H2 -42.4, 2026P +4.5
+        max-below = 47.3 → rubric「>15pp below」→ **U2-(d) 弱く棄却**
+      → 戦略により verdict 一定せず (= 単一の U2-(d) 採否言明できない)
+    ---
+    correct framing 下での解釈 (= rubric 前提崩壊を踏まえた refine):
+      - 2026P (narrower IQR、LGBM/MING の picking 空間が closer):
+        LGBM strategies は MING と **同等以上** (kelly -4.7、ev +1.2、
+        prob +4.5)
+      - 2025H1/H2 (wider IQR、MING が大穴含む空間で picking):
+        LGBM strategies は MING より lower lo。これは高オッズ horse で
+        LGBM が over-confident かつ kelly/prob filter で大穴 picking
+        してしまう dynamics と整合
+      - **U2-(d) 「favorite class 効果」hypothesis は false framing**:
+        MING is not consistently favorite-class. 2026P でのみ favorite 寄り
+    ---
+    対立仮説の整理:
+      (1) MING の picking 戦略自体が 2025-2026 で shift: 大穴 picker から
+          favorite picker へ。MING の内部ロジック (JRA-VAN) 変更か、または
+          データ取り込み層の変化 (= MING fields の coverage 改善で母集団変化)
+          → confirmable by jvlink_client/ingest.py changelog inspection
+      (2) MING is consistently better at 高オッズ contrarian: 2025 で
+          MING がカバーした wider IQR で LGBM が ill-equipped。LGBM の
+          over-confidence at high odds が原因 → addressable in Phase B1
+      (3) 2026P で LGBM 同等は sample noise: 2026P bets = 280-353 で
+          まだ CI 広い。再現性の確認に追加 fold (例: 2026Q3 が貯まれば) 要
+    ---
+    U2 判定:
+      - U2-(d) hypothesis (= MING robust 性は favorite class 効果): **false
+        framing で部分採用も部分棄却もできず、framing 自体を更新**
+      - revised question (= U2 update): 「MING の picking 戦略 (高オッズ
+        contrarian vs favorite) が fold 間で shift していることが robust
+        性に影響するか」
+      - 観察範囲内では: 2026P で LGBM ≈ MING (LGBM lacks info 仮説 弱く棄却)、
+        2025 で LGBM < MING (LGBM lacks info 仮説 観察範囲内で弱く支持)
+      - §0.0 dataset 上限: 1 dataset で fold 間 framing shift があるため
+        confident な判定不可
+    ---
+    付随する重要発見 (= v4 §1 / §3 で記録):
+      - MING の odds 分布 fold shift = 「MING 自体が時間とともに別物に
+        なっている可能性」。これは v3 U2 が全く想定していなかった新軸
+      - rubric 機械適用での verdict (kelly 弱く棄却, ev border, prob 弱く
+        棄却) は framing 崩壊下では misleading。**rubric pre-fixing は
+        framing が data で支持された場合のみ有効**という meta-lesson
+
+----------------------------------------------------------------
+
+N9 R% 1pp 刻み (post-hoc override 記録):
+  [override 理由] (post-hoc、2026-05-24 v4 critic 観点 1 で指摘されて追加):
+    h2_session_notes.txt §U7 operational 化 で「H2 では実施しない (Phase B1
+    後の sweep で扱う)」と書いた 1-2 時間以内に、dump 待ち時間中に N9 を
+    実行した。当時の動機は「軽量 (existing CSV 使用)」「U7 operational
+    化を概念ルールだけでなく具体的数値で示す」。事前に notes に override
+    1 文を書かなかった。これは「無音逸脱」事故クラス。次回同類の思いつき
+    は実行前に必ずこの欄を書いてから着手する。
+  [事前予想] (post-hoc 想起、信頼性低い):
+    R 76-85 で Y=0 が続く (実 cliff は 80 周辺で起きる); R 60-70 で Y は
+    数戦略まで増える、と漠然と予想していた。書き付けていない。
+  [30s ポーズ] **違反**: log を読んだ直後 (10 秒以内) に v4 skeleton §3 U7
+              に判定を書き付けた。ポーズなし。
+  [事後判定] **mechanical 適用未遂行**: rubric §0.2 が fold ベースで
+            strategy × R% space に合わず、(a) は「弱く支持」と直感 hedge、
+            (b)(c) は「強く棄却」と確信。v4 critic 観点 2 で「強く棄却」
+            は単一観察での確定的言明 (= v3 §4 t5 と同型) と指摘され、
+            修正方針を「観察範囲内強棄却 / dataset 限定」に再定義。

@@ -1,0 +1,31 @@
+total picks: 4776
+
+=== MING (dm_rank_1_3) odds distribution per fold ===
+fold,bets,odds_p25,odds_median,odds_p75,return_rate,lo
+2025H1,377,7.0,40.4,101.0,82.8,55.1
+2025H2,447,6.0,40.4,101.0,71.7,51.0
+2026P,374,3.4,7.7,30.3,77.2,55.4
+
+=== LGBM strategies in same odds-tier (= MING IQR) per fold ===
+strategy,fold,odds_lo,odds_hi,bets,hit_rate,return_rate,lo,delta_vs_ming
+kelly_ge_05,2025H1,7.0,101.0,401,8.5,62.5,30.5,-24.6
+kelly_ge_05,2025H2,6.0,101.0,395,10.4,87.2,46.7,-4.3
+kelly_ge_05,2026P,3.4,30.3,280,11.1,80.4,50.6,-4.7
+ev_ge_105,2025H1,7.0,101.0,531,9.0,69.9,41.4,-13.8
+ev_ge_105,2025H2,6.0,101.0,519,9.6,75.1,45.2,-5.9
+ev_ge_105,2026P,3.4,30.3,353,11.6,85.6,56.6,+1.2
+prob_ge_20,2025H1,7.0,101.0,87,6.9,118.6,7.8,-47.3
+prob_ge_20,2025H2,6.0,101.0,102,6.9,39.3,8.6,-42.4
+prob_ge_20,2026P,3.4,30.3,206,14.6,98.3,59.9,+4.5
+
+=== verdict per fold (LGBM same-tier vs MING) ===
+rubric (h2_session_notes.txt N2):
+  same-tier LGBM min_lo within +/- 5pp of MING: U2-(d) weakly-support (class effect)
+  same-tier LGBM min_lo 5-15pp below MING: border zone
+  same-tier LGBM min_lo >= 15pp below MING: U2-(d) weakly-reject (MING has info LGBM lacks)
+  same-tier LGBM bets < 30: undetermined
+
+strategy,2025H1_delta,2025H2_delta,2026P_delta,verdict
+kelly_ge_05,-24.6(401),-4.3(395),-4.7(280),U2-(d) 弱く棄却 (>15pp below = LGBM lacks info)
+ev_ge_105,-13.8(531),-5.9(519),+1.2(353),border zone (5-15pp below)
+prob_ge_20,-47.3(87),-42.4(102),+4.5(206),U2-(d) 弱く棄却 (>15pp below = LGBM lacks info)
