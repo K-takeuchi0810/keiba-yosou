@@ -12,8 +12,8 @@ causal candidate として特定する。
   5. distance bucket (距離帯、races join)
   (bonus) dm_rank / tm_rank の MING rank 帯
 
-2σ test: pooled SE of delta = sqrt(p25(1-p25)/n25 + p26(1-p26)/n26)
-         delta / SE >= 2.0 で causal candidate
+two-proportion z-test: default は pooled SE under H0。
+Gate-2 (c) 判定は Bonferroni / BH-FDR 補正後 survivor 数を採用。
 
 実行: python -m scripts.q1_root_cause
 出力: data/h3_3_q1_root_cause.log
@@ -23,12 +23,18 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import sqlite3
 import sys
 from collections import defaultdict
-from math import sqrt
 from pathlib import Path
-from typing import Iterable
+
+from scripts._stats_helper import (
+    bonferroni_alpha,
+    bonferroni_z_threshold,
+    multiple_comparison_results,
+    two_proportion_z_test,
+)
 
 
 def load_picks(csv_path: Path) -> list[dict]:
@@ -186,17 +192,19 @@ def compute_delta_sigma(stats_25: dict, stats_26: dict) -> dict:
     for b in common_buckets:
         s25 = stats_25[b]
         s26 = stats_26[b]
-        p25, n25 = s25["hit_rate"], s25["n"]
-        p26, n26 = s26["hit_rate"], s26["n"]
-        # SE of (p26 - p25) under H0: p_pooled
-        se = sqrt(p25 * (1 - p25) / n25 + p26 * (1 - p26) / n26)
-        delta = p26 - p25
-        z = delta / se if se > 0 else 0
+        test = two_proportion_z_test(
+            s25["hits"],
+            s25["n"],
+            s26["hits"],
+            s26["n"],
+            method=compute_delta_sigma.z_method,
+        )
         rows.append({
             "bucket": b,
-            "n_25": n25, "hit_25": s25["hits"], "hr_25": p25,
-            "n_26": n26, "hit_26": s26["hits"], "hr_26": p26,
-            "delta": delta, "se": se, "z": z,
+            "n_25": s25["n"], "hit_25": s25["hits"], "hr_25": test["p_a"],
+            "n_26": s26["n"], "hit_26": s26["hits"], "hr_26": test["p_b"],
+            "delta": test["delta"], "se": test["se"], "z": test["z"],
+            "p_two_sided": test["p_two_sided"],
         })
     # buckets only in one year
     only_25 = stats_25.keys() - stats_26.keys()
@@ -205,18 +213,59 @@ def compute_delta_sigma(stats_25: dict, stats_26: dict) -> dict:
             "only_25": sorted(only_25), "only_26": sorted(only_26)}
 
 
+compute_delta_sigma.z_method = "pooled"
+
+
 def fmt_row(r: dict, axis_name: str) -> str:
     flag = ""
-    if abs(r["z"]) >= 2.0:
-        flag = "  ** >=2σ **"
-    if abs(r["z"]) >= 3.0:
-        flag = "  *** >=3σ ***"
+    if r.get("bonferroni_p", 1.0) <= fmt_row.alpha:
+        flag = "  *** Bonferroni ***"
+    elif r.get("bh_q", 1.0) <= fmt_row.alpha:
+        flag = "  ** BH-FDR **"
+    elif abs(r["z"]) >= 2.0:
+        flag = "  ** naive >=2σ **"
     return (
         f"  {axis_name:>30}  | {r['bucket']:<30}  "
         f"| 25: {r['hit_25']:>3}/{r['n_25']:>3} ({r['hr_25']:6.3%})  "
         f"| 26: {r['hit_26']:>3}/{r['n_26']:>3} ({r['hr_26']:6.3%})  "
-        f"| δ={r['delta']:+7.4f}  z={r['z']:+5.2f}{flag}"
+        f"| δ={r['delta']:+7.4f}  z={r['z']:+5.2f}  "
+        f"p={r['p_two_sided']:.4f}  "
+        f"p_bonf={r.get('bonferroni_p', 1.0):.4f}  "
+        f"q={r.get('bh_q', 1.0):.4f}{flag}"
     )
+
+
+fmt_row.alpha = 0.05
+
+
+def feature_hint(axis_name: str, bucket: str) -> list[str]:
+    """Return compact Tier 2/3 hints for exploratory rows."""
+    if axis_name == "track_code":
+        return [
+            "T2.3 track_recent_top3_rate_30d (track drift / recent form)",
+            "T2.2 track_surface_distance_top3_rate (track x surface x distance)",
+            "T3.2 track_bias_inside_outside (track bias)",
+        ]
+    if axis_name == "starter_count" and bucket == "<=8 small":
+        return [
+            "T2.1b expected_pace_index (small-race pace dynamics)",
+            "T2.1a pace_runners_count_pct (small-race pace composition)",
+        ]
+    if axis_name == "grade_code" and bucket == "0":
+        return [
+            "Tier 1 grade_code existing signal",
+            "T2.2 track_grade interactional feature candidate",
+        ]
+    if axis_name.startswith("dm_rank") or axis_name.startswith("tm_rank"):
+        return [
+            "MING dynamics monitor (H4 raw DM/TM yearly distribution split)",
+        ]
+    if axis_name == "distance bucket":
+        return [
+            "data-quality audit for distance missing/invalid",
+            "T2.2 distance interaction features if replicated",
+        ]
+    return ["monitor only; no direct B1-S1 feature gate"]
 
 
 def main() -> int:
@@ -226,7 +275,16 @@ def main() -> int:
     parser.add_argument("--out", default="data/h3_3_q1_root_cause.log")
     parser.add_argument("--min-n", type=int, default=30,
                         help="Minimum picks per bucket to include (default: 30)")
+    parser.add_argument("--alpha", type=float, default=0.05)
+    parser.add_argument(
+        "--z-method",
+        choices=("pooled", "unpooled"),
+        default="pooled",
+        help="Two-proportion z-test SE definition (default: pooled under H0)",
+    )
     args = parser.parse_args()
+    compute_delta_sigma.z_method = args.z_method
+    fmt_row.alpha = args.alpha
 
     out_lines = []
     out_lines.append("H3-3: 2026Q1 LGBM 崩壊 root cause 探索 (5+ 軸分解)")
@@ -242,13 +300,13 @@ def main() -> int:
     out_lines.append(f"Loaded picks (Jan-Mar): 2025={n25}, 2026={n26}")
     out_lines.append(f"Baseline hit_rate: 2025Q1={hit25/n25:.4f} ({hit25}/{n25})")
     out_lines.append(f"Cohort hit_rate:   2026Q1={hit26/n26:.4f} ({hit26}/{n26})")
-    overall_delta = hit26 / n26 - hit25 / n25
-    overall_se = sqrt(
-        (hit25 / n25) * (1 - hit25 / n25) / n25
-        + (hit26 / n26) * (1 - hit26 / n26) / n26
+    overall_test = two_proportion_z_test(hit25, n25, hit26, n26, method=args.z_method)
+    overall_delta = overall_test["delta"]
+    overall_z = overall_test["z"]
+    out_lines.append(
+        f"Overall delta:     {overall_delta:+.4f} "
+        f"(z={overall_z:+.2f}, p={overall_test['p_two_sided']:.4f}, method={args.z_method})"
     )
-    overall_z = overall_delta / overall_se
-    out_lines.append(f"Overall delta:     {overall_delta:+.4f} (z={overall_z:+.2f})")
     out_lines.append("")
 
     # Attach race meta (distance + starter_count)
@@ -256,6 +314,8 @@ def main() -> int:
     out_lines.append(f"Joined with races table for distance/starter_count: matched={matched}/{len(picks)}")
     out_lines.append("")
     out_lines.append(f"min_n per bucket (filter): {args.min_n}")
+    out_lines.append(f"z-test method: {args.z_method}")
+    out_lines.append(f"alpha: {args.alpha:.4f}")
     out_lines.append("")
 
     # 5 軸 + bonus
@@ -270,21 +330,49 @@ def main() -> int:
         ("tm_rank (MING TM)", "tm_rank", bucket_dm_rank),  # 同じ bucket_fn 流用
     ]
 
-    causal_candidates: list[tuple[str, dict]] = []
+    axis_results = []
+    all_rows: list[dict] = []
 
     for axis_name, field, bucket_fn in axes:
         stats_25 = aggregate_by_axis(picks, "2025", bucket_fn, field, args.min_n)
         stats_26 = aggregate_by_axis(picks, "2026", bucket_fn, field, args.min_n)
         cmp = compute_delta_sigma(stats_25, stats_26)
+        for r in cmp["common"]:
+            r["axis"] = axis_name
+            all_rows.append(r)
+        axis_results.append((axis_name, cmp))
 
+    corrections = multiple_comparison_results([r["p_two_sided"] for r in all_rows])
+    for r, correction in zip(all_rows, corrections):
+        r["bonferroni_p"] = correction.bonferroni_p
+        r["bh_q"] = correction.bh_q
+
+    family_size = len(all_rows)
+    bonf_alpha = bonferroni_alpha(args.alpha, family_size)
+    bonf_z_two_sided = bonferroni_z_threshold(args.alpha, family_size, two_sided=True)
+    bonf_z_one_sided = bonferroni_z_threshold(args.alpha, family_size, two_sided=False)
+
+    out_lines.append("=" * 100)
+    out_lines.append("Multiple-comparison family definition")
+    out_lines.append("=" * 100)
+    out_lines.append("")
+    out_lines.append(
+        "family = all displayed H3-3 buckets with min_n >= threshold and both 2025Q1/2026Q1 present"
+    )
+    out_lines.append(f"family size N = {family_size}")
+    out_lines.append(f"Bonferroni alpha/N = {bonf_alpha:.9f}")
+    out_lines.append(f"Bonferroni two-sided |z| threshold = {bonf_z_two_sided:.3f}")
+    out_lines.append(f"Bonferroni one-sided |z| threshold = {bonf_z_one_sided:.3f}")
+    out_lines.append("BH-FDR threshold = q <= alpha")
+    out_lines.append("")
+
+    for axis_name, cmp in axis_results:
         out_lines.append("-" * 100)
         out_lines.append(f"Axis: {axis_name}")
         out_lines.append("-" * 100)
         if cmp["common"]:
             for r in cmp["common"]:
                 out_lines.append(fmt_row(r, axis_name))
-                if abs(r["z"]) >= 2.0:
-                    causal_candidates.append((axis_name, r))
         else:
             out_lines.append("  (no common buckets with min_n)")
         if cmp["only_25"]:
@@ -293,37 +381,89 @@ def main() -> int:
             out_lines.append(f"  (buckets only in 2026Q1 with min_n: {cmp['only_26']})")
         out_lines.append("")
 
+    naive_candidates = [r for r in all_rows if abs(r["z"]) >= 2.0]
+    bonferroni_survivors = [r for r in all_rows if r["bonferroni_p"] <= args.alpha]
+    bh_survivors = [r for r in all_rows if r["bh_q"] <= args.alpha]
+    exploratory_rows = sorted(
+        [r for r in all_rows if abs(r["z"]) >= 1.7],
+        key=lambda r: abs(r["z"]),
+        reverse=True,
+    )
+
     # Summary
     out_lines.append("=" * 100)
-    out_lines.append("Causal candidate summary (= |z| >= 2.0 buckets)")
+    out_lines.append("Corrected causal candidate summary")
     out_lines.append("=" * 100)
     out_lines.append("")
-    if not causal_candidates:
-        out_lines.append("  No causal candidates found at z >= 2.0 threshold.")
-        out_lines.append("  Gate-2 (c) 判定: FAIL (>= 1 個 candidate 不在)")
+    out_lines.append(f"  naive |z| >= 2.0 rows: {len(naive_candidates)}")
+    out_lines.append(f"  Bonferroni survivors: {len(bonferroni_survivors)}")
+    out_lines.append(f"  BH-FDR survivors: {len(bh_survivors)}")
+    out_lines.append("")
+    if not bonferroni_survivors and not bh_survivors:
+        out_lines.append("  No corrected causal candidates found.")
+        out_lines.append("  Gate-2 (c) corrected verdict: FAIL (corrected survivor 不在)")
     else:
-        out_lines.append(f"  Total: {len(causal_candidates)} candidate(s)")
+        out_lines.append("  Corrected candidates:")
         out_lines.append("")
-        for axis_name, r in causal_candidates:
+        for r in sorted(bonferroni_survivors or bh_survivors, key=lambda row: abs(row["z"]), reverse=True):
             sign = "MORE-MISS in 2026" if r["delta"] < 0 else "MORE-HIT in 2026"
             out_lines.append(
-                f"  - axis={axis_name:>25} | bucket={r['bucket']:<25} | "
-                f"δ={r['delta']:+.4f} | z={r['z']:+.2f} | {sign}"
+                f"  - axis={r['axis']:>25} | bucket={r['bucket']:<25} | "
+                f"δ={r['delta']:+.4f} | z={r['z']:+.2f} | "
+                f"p_bonf={r['bonferroni_p']:.4f} | q={r['bh_q']:.4f} | {sign}"
             )
         out_lines.append("")
-        out_lines.append(f"  Gate-2 (c) 判定: PASS (>= 1 個 candidate 特定)")
+        out_lines.append("  Gate-2 (c) corrected verdict: PASS")
 
     out_lines.append("")
     out_lines.append("=" * 100)
-    out_lines.append("Tier 2/3 features 対応 check (= 個別 candidate が Tier 2/3 features で説明可能か)")
+    out_lines.append("Exploratory signal summary (= Gate PASS ではなく優先順位の参考値)")
     out_lines.append("=" * 100)
     out_lines.append("")
-    out_lines.append(
-        "(本 step 末 に手動で対応表を書く、causal candidate と PHASE6_TIER23_DESIGN.md の"
-    )
-    out_lines.append(
-        " features 候補のクロスチェック)"
-    )
+    if not exploratory_rows:
+        out_lines.append("  No exploratory rows at |z| >= 1.7.")
+    else:
+        for r in exploratory_rows:
+            sign = "MORE-MISS in 2026" if r["delta"] < 0 else "MORE-HIT in 2026"
+            out_lines.append(
+                f"  - axis={r['axis']:>25} | bucket={r['bucket']:<25} | "
+                f"δ={r['delta']:+.4f} | z={r['z']:+.2f} | "
+                f"p={r['p_two_sided']:.4f} | p_bonf={r['bonferroni_p']:.4f} | "
+                f"q={r['bh_q']:.4f} | {sign}"
+            )
+            for hint in feature_hint(r["axis"], r["bucket"]):
+                out_lines.append(f"      * {hint}")
+    out_lines.append("")
+    out_lines.append("Invariant 2 handling: exploratory rows may guide diagnostic priorities,")
+    out_lines.append("but Gate / 採否判定 uses corrected survivor count only.")
+
+    out_lines.append("")
+    out_lines.append("=" * 100)
+    out_lines.append("Raw correction summary (JSON)")
+    out_lines.append("=" * 100)
+    out_lines.append("")
+    out_lines.append(json.dumps({
+        "family_size": family_size,
+        "alpha": args.alpha,
+        "z_method": args.z_method,
+        "bonferroni_alpha": bonf_alpha,
+        "bonferroni_z_two_sided": bonf_z_two_sided,
+        "bonferroni_z_one_sided": bonf_z_one_sided,
+        "naive_abs_z_ge_2": len(naive_candidates),
+        "bonferroni_survivors": len(bonferroni_survivors),
+        "bh_fdr_survivors": len(bh_survivors),
+        "top_rows": [
+            {
+                "axis": r["axis"],
+                "bucket": r["bucket"],
+                "z": r["z"],
+                "p_two_sided": r["p_two_sided"],
+                "bonferroni_p": r["bonferroni_p"],
+                "bh_q": r["bh_q"],
+            }
+            for r in sorted(all_rows, key=lambda row: abs(row["z"]), reverse=True)[:12]
+        ],
+    }, ensure_ascii=False, indent=2))
 
     out_text = "\n".join(out_lines) + "\n"
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
@@ -331,7 +471,10 @@ def main() -> int:
 
     # stdout 短縮版
     print(f"Wrote {args.out}")
-    print(f"Causal candidates: {len(causal_candidates)} (z >= 2.0)")
+    print(f"Family size: {family_size}")
+    print(f"Naive candidates: {len(naive_candidates)} (|z| >= 2.0)")
+    print(f"Bonferroni survivors: {len(bonferroni_survivors)}")
+    print(f"BH-FDR survivors: {len(bh_survivors)}")
     print(f"Overall 2026Q1 delta: {overall_delta:+.4f} (z={overall_z:+.2f})")
     return 0
 

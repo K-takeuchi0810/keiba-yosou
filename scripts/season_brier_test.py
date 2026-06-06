@@ -1,4 +1,4 @@
-"""H3-2: 同季節 Brier 悪化の Welch t-test + bootstrap CI.
+"""H3-2: 同季節 Brier 悪化の Welch t-test + bootstrap CI + power.
 
 P19 B1-S0 Step 2: v4 §1.1 N1 月次 Brier 表から 2025-01〜05 と 2026-01〜05 の
 5 ペアを抽出し、Welch (= unpaired, equal_var=False) t-test と paired t-test、
@@ -6,6 +6,7 @@ P19 B1-S0 Step 2: v4 §1.1 N1 月次 Brier 表から 2025-01〜05 と 2026-01〜
 評価する。
 
 Gate-2 (a) 判定: Welch p < 0.05 → 「弱く棄却」以上 = Gate-2 (a) PASS。
+power < 0.80 の場合、FAIL は「bias なし」ではなく「判定保留 / replication 必須」。
 
 実行: python -m scripts.season_brier_test
 出力: data/h3_2_season_brier_test.log
@@ -16,10 +17,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
 from scipy import stats
+
+from scripts._stats_helper import welch_power_two_sided
 
 
 # v4 §1.1 N1 月次 Brier 表 (p_win Brier) からハードコード
@@ -38,6 +42,9 @@ MONTHLY_BRIER_2026 = {
     "2026-04": {"n": 264, "brier": 0.1167},
     "2026-05": {"n": 144, "brier": 0.1250},
 }
+
+ALPHA = 0.05
+TARGET_POWER = 0.80
 
 
 def bootstrap_delta_ci(
@@ -78,6 +85,18 @@ def run_tests(arr2025: np.ndarray, arr2026: np.ndarray, label: str) -> dict:
     paired = stats.ttest_rel(arr2026, arr2025)
 
     boot = bootstrap_delta_ci(arr2025, arr2026, n_resample=10000)
+    std_2025 = float(arr2025.std(ddof=1)) if len(arr2025) > 1 else 0.0
+    std_2026 = float(arr2026.std(ddof=1)) if len(arr2026) > 1 else 0.0
+    delta = float(arr2026.mean() - arr2025.mean())
+    power = welch_power_two_sided(
+        effect_delta=delta,
+        std_a=std_2025,
+        n_a=len(arr2025),
+        std_b=std_2026,
+        n_b=len(arr2026),
+        alpha=ALPHA,
+        target_power=TARGET_POWER,
+    )
 
     return {
         "label": label,
@@ -85,9 +104,9 @@ def run_tests(arr2025: np.ndarray, arr2026: np.ndarray, label: str) -> dict:
         "n_2026": int(len(arr2026)),
         "mean_2025": float(arr2025.mean()),
         "mean_2026": float(arr2026.mean()),
-        "std_2025": float(arr2025.std(ddof=1)) if len(arr2025) > 1 else 0.0,
-        "std_2026": float(arr2026.std(ddof=1)) if len(arr2026) > 1 else 0.0,
-        "delta": float(arr2026.mean() - arr2025.mean()),
+        "std_2025": std_2025,
+        "std_2026": std_2026,
+        "delta": delta,
         "welch_t": float(welch.statistic),
         "welch_p_two_sided": float(welch.pvalue),
         "welch_p_one_sided_greater": float(welch.pvalue) / 2.0
@@ -99,6 +118,7 @@ def run_tests(arr2025: np.ndarray, arr2026: np.ndarray, label: str) -> dict:
         if paired.statistic > 0
         else 1.0 - float(paired.pvalue) / 2.0,
         "bootstrap": boot,
+        "power": asdict(power),
     }
 
 
@@ -182,6 +202,21 @@ def main() -> int:
             f"p_two_sided={test_result['paired_p_two_sided']:.4f}, "
             f"p_one_sided_greater={test_result['paired_p_one_sided_greater']:.4f}"
         )
+        power = test_result["power"]
+        out_lines.append("")
+        out_lines.append(
+            f"  Welch power (two-sided alpha={power['alpha']:.2f}, "
+            f"target_power={power['target_power']:.2f}):"
+        )
+        out_lines.append(
+            f"    observed_power={power['observed_power']:.4f} "
+            f"(effect_delta={power['effect_delta']:+.4f}, "
+            f"SE={power['se']:.4f}, df={power['df']:.3f}, ncp={power['ncp']:+.3f})"
+        )
+        out_lines.append(
+            f"    delta needed for 80% power at same n/std = "
+            f"{power['target_power_delta']:+.4f}"
+        )
         out_lines.append("")
         boot = test_result["bootstrap"]
         out_lines.append(
@@ -208,9 +243,21 @@ def main() -> int:
     out_lines.append("primary test: Jan-May 5 pairs (= handoff §「事前予想」が想定)")
     out_lines.append("")
     primary_p = test_full["welch_p_two_sided"]
+    primary_power = test_full["power"]
     out_lines.append(
         f"  Welch p_two_sided = {primary_p:.4f} → {gate2a_verdict(primary_p)}"
     )
+    out_lines.append(
+        f"  Power = {primary_power['observed_power']:.4f} "
+        f"(effect_delta={primary_power['effect_delta']:+.4f}, "
+        f"n={primary_power['n_a']} vs {primary_power['n_b']}, "
+        f"target_power_delta={primary_power['target_power_delta']:+.4f})"
+    )
+    if primary_power["observed_power"] < TARGET_POWER:
+        out_lines.append(
+            "  Invariant 1 verdict: power < 0.80 のため、Gate-2 (a) FAIL は "
+            "「bias なし」ではなく「判定保留 / replication test 必須」と解釈する。"
+        )
     out_lines.append("")
     paired_p = test_full["paired_p_two_sided"]
     out_lines.append(
@@ -220,9 +267,16 @@ def main() -> int:
     out_lines.append("secondary test: Apr-May 2 pairs (= v4 §1.1 +3.3σ 観察の正面検定)")
     out_lines.append("")
     secondary_p = test_aprmay["welch_p_two_sided"]
+    secondary_power = test_aprmay["power"]
     out_lines.append(
         f"  Welch p_two_sided = {secondary_p:.4f} → {gate2a_verdict(secondary_p)} "
         "(n=2 vs 2 で power 極小、参考値)"
+    )
+    out_lines.append(
+        f"  Power = {secondary_power['observed_power']:.4f} "
+        f"(effect_delta={secondary_power['effect_delta']:+.4f}, "
+        f"n={secondary_power['n_a']} vs {secondary_power['n_b']}, "
+        f"target_power_delta={secondary_power['target_power_delta']:+.4f})"
     )
     out_lines.append("")
     out_lines.append("-" * 70)

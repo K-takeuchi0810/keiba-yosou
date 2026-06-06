@@ -30,6 +30,8 @@ import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from config import BET_KELLY_MAX_PCT, BET_KELLY_MODE
+
 logger = logging.getLogger(__name__)
 
 
@@ -56,11 +58,47 @@ def kelly_fraction(win_prob: float, odds: float) -> float:
     return min(1.0, edge / b)
 
 
+_KELLY_MODE_MULTIPLIER = {"full": 1.0, "half": 0.5, "quarter": 0.25}
+
+
+def recommended_fraction(
+    f_star: float,
+    mode: str | None = None,
+    max_pct: float | None = None,
+) -> float:
+    """full Kelly f* に mode 倍率 + per-bet cap を適用した「推奨投資率」(fraction)。
+
+    kelly_size() の円換算前の段階を切り出したもの。HTML 表示 (web/generator.py)
+    と賭金サイジング (kelly_size) が **同じ縮小ロジック** を共有するための単一出典。
+    full Kelly をそのまま表示すると過大 (例: f*=0.187 → 実際は quarter で 0.047)
+    になり、ユーザーが破綻的なオーバーベットをする原因になる。
+
+    **注意 (variance 抑制であって calibration ではない)**: quarter + per-bet cap は
+    「予想勝率 p が正しい前提」での分散抑制策。現行モデルは中穴〜大穴の p を市場
+    implied の 2-7 倍に過大評価する系統誤差 (reliability gap) を持つため、quarter に
+    縮めても実効エッジが楽観側に残る。確率自体の矯正は Phase B1 (LGBM v6 再訓練 +
+    再校正) 領域で、本関数の責務外。
+
+    引数:
+        f_star: kelly_fraction() の戻り値 (= full Kelly, 0-1)
+        mode: "full" / "half" / "quarter"。None なら config.BET_KELLY_MODE
+        max_pct: 1 点あたり bankroll の上限割合。None なら config.BET_KELLY_MAX_PCT
+    戻り:
+        推奨投資率 ∈ [0, max_pct]
+    """
+    if f_star <= 0:
+        return 0.0
+    mode = mode if mode is not None else BET_KELLY_MODE
+    max_pct = max_pct if max_pct is not None else BET_KELLY_MAX_PCT
+    multiplier = _KELLY_MODE_MULTIPLIER.get(mode, _KELLY_MODE_MULTIPLIER["quarter"])
+    return min(f_star * multiplier, max_pct)
+
+
 def kelly_size(
     f_star: float,
     bankroll: float,
-    mode: str = "quarter",
-    max_pct: float = 0.05,
+    mode: str | None = None,
+    max_pct: float | None = None,
     round_unit: int = 100,
 ) -> int:
     """Kelly fraction を円単位の賭金に変換。
@@ -68,16 +106,15 @@ def kelly_size(
     引数:
         f_star: kelly_fraction() の戻り値
         bankroll: 現在の bankroll (円)
-        mode: "full" / "half" / "quarter" (= 1/4 Kelly、推奨)
-        max_pct: bankroll の最大 X%% を上限とする safety cap (default 5%%)
+        mode: "full" / "half" / "quarter"。None なら config.BET_KELLY_MODE
+        max_pct: bankroll の上限割合 safety cap。None なら config.BET_KELLY_MAX_PCT
         round_unit: 賭金丸め単位 (default 100 = 100 円単位)
     """
-    if f_star <= 0:
+    frac = recommended_fraction(f_star, mode=mode, max_pct=max_pct)
+    if frac <= 0:
         return 0
-    multiplier = {"full": 1.0, "half": 0.5, "quarter": 0.25}.get(mode, 0.25)
-    raw = f_star * multiplier * bankroll
-    capped = min(raw, bankroll * max_pct)
-    return max(0, int(round(capped / round_unit)) * round_unit)
+    raw = frac * bankroll
+    return max(0, int(round(raw / round_unit)) * round_unit)
 
 
 # ============================================================

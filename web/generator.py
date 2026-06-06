@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import os
 import shutil
 import sys
 from datetime import datetime
@@ -11,10 +14,19 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from config import BUY_FILTER_DEFAULT, ICLOUD_PUBLISH_DIR, WEB_DIST, is_whitelisted_race
+from config import (
+    BET_KELLY_MAX_PCT,
+    BET_KELLY_MODE,
+    BET_PORTFOLIO_MAX_PCT,
+    BUY_FILTER_DEFAULT,
+    ICLOUD_PUBLISH_DIR,
+    WEB_DIST,
+    is_whitelisted_race,
+)
 from db import open_db
 from predictor import is_tentative, predict_race
 from predictor.filter import is_buy_candidate
+from predictor.risk import recommended_fraction
 from web.codes import (
     grade_name,
     ground_name,
@@ -44,6 +56,38 @@ BET_MIN_VALUE: float = float(_mv) if _mv is not None else float("-inf")
 _me = BUY_FILTER_DEFAULT.get("min_ev")
 BET_MIN_EV: float = float(_me) if _me is not None else float("-inf")
 BET_MAX_ODDS_AGE_MIN: int = int(BUY_FILTER_DEFAULT.get("max_odds_age_min") or 30)
+SYNC_DIAGNOSTIC_RETENTION = 20
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _prune_old_files(
+    directory: Path,
+    pattern: str,
+    keep: int = SYNC_DIAGNOSTIC_RETENTION,
+) -> None:
+    def sort_key(path: Path) -> tuple[float, str]:
+        try:
+            return (path.stat().st_mtime, path.name)
+        except OSError:
+            return (0.0, path.name)
+
+    files = sorted(
+        (p for p in directory.glob(pattern) if p.is_file()),
+        key=sort_key,
+        reverse=True,
+    )
+    for path in files[keep:]:
+        try:
+            path.unlink()
+        except OSError:
+            pass
 
 
 def _surface_class(t: str) -> str:
@@ -227,6 +271,12 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
                     "fair_odds": p.fair_odds,
                     "expected_value": p.expected_value,
                     "kelly_fraction": p.kelly_fraction,
+                    # P20 (2026-06-07): full Kelly は過大表示なので、実際の
+                    # 推奨賭金率 (= 1/4 Kelly + per-bet cap) を併せて持たせる。
+                    # 表示・バッジ判定はこちらを使い、full Kelly は副次表示に降格。
+                    "recommended_kelly": recommended_fraction(
+                        p.kelly_fraction, mode=BET_KELLY_MODE, max_pct=BET_KELLY_MAX_PCT
+                    ),
                 })
             top_picks_by_race[key] = top_picks_for_race
 
@@ -295,6 +345,26 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
         key=lambda b: (-(b.get("kelly_fraction") or 0), b.get("start_time") or "")
     )
 
+    # P20 (2026-06-07): ポートフォリオ合計の推奨投資率と上限超過チェック。
+    # full Kelly 合計だと bankroll の 100% 超 (= 物理的に賭けられない) になる
+    # 事故があったため、recommended_kelly (= quarter + per-bet cap 済) の合計を
+    # 出し、BET_PORTFOLIO_MAX_PCT を超える場合は按分縮小係数を提示する。
+    recommended_total = sum(b.get("recommended_kelly") or 0 for b in buy_candidates)
+    portfolio_over_cap = recommended_total > BET_PORTFOLIO_MAX_PCT
+    portfolio_scale = (
+        BET_PORTFOLIO_MAX_PCT / recommended_total
+        if portfolio_over_cap and recommended_total > 0
+        else 1.0
+    )
+    portfolio_info = {
+        "recommended_total_pct": recommended_total * 100,
+        "cap_pct": BET_PORTFOLIO_MAX_PCT * 100,
+        "over_cap": portfolio_over_cap,
+        "scale": portfolio_scale,
+        "kelly_mode": BET_KELLY_MODE,
+        "per_bet_cap_pct": BET_KELLY_MAX_PCT * 100,
+    }
+
     # S7-β-4 (2026-05-18): フィルタ条件の header 明示用 context。
     # config.BUY_FILTER_DEFAULT を読み、None でない項目を表示文字列にまとめる。
     # ユーザーが「フィルタが効いていない状態」を検知できるセンサーとして機能。
@@ -309,6 +379,7 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
         "days": list(days.values()),
         "filter_summary": filter_summary,
         "version_info": version_info,
+        "portfolio_info": portfolio_info,
     }
 
 
@@ -395,14 +466,66 @@ def publish_to_icloud() -> Path:
         raise FileNotFoundError(
             f"{src} が無い。先に render() を実行してください。"
         )
+    src_stat = src.stat()
+    src_digest = _file_sha256(src)
     ICLOUD_PUBLISH_DIR.mkdir(parents=True, exist_ok=True)
     dst = ICLOUD_PUBLISH_DIR / "index.html"
     shutil.copy2(src, dst)
-    # CSS/画像等のアセットも、後でテンプレ外部化したらここで copy する
+    os.utime(dst, None)
+
     for asset_dir in ("static", "assets"):
         src_dir = WEB_DIST / asset_dir
         if src_dir.exists():
             shutil.copytree(src_dir, ICLOUD_PUBLISH_DIR / asset_dir, dirs_exist_ok=True)
+
+    published_at = datetime.now().astimezone()
+    stamp = published_at.strftime("%Y%m%d_%H%M%S_%f")
+    snapshot_dir = ICLOUD_PUBLISH_DIR / "snapshots"
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    snapshot = snapshot_dir / f"index_{stamp}.html"
+    shutil.copy2(dst, snapshot)
+    os.utime(snapshot, None)
+
+    digest = _file_sha256(dst)
+    size = dst.stat().st_size
+    source_mtime = datetime.fromtimestamp(src_stat.st_mtime).astimezone().isoformat(
+        timespec="seconds"
+    )
+    status = {
+        "published_at": published_at.isoformat(timespec="seconds"),
+        "index": "index.html",
+        "snapshot": f"snapshots/{snapshot.name}",
+        "sha256": digest,
+        "bytes": size,
+        "copied_ok": digest == src_digest and size == src_stat.st_size,
+        "source_index_mtime": source_mtime,
+        "source_sha256": src_digest,
+        "source_bytes": src_stat.st_size,
+    }
+    (ICLOUD_PUBLISH_DIR / "_sync_status.json").write_text(
+        json.dumps(status, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    check_text = (
+        f"published_at={status['published_at']}\n"
+        f"sha256={digest}\n"
+        f"bytes={size}\n"
+        f"copied_ok={status['copied_ok']}\n"
+        f"source_index_mtime={status['source_index_mtime']}\n"
+        f"source_sha256={src_digest}\n"
+        "index=index.html\n"
+        f"snapshot=snapshots/{snapshot.name}\n"
+    )
+    (ICLOUD_PUBLISH_DIR / "_sync_check_latest.txt").write_text(
+        check_text,
+        encoding="utf-8",
+    )
+    (ICLOUD_PUBLISH_DIR / f"_sync_check_{stamp}.txt").write_text(
+        check_text,
+        encoding="utf-8",
+    )
+    _prune_old_files(snapshot_dir, "index_*.html")
+    _prune_old_files(ICLOUD_PUBLISH_DIR, "_sync_check_[0-9]*.txt")
     return dst
 
 

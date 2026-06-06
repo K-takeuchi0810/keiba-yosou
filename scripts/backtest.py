@@ -133,7 +133,14 @@ def race_class_label(grade_code: str | None) -> str:
     return "cond"
 
 
-def list_races(conn, from_date: str, to_date: str, jra_only: bool = True) -> list[dict]:
+def list_races(
+    conn,
+    from_date: str,
+    to_date: str,
+    jra_only: bool = True,
+    min_distance: int | None = None,
+    max_distance: int | None = None,
+) -> list[dict]:
     """jra_only=True なら中央場 (track_code 01-10) のみ。
     地方場と海外は JV-Data の RACE dataspec で払戻が来ないので除外しないと
     回収率が引きずり落とされる。
@@ -144,8 +151,15 @@ def list_races(conn, from_date: str, to_date: str, jra_only: bool = True) -> lis
     """
     if jra_only:
         sql += " AND CAST(track_code AS INTEGER) BETWEEN 1 AND 10 "
+    params: list = [from_date, to_date]
+    if min_distance is not None:
+        sql += " AND distance >= ? "
+        params.append(min_distance)
+    if max_distance is not None:
+        sql += " AND distance <= ? "
+        params.append(max_distance)
     sql += " ORDER BY race_year, race_month_day, track_code, race_num "
-    return [dict(r) for r in conn.execute(sql, (from_date, to_date)).fetchall()]
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
 
 def horses_for_race(conn, race: dict) -> list[dict]:
@@ -295,6 +309,8 @@ def run_backtest(
     filter_from_config: bool = False,
     min_value: float | None = None,
     min_ev: float | None = None,
+    min_distance: int | None = None,
+    max_distance: int | None = None,
     db_path: str | Path | None = None,
     progress_every: int = 200,
 ) -> dict:
@@ -310,7 +326,14 @@ def run_backtest(
         if min_ev is not None:
             buy_filter["min_ev"] = min_ev
     with open_db(db_path) if db_path else open_db() as conn:
-        races = list_races(conn, from_date, to_date, jra_only=jra_only)
+        races = list_races(
+            conn,
+            from_date,
+            to_date,
+            jra_only=jra_only,
+            min_distance=min_distance,
+            max_distance=max_distance,
+        )
 
         n_total_races = len(races)
         n_no_horses = 0
@@ -493,6 +516,8 @@ def run_backtest(
             "max_odds": max_odds,
             "min_popularity": min_popularity,
             "max_popularity": max_popularity,
+            "min_distance": min_distance,
+            "max_distance": max_distance,
         },
         "buy_filter": buy_filter,
         "by_track": {
@@ -649,6 +674,8 @@ def main() -> int:
     ap.add_argument("--min-ev", type=float, default=None)
     ap.add_argument("--min-popularity", type=int, default=None)
     ap.add_argument("--max-popularity", type=int, default=None)
+    ap.add_argument("--min-distance", type=int, default=None)
+    ap.add_argument("--max-distance", type=int, default=None)
     ap.add_argument("--db", default=None, help="SQLite DB path")
     ap.add_argument(
         "--save", action="store_true",
@@ -683,6 +710,8 @@ def main() -> int:
         filter_from_config=not args.no_filter_from_config,
         min_value=args.min_value,
         min_ev=args.min_ev,
+        min_distance=args.min_distance,
+        max_distance=args.max_distance,
         db_path=args.db,
     )
     print(format_report(result))

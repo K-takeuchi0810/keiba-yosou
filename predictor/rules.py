@@ -177,7 +177,12 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
 
     # 長距離適性 (Phase 2-A): 距離バケットで同一の実績は ±100m より広く拾えるので、
     # 2201m+ (long バケット) のレースで「適性ありを強く評価/未経験を強く減点」する。
-    if V2_DIST_ENABLED and feat.get("current_bucket") == "long":
+    is_flat_long = (
+        V2_DIST_ENABLED
+        and feat.get("current_bucket") == "long"
+        and feat.get("current_surface_family") != "jump"
+    )
+    if is_flat_long:
         sb_runs = feat.get("same_bucket_runs", 0) or 0
         sb_top3 = feat.get("same_bucket_top3", 0) or 0
         sb_wins = feat.get("same_bucket_wins", 0) or 0
@@ -534,7 +539,7 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
             score += _w("bloodline.dam_sire_going_weak", -2) * blood_weight
             reasons.append(f"母父道悪低調{dsgr * 100:.0f}%")
 
-    if V2_DIST_ENABLED and feat.get("current_bucket") == "long":
+    if is_flat_long:
         long_blood_ok = (
             (sdr is not None and sdn >= 30 and sdr >= 0.40)
             or (ddr is not None and ddn >= 30 and ddr >= 0.40)
@@ -649,7 +654,7 @@ def _stability_score(horse: dict, feat: dict) -> float:
             stable += 2
         elif dsr <= 0.18:
             stable -= 2
-    if feat.get("current_bucket") == "long":
+    if feat.get("current_bucket") == "long" and feat.get("current_surface_family") != "jump":
         if feat.get("same_bucket_top3", 0) >= 1:
             stable += 2
         elif feat.get("same_bucket_runs", 0) >= 2:
@@ -936,7 +941,7 @@ def _value_score(
     value = (expected_value - 1.0) * 100 if expected_value else score - 70
     if expected_value == 0.0 and 7.0 <= odds <= 30.0:
         value += min(odds, 30.0) / 3.0
-    if feat.get("current_bucket") == "long":
+    if feat.get("current_bucket") == "long" and feat.get("current_surface_family") != "jump":
         value -= _w("risk.long_value_penalty", 10)
     current_level = feat.get("current_race_level", 0) or 0
     if current_level >= 7:

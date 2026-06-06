@@ -27,6 +27,10 @@ Test: Jan-May 5 pairs
   Welch (unpaired, equal_var=False): t=+0.252, p_two_sided=0.8104, p_one_sided_greater=0.4052
   Paired (ttest_rel):                t=+0.209, p_two_sided=0.8446, p_one_sided_greater=0.4223
 
+  Welch power (two-sided alpha=0.05, target_power=0.80):
+    observed_power=0.0550 (effect_delta=+0.0033, SE=0.0131, df=5.164, ncp=+0.252)
+    delta needed for 80% power at same n/std = +0.0458
+
   Bootstrap CI (n_resample=10000, ci=0.95):
     observed delta = +0.0033
     bootstrap median = +0.0033, 95% CI = [-0.0192, +0.0266]
@@ -43,6 +47,10 @@ Test: Apr-May 2 pairs (subset)
   Welch (unpaired, equal_var=False): t=+3.787, p_two_sided=0.1118, p_one_sided_greater=0.0559
   Paired (ttest_rel):                t=+7.198, p_two_sided=0.0879, p_one_sided_greater=0.0439
 
+  Welch power (two-sided alpha=0.05, target_power=0.80):
+    observed_power=0.3405 (effect_delta=+0.0399, SE=0.0106, df=1.354, ncp=+3.787)
+    delta needed for 80% power at same n/std = +0.0960
+
   Bootstrap CI (n_resample=10000, ci=0.95):
     observed delta = +0.0399
     bootstrap median = +0.0399, 95% CI = [+0.0261, +0.0538]
@@ -55,12 +63,15 @@ Gate-2 (a) verdict
 primary test: Jan-May 5 pairs (= handoff §「事前予想」が想定)
 
   Welch p_two_sided = 0.8104 → 弱く支持 (p>=0.20) = Gate-2 (a) FAIL
+  Power = 0.0550 (effect_delta=+0.0033, n=5 vs 5, target_power_delta=+0.0458)
+  Invariant 1 verdict: power < 0.80 のため、Gate-2 (a) FAIL は 「bias なし」ではなく「判定保留 / replication test 必須」と解釈する。
 
   Paired p_two_sided = 0.8446 → 弱く支持 (p>=0.20) = Gate-2 (a) FAIL (補助)
 
 secondary test: Apr-May 2 pairs (= v4 §1.1 +3.3σ 観察の正面検定)
 
   Welch p_two_sided = 0.1118 → border zone (0.10<=p<0.20) = Gate-2 (a) FAIL (n=2 vs 2 で power 極小、参考値)
+  Power = 0.3405 (effect_delta=+0.0399, n=2 vs 2, target_power_delta=+0.0960)
 
 ----------------------------------------------------------------------
 総合判定:
@@ -102,6 +113,21 @@ Raw numbers (JSON)
       "hi": 0.026561999999999985,
       "p_delta_gt_0": 0.6039,
       "observed_delta": 0.0033200000000000035
+    },
+    "power": {
+      "alpha": 0.05,
+      "target_power": 0.8,
+      "n_a": 5,
+      "n_b": 5,
+      "std_a": 0.010580170130957252,
+      "std_b": 0.027433045766010015,
+      "effect_delta": 0.0033200000000000035,
+      "se": 0.013149235719234788,
+      "df": 5.16418878950703,
+      "ncp": 0.2524861574382978,
+      "critical_t": 2.5461932272776395,
+      "observed_power": 0.055042987209897025,
+      "target_power_delta": 0.045822707856680904
     }
   },
   "apr_may": {
@@ -127,6 +153,21 @@ Raw numbers (JSON)
       "hi": 0.0538,
       "p_delta_gt_0": 1.0,
       "observed_delta": 0.03995
+    },
+    "power": {
+      "alpha": 0.05,
+      "target_power": 0.8,
+      "n_a": 2,
+      "n_b": 2,
+      "std_a": 0.013717871555019022,
+      "std_b": 0.0058689862838483455,
+      "effect_delta": 0.03995,
+      "se": 0.010550473923004596,
+      "df": 1.3542177122369092,
+      "ncp": 3.7865597594522957,
+      "critical_t": 7.013031928773971,
+      "observed_power": 0.34051521736480206,
+      "target_power_delta": 0.09601436922865957
     }
   }
 }

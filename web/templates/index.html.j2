@@ -103,6 +103,32 @@
   .buy-card strong { font-size: 1rem; }
   .buy-meta { color: var(--fg-mute); font-size: 0.82rem; margin-top: 0.15rem; }
   .buy-metrics { margin-top: 0.25rem; font-size: 0.82rem; font-weight: 700; color: var(--buy-board-fg); }
+  /* P20: full Kelly は副次情報に降格 (推奨投資率を主表示に) */
+  .full-kelly-note { color: var(--fg-mute); font-weight: 400; font-size: 0.92em; margin-left: 0.3em; }
+  /* P20: モデル over-confidence の常時開示 caveat */
+  .calib-caveat {
+    padding: 0.45rem 0.75rem;
+    font-size: 0.74rem;
+    line-height: 1.45;
+    color: var(--buy-board-fg);
+    background: var(--buy-board-bg);
+    border-top: 1px solid var(--buy-card-border);
+  }
+  .calib-caveat strong { font-weight: 700; }
+  /* P20: ポートフォリオ合計の推奨投資率 + 1 日上限超過警告 */
+  .portfolio-note {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.78rem;
+    color: var(--fg-mute);
+    border-top: 1px solid var(--buy-card-border);
+    border-bottom: 1px solid var(--buy-card-border);
+    background: var(--top-picks-bg);
+  }
+  .portfolio-note.over-cap {
+    color: var(--buy-board-fg);
+    font-weight: 700;
+    background: var(--buy-board-bg);
+  }
   /* S7-β-3: Kelly>=10% で「★強い買い」バッジ。買い候補内の重要度を一目で示す */
   .strong-buy-badge {
     display: inline-block;
@@ -251,6 +277,9 @@
     /* タップ領域確保 */
     summary.race-head { padding: 0.75rem 0.7rem; min-height: 44px; }
     .buy-card { padding: 0.85rem 0.75rem; min-height: 44px; }
+    /* P20: 狭画面では推奨/full Kelly を改行配置し 1 行の数字密度を下げる */
+    .full-kelly-note { display: block; margin-left: 0; margin-top: 0.1rem; }
+    .portfolio-note { padding: 0.4rem 0.5rem; line-height: 1.45; }
   }
   /* タブレット (~600px) では調教師だけ畳む */
   @media (max-width: 600px) and (min-width: 481px) {
@@ -327,15 +356,29 @@
   <section class="buy-board">
     <h2>買い候補 {{ buy_count }}件 (Kelly 降順)</h2>
   {% endif %}
+    {# P20 (2026-06-07): モデルの系統的 over-confidence を常時開示。
+       表示 P/EV/Kelly は未校正の予想確率に基づき、現行モデルは中穴〜大穴の勝率を
+       市場の 2-7 倍に過大評価する (reliability gap)。Kelly 表示は是正したが確率
+       自体の矯正は Phase B1 待ち。MEMORY「実弾運用を控える」方針と整合。 #}
+    <div class="calib-caveat">⚠ 表示の P / EV / Kelly は<strong>未校正の予想確率</strong>に基づきます。現行モデルは中穴〜大穴の勝率を市場想定の 2〜7 倍に過大評価する傾向があり、実際の期待値はこれより低い見込みです。再訓練 (Phase B1) までは<strong>ロジック観察用</strong>とし、実弾投入は推奨しません。</div>
+    {# P20 (2026-06-07): ポートフォリオ合計の推奨投資率 + 1 日上限警告 #}
+    {% if portfolio_info %}
+    <div class="portfolio-note{% if portfolio_info.over_cap %} over-cap{% endif %}">
+      推奨投資率合計 {{ "%.1f"|format(portfolio_info.recommended_total_pct) }}%
+      （{{ portfolio_info.kelly_mode }} Kelly・1点上限 {{ "%.0f"|format(portfolio_info.per_bet_cap_pct) }}%）{% if portfolio_info.over_cap %} ／ ⚠ 1日上限 {{ "%.0f"|format(portfolio_info.cap_pct) }}% 超過 → 各点 ×{{ "%.2f"|format(portfolio_info.scale) }} に縮小推奨{% endif %}
+    </div>
+    {% endif %}
     {% for b in buy_candidates %}
       <a class="buy-card" href="#{{ b.anchor }}">
         <strong>
-          {# S7-β-3: Kelly>=10% で「★ 強い買い」バッジ表示 #}
-          {% if b.kelly_fraction >= 0.10 %}<span class="strong-buy-badge">★ 強い買い</span>{% endif %}
+          {# P20 (2026-06-07): バッジは「推奨投資率が 1 点上限に達した = full Kelly が
+             十分高い」を示す。旧 S7-β-3 は full Kelly>=10% を見ていたが、これは
+             過大表示の full Kelly 基準で誤誘導だったため recommended_kelly 基準に変更 #}
+          {% if b.recommended_kelly * 100 >= portfolio_info.per_bet_cap_pct %}<span class="strong-buy-badge">★ 上限張り</span>{% endif %}
           {{ b.date }} {{ b.track }} {{ b.race_num }}R {% if b.race_name %}{{ b.race_name }}{% endif %}
         </strong>
         <div class="buy-meta">{{ b.start_time }} / {{ b.mark }} {{ b.num }} {{ b.name }} / {{ "%.1f"|format(b.odds) }}倍{% if b.popularity %} {{ b.popularity }}人気{% endif %}</div>
-        <div class="buy-metrics">P {{ "%.1f"|format(b.win_probability * 100) }}% / EV {{ "%.2f"|format(b.expected_value) }} / K {{ "%.2f"|format(b.kelly_fraction * 100) }}%</div>
+        <div class="buy-metrics">P {{ "%.1f"|format(b.win_probability * 100) }}% / EV {{ "%.2f"|format(b.expected_value) }} / 推奨 {{ "%.2f"|format(b.recommended_kelly * 100) }}%<span class="full-kelly-note">（full Kelly {{ "%.1f"|format(b.kelly_fraction * 100) }}%）</span></div>
       </a>
     {% endfor %}
   {% if buy_count >= 6 %}

@@ -139,6 +139,25 @@ BUY_FILTER_DEFAULT: dict = {
 }
 
 
+# ----- 賭金サイジング既定 (2026-06-07 P20: HTML 表示 Kelly 是正) -----
+# predictor.risk.kelly_size / recommended_fraction がこの 3 定数を import して
+# 既定値に使う (= 単一出典)。risk → config の一方向依存で循環なし。
+# 過去 HTML (web/generator.py) は predictor が返す full Kelly (kelly_fraction,
+# 0-1 連続値) をそのまま「K xx%」と表示していたが、これは実際の推奨賭金
+# (= 1/4 Kelly + per-bet cap) の ~3-4 倍に相当する過大表示で、買い候補 8 件の
+# full Kelly 合計が bankroll の 115% に達する (= 物理的に賭けられない) 事故を
+# 招いていた (2026-06-06 dist で実測)。表示を recommended_fraction に揃える。
+#
+# 重要 (variance 抑制 ≠ calibration): quarter + cap は「予想勝率 p が正しい前提」
+# での分散抑制。現行モデルは中穴〜大穴の p を市場 implied の 2-7 倍に過大評価する
+# reliability gap を持つため、これらの定数では over-confidence は矯正されない。
+# 確率自体の矯正は Phase B1 (LGBM v6 再訓練 + 再校正) 領域。HTML 側でも
+# .calib-caveat で「表示 P/EV は未校正で過大」とユーザーに開示する。
+BET_KELLY_MODE = "quarter"          # full / half / quarter (= 1/4 Kelly, 推奨)
+BET_KELLY_MAX_PCT = 0.05            # 1 点あたり bankroll の上限割合 (safety cap)
+BET_PORTFOLIO_MAX_PCT = 0.25        # 1 日合計の推奨投資率上限 (超過時は HTML で警告)
+
+
 def buy_whitelist_enabled() -> bool:
     """環境変数で `whitelist_mode` の既定値を上書き可能にする。"""
     raw = os.environ.get("BET_WHITELIST")

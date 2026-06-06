@@ -4,172 +4,261 @@ H3-3: 2026Q1 LGBM 崩壊 root cause 探索 (5+ 軸分解)
 Loaded picks (Jan-Mar): 2025=876, 2026=900
 Baseline hit_rate: 2025Q1=0.0902 (79/876)
 Cohort hit_rate:   2026Q1=0.0656 (59/900)
-Overall delta:     -0.0246 (z=-1.94)
+Overall delta:     -0.0246 (z=-1.94, p=0.0526, method=pooled)
 
 Joined with races table for distance/starter_count: matched=1776/1776
 
 min_n per bucket (filter): 30
+z-test method: pooled
+alpha: 0.0500
+
+====================================================================================================
+Multiple-comparison family definition
+====================================================================================================
+
+family = all displayed H3-3 buckets with min_n >= threshold and both 2025Q1/2026Q1 present
+family size N = 41
+Bonferroni alpha/N = 0.001219512
+Bonferroni two-sided |z| threshold = 3.234
+Bonferroni one-sided |z| threshold = 3.031
+BH-FDR threshold = q <= alpha
 
 ----------------------------------------------------------------------------------------------------
 Axis: grade_code
 ----------------------------------------------------------------------------------------------------
-                      grade_code  | 0                               | 25:  13/ 75 (17.333%)  | 26:   5/ 79 (6.329%)  | δ=-0.1100  z=-2.13  ** >=2σ **
-                      grade_code  | (blank, regular)                | 25:  47/649 (7.242%)  | 26:  39/666 (5.856%)  | δ=-0.0139  z=-1.02
-                      grade_code  | ?                               | 25:   5/ 45 (11.111%)  | 26:   3/ 41 (7.317%)  | δ=-0.0379  z=-0.61
-                      grade_code  | E                               | 25:   6/ 33 (18.182%)  | 26:   5/ 36 (13.889%)  | δ=-0.0429  z=-0.49
+                      grade_code  | 0                               | 25:  13/ 75 (17.333%)  | 26:   5/ 79 (6.329%)  | δ=-0.1100  z=-2.12  p=0.0336  p_bonf=1.0000  q=0.2862  ** naive >=2σ **
+                      grade_code  | (blank, regular)                | 25:  47/649 (7.242%)  | 26:  39/666 (5.856%)  | δ=-0.0139  z=-1.02  p=0.3094  p_bonf=1.0000  q=0.4919
+                      grade_code  | ?                               | 25:   5/ 45 (11.111%)  | 26:   3/ 41 (7.317%)  | δ=-0.0379  z=-0.61  p=0.5452  p_bonf=1.0000  q=0.6386
+                      grade_code  | E                               | 25:   6/ 33 (18.182%)  | 26:   5/ 36 (13.889%)  | δ=-0.0429  z=-0.49  p=0.6265  p_bonf=1.0000  q=0.6943
 
 ----------------------------------------------------------------------------------------------------
 Axis: popularity
 ----------------------------------------------------------------------------------------------------
-                      popularity  | 2-3                             | 25:  35/203 (17.241%)  | 26:  24/224 (10.714%)  | δ=-0.0653  z=-1.94
-                      popularity  | 1 (top-favorite)                | 25:   9/ 64 (14.062%)  | 26:   6/ 78 (7.692%)  | δ=-0.0637  z=-1.20
-                      popularity  | 7+                              | 25:  26/490 (5.306%)  | 26:  20/498 (4.016%)  | δ=-0.0129  z=-0.96
-                      popularity  | 4-6                             | 25:   9/119 (7.563%)  | 26:   9/100 (9.000%)  | δ=+0.0144  z=+0.38
+                      popularity  | 2-3                             | 25:  35/203 (17.241%)  | 26:  24/224 (10.714%)  | δ=-0.0653  z=-1.95  p=0.0510  p_bonf=1.0000  q=0.2862
+                      popularity  | 1 (top-favorite)                | 25:   9/ 64 (14.062%)  | 26:   6/ 78 (7.692%)  | δ=-0.0637  z=-1.23  p=0.2191  p_bonf=1.0000  q=0.4729
+                      popularity  | 7+                              | 25:  26/490 (5.306%)  | 26:  20/498 (4.016%)  | δ=-0.0129  z=-0.96  p=0.3359  p_bonf=1.0000  q=0.4919
+                      popularity  | 4-6                             | 25:   9/119 (7.563%)  | 26:   9/100 (9.000%)  | δ=+0.0144  z=+0.39  p=0.6997  p_bonf=1.0000  q=0.7356
 
 ----------------------------------------------------------------------------------------------------
 Axis: track_code
 ----------------------------------------------------------------------------------------------------
-                      track_code  | track_10                        | 25:  15/144 (10.417%)  | 26:   4/144 (2.778%)  | δ=-0.0764  z=-2.64  ** >=2σ **
-                      track_code  | track_07                        | 25:  20/180 (11.111%)  | 26:   3/ 72 (4.167%)  | δ=-0.0694  z=-2.09  ** >=2σ **
-                      track_code  | track_06                        | 25:  20/228 (8.772%)  | 26:  10/228 (4.386%)  | δ=-0.0439  z=-1.90
-                      track_code  | track_08                        | 25:   9/108 (8.333%)  | 26:  13/204 (6.373%)  | δ=-0.0196  z=-0.62
-                      track_code  | track_09                        | 25:  11/120 (9.167%)  | 26:  19/144 (13.194%)  | δ=+0.0403  z=+1.04
-                      track_code  | track_05                        | 25:   4/ 96 (4.167%)  | 26:  10/108 (9.259%)  | δ=+0.0509  z=+1.47
+                      track_code  | track_10                        | 25:  15/144 (10.417%)  | 26:   4/144 (2.778%)  | δ=-0.0764  z=-2.61  p=0.0090  p_bonf=0.3699  q=0.2862  ** naive >=2σ **
+                      track_code  | track_06                        | 25:  20/228 (8.772%)  | 26:  10/228 (4.386%)  | δ=-0.0439  z=-1.89  p=0.0589  p_bonf=1.0000  q=0.2862
+                      track_code  | track_07                        | 25:  20/180 (11.111%)  | 26:   3/ 72 (4.167%)  | δ=-0.0694  z=-1.73  p=0.0838  p_bonf=1.0000  q=0.2862
+                      track_code  | track_08                        | 25:   9/108 (8.333%)  | 26:  13/204 (6.373%)  | δ=-0.0196  z=-0.64  p=0.5198  p_bonf=1.0000  q=0.6269
+                      track_code  | track_09                        | 25:  11/120 (9.167%)  | 26:  19/144 (13.194%)  | δ=+0.0403  z=+1.03  p=0.3045  p_bonf=1.0000  q=0.4919
+                      track_code  | track_05                        | 25:   4/ 96 (4.167%)  | 26:  10/108 (9.259%)  | δ=+0.0509  z=+1.44  p=0.1510  p_bonf=1.0000  q=0.3869
 
 ----------------------------------------------------------------------------------------------------
 Axis: odds bucket
 ----------------------------------------------------------------------------------------------------
-                     odds bucket  | >=50 (deep)                     | 25:  27/271 (9.963%)  | 26:  16/279 (5.735%)  | δ=-0.0423  z=-1.85
-                     odds bucket  | 20-50 (long-shot)               | 25:  18/ 84 (21.429%)  | 26:   9/ 81 (11.111%)  | δ=-0.1032  z=-1.82
-                     odds bucket  | 3-7 (favorite)                  | 25:   5/ 49 (10.204%)  | 26:   2/ 35 (5.714%)  | δ=-0.0449  z=-0.77
-                     odds bucket  | <3 (heavy-favorite)             | 25:   8/ 88 (9.091%)  | 26:   6/ 85 (7.059%)  | δ=-0.0203  z=-0.49
-                     odds bucket  | missing                         | 25:  19/296 (6.419%)  | 26:  18/320 (5.625%)  | δ=-0.0079  z=-0.41
-                     odds bucket  | 7-20 (mid)                      | 25:   2/ 88 (2.273%)  | 26:   8/100 (8.000%)  | δ=+0.0573  z=+1.82
+                     odds bucket  | >=50 (deep)                     | 25:  27/271 (9.963%)  | 26:  16/279 (5.735%)  | δ=-0.0423  z=-1.85  p=0.0648  p_bonf=1.0000  q=0.2862
+                     odds bucket  | 20-50 (long-shot)               | 25:  18/ 84 (21.429%)  | 26:   9/ 81 (11.111%)  | δ=-0.1032  z=-1.79  p=0.0733  p_bonf=1.0000  q=0.2862
+                     odds bucket  | 3-7 (favorite)                  | 25:   5/ 49 (10.204%)  | 26:   2/ 35 (5.714%)  | δ=-0.0449  z=-0.73  p=0.4629  p_bonf=1.0000  q=0.6084
+                     odds bucket  | <3 (heavy-favorite)             | 25:   8/ 88 (9.091%)  | 26:   6/ 85 (7.059%)  | δ=-0.0203  z=-0.49  p=0.6242  p_bonf=1.0000  q=0.6943
+                     odds bucket  | missing                         | 25:  19/296 (6.419%)  | 26:  18/320 (5.625%)  | δ=-0.0079  z=-0.41  p=0.6786  p_bonf=1.0000  q=0.7322
+                     odds bucket  | 7-20 (mid)                      | 25:   2/ 88 (2.273%)  | 26:   8/100 (8.000%)  | δ=+0.0573  z=+1.75  p=0.0808  p_bonf=1.0000  q=0.2862
 
 ----------------------------------------------------------------------------------------------------
 Axis: distance bucket
 ----------------------------------------------------------------------------------------------------
-                 distance bucket  | missing/invalid                 | 25:  24/182 (13.187%)  | 26:  14/187 (7.487%)  | δ=-0.0570  z=-1.80
-                 distance bucket  | sprint (<1400m)                 | 25:  11/155 (7.097%)  | 26:   7/156 (4.487%)  | δ=-0.0261  z=-0.99
-                 distance bucket  | long (2200-2599m)               | 25:   5/ 31 (16.129%)  | 26:   3/ 36 (8.333%)  | δ=-0.0780  z=-0.97
-                 distance bucket  | middle (1800-2199m)             | 25:  27/279 (9.677%)  | 26:  22/286 (7.692%)  | δ=-0.0199  z=-0.84
-                 distance bucket  | mile (1400-1799m)               | 25:  12/199 (6.030%)  | 26:  11/205 (5.366%)  | δ=-0.0066  z=-0.29
-                 distance bucket  | marathon (>=2600m)              | 25:   0/ 30 (0.000%)  | 26:   2/ 30 (6.667%)  | δ=+0.0667  z=+1.46
+                 distance bucket  | missing/invalid                 | 25:  24/182 (13.187%)  | 26:  14/187 (7.487%)  | δ=-0.0570  z=-1.80  p=0.0717  p_bonf=1.0000  q=0.2862
+                 distance bucket  | sprint (<1400m)                 | 25:  11/155 (7.097%)  | 26:   7/156 (4.487%)  | δ=-0.0261  z=-0.99  p=0.3244  p_bonf=1.0000  q=0.4919
+                 distance bucket  | long (2200-2599m)               | 25:   5/ 31 (16.129%)  | 26:   3/ 36 (8.333%)  | δ=-0.0780  z=-0.98  p=0.3265  p_bonf=1.0000  q=0.4919
+                 distance bucket  | middle (1800-2199m)             | 25:  27/279 (9.677%)  | 26:  22/286 (7.692%)  | δ=-0.0199  z=-0.84  p=0.4019  p_bonf=1.0000  q=0.5524
+                 distance bucket  | mile (1400-1799m)               | 25:  12/199 (6.030%)  | 26:  11/205 (5.366%)  | δ=-0.0066  z=-0.29  p=0.7733  p_bonf=1.0000  q=0.7733
+                 distance bucket  | marathon (>=2600m)              | 25:   0/ 30 (0.000%)  | 26:   2/ 30 (6.667%)  | δ=+0.0667  z=+1.44  p=0.1503  p_bonf=1.0000  q=0.3869
 
 ----------------------------------------------------------------------------------------------------
 Axis: starter_count
 ----------------------------------------------------------------------------------------------------
-                   starter_count  | <=8 small                       | 25:  12/ 56 (21.429%)  | 26:   4/ 53 (7.547%)  | δ=-0.1388  z=-2.11  ** >=2σ **
-                   starter_count  | 13-15                           | 25:  14/144 (9.722%)  | 26:  12/202 (5.941%)  | δ=-0.0378  z=-1.27
-                   starter_count  | 16-18                           | 25:  27/395 (6.835%)  | 26:  16/341 (4.692%)  | δ=-0.0214  z=-1.25
-                   starter_count  | missing/invalid                 | 25:   9/103 (8.738%)  | 26:   6/120 (5.000%)  | δ=-0.0374  z=-1.09
-                   starter_count  | >=19 (likely-garbage)           | 25:   6/ 33 (18.182%)  | 26:   6/ 47 (12.766%)  | δ=-0.0542  z=-0.65
-                   starter_count  | 9-12                            | 25:  11/145 (7.586%)  | 26:  15/137 (10.949%)  | δ=+0.0336  z=+0.97
+                   starter_count  | <=8 small                       | 25:  12/ 56 (21.429%)  | 26:   4/ 53 (7.547%)  | δ=-0.1388  z=-2.05  p=0.0407  p_bonf=1.0000  q=0.2862  ** naive >=2σ **
+                   starter_count  | 13-15                           | 25:  14/144 (9.722%)  | 26:  12/202 (5.941%)  | δ=-0.0378  z=-1.32  p=0.1884  p_bonf=1.0000  q=0.4544
+                   starter_count  | 16-18                           | 25:  27/395 (6.835%)  | 26:  16/341 (4.692%)  | δ=-0.0214  z=-1.24  p=0.2164  p_bonf=1.0000  q=0.4729
+                   starter_count  | missing/invalid                 | 25:   9/103 (8.738%)  | 26:   6/120 (5.000%)  | δ=-0.0374  z=-1.11  p=0.2666  p_bonf=1.0000  q=0.4919
+                   starter_count  | >=19 (likely-garbage)           | 25:   6/ 33 (18.182%)  | 26:   6/ 47 (12.766%)  | δ=-0.0542  z=-0.67  p=0.5042  p_bonf=1.0000  q=0.6265
+                   starter_count  | 9-12                            | 25:  11/145 (7.586%)  | 26:  15/137 (10.949%)  | δ=+0.0336  z=+0.98  p=0.3293  p_bonf=1.0000  q=0.4919
 
 ----------------------------------------------------------------------------------------------------
 Axis: dm_rank (MING DM)
 ----------------------------------------------------------------------------------------------------
-               dm_rank (MING DM)  | 1 (top-MING)                    | 25:  22/ 72 (30.556%)  | 26:  11/ 66 (16.667%)  | δ=-0.1389  z=-1.95
-               dm_rank (MING DM)  | >=10                            | 25:  10/316 (3.165%)  | 26:   3/312 (0.962%)  | δ=-0.0220  z=-1.95
-               dm_rank (MING DM)  | 4-9                             | 25:  34/364 (9.341%)  | 26:  25/355 (7.042%)  | δ=-0.0230  z=-1.13
-               dm_rank (MING DM)  | 2-3                             | 25:  13/112 (11.607%)  | 26:  20/125 (16.000%)  | δ=+0.0439  z=+0.98
+               dm_rank (MING DM)  | >=10                            | 25:  10/316 (3.165%)  | 26:   3/312 (0.962%)  | δ=-0.0220  z=-1.94  p=0.0525  p_bonf=1.0000  q=0.2862
+               dm_rank (MING DM)  | 1 (top-MING)                    | 25:  22/ 72 (30.556%)  | 26:  11/ 66 (16.667%)  | δ=-0.1389  z=-1.91  p=0.0560  p_bonf=1.0000  q=0.2862
+               dm_rank (MING DM)  | 4-9                             | 25:  34/364 (9.341%)  | 26:  25/355 (7.042%)  | δ=-0.0230  z=-1.12  p=0.2616  p_bonf=1.0000  q=0.4919
+               dm_rank (MING DM)  | 2-3                             | 25:  13/112 (11.607%)  | 26:  20/125 (16.000%)  | δ=+0.0439  z=+0.98  p=0.3294  p_bonf=1.0000  q=0.4919
   (buckets only in 2026Q1 with min_n: ['0/missing'])
 
 ----------------------------------------------------------------------------------------------------
 Axis: tm_rank (MING TM)
 ----------------------------------------------------------------------------------------------------
-               tm_rank (MING TM)  | 4-9                             | 25:  22/330 (6.667%)  | 26:  12/321 (3.738%)  | δ=-0.0293  z=-1.69
-               tm_rank (MING TM)  | 1 (top-MING)                    | 25:  20/ 57 (35.088%)  | 26:  14/ 63 (22.222%)  | δ=-0.1287  z=-1.57
-               tm_rank (MING TM)  | 2-3                             | 25:  31/139 (22.302%)  | 26:  25/133 (18.797%)  | δ=-0.0351  z=-0.72
-               tm_rank (MING TM)  | >=10                            | 25:   5/304 (1.645%)  | 26:   4/307 (1.303%)  | δ=-0.0034  z=-0.35
-               tm_rank (MING TM)  | 0/missing                       | 25:   1/ 46 (2.174%)  | 26:   4/ 76 (5.263%)  | δ=+0.0309  z=+0.92
+               tm_rank (MING TM)  | 4-9                             | 25:  22/330 (6.667%)  | 26:  12/321 (3.738%)  | δ=-0.0293  z=-1.68  p=0.0932  p_bonf=1.0000  q=0.2938
+               tm_rank (MING TM)  | 1 (top-MING)                    | 25:  20/ 57 (35.088%)  | 26:  14/ 63 (22.222%)  | δ=-0.1287  z=-1.56  p=0.1183  p_bonf=1.0000  q=0.3465
+               tm_rank (MING TM)  | 2-3                             | 25:  31/139 (22.302%)  | 26:  25/133 (18.797%)  | δ=-0.0351  z=-0.71  p=0.4748  p_bonf=1.0000  q=0.6084
+               tm_rank (MING TM)  | >=10                            | 25:   5/304 (1.645%)  | 26:   4/307 (1.303%)  | δ=-0.0034  z=-0.35  p=0.7258  p_bonf=1.0000  q=0.7440
+               tm_rank (MING TM)  | 0/missing                       | 25:   1/ 46 (2.174%)  | 26:   4/ 76 (5.263%)  | δ=+0.0309  z=+0.83  p=0.4042  p_bonf=1.0000  q=0.5524
 
 ====================================================================================================
-Causal candidate summary (= |z| >= 2.0 buckets)
+Corrected causal candidate summary
 ====================================================================================================
 
-  Total: 4 candidate(s)
+  naive |z| >= 2.0 rows: 3
+  Bonferroni survivors: 0
+  BH-FDR survivors: 0
 
-  - axis=               grade_code | bucket=0                         | δ=-0.1100 | z=-2.13 | MORE-MISS in 2026
-  - axis=               track_code | bucket=track_10                  | δ=-0.0764 | z=-2.64 | MORE-MISS in 2026
-  - axis=               track_code | bucket=track_07                  | δ=-0.0694 | z=-2.09 | MORE-MISS in 2026
-  - axis=            starter_count | bucket=<=8 small                 | δ=-0.1388 | z=-2.11 | MORE-MISS in 2026
-
-  Gate-2 (c) 判定: PASS (>= 1 個 candidate 特定)
+  No corrected causal candidates found.
+  Gate-2 (c) corrected verdict: FAIL (corrected survivor 不在)
 
 ====================================================================================================
-Tier 2/3 features 対応 check (= 個別 candidate が Tier 2/3 features で説明可能か)
+Exploratory signal summary (= Gate PASS ではなく優先順位の参考値)
 ====================================================================================================
 
-causal candidate (>=2σ) と Tier 2/3 features (PHASE6_TIER23_DESIGN.md) の対応:
+  - axis=               track_code | bucket=track_10                  | δ=-0.0764 | z=-2.61 | p=0.0090 | p_bonf=0.3699 | q=0.2862 | MORE-MISS in 2026
+      * T2.3 track_recent_top3_rate_30d (track drift / recent form)
+      * T2.2 track_surface_distance_top3_rate (track x surface x distance)
+      * T3.2 track_bias_inside_outside (track bias)
+  - axis=               grade_code | bucket=0                         | δ=-0.1100 | z=-2.12 | p=0.0336 | p_bonf=1.0000 | q=0.2862 | MORE-MISS in 2026
+      * Tier 1 grade_code existing signal
+      * T2.2 track_grade interactional feature candidate
+  - axis=            starter_count | bucket=<=8 small                 | δ=-0.1388 | z=-2.05 | p=0.0407 | p_bonf=1.0000 | q=0.2862 | MORE-MISS in 2026
+      * T2.1b expected_pace_index (small-race pace dynamics)
+      * T2.1a pace_runners_count_pct (small-race pace composition)
+  - axis=               popularity | bucket=2-3                       | δ=-0.0653 | z=-1.95 | p=0.0510 | p_bonf=1.0000 | q=0.2862 | MORE-MISS in 2026
+      * monitor only; no direct B1-S1 feature gate
+  - axis=        dm_rank (MING DM) | bucket=>=10                      | δ=-0.0220 | z=-1.94 | p=0.0525 | p_bonf=1.0000 | q=0.2862 | MORE-MISS in 2026
+      * MING dynamics monitor (H4 raw DM/TM yearly distribution split)
+  - axis=        dm_rank (MING DM) | bucket=1 (top-MING)              | δ=-0.1389 | z=-1.91 | p=0.0560 | p_bonf=1.0000 | q=0.2862 | MORE-MISS in 2026
+      * MING dynamics monitor (H4 raw DM/TM yearly distribution split)
+  - axis=               track_code | bucket=track_06                  | δ=-0.0439 | z=-1.89 | p=0.0589 | p_bonf=1.0000 | q=0.2862 | MORE-MISS in 2026
+      * T2.3 track_recent_top3_rate_30d (track drift / recent form)
+      * T2.2 track_surface_distance_top3_rate (track x surface x distance)
+      * T3.2 track_bias_inside_outside (track bias)
+  - axis=              odds bucket | bucket=>=50 (deep)               | δ=-0.0423 | z=-1.85 | p=0.0648 | p_bonf=1.0000 | q=0.2862 | MORE-MISS in 2026
+      * monitor only; no direct B1-S1 feature gate
+  - axis=          distance bucket | bucket=missing/invalid           | δ=-0.0570 | z=-1.80 | p=0.0717 | p_bonf=1.0000 | q=0.2862 | MORE-MISS in 2026
+      * data-quality audit for distance missing/invalid
+      * T2.2 distance interaction features if replicated
+  - axis=              odds bucket | bucket=20-50 (long-shot)         | δ=-0.1032 | z=-1.79 | p=0.0733 | p_bonf=1.0000 | q=0.2862 | MORE-MISS in 2026
+      * monitor only; no direct B1-S1 feature gate
+  - axis=              odds bucket | bucket=7-20 (mid)                | δ=+0.0573 | z=+1.75 | p=0.0808 | p_bonf=1.0000 | q=0.2862 | MORE-HIT in 2026
+      * monitor only; no direct B1-S1 feature gate
+  - axis=               track_code | bucket=track_07                  | δ=-0.0694 | z=-1.73 | p=0.0838 | p_bonf=1.0000 | q=0.2862 | MORE-MISS in 2026
+      * T2.3 track_recent_top3_rate_30d (track drift / recent form)
+      * T2.2 track_surface_distance_top3_rate (track x surface x distance)
+      * T3.2 track_bias_inside_outside (track bias)
 
-1. **track_code = track_10 (小倉) z=-2.64 strongest**
-   - 観察: 2025Q1 hr 10.4% (15/144) → 2026Q1 hr 2.8% (4/144) で同サンプル数だが大幅 drop
-   - 対応 Tier 2/3 features:
-     * T2.2 track_surface_distance_top3_rate (track, surface, distance_bucket) ← 直接
-     * T2.2 track_going_top3_rate (track, going) ← 直接
-     * T2.2 track_season_top3_rate (track, season) ← 直接
-     * T2.3 track_recent_top3_rate_30d (rolling 30 日) ← 馬場改修対応
-     * T3.2 track_bias_inside_outside ← 内/外有利
-   - 仮説: 小倉 / 中京 (track_07) で 2025-2026 間に馬場改修 or 開催 schedule 変更が発生、LGBM v5 は固定 prior で対応不可
-   - Phase B1 含意: **track_recent_top3_rate_30d (T2.3) の導入優先度 = MAX**
+Invariant 2 handling: exploratory rows may guide diagnostic priorities,
+but Gate / 採否判定 uses corrected survivor count only.
 
-2. **track_code = track_07 (中京) z=-2.09**
-   - 観察: 2025Q1 hr 11.1% (20/180) → 2026Q1 hr 4.2% (3/72) で 2026Q1 sample が大幅減 (開催減)
-   - 対応 Tier 2/3: 同上 (T2.2 + T2.3)
-   - 仮説: 中京開催数自体が減 + hit_rate も同時 drop。「開催機会減 → 学習データの最近性低下」の二重打撃
-   - Phase B1 含意: T2.3 rolling stats が「最近開催した場の最新傾向」を反映する設計の正当性を示す
+====================================================================================================
+Raw correction summary (JSON)
+====================================================================================================
 
-3. **starter_count = <=8 small z=-2.11**
-   - 観察: 2025Q1 hr 21.4% (12/56) → 2026Q1 hr 7.5% (4/53)
-   - 対応 Tier 2/3 features:
-     * T2.1 pace_runners_count_pct (= 先行馬比率) ← 直接、小頭数で意味大
-     * T2.1 same_leg_rivals_pct ← 同上
-     * T2.1 expected_pace_index ← race-internal ペース推定
-     * T2.1 is_front_only_race ← 持続力勝負想定
-   - 仮説: 小頭数 race ではペース動態が単純 (= 先行有利 / 持続力勝負) で T2.1 features が予測精度向上に直結
-   - Phase B1 含意: **expected_pace_index (T2.1b) の導入が小頭数 race の compensation に有効** — ただし PHASE6_TIER23_DESIGN §2.1 では「過去走の上がり 3F」由来なので race-internal post-race 情報利用に注意 (= leak risk audit、Step 4)
-
-4. **grade_code = '0' z=-2.13**
-   - 観察: 2025Q1 hr 17.3% (13/75) → 2026Q1 hr 6.3% (5/79)
-   - 対応 Tier 2/3 features: 直接対応なし (Tier 1 で grade_code は既存)
-   - 仮説: grade_code='0' は JRA classification の特殊 categoryで、LGBM v5 学習データに偏り。または BSTR データ corruption の signal
-   - Phase B1 含意: Tier 1 を変更せず Tier 2.2 (track_grade interactional features) を追加すれば吸収可能
-
-5. **borderline candidates (|z| 1.7-2.0)** — Phase B1 で副次的 monitor 対象:
-   - popularity 2-3 (z=-1.94): 1番人気 + 2-3番人気層の予測精度低下
-   - track_06 (中山) (z=-1.90): 中山開催の hit_rate も drop、track_10/07 と同パターン
-   - dm_rank=1 top-MING (z=-1.95): MING 1位馬の hit_rate が 30.6→16.7% で大幅 drop = MING shift (H3-1 verdict (c)) の直接観察
-   - dm_rank >=10 (z=-1.95): MING 低評価馬の hit_rate も drop
-   - odds >=50 deep (z=-1.85): 大穴予想の精度低下
-   - distance missing/invalid (z=-1.80): データ品質課題
-
-Tier 2/3 features カバー範囲:
-  - Tier 2.1 (ペース動態 4 features): 軸 3 (small starter_count) を直接カバー
-  - Tier 2.2 (3 次元キー集計 3 features): 軸 1+2 (track_10/07) を直接カバー
-  - Tier 2.3 (rolling 30/90 日 3 features): 軸 1+2+5 (track shift) を時系列補正
-  - Tier 3.1 (4 角通過順位 3 features): 軸 3 (small race の脚質) を間接カバー
-  - Tier 3.2 (馬場バイアス 2 features): 軸 1+2 (track-specific shift) を直接カバー
-  - Tier 3.3 (馬体重 delta 2 features): 軸ベース対応なし、独立シグナル
-  - Tier 4 (騎手×厩舎ペア): grade '0' bucket の特殊 race に有効可能性
-
-Phase B1 候補絞り込み推奨 (= causal candidate を強くカバーする順):
-  優先 1: T2.3 track_recent_top3_rate_30d (rolling, track shift 対応) ← 軸 1+2 直接
-  優先 2: T2.1 expected_pace_index + pace_runners_count_pct ← 軸 3 直接 (small race)
-  優先 3: T2.2 track_surface_distance_top3_rate ← 軸 1+2 補強
-  優先 4: T3.2 track_bias_inside_outside ← 軸 1+2 補強 (rolling 30 日)
-  優先 5: T2.1 same_leg_rivals_pct + is_front_only_race ← 軸 3 補強
-
-新発見:
-  「2026Q1 LGBM 崩壊の root cause」は **単一の causal ではなく軸 1-3 (track-specific
-  + small race) の複合パターン**。「market regime shift」narrative より「track-
-  specific data drift + small race feature gap」narrative の方が data に整合。
-  対立仮説 H_alt_2 (= 複合効果、軸 1 つでは検出不可) が部分的に支持されたが、
-  軸単独でも >= 2σ 出る candidate が 4 個あるので、検出粒度は十分。
-
-事前予想との照合:
-  事前予想 §B1-S0.1: P(causal candidate >= 1) = 0.55-0.70 中央 0.625
-  観察: 4 candidates (>= 2σ) + 6 borderline = much-stronger-than-predicted
-
-  方向 ✓ 強度 ✓ (= 予想範囲の上限を上回る発見数)
-  事前予想 hit、訂正不要 (= 信頼区間内の振れ幅)
+{
+  "family_size": 41,
+  "alpha": 0.05,
+  "z_method": "pooled",
+  "bonferroni_alpha": 0.0012195121951219512,
+  "bonferroni_z_two_sided": 3.2342767514520623,
+  "bonferroni_z_one_sided": 3.0308053363641583,
+  "naive_abs_z_ge_2": 3,
+  "bonferroni_survivors": 0,
+  "bh_fdr_survivors": 0,
+  "top_rows": [
+    {
+      "axis": "track_code",
+      "bucket": "track_10",
+      "z": -2.611175057139148,
+      "p_two_sided": 0.00902316920407273,
+      "bonferroni_p": 0.36994993736698195,
+      "bh_q": 0.2861928669986732
+    },
+    {
+      "axis": "grade_code",
+      "bucket": "0",
+      "z": -2.1245065386749893,
+      "p_two_sided": 0.033627809876467775,
+      "bonferroni_p": 1.0,
+      "bh_q": 0.2861928669986732
+    },
+    {
+      "axis": "starter_count",
+      "bucket": "<=8 small",
+      "z": -2.0468077423941287,
+      "p_two_sided": 0.04067696518340387,
+      "bonferroni_p": 1.0,
+      "bh_q": 0.2861928669986732
+    },
+    {
+      "axis": "popularity",
+      "bucket": "2-3",
+      "z": -1.951892479822816,
+      "p_two_sided": 0.05095097131109881,
+      "bonferroni_p": 1.0,
+      "bh_q": 0.2861928669986732
+    },
+    {
+      "axis": "dm_rank (MING DM)",
+      "bucket": ">=10",
+      "z": -1.938695357968079,
+      "p_two_sided": 0.052538444242223925,
+      "bonferroni_p": 1.0,
+      "bh_q": 0.2861928669986732
+    },
+    {
+      "axis": "dm_rank (MING DM)",
+      "bucket": "1 (top-MING)",
+      "z": -1.9107050140703699,
+      "p_two_sided": 0.056042500098592025,
+      "bonferroni_p": 1.0,
+      "bh_q": 0.2861928669986732
+    },
+    {
+      "axis": "track_code",
+      "bucket": "track_06",
+      "z": -1.8889349161288993,
+      "p_two_sided": 0.058900550163413966,
+      "bonferroni_p": 1.0,
+      "bh_q": 0.2861928669986732
+    },
+    {
+      "axis": "odds bucket",
+      "bucket": ">=50 (deep)",
+      "z": -1.8467113844059777,
+      "p_two_sided": 0.06478898085550439,
+      "bonferroni_p": 1.0,
+      "bh_q": 0.2861928669986732
+    },
+    {
+      "axis": "distance bucket",
+      "bucket": "missing/invalid",
+      "z": -1.8011613558755888,
+      "p_two_sided": 0.07167745134396425,
+      "bonferroni_p": 1.0,
+      "bh_q": 0.2861928669986732
+    },
+    {
+      "axis": "odds bucket",
+      "bucket": "20-50 (long-shot)",
+      "z": -1.7909171960301729,
+      "p_two_sided": 0.07330658375720056,
+      "bonferroni_p": 1.0,
+      "bh_q": 0.2861928669986732
+    },
+    {
+      "axis": "odds bucket",
+      "bucket": "7-20 (mid)",
+      "z": 1.7460558208487833,
+      "p_two_sided": 0.0808012525819403,
+      "bonferroni_p": 1.0,
+      "bh_q": 0.2861928669986732
+    },
+    {
+      "axis": "track_code",
+      "bucket": "track_07",
+      "z": -1.729253326884169,
+      "p_two_sided": 0.08376376595083118,
+      "bonferroni_p": 1.0,
+      "bh_q": 0.2861928669986732
+    }
+  ]
+}
