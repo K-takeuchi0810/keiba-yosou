@@ -1,7 +1,8 @@
 """ルールベース予想ロジック。
 
 シグナル:
-- 直近 3 走の平均着順 / 最高着順
+- 直近走の頭数正規化着順率 (finish_rate) / 最高着順 / 連続好走
+  (raw 平均着順 rule 項は P20-2 アブレーションで削除、下記参照)
 - 同種トラック（芝/ダート）勝利数
 - 同距離（±100m）出走数・トップ 3 回数
 - 重賞経験
@@ -97,27 +98,19 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     current_level = feat.get("current_race_level", 0) or 0
     blood_weight = 1.35 if past_count <= 2 else 1.0
 
-    # 直近 3 走平均着順
-    # 重賞では「平均着順」より「内容 (着差・相手関係)」が重要なので、
-    # current_level >= 5 (OP/重賞) では重みを 0.6 倍に下げて影響を抑える。
-    avg = feat.get("recent_avg_finish")
-    if avg is not None:
-        avg_weight = 0.6 if (V2_GRADE_ENABLED and current_level >= 5) else 1.0
-        if avg <= 2.0:
-            score += _w("recent_avg.excellent", 25) * avg_weight
-            reasons.append(f"直近3走平均{avg:.1f}着")
-        elif avg <= 4.0:
-            score += _w("recent_avg.good", 12) * avg_weight
-            reasons.append(f"直近3走平均{avg:.1f}着")
-        elif avg <= 6.0:
-            score += _w("recent_avg.ok", 4) * avg_weight
-            reasons.append(f"直近3走平均{avg:.1f}着")
-        elif avg <= 10.0:
-            score += _w("recent_avg.poor", -4)
-            reasons.append(f"直近平均{avg:.1f}着")
-        else:
-            score += _w("recent_avg.bad", -12)
-            reasons.append(f"直近平均{avg:.1f}着")
+    # 直近平均着順 (raw confirmed_order 平均) の rule スコア項は P20-2 (2026-06-07)
+    # のアブレーション backtest (2026-04-01〜05-10, n=5,745) で **削除**。
+    # raw 平均着順は:
+    #   (1) 頭数・クラス非正規化 (5頭立て2着と18頭立て2着が同点) で signal が粗い
+    #   (2) 過去走数を見ず 1 走 2着を 3 走連続好走と同評価 → 49% の薄経験馬で過大評価
+    #   (3) finish_rate (頭数正規化) / class_level_top3 / LGBM 特徴と冗長
+    # ablation で raw 平均着順 rule 項を削除すると rank-1 べた買い回収率
+    # 77.0% → 84.6% (+7.6pt, 的中 +10/408)、Brier 0.065533 → 0.065449 (微改善)。
+    # = 削除がむしろ ◎ 選定を改善。頭数正規化済みの finish_rate は下で残す。
+    # 詳細: data/backtest/20260607_022454_*abl-a-baseline* vs *abl-b-no-recentavg*
+    # NOTE: _stability_score の recent_avg (hardcoded 8/5/2/-4) は本 ablation の
+    #       対象外 (= secondary sort key)。別途 ablation 候補として残置。
+    avg = feat.get("recent_avg_finish")  # finish_rate ブロックの補助判定で参照
 
     finish_rate = feat.get("recent_avg_finish_rate")
     if finish_rate is not None:
