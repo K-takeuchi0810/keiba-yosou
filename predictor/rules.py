@@ -108,8 +108,14 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     # 77.0% → 84.6% (+7.6pt, 的中 +10/408)、Brier 0.065533 → 0.065449 (微改善)。
     # = 削除がむしろ ◎ 選定を改善。頭数正規化済みの finish_rate は下で残す。
     # 詳細: data/backtest/20260607_022454_*abl-a-baseline* vs *abl-b-no-recentavg*
-    # NOTE: _stability_score の recent_avg (hardcoded 8/5/2/-4) は本 ablation の
-    #       対象外 (= secondary sort key)。別途 ablation 候補として残置。
+    # 2025 同季節でも符号一致を確認 (rank-1 79.9%→85.4% +5.5pt、Brier 中立)
+    # = 独立 2 dataset で削除は非有害。
+    # NOTE: _stability_score の recent_avg (hardcoded 8/5/2/-4) は **あえて残置**。
+    #       P20-2b で stability 側も削除したら rank-1 84.6%→62.7% (-21.9pt) と大幅
+    #       悪化 (◎ が低オッズ寄りにシフトし価値を失う) → 非対称は data 上正しい配置。
+    #       primary score の直加算 (薄経験馬を過大評価=有害) と、secondary tie-break
+    #       (接戦時に安定馬へ誘導=有益) で recent_avg の役割が異なる。
+    #       詳細: data/backtest/20260607_*p20-2b-stability-removed*
     avg = feat.get("recent_avg_finish")  # finish_rate ブロックの補助判定で参照
 
     finish_rate = feat.get("recent_avg_finish_rate")
