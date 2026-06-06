@@ -361,11 +361,13 @@
        市場の 2-7 倍に過大評価する (reliability gap)。Kelly 表示は是正したが確率
        自体の矯正は Phase B1 待ち。MEMORY「実弾運用を控える」方針と整合。 #}
     <div class="calib-caveat">⚠ 表示の P / EV / Kelly は<strong>未校正の予想確率</strong>に基づきます。現行モデルは中穴〜大穴の勝率を市場想定の 2〜7 倍に過大評価する傾向があり、実際の期待値はこれより低い見込みです。再訓練 (Phase B1) までは<strong>ロジック観察用</strong>とし、実弾投入は推奨しません。</div>
-    {# P20 (2026-06-07): ポートフォリオ合計の推奨投資率 + 1 日上限警告 #}
-    {% if portfolio_info %}
-    <div class="portfolio-note{% if portfolio_info.over_cap %} over-cap{% endif %}">
-      推奨投資率合計 {{ "%.1f"|format(portfolio_info.recommended_total_pct) }}%
-      （{{ portfolio_info.kelly_mode }} Kelly・1点上限 {{ "%.0f"|format(portfolio_info.per_bet_cap_pct) }}%）{% if portfolio_info.over_cap %} ／ ⚠ 1日上限 {{ "%.0f"|format(portfolio_info.cap_pct) }}% 超過 → 各点 ×{{ "%.2f"|format(portfolio_info.scale) }} に縮小推奨{% endif %}
+    {# P20 (2026-06-07): 推奨投資率は **開催日ごと** に集計 (bankroll は日単位)。
+       多日窓で全件合算すると誤って巨大化するため日別に表示する。 #}
+    {% if portfolio_info and portfolio_info.days %}
+    <div class="portfolio-note{% if portfolio_info.any_over_cap %} over-cap{% endif %}">
+      推奨投資率（1日あたり・{{ portfolio_info.kelly_mode }} Kelly・1点上限 {{ "%.0f"|format(portfolio_info.per_bet_cap_pct) }}%）:
+      {% for d in portfolio_info.days %}{{ d.date[5:] }} {{ "%.0f"|format(d.total_pct) }}%（{{ d.count }}件{% if d.over_cap %}・⚠各点×{{ "%.2f"|format(d.scale) }}{% endif %}）{% if not loop.last %} / {% endif %}{% endfor %}
+      {% if portfolio_info.any_over_cap %}<br>⚠ 1日上限 {{ "%.0f"|format(portfolio_info.cap_pct) }}% 超過の日は、該当日内で各点を表示倍率に縮小推奨。{% endif %}
     </div>
     {% endif %}
     {% for b in buy_candidates %}

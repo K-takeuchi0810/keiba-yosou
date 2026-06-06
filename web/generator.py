@@ -345,22 +345,34 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
         key=lambda b: (-(b.get("kelly_fraction") or 0), b.get("start_time") or "")
     )
 
-    # P20 (2026-06-07): ポートフォリオ合計の推奨投資率と上限超過チェック。
+    # P20 (2026-06-07): ポートフォリオ推奨投資率の上限チェック。
     # full Kelly 合計だと bankroll の 100% 超 (= 物理的に賭けられない) になる
-    # 事故があったため、recommended_kelly (= quarter + per-bet cap 済) の合計を
-    # 出し、BET_PORTFOLIO_MAX_PCT を超える場合は按分縮小係数を提示する。
-    recommended_total = sum(b.get("recommended_kelly") or 0 for b in buy_candidates)
-    portfolio_over_cap = recommended_total > BET_PORTFOLIO_MAX_PCT
-    portfolio_scale = (
-        BET_PORTFOLIO_MAX_PCT / recommended_total
-        if portfolio_over_cap and recommended_total > 0
-        else 1.0
-    )
+    # 事故があったため、recommended_kelly (= quarter + per-bet cap 済) を集計する。
+    # **日単位で集計する** (実際の bankroll は 1 開催日ごとに区切られるため、
+    # 多日窓の買い候補を全部合算すると誤って巨大化する。2026-06-07 修正)。
+    by_day_total: dict[str, float] = {}
+    by_day_count: dict[str, int] = {}
+    for b in buy_candidates:
+        d = b.get("date") or "?"
+        by_day_total[d] = by_day_total.get(d, 0.0) + (b.get("recommended_kelly") or 0)
+        by_day_count[d] = by_day_count.get(d, 0) + 1
+    portfolio_days = []
+    for d in sorted(by_day_total):
+        tot = by_day_total[d]
+        over = tot > BET_PORTFOLIO_MAX_PCT
+        portfolio_days.append({
+            "date": d,
+            "count": by_day_count[d],
+            "total_pct": tot * 100,
+            "over_cap": over,
+            "scale": (BET_PORTFOLIO_MAX_PCT / tot if over and tot > 0 else 1.0),
+        })
+    max_day_pct = max((d["total_pct"] for d in portfolio_days), default=0.0)
     portfolio_info = {
-        "recommended_total_pct": recommended_total * 100,
+        "days": portfolio_days,
+        "max_day_pct": max_day_pct,
+        "any_over_cap": any(d["over_cap"] for d in portfolio_days),
         "cap_pct": BET_PORTFOLIO_MAX_PCT * 100,
-        "over_cap": portfolio_over_cap,
-        "scale": portfolio_scale,
         "kelly_mode": BET_KELLY_MODE,
         "per_bet_cap_pct": BET_KELLY_MAX_PCT * 100,
     }
