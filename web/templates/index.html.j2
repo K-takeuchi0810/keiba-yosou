@@ -14,6 +14,7 @@
     --fg: #111;
     --fg-mute: #666;
     --bg: #fafafa;
+    --bg-mute: rgba(127,127,127,.08);
     --card: #ffffff;
     --border: #e0e0e0;
     --accent: #1a5fb4;
@@ -34,6 +35,7 @@
       --fg: #eaeaea;
       --fg-mute: #a0a0a0;
       --bg: #181818;
+      --bg-mute: rgba(255,255,255,.06);
       --card: #232323;
       --border: #383838;
       --accent: #6aa6ff;
@@ -78,6 +80,31 @@
     font-variant-numeric: tabular-nums;
   }
   .meta { color: var(--fg-mute); font-size: 0.8rem; margin-top: 0.25rem; }
+  /* 開催日ナビ: 複数開催のとき各セクションへワンタップで飛ぶ。
+     横スクロール 1 行に収め、sticky ヘッダの高さ増を最小化 */
+  .day-nav {
+    display: flex;
+    gap: 0.35rem;
+    margin-top: 0.4rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    padding-bottom: 0.15rem;
+    /* スクロールバーは隠す (チップの見切れでスクロール可能なことは伝わる) */
+    scrollbar-width: none;
+  }
+  .day-nav::-webkit-scrollbar { display: none; }
+  .day-nav a {
+    flex: 0 0 auto;
+    padding: 0.25rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card);
+    color: var(--fg-mute);
+    font-size: 0.78rem;
+    text-decoration: none;
+  }
+  .day-nav a .nav-buy { color: var(--buy-board-fg); font-weight: 700; }
   main { padding: 0.5rem; max-width: 720px; margin: 0 auto; }
   .buy-board {
     margin: 0.5rem 0 1rem;
@@ -93,16 +120,39 @@
     color: #fff;
     font-size: 1rem;
   }
+  /* P22: 推奨投資率 (実際に賭ける数字) を右側ブロックに大きく分離。
+     左 = レース/馬の識別情報、右 = 行動につながる数値、で視線移動を最短化 */
   .buy-card {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
     padding: 0.65rem 0.75rem;
     color: var(--fg);
     text-decoration: none;
     border-top: 1px solid var(--buy-card-border);
   }
+  .buy-card-main { flex: 1 1 auto; min-width: 0; }
   .buy-card strong { font-size: 1rem; }
   .buy-meta { color: var(--fg-mute); font-size: 0.82rem; margin-top: 0.15rem; }
   .buy-metrics { margin-top: 0.25rem; font-size: 0.82rem; font-weight: 700; color: var(--buy-board-fg); }
+  .buy-reco {
+    flex: 0 0 auto;
+    text-align: right;
+    min-width: 4.6rem;
+  }
+  .buy-reco-num {
+    display: block;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--buy-board-fg);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+  .buy-reco-label {
+    display: block;
+    font-size: 0.66rem;
+    color: var(--fg-mute);
+  }
   /* P20: full Kelly は副次情報に降格 (推奨投資率を主表示に) */
   .full-kelly-note { color: var(--fg-mute); font-weight: 400; font-size: 0.92em; margin-left: 0.3em; }
   /* P20: モデル over-confidence の常時開示 caveat */
@@ -159,21 +209,31 @@
     color: var(--fg-mute);
     opacity: 0.7;
   }
-  /* S7-β-1: 買い候補ボードの折りたたみ用 (details/summary) */
+  /* S7-β-1: 買い候補ボードの折りたたみ用 (details/summary)。
+     P22: 展開時の h2 と同じ赤バーに統一 + min-height 44px (Apple HIG
+     タップ領域、mobile-html-reviewer 2 回持ち越し分) */
   details.buy-board > summary {
     list-style: none;
     cursor: pointer;
     font-weight: 700;
-    color: var(--buy-board-fg);
-    padding: 0.5rem 0;
+    background: var(--grade);
+    color: #fff;
+    font-size: 1rem;
+    padding: 0.55rem 0.75rem;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
   }
   details.buy-board > summary::-webkit-details-marker { display: none; }
   details.buy-board > summary::after {
-    content: " ▼";
+    content: "▼";
     font-size: 0.8rem;
-    color: var(--fg-mute);
+    color: rgba(255,255,255,.85);
+    transition: transform .2s ease;
   }
-  details.buy-board[open] > summary::after { content: " ▲"; }
+  details.buy-board[open] > summary::after { transform: rotate(180deg); }
   .no-buy {
     margin: 0.5rem 0 1rem;
     padding: 0.75rem;
@@ -191,6 +251,18 @@
     background: var(--accent);
     color: #fff;
     border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .day-buy-count {
+    font-size: 0.78rem;
+    font-weight: 700;
+    background: rgba(255,255,255,.18);
+    border-radius: 999px;
+    padding: 0.08rem 0.55rem;
+    white-space: nowrap;
   }
   details.race {
     background: var(--card);
@@ -198,6 +270,7 @@
     border-radius: 8px;
     margin-bottom: 0.5rem;
     overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
   }
   details.race.buy-race { border-color: var(--grade); box-shadow: 0 0 0 1px var(--buy-card-border); }
   details.race[open] { border-color: var(--accent); }
@@ -227,6 +300,22 @@
   .race-num { font-weight: 700; font-size: 1.1rem; color: var(--accent); }
   .race-info-line { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
   .race-name { font-weight: 600; }
+  /* P22: 閉じたレース行でも本命が見えるプレビュー行。
+     全レースを開かずに「どの馬を推しているか」を一覧スキャンできる */
+  .head-pick {
+    margin-top: 0.1rem;
+    font-size: 0.78rem;
+    color: var(--fg-mute);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .head-pick .mark { font-size: 0.85rem; margin-right: 0.15rem; }
+  .head-pick .head-pick-tent {
+    color: var(--buy-board-fg);
+    font-weight: 600;
+    margin-left: 0.3rem;
+  }
   .badge {
     display: inline-block;
     padding: 0.05rem 0.4rem;
@@ -263,6 +352,10 @@
   }
   td.num { text-align: right; }
   td.mark-cell { width: 1.6rem; text-align: center; font-weight: 700; color: var(--accent); }
+  /* P22: 印のついた馬の行をうっすら強調 (出馬表スキャン時に予想対象が浮く)。
+     枠番カラーセル (.horse-num) は上書きしない (waku-* の方が specificity が
+     低く、馬番が背景色を失って読めなくなるため除外) */
+  tr.marked td:not(.horse-num) { background: var(--top-picks-bg); }
   /* 馬名は狭画面で省略 */
   td.horse-name { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* スマホ (480px 以下) では調教師・性齢・斤量を畳む */
@@ -280,6 +373,8 @@
     /* P20: 狭画面では推奨/full Kelly を改行配置し 1 行の数字密度を下げる */
     .full-kelly-note { display: block; margin-left: 0; margin-top: 0.1rem; }
     .portfolio-note { padding: 0.4rem 0.5rem; line-height: 1.45; }
+    .buy-reco { min-width: 4rem; }
+    .buy-reco-num { font-size: 1.05rem; }
   }
   /* タブレット (~600px) では調教師だけ畳む */
   @media (max-width: 600px) and (min-width: 481px) {
@@ -345,6 +440,15 @@
   {% if filter_summary %}
   <div class="filter-summary">買い候補フィルタ: {{ filter_summary }}</div>
   {% endif %}
+  {# P22: 複数開催のとき、各開催セクションへのワンタップナビ (買い候補数つき) #}
+  {% if days | length > 1 %}
+  <nav class="day-nav">
+    {% for day in days %}
+    {% set day_buys = day.races | selectattr('has_bet') | list | length %}
+    <a href="#day-{{ loop.index }}">{{ day.date[5:] }} {{ day.track }}{% if day_buys %} <span class="nav-buy">買{{ day_buys }}</span>{% endif %}</a>
+    {% endfor %}
+  </nav>
+  {% endif %}
 </header>
 <main>
 {% if buy_candidates %}
@@ -372,15 +476,22 @@
     {% endif %}
     {% for b in buy_candidates %}
       <a class="buy-card" href="#{{ b.anchor }}">
-        <strong>
-          {# P20 (2026-06-07): バッジは「推奨投資率が 1 点上限に達した = full Kelly が
-             十分高い」を示す。旧 S7-β-3 は full Kelly>=10% を見ていたが、これは
-             過大表示の full Kelly 基準で誤誘導だったため recommended_kelly 基準に変更 #}
-          {% if b.recommended_kelly * 100 >= portfolio_info.per_bet_cap_pct %}<span class="strong-buy-badge">★ 上限張り</span>{% endif %}
-          {{ b.date }} {{ b.track }} {{ b.race_num }}R {% if b.race_name %}{{ b.race_name }}{% endif %}
-        </strong>
-        <div class="buy-meta">{{ b.start_time }} / {{ b.mark }} {{ b.num }} {{ b.name }} / {{ "%.1f"|format(b.odds) }}倍{% if b.popularity %} {{ b.popularity }}人気{% endif %}</div>
-        <div class="buy-metrics">P {{ "%.1f"|format(b.win_probability * 100) }}% / EV {{ "%.2f"|format(b.expected_value) }} / 推奨 {{ "%.2f"|format(b.recommended_kelly * 100) }}%<span class="full-kelly-note">（full Kelly {{ "%.1f"|format(b.kelly_fraction * 100) }}%）</span></div>
+        <div class="buy-card-main">
+          <strong>
+            {# P20 (2026-06-07): バッジは「推奨投資率が 1 点上限に達した = full Kelly が
+               十分高い」を示す。旧 S7-β-3 は full Kelly>=10% を見ていたが、これは
+               過大表示の full Kelly 基準で誤誘導だったため recommended_kelly 基準に変更 #}
+            {% if b.recommended_kelly * 100 >= portfolio_info.per_bet_cap_pct %}<span class="strong-buy-badge">★ 上限張り</span>{% endif %}
+            {{ b.date }} {{ b.track }} {{ b.race_num }}R {% if b.race_name %}{{ b.race_name }}{% endif %}
+          </strong>
+          <div class="buy-meta">{{ b.start_time }} / {{ b.mark }} {{ b.num }} {{ b.name }} / {{ "%.1f"|format(b.odds) }}倍{% if b.popularity %} {{ b.popularity }}人気{% endif %}</div>
+          <div class="buy-metrics">P {{ "%.1f"|format(b.win_probability * 100) }}% / EV {{ "%.2f"|format(b.expected_value) }}<span class="full-kelly-note">（full Kelly {{ "%.1f"|format(b.kelly_fraction * 100) }}%）</span></div>
+        </div>
+        {# P22: 「実際に賭ける数字」= 推奨投資率を右側に大きく分離表示 #}
+        <div class="buy-reco">
+          <span class="buy-reco-num">{{ "%.2f"|format(b.recommended_kelly * 100) }}%</span>
+          <span class="buy-reco-label">推奨投資</span>
+        </div>
       </a>
     {% endfor %}
   {% if buy_count >= 6 %}
@@ -392,8 +503,9 @@
   <section class="no-buy">表示中の期間に買い候補はありません。予想印は下に表示していますが、EV/信頼度条件を満たすレースは見送り判定です。</section>
 {% endif %}
 {% for day in days %}
-  <section class="day-section">
-    <h2>{{ day.date }}（{{ day.weekday }}）{{ day.track }}</h2>
+  <section class="day-section" id="day-{{ loop.index }}">
+    {% set day_buys = day.races | selectattr('has_bet') | list | length %}
+    <h2><span>{{ day.date }}（{{ day.weekday }}）{{ day.track }}</span>{% if day_buys %}<span class="day-buy-count">買い候補 {{ day_buys }}</span>{% endif %}</h2>
     {% for race in day.races %}
     <details id="{{ race.anchor }}" class="race {% if race.has_bet %}buy-race{% endif %}">
       <summary class="race-head">
@@ -406,6 +518,11 @@
             {% if race.distance %}<span class="badge">{{ race.distance }}m</span>{% endif %}
             {% if race.has_bet %}<span class="bet-head">買い候補</span>{% endif %}
           </div>
+          {# P22: 閉じたままでも本命が見えるプレビュー行 (全レース開かずにスキャン可能) #}
+          {% if race.top_picks %}
+          {% set tp = race.top_picks[0] %}
+          <div class="head-pick"><span class="mark">{{ tp.mark }}</span>{{ tp.num }} {{ tp.name }}{% if tp.odds %} / {{ "%.1f"|format(tp.odds) }}倍{% endif %}{% if race.tentative %}<span class="head-pick-tent">暫定</span>{% endif %}</div>
+          {% endif %}
         </div>
         <div class="race-time">{{ race.start_time }}</div>
       </summary>
@@ -437,7 +554,7 @@
         </thead>
         <tbody>
         {% for h in race.horses %}
-          <tr>
+          <tr{% if h.mark %} class="marked"{% endif %}>
             <td class="mark-cell" {% if h.rationale %}title="{{ h.rationale }}"{% endif %}>{{ h.mark }}</td>
             <td class="horse-num waku-{{ h.waku }}">{{ h.num }}</td>
             <td class="horse-name">{{ h.name }}</td>

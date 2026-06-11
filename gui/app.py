@@ -1113,6 +1113,12 @@ CONTROL_HTML = """<!doctype html>
     color: var(--accent-hi);
     font-weight: 600;
   }
+  .tabs .close-tab { color: var(--buy); }
+  .tabs .close-tab:hover {
+    background: var(--buy-bg);
+    border-color: var(--buy-border);
+    color: var(--buy);
+  }
   .toolbar-meta {
     flex: 1 1 auto;
     min-width: 0;
@@ -1707,7 +1713,7 @@ CONTROL_HTML = """<!doctype html>
 <div class="chip-row">
   <button type="button" onclick="presetToday()">今日</button>
   <button type="button" onclick="presetWeekend()">今週末</button>
-  <button type="button" onclick="presetAuto()" title="日付を空欄に戻し、データのある最新開催日を自動選択">自動</button>
+  <button type="button" onclick="presetLatest()" title="データが存在する最新の開催日を表示 (平日など当日にレースが無いときに)">最新開催</button>
 </div>
 
 <div class="status-row">
@@ -1749,6 +1755,7 @@ CONTROL_HTML = """<!doctype html>
     <div class="tabs">
       <button id="tabDash" type="button" class="tab active" onclick="showTab('dash')">ダッシュボード</button>
       <button id="tabPreview" type="button" class="tab" onclick="showTab('preview')">予想 HTML</button>
+      <button id="closePreviewBtn" type="button" class="tab close-tab" onclick="showTab('dash')" style="display:none" title="プレビューを閉じてダッシュボードに戻る (Esc)">✕ 閉じる</button>
     </div>
     <span id="dashMeta" class="toolbar-meta"></span>
     <button id="refreshBtn" type="button" class="tool-btn" onclick="forceRefresh()" title="キャッシュを破棄して再計算">⟳ 更新</button>
@@ -1833,6 +1840,10 @@ CONTROL_HTML = """<!doctype html>
   function fmtDateInput(d) {
     return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
   }
+  function ymdToInput(v) {
+    v = String(valueOr(v, ''));
+    return v.length === 8 ? v.slice(0, 4) + '-' + v.slice(4, 6) + '-' + v.slice(6, 8) : '';
+  }
   // フィルタ key ↔ input id の対応 (options / applyBuyFilter で共用)
   var FILTER_INPUTS = {
     min_ev: 'filter_ev',
@@ -1876,6 +1887,8 @@ CONTROL_HTML = """<!doctype html>
     byId('previewPane').style.display = isPreview ? '' : 'none';
     byId('tabDash').className = isPreview ? 'tab' : 'tab active';
     byId('tabPreview').className = isPreview ? 'tab active' : 'tab';
+    // プレビュー表示中だけ「✕ 閉じる」を出す (戻る導線の明示)
+    byId('closePreviewBtn').style.display = isPreview ? '' : 'none';
     if (isPreview && !byId('previewFrame').getAttribute('data-loaded')) {
       reloadPreview();
     }
@@ -1912,7 +1925,11 @@ CONTROL_HTML = """<!doctype html>
     sun.setDate(sat.getDate() + 1);
     setDates(fmtDateInput(sat), fmtDateInput(sun));
   }
-  function presetAuto() {
+  function presetLatest() {
+    // 空欄 = Python 側 _date_range が「データのある最新開催日」に解決する。
+    // 解決結果は renderDashboard が input に書き戻すので、ユーザには
+    // 「最新開催の日付が入った」ように見える (空欄のままだと意図が
+    // 伝わらない、という 2026-06-12 ユーザフィードバックへの対応)。
     setDates('', '');
   }
 
@@ -2015,6 +2032,16 @@ CONTROL_HTML = """<!doctype html>
     }
     metaParts.push('HTML生成 ' + valueOr(s.generated_at, '-'));
     byId('dashMeta').textContent = metaParts.join('  /  ');
+
+    // 日付が両方空欄 (= 自動解決、「最新開催」プリセット含む) のときは
+    // 解決された開催日を input に書き戻して「何が表示されているか」を明示。
+    // ユーザ入力中 (片方だけ空欄) は触らない。
+    var fromEl = byId('from_date');
+    var toEl = byId('to_date');
+    if (fromEl && toEl && !fromEl.value && !toEl.value && data.from_date) {
+      fromEl.value = ymdToInput(data.from_date);
+      toEl.value = ymdToInput(data.to_date || data.from_date);
+    }
 
     byId('summary').innerHTML =
       metric('レース', valueOr(s.races, 0)) +
@@ -2222,6 +2249,13 @@ CONTROL_HTML = """<!doctype html>
       if (el) el.onchange = onFilterChange;
     }
   }
+  // Esc でプレビューを閉じる (iframe 内にフォーカスがあるときは届かないが、
+  // タブ/閉じるボタンへの補助導線として)
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && byId('previewPane').style.display !== 'none') {
+      showTab('dash');
+    }
+  });
   window.addEventListener('pywebviewready', boot);
   if (window.pywebview && window.pywebview.api) boot();
 </script>
