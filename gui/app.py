@@ -156,12 +156,24 @@ class Api:
         }
         self._cancel_event = threading.Event()
         self._progress_samples: list[tuple[float, float]] = []
-        self._last_options: dict = {}
         self._weather_cache: dict[tuple[str, str], tuple[float, dict]] = {}
+        # ダッシュボード計算キャッシュ。predict_race (全レース) と
+        # _recent_backtest (最大100日分の再予測) は数秒かかるため、
+        # フィルタ変更や期間ボタン切替のたびに再計算しない。
+        # データが変わりうるアクション開始時 (_begin_run) に無効化する。
+        self._cache_lock = threading.Lock()
+        self._pred_cache: dict[tuple[str, str], list] = {}
+        self._backtest_cache: dict[tuple[str, str], dict] = {}
 
     def _begin_run(self) -> None:
         self._cancel_event.clear()
         self._progress_samples = []
+        self._invalidate_caches()
+
+    def _invalidate_caches(self) -> None:
+        with self._cache_lock:
+            self._pred_cache.clear()
+            self._backtest_cache.clear()
 
     def _check_cancel(self) -> None:
         if self._cancel_event.is_set():
@@ -230,10 +242,6 @@ class Api:
     def get_status(self, options: dict | None = None) -> dict:
         with self._status_lock:
             return dict(self._status)
-
-    @_safe
-    def get_last_options(self, options: dict | None = None) -> dict:
-        return {"ok": True, "options": dict(self._last_options)}
 
     @_safe
     def get_buy_filter_default(self, options: dict | None = None) -> dict:
@@ -602,9 +610,60 @@ class Api:
             })
         return out
 
+    def _predictions_cached(self, conn, from_date: str, to_date: str, races: list) -> list:
+        """期間内全レースの予測を計算してキャッシュする。
+
+        返り値は (race, horses, preds, tentative) のリスト。
+        フィルタ変更ごとの再計算 (数秒) を避けるためのキャッシュで、
+        買い候補判定 (フィルタ依存) は呼び出し側で entries から都度作る。
+        単一キーのみ保持 (期間を変えたら前の期間分は捨てる)。
+        """
+        key = (from_date, to_date)
+        with self._cache_lock:
+            cached = self._pred_cache.get(key)
+        if cached is not None:
+            return cached
+        feature_cache: dict = {}
+        entries = []
+        for race in races:
+            horses = horses_for_race(conn, race)
+            if not horses:
+                continue
+            preds = predict_race(horses, conn=conn, race=race, cache=feature_cache)
+            entries.append((race, horses, preds, is_tentative(preds)))
+        with self._cache_lock:
+            self._pred_cache = {key: entries}
+        return entries
+
+    def _recent_backtest_cached(self, conn, to_date: str, range_key: str) -> dict:
+        key = (to_date, range_key)
+        with self._cache_lock:
+            hit = self._backtest_cache.get(key)
+        if hit is not None:
+            return hit
+        result = self._recent_backtest(conn, to_date, range_key)
+        with self._cache_lock:
+            self._backtest_cache[key] = result
+        return result
+
+    @_safe
+    def get_backtest(self, options: dict | None = None) -> dict:
+        """バックテストカードのみ更新する軽量 API (期間ボタン切替用)。
+
+        get_dashboard 全体 (予測再計算込み) を呼び直さずに済む。
+        """
+        options = options or {}
+        _, to_date = self._date_range(options)
+        with open_db() as conn:
+            backtest = self._recent_backtest_cached(
+                conn, to_date, str(options.get("backtest_range") or "3"))
+        return {"ok": True, "backtest": backtest}
+
     @_safe
     def get_dashboard(self, options: dict | None = None) -> dict:
         options = options or {}
+        if options.get("force_refresh"):
+            self._invalidate_caches()
         from_date, to_date = self._date_range(options)
         bet_filter = {
             "min_value": options.get("min_value", BET_MIN_VALUE),
@@ -643,13 +702,8 @@ class Api:
             prediction_items: list[dict] = []
             feature_warning_counts: dict[str, int] = {}
             feature_warning_total = 0
-            feature_cache: dict = {}
-            for race in races:
-                horses = horses_for_race(conn, race)
-                if not horses:
-                    continue
-                preds = predict_race(horses, conn=conn, race=race, cache=feature_cache)
-                tentative = is_tentative(preds)
+            entries = self._predictions_cached(conn, from_date, to_date, races)
+            for race, horses, preds, tentative in entries:
                 horse_by_num = {h["horse_num"]: h for h in horses}
                 for pred in preds[:3]:
                     if pred.rank == 1:
@@ -686,7 +740,13 @@ class Api:
                         prediction_items.append(item)
                     if item["buy"]:
                         buy_candidates.append(item)
-            backtest = self._recent_backtest(conn, to_date, str(options.get("backtest_range") or "3"))
+            # skip_backtest: JS ダッシュボードは backtest を get_backtest で
+            # 分離取得するため常に skip を指定してくる (本体描画を 100 日分の
+            # 再予測で待たせない)。同梱取得はスクリプト等の直叩き用に残す。
+            backtest = None
+            if not options.get("skip_backtest"):
+                backtest = self._recent_backtest_cached(
+                    conn, to_date, str(options.get("backtest_range") or "3"))
             trends = self._track_trends(conn, from_date, to_date)
             if not trends:
                 trends = self._prediction_trends(races, prediction_items)
@@ -857,34 +917,6 @@ class Api:
         return {"ok": True, "opened": str(ICLOUD_PUBLISH_DIR)}
 
     @_safe
-    def open_preview(self, options: dict | None = None) -> dict:
-        self._last_options = dict(options or {})
-        index = WEB_DIST / "index.html"
-        if not index.exists():
-            index.write_text(
-                "<!doctype html><meta charset='utf-8'>"
-                "<h1>プレビュー未生成</h1>"
-                "<p>「予想生成」を実行すると HTML がここに作られます。</p>",
-                encoding="utf-8",
-            )
-        wrapper_dir = WEB_DIST / "_gui"
-        wrapper_dir.mkdir(parents=True, exist_ok=True)
-        wrapper = wrapper_dir / "preview.html"
-        wrapper.write_text(
-            PREVIEW_HTML.replace("__PREVIEW_URL__", "../index.html"),
-            encoding="utf-8",
-        )
-        # return が JS 側に届く前に navigate するとコールバックレジストリが
-        # 消えて pywebview が TypeError を吐く。Timer で遅延させて切り離す。
-        threading.Timer(0.1, lambda: webview.windows[0].load_url(wrapper.as_uri())).start()
-        return {"ok": True, "preview": str(index), "wrapper": str(wrapper)}
-
-    @_safe
-    def show_control(self, options: dict | None = None) -> dict:
-        threading.Timer(0.1, lambda: webview.windows[0].load_html(CONTROL_HTML)).start()
-        return {"ok": True}
-
-    @_safe
     def run_all(self, options: dict | None = None) -> dict:
         """① 取得 → ② 予想 → ③ 公開 を一括実行。"""
         self._begin_run()
@@ -976,10 +1008,12 @@ CONTROL_HTML = """<!doctype html>
     height: 100vh;
     overflow: hidden;
   }
-  /* 左カラム = 既存コントロールパネル。幅固定。広げても膨らまない。 */
+  /* 左カラム = コントロールパネル。幅固定。
+     460px は 1100px 窓の 42% を占めて広すぎたため 380px に縮小
+     (ノート PC の実効幅 1280px 前後でダッシュボードに 900px 残す)。 */
   .sidebar {
-    flex: 0 0 460px;
-    width: 460px;
+    flex: 0 0 380px;
+    width: 380px;
     padding: .85rem 1rem .9rem;
     border-right: 1px solid var(--border-soft);
     height: 100vh;
@@ -988,14 +1022,79 @@ CONTROL_HTML = """<!doctype html>
     display: flex;
     flex-direction: column;
   }
-  /* 右カラム = 将来のコンテンツ用エリア (予想結果プレビュー等)。 */
+  /* 右カラム = タブ切替 (ダッシュボード / 予想 HTML プレビュー)。 */
   .main {
     flex: 1 1 auto;
     min-width: 0;
-    padding: .65rem .85rem;
     height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .main-toolbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .42rem .85rem .38rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .tabs { display: flex; gap: .2rem; }
+  .tabs .tab {
+    display: inline-block;
+    width: auto;
+    margin: 0;
+    padding: .3rem .7rem;
+    font-size: .78rem;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    color: var(--text-dim);
+    text-align: center;
+  }
+  .tabs .tab.active {
+    background: var(--accent-soft);
+    border-color: var(--accent-line);
+    color: var(--accent-hi);
+    font-weight: 600;
+  }
+  .toolbar-meta {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: right;
+    font-size: .7rem;
+    color: var(--text-mute);
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tool-btn {
+    display: inline-block;
+    width: auto;
+    flex: 0 0 auto;
+    margin: 0;
+    padding: .3rem .6rem;
+    font-size: .74rem;
+  }
+  #dashboardPane {
+    flex: 1 1 auto;
     overflow-y: auto;
     overflow-x: hidden;
+    padding: .65rem .85rem;
+  }
+  #previewPane {
+    flex: 1 1 auto;
+    overflow: hidden;
+    background: #ffffff;
+  }
+  #previewPane iframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+    background: #ffffff;
   }
   .card {
     background: var(--surface);
@@ -1026,10 +1125,12 @@ CONTROL_HTML = """<!doctype html>
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: .3rem;
-    min-height: 100%;
     grid-auto-rows: min-content;
     align-content: start;
+    transition: opacity .15s ease;
   }
+  /* 更新中はグリッドを淡くして「固まっていない」ことを可視化 */
+  .dashboard-grid.loading { opacity: .55; pointer-events: none; }
   .wide { grid-column: 1 / -1; }
   .span-2 { grid-column: span 2; }
   .metric-row {
@@ -1125,6 +1226,10 @@ CONTROL_HTML = """<!doctype html>
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* ライブ天候 (open-meteo)。JV-Data の確定天候とは別行で併記し、
+     上書きによるチラつき・情報消失を避ける。空のあいだは非表示。 */
+  .live-weather { color: var(--accent-hi); }
+  .live-weather:empty { display: none; }
   /* 買い候補ポートフォリオ集計バー (点数 / 推奨投資率 / 想定回収) */
   .buy-portfolio {
     display: flex;
@@ -1166,11 +1271,20 @@ CONTROL_HTML = """<!doctype html>
   .filter-panel summary { cursor: pointer; color: var(--accent-hi); font-size: .76rem; }
   .filter-controls {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
     gap: .45rem;
     margin-top: .35rem;
+    align-items: end;
   }
   .filter-controls input { width: 100%; }
+  .filter-reset {
+    width: auto;
+    margin: 0;
+    padding: .32rem .55rem;
+    font-size: .72rem;
+    text-align: center;
+    white-space: nowrap;
+  }
   .seg {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1200,10 +1314,21 @@ CONTROL_HTML = """<!doctype html>
     max-height: 9rem;
     overflow-y: auto;
   }
-  @media (max-width: 980px) {
-    .dashboard-grid { grid-template-columns: 1fr; }
+  /* ブレークポイントは「サイドバー 380px を引いた main の実効幅」基準。
+     3 列が成立する main >= 760px → viewport >= 1150px。
+     2 列が成立する main >= 500px → viewport >= 890px。 */
+  @media (max-width: 1150px) {
+    .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .span-2 { grid-column: 1 / -1; }
+  }
+  @media (max-width: 1000px) {
+    .sidebar { flex-basis: 330px; width: 330px; }
+  }
+  @media (max-width: 890px) {
+    .dashboard-grid { grid-template-columns: 1fr; }
     .metric-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .filter-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .filter-controls .filter-reset { grid-column: 1 / -1; }
   }
 
   /* ---------- header ---------- */
@@ -1235,6 +1360,11 @@ CONTROL_HTML = """<!doctype html>
 
   /* ---------- form ---------- */
   .field { margin: .38rem 0; }
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .5rem;
+  }
   label {
     display: block;
     font-size: .68rem;
@@ -1243,7 +1373,7 @@ CONTROL_HTML = """<!doctype html>
     margin-bottom: .25rem;
     text-transform: uppercase;
   }
-  input[type="date"], input[type="text"] {
+  input[type="date"], input[type="text"], input[type="number"] {
     width: 100%;
     background: var(--surface);
     border: 1px solid var(--border);
@@ -1269,6 +1399,21 @@ CONTROL_HTML = """<!doctype html>
     color: var(--text-mute);
     font-size: .7rem;
     margin: .2rem 0 0;
+  }
+  .chip-row {
+    display: flex;
+    gap: .3rem;
+    margin: .1rem 0 .15rem;
+  }
+  .chip-row button {
+    display: inline-block;
+    width: auto;
+    flex: 1 1 0;
+    margin: 0;
+    padding: .26rem .4rem;
+    font-size: .72rem;
+    text-align: center;
+    color: var(--text-dim);
   }
 
   /* ---------- status ---------- */
@@ -1431,6 +1576,22 @@ CONTROL_HTML = """<!doctype html>
   }
 
   /* ---------- details ---------- */
+  .adv {
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: 3px;
+    margin: .45rem 0 0;
+    font-size: .76rem;
+  }
+  .adv summary {
+    cursor: pointer;
+    padding: .35rem .55rem;
+    color: var(--text-dim);
+  }
+  .adv .field {
+    padding: 0 .55rem .45rem;
+    margin: 0;
+  }
   #detailsBox {
     background: var(--log-bg);
     color: var(--log-fg);
@@ -1472,18 +1633,20 @@ CONTROL_HTML = """<!doctype html>
   <div class="rule"></div>
 </header>
 
-<div class="field">
-  <label>開催日 (From)</label>
-  <input id="from_date" type="date">
+<div class="field-row">
+  <div class="field">
+    <label>開催日 From</label>
+    <input id="from_date" type="date">
+  </div>
+  <div class="field">
+    <label>To</label>
+    <input id="to_date" type="date">
+  </div>
 </div>
-<div class="field">
-  <label>開催日 (To)</label>
-  <input id="to_date" type="date">
-</div>
-<div class="field">
-  <label>血統取得 開始時刻 (任意)</label>
-  <input id="bloodline_fromtime" type="text" placeholder="空欄なら前回以降の差分">
-  <div class="hint">例 — 20260501000000</div>
+<div class="chip-row">
+  <button type="button" onclick="presetToday()">今日</button>
+  <button type="button" onclick="presetWeekend()">今週末</button>
+  <button type="button" onclick="presetAuto()" title="日付を空欄に戻し、データのある最新開催日を自動選択">自動</button>
 </div>
 
 <div class="status-row">
@@ -1498,13 +1661,21 @@ CONTROL_HTML = """<!doctype html>
 <div class="section-label">個別実行</div>
 <button data-action="fetch_data" onclick="runAction(this)"><span class="step">Ⅰ</span>JVLink でデータ取得</button>
 <button data-action="fetch_odds" onclick="runAction(this)"><span class="step">Ⅱ</span>最新オッズ取得</button>
-<button data-action="fetch_bloodline" onclick="runAction(this)"><span class="step">＊</span>血統データ取得</button>
 <button data-action="run_prediction" onclick="runAction(this)"><span class="step">Ⅲ</span>予想生成</button>
 <button data-action="publish" onclick="runAction(this)"><span class="step">Ⅳ</span>iCloud Drive へ公開</button>
+<button data-action="fetch_bloodline" onclick="runAction(this)"><span class="step">＊</span>血統データ取得</button>
 
 <div class="section-label">確認</div>
-<button data-action="open_preview" onclick="runAction(this)"><span class="step">›</span>プレビューを開く</button>
 <button data-action="open_icloud_folder" onclick="runAction(this)"><span class="step">›</span>iCloud 公開先を Explorer で開く</button>
+
+<details class="adv">
+  <summary>詳細設定</summary>
+  <div class="field">
+    <label>血統取得 開始時刻 (任意)</label>
+    <input id="bloodline_fromtime" type="text" placeholder="空欄なら前回以降の差分">
+    <div class="hint">例 — 20260501000000</div>
+  </div>
+</details>
 
 <details id="detailsBox">
   <summary>詳細を表示</summary>
@@ -1513,45 +1684,59 @@ CONTROL_HTML = """<!doctype html>
 </aside>
 
 <main class="main">
-  <div class="dashboard-grid">
-    <details class="filter-panel">
-      <summary>買い目フィルタ</summary>
-      <div class="filter-controls">
-        <label>EV<input id="filter_ev" type="number" min="0" max="3" step="0.01" value="1.05"></label>
-        <label>Value<input id="filter_value" type="number" min="-50" max="200" step="1" value="0"></label>
-        <label>Odds min<input id="filter_min_odds" type="number" min="1" max="100" step="0.1" value="10"></label>
-        <label>Odds max<input id="filter_max_odds" type="number" min="1" max="100" step="0.1" value="20"></label>
-      </div>
-    </details>
-    <section class="card wide">
-      <div class="card-title">本日の状況</div>
-      <div id="summary" class="metric-row"><div class="card-empty">読み込み中...</div></div>
-    </section>
-    <section class="card span-2">
-      <div class="card-title">買い候補</div>
-      <div id="buyList" class="card-empty">読み込み中...</div>
-    </section>
-    <section class="card">
-      <div class="card-title">直近バックテスト</div>
-      <div id="backtest" class="card-empty">読み込み中...</div>
-    </section>
-    <section class="card">
-      <div class="card-title">注意点</div>
-      <div id="warnings" class="card-empty">読み込み中...</div>
-    </section>
-    <section class="card">
-      <div class="card-title">開催競馬場</div>
-      <div id="venues" class="card-empty">読み込み中...</div>
-    </section>
-    <section class="card">
-      <div class="card-title">本日の場別傾向</div>
-      <div id="trackTrends" class="card-empty">読み込み中...</div>
-    </section>
+  <div class="main-toolbar">
+    <div class="tabs">
+      <button id="tabDash" type="button" class="tab active" onclick="showTab('dash')">ダッシュボード</button>
+      <button id="tabPreview" type="button" class="tab" onclick="showTab('preview')">予想 HTML</button>
+    </div>
+    <span id="dashMeta" class="toolbar-meta"></span>
+    <button id="refreshBtn" type="button" class="tool-btn" onclick="forceRefresh()" title="キャッシュを破棄して再計算">⟳ 更新</button>
   </div>
+  <div id="dashboardPane">
+    <div class="dashboard-grid" id="dashGrid">
+      <details class="filter-panel">
+        <summary>買い目フィルタ</summary>
+        <div class="filter-controls">
+          <label>EV<input id="filter_ev" type="number" min="0" max="3" step="0.01"></label>
+          <label>Value<input id="filter_value" type="number" min="-50" max="200" step="1"></label>
+          <label>Odds min<input id="filter_min_odds" type="number" min="1" max="100" step="0.1"></label>
+          <label>Odds max<input id="filter_max_odds" type="number" min="1" max="100" step="0.1"></label>
+          <button type="button" class="filter-reset" onclick="resetFilters()">既定値に戻す</button>
+        </div>
+      </details>
+      <section class="card wide">
+        <div class="card-title">本日の状況</div>
+        <div id="summary" class="metric-row"><div class="card-empty">読み込み中...</div></div>
+      </section>
+      <section class="card span-2">
+        <div class="card-title">買い候補</div>
+        <div id="buyList" class="card-empty">読み込み中...</div>
+      </section>
+      <section class="card">
+        <div class="card-title">直近バックテスト</div>
+        <div id="backtest" class="card-empty">読み込み中...</div>
+      </section>
+      <section class="card">
+        <div class="card-title">注意点</div>
+        <div id="warnings" class="card-empty">読み込み中...</div>
+      </section>
+      <section class="card">
+        <div class="card-title">開催競馬場</div>
+        <div id="venues" class="card-empty">読み込み中...</div>
+      </section>
+      <section class="card">
+        <div class="card-title">本日の場別傾向</div>
+        <div id="trackTrends" class="card-empty">読み込み中...</div>
+      </section>
+    </div>
+  </div>
+  <div id="previewPane" style="display:none"><iframe id="previewFrame" src="about:blank"></iframe></div>
 </main>
 
 <script>
   var backtestRange = '3';
+  var dashSeq = 0;
+  var filterTimer = null;
 
   function valueOr(value, fallback) {
     return value == null ? fallback : value;
@@ -1576,13 +1761,20 @@ CONTROL_HTML = """<!doctype html>
     var el = byId(id);
     if (!el) return fallback;
     var n = Number(el.value);
-    return isFinite(n) ? n : fallback;
+    return el.value !== '' && isFinite(n) ? n : fallback;
   }
   function shortTime(v) {
     if (!v) return '-';
     var d = new Date(v);
     if (isNaN(d.getTime())) return String(v).slice(11, 16) || String(v);
     return String(d.getHours()).padStart ? String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') : d.getHours() + ':' + d.getMinutes();
+  }
+  function fmtYmd(v) {
+    v = String(valueOr(v, ''));
+    return v.length === 8 ? v.slice(4, 6) + '/' + v.slice(6, 8) : v;
+  }
+  function fmtDateInput(d) {
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
   }
   function options() {
     return {
@@ -1606,92 +1798,227 @@ CONTROL_HTML = """<!doctype html>
     text.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
     box.open = Boolean(open);
   }
+
+  /* ---------- タブ (ダッシュボード / 予想 HTML プレビュー) ---------- */
+  function showTab(name) {
+    var isPreview = name === 'preview';
+    byId('dashboardPane').style.display = isPreview ? 'none' : '';
+    byId('previewPane').style.display = isPreview ? '' : 'none';
+    byId('tabDash').className = isPreview ? 'tab' : 'tab active';
+    byId('tabPreview').className = isPreview ? 'tab active' : 'tab';
+    if (isPreview && !byId('previewFrame').getAttribute('data-loaded')) {
+      reloadPreview();
+    }
+  }
+  function reloadPreview() {
+    var frame = byId('previewFrame');
+    if (!frame) return;
+    frame.setAttribute('data-loaded', '1');
+    // control.html は web/dist/_gui/ に置かれるので ../index.html = web/dist/index.html。
+    // ?ts= はキャッシュバスター (予想生成後に必ず新しい HTML を読む)。
+    frame.src = '../index.html?ts=' + Date.now();
+  }
+
+  /* ---------- 日付プリセット ---------- */
+  function setDates(from, to) {
+    byId('from_date').value = from;
+    byId('to_date').value = to;
+    refreshAll();
+  }
+  function presetToday() {
+    var t = fmtDateInput(new Date());
+    setDates(t, t);
+  }
+  function presetWeekend() {
+    var now = new Date();
+    var dow = now.getDay();
+    var sat = new Date(now.getTime());
+    if (dow === 0) {
+      sat.setDate(now.getDate() - 1);
+    } else {
+      sat.setDate(now.getDate() + (6 - dow));
+    }
+    var sun = new Date(sat.getTime());
+    sun.setDate(sat.getDate() + 1);
+    setDates(fmtDateInput(sat), fmtDateInput(sun));
+  }
+  function presetAuto() {
+    setDates('', '');
+  }
+
+  /* ---------- 買い目フィルタ ---------- */
+  function applyBuyFilter(f) {
+    if (!f) return;
+    if (f.min_ev != null && byId('filter_ev')) byId('filter_ev').value = f.min_ev;
+    if (f.min_value != null && byId('filter_value')) byId('filter_value').value = f.min_value;
+    if (f.min_odds != null && byId('filter_min_odds')) byId('filter_min_odds').value = f.min_odds;
+    if (f.max_odds != null && byId('filter_max_odds')) byId('filter_max_odds').value = f.max_odds;
+  }
+  function resetFilters() {
+    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_buy_filter_default) return;
+    window.pywebview.api.get_buy_filter_default({}).then(function (res) {
+      if (res && res.filter) {
+        applyBuyFilter(res.filter);
+        refreshDashboard();
+      }
+    }).catch(function () {});
+  }
+  function onFilterChange() {
+    // 連続入力をデバウンス。フィルタはバックテストに影響しないので
+    // 本体のみ更新 (予測はキャッシュ済みで 1 秒未満)。
+    if (filterTimer) clearTimeout(filterTimer);
+    filterTimer = setTimeout(function () {
+      refreshDashboard();
+    }, 350);
+  }
+
+  /* ---------- バックテストカード ---------- */
   function bindBacktestRangeButtons() {
     var buttons = document.querySelectorAll('#backtest button[data-range]');
     for (var i = 0; i < buttons.length; i += 1) {
       buttons[i].onclick = function () {
         backtestRange = this.getAttribute('data-range');
-        refreshDashboard();
+        var all = document.querySelectorAll('#backtest button[data-range]');
+        for (var j = 0; j < all.length; j += 1) {
+          all[j].className = all[j].getAttribute('data-range') === backtestRange ? 'active' : '';
+        }
+        // 未キャッシュの期間は計算に数十秒かかりうるので即時フィードバック
+        var period = document.querySelector('#backtest .bt-period');
+        if (period) period.textContent = '計算中...';
+        refreshBacktest();
       };
     }
   }
+  function renderBacktest(bt) {
+    if (!bt) return;
+    var btPeriod = bt.period ? esc(bt.label) + ' ' + esc(bt.period) : esc(bt.label || '-');
+    byId('backtest').innerHTML = '<div class="seg">' +
+      ['3', '7', '30', 'month'].map(function (v) {
+        return '<button type="button" data-range="' + esc(v) + '" class="' + (backtestRange === v ? 'active' : '') + '">' + (v === 'month' ? '当月' : v + '日') + '</button>';
+      }).join('') + '</div>' +
+      '<div class="bt-period">' + btPeriod + '</div>' +
+      '<div class="metric-row">' +
+      metric('対象R', valueOr(bt.races, 0)) +
+      metric('単勝', valueOr(bt.wins, 0) + '/' + valueOr(bt.races, 0)) +
+      metric('3着内', valueOr(bt.top3, 0) + '/' + valueOr(bt.races, 0)) +
+      metric('回収率', valueOr(bt.return_rate, 0) + '%') + '</div>' +
+      (bt.note ? '<div class="bt-note">' + esc(bt.note) + '</div>' : '');
+    bindBacktestRangeButtons();
+  }
+  function refreshBacktest() {
+    if (!window.pywebview || !window.pywebview.api) return;
+    if (!window.pywebview.api.get_backtest) {
+      refreshDashboard();
+      return;
+    }
+    window.pywebview.api.get_backtest(options()).then(function (res) {
+      if (res && res.ok) renderBacktest(res.backtest);
+    }).catch(function () {});
+  }
+
+  /* ---------- ダッシュボード ---------- */
   function weatherText(code) {
-    var m = {0:'\u6674',1:'\u6674',2:'\u66c7',3:'\u66c7',45:'\u9727',48:'\u9727',51:'\u5c0f\u96e8',53:'\u5c0f\u96e8',55:'\u96e8',61:'\u96e8',63:'\u96e8',65:'\u5f37\u96e8',71:'\u96ea',73:'\u96ea',75:'\u5927\u96ea',80:'\u306b\u308f\u304b\u96e8',81:'\u306b\u308f\u304b\u96e8',82:'\u5f37\u96e8',95:'\u96f7\u96e8'};
-    return m[code] || '\u5929\u5019\u53d6\u5f97';
+    var m = {0: '晴', 1: '晴', 2: '曇', 3: '曇', 45: '霧', 48: '霧', 51: '小雨', 53: '小雨', 55: '雨', 61: '雨', 63: '雨', 65: '強雨', 71: '雪', 73: '雪', 75: '大雪', 80: 'にわか雨', 81: 'にわか雨', 82: '強雨', 95: '雷雨'};
+    return m[code] || '天候取得';
+  }
+  function setDashLoading(on) {
+    var grid = byId('dashGrid');
+    if (grid) grid.className = on ? 'dashboard-grid loading' : 'dashboard-grid';
+    var btn = byId('refreshBtn');
+    if (btn) btn.disabled = on;
+    if (on) byId('dashMeta').textContent = '更新中...';
   }
   function renderDashboard(data) {
     if (!data || !data.ok) return;
     var s = data.summary || {};
+
+    var metaParts = [];
+    if (data.from_date) {
+      var range = fmtYmd(data.from_date);
+      if (data.to_date && data.to_date !== data.from_date) range += '〜' + fmtYmd(data.to_date);
+      metaParts.push('対象 ' + range);
+    }
+    metaParts.push('HTML生成 ' + valueOr(s.generated_at, '-'));
+    byId('dashMeta').textContent = metaParts.join('  /  ');
+
     byId('summary').innerHTML =
-      metric('\u30ec\u30fc\u30b9', valueOr(s.races, 0)) +
-      metric('\u51fa\u8d70\u982d\u6570', valueOr(s.horses, 0)) +
-      metric('\u8cb7\u3044\u5019\u88dc', valueOr(s.buy_count, 0)) +
-      metric('Odds\u6700\u65b0', shortTime(s.last_fetched_odds) + (s.odds_age_minutes == null ? '' : ' / ' + s.odds_age_minutes + '\u5206\u524d'));
+      metric('レース', valueOr(s.races, 0)) +
+      metric('出走頭数', valueOr(s.horses, 0)) +
+      metric('買い候補', valueOr(s.buy_count, 0)) +
+      metric('Odds最新', shortTime(s.last_fetched_odds) + (s.odds_age_minutes == null ? '' : ' / ' + s.odds_age_minutes + '分前'));
 
     var buys = data.buy_candidates || [];
     var bp = data.buy_portfolio || {};
     var portfolioHtml = '';
     if (bp.count) {
-      var investLabel = bp.multi_day ? '\u63a8\u5968\u6295\u8cc7(\u6700\u5927\u65e5)' : '\u63a8\u5968\u6295\u8cc7';
+      var investLabel = bp.multi_day ? '推奨投資(最大日)' : '推奨投資';
       var ret = bp.exp_return_pct == null ? '-' : esc(bp.exp_return_pct) + '%';
       portfolioHtml = '<div class="buy-portfolio' + (bp.any_over_cap ? ' over' : '') + '">' +
-        '<span class="bp-count">' + esc(bp.count) + '\u70b9</span>' +
-        '<span>' + investLabel + ' <strong>' + esc(bp.max_day_pct) + '%</strong> / \u4e0a\u9650 ' + esc(bp.cap_pct) + '%</span>' +
-        '<span>\u60f3\u5b9a\u56de\u53ce <strong>' + ret + '</strong></span>' +
-        (bp.any_over_cap ? '<span class="bp-warn">\u26a0 \u4e0a\u9650\u8d85\u904e</span>' : '') +
+        '<span class="bp-count">' + esc(bp.count) + '点</span>' +
+        '<span>' + investLabel + ' <strong>' + esc(bp.max_day_pct) + '%</strong> / 上限 ' + esc(bp.cap_pct) + '%</span>' +
+        '<span>想定回収 <strong>' + ret + '</strong></span>' +
+        (bp.any_over_cap ? '<span class="bp-warn">⚠ 上限超過</span>' : '') +
         '</div>';
     }
     byId('buyList').innerHTML = buys.length ? portfolioHtml + buys.map(function (b) {
       return '<div class="buy-item">' +
         '<div class="buy-main">' + esc(b.track) + ' ' + esc(b.race_num) + 'R ' + esc(b.horse_num) + ' ' + esc(b.horse_name) + '</div>' +
         '<div class="buy-sub">' + esc(b.start_time) + ' / ' + esc(b.race_name || '') +
-        '<span class="pill buy">' + esc(b.odds) + '\u500d</span>' +
-        '<span class="pill">' + esc(b.popularity) + '\u4eba\u6c17</span>' +
+        '<span class="pill buy">' + esc(b.odds) + '倍</span>' +
+        '<span class="pill">' + esc(b.popularity) + '人気</span>' +
         '<span class="pill">P ' + esc(b.probability) + '%</span>' +
         '<span class="pill">EV ' + esc(b.ev) + '</span>' +
-        '<span class="pill" title="1/4 Kelly + 1\u70b9\u4e0a\u9650cap\u6e08\u307f\u306e\u63a8\u5968\u6295\u8cc7\u7387">\u63a8\u5968 ' + pct2(b.recommended_kelly) + '%</span></div></div>';
-    }).join('') : '<div class="card-empty">\u8cb7\u3044\u5019\u88dc\u306a\u3057\u3002EV/\u4fe1\u983c\u5ea6\u6761\u4ef6\u3067\u306f\u898b\u9001\u308a\u3067\u3059\u3002</div>';
-
-    var bt = data.backtest || {};
-    var btPeriod = bt.period ? esc(bt.label) + ' ' + esc(bt.period) : esc(bt.label || '-');
-    byId('backtest').innerHTML = '<div class="seg">' +
-      ['3','7','30','month'].map(function (v) {
-        return '<button type="button" data-range="' + esc(v) + '" class="' + (backtestRange === v ? 'active' : '') + '">' + (v === 'month' ? '\u5f53\u6708' : v + '\u65e5') + '</button>';
-      }).join('') + '</div>' +
-      '<div class="bt-period">' + btPeriod + '</div>' +
-      '<div class="metric-row">' +
-      metric('\u5bfe\u8c61R', valueOr(bt.races, 0)) +
-      metric('\u5358\u52dd', valueOr(bt.wins, 0) + '/' + valueOr(bt.races, 0)) +
-      metric('3\u7740\u5185', valueOr(bt.top3, 0) + '/' + valueOr(bt.races, 0)) +
-      metric('\u56de\u53ce\u7387', valueOr(bt.return_rate, 0) + '%') + '</div>' +
-      (bt.note ? '<div class="bt-note">' + esc(bt.note) + '</div>' : '');
-    bindBacktestRangeButtons();
+        '<span class="pill" title="1/4 Kelly + 1点上限cap済みの推奨投資率">推奨 ' + pct2(b.recommended_kelly) + '%</span></div></div>';
+    }).join('') : '<div class="card-empty">買い候補なし。EV/信頼度条件では見送りです。</div>';
 
     var warnings = data.warnings || [];
-    byId('warnings').innerHTML = warnings.length ? warnings.map(function (w) { return '<div class="warn-item">' + esc(w) + '</div>'; }).join('') : '<div class="card-empty">\u6ce8\u610f\u70b9\u306f\u3042\u308a\u307e\u305b\u3093\u3002</div>';
+    byId('warnings').innerHTML = warnings.length ? warnings.map(function (w) { return '<div class="warn-item">' + esc(w) + '</div>'; }).join('') : '<div class="card-empty">注意点はありません。</div>';
 
     var venues = data.venues || [];
     byId('venues').innerHTML = venues.length ? '<div class="compact-grid">' + venues.map(function (v) {
       return '<div class="mini-card venue-card" data-track="' + esc(v.track) + '" data-lat="' + esc(v.lat) + '" data-lon="' + esc(v.lon) + '">' +
         '<div class="mini-title">' + esc(v.track) + ' <span class="pill">' + esc(v.races) + 'R</span></div>' +
         '<div class="mini-line">' + esc(v.surfaces) + '</div>' +
-        '<div class="mini-line weather-line">\u5929\u5019 ' + esc(v.weather) + ' / \u829d ' + esc(v.turf) + ' / \u30c0 ' + esc(v.dirt) + '</div></div>';
-    }).join('') + '</div>' : '<div class="card-empty">\u958b\u50ac\u60c5\u5831\u304c\u3042\u308a\u307e\u305b\u3093\u3002</div>';
+        '<div class="mini-line">天候 ' + esc(v.weather) + ' / 芝 ' + esc(v.turf) + ' / ダ ' + esc(v.dirt) + '</div>' +
+        '<div class="mini-line live-weather"></div></div>';
+    }).join('') + '</div>' : '<div class="card-empty">開催情報がありません。</div>';
     updateVenueWeather();
 
     var trends = data.track_trends || [];
     byId('trackTrends').innerHTML = trends.length ? '<div class="compact-grid">' + trends.map(function (t) {
-      return '<div class="mini-card"><div class="mini-title">' + esc(t.track) + ' <span class="pill">3\u7740\u5185 ' + esc(t.top3_samples) + '</span></div>' +
+      return '<div class="mini-card"><div class="mini-title">' + esc(t.track) + ' <span class="pill">3着内 ' + esc(t.top3_samples) + '</span></div>' +
         '<div class="mini-line">' + esc(t.surface) + ' / ' + esc(t.leg) + ' / ' + esc(t.gate) + '</div><div class="mini-line">' + esc(t.note) + '</div></div>';
-    }).join('') + '</div>' : '<div class="card-empty">\u78ba\u5b9a\u6e08\u307f\u306e\u5f53\u65e5\u7d50\u679c\u304c\u307e\u3060\u5c11\u306a\u304f\u3001\u50be\u5411\u306f\u8868\u793a\u3067\u304d\u307e\u305b\u3093\u3002</div>';
+    }).join('') + '</div>' : '<div class="card-empty">確定済みの当日結果がまだ少なく、傾向は表示できません。</div>';
   }
-  function refreshDashboard() {
-    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_dashboard) return;
-    window.pywebview.api.get_dashboard(options()).then(function (data) {
+  function refreshDashboard(opts) {
+    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_dashboard) return Promise.resolve();
+    opts = opts || {};
+    var payload = options();
+    // backtest は常に分離取得 (refreshAll 参照)。初回 100 日分の再予測は
+    // 数十秒〜かかるため、ダッシュボード本体の描画を待たせない。
+    payload.skip_backtest = true;
+    if (opts.force) payload.force_refresh = true;
+    var seq = ++dashSeq;
+    setDashLoading(true);
+    return window.pywebview.api.get_dashboard(payload).then(function (data) {
+      if (seq !== dashSeq) return;
+      setDashLoading(false);
       renderDashboard(data);
     }).catch(function (e) {
-      byId('summary').innerHTML = '<div class="card-empty">\u30c0\u30c3\u30b7\u30e5\u30dc\u30fc\u30c9\u53d6\u5f97\u30a8\u30e9\u30fc: ' + esc(e) + '</div>';
+      if (seq !== dashSeq) return;
+      setDashLoading(false);
+      byId('dashMeta').textContent = '';
+      byId('summary').innerHTML = '<div class="card-empty">ダッシュボード取得エラー: ' + esc(e) + '</div>';
     });
+  }
+  // 本体を先に描画 → 完了後にバックテストを後追いロード。
+  // 並列にしない (同一プロセスの GIL で取り合うだけ + force 時のキャッシュ
+  // 破棄レースを避ける)。
+  function refreshAll(opts) {
+    refreshDashboard(opts).then(function () { refreshBacktest(); });
+  }
+  function forceRefresh() {
+    refreshAll({force: true});
   }
   function updateVenueWeather() {
     if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_weather) return;
@@ -1700,17 +2027,19 @@ CONTROL_HTML = """<!doctype html>
       (function (card) {
         var lat = card.getAttribute('data-lat');
         var lon = card.getAttribute('data-lon');
-        var line = card.querySelector('.weather-line');
+        var line = card.querySelector('.live-weather');
         if (!lat || !lon || lat === 'None' || lon === 'None' || !line) return;
         window.pywebview.api.get_weather({lat: lat, lon: lon}).then(function (py) {
           if (!py || !py.ok) return;
-          var temp = py.temperature == null ? '-' : Math.round(py.temperature) + '\u5ea6';
+          var temp = py.temperature == null ? '-' : Math.round(py.temperature) + '度';
           var rain = py.precipitation == null ? '-' : py.precipitation + 'mm';
-          line.textContent = '\u73fe\u5728 ' + weatherText(py.weather_code) + ' / ' + temp + ' / \u964d\u6c34 ' + rain;
+          line.textContent = '現在 ' + weatherText(py.weather_code) + ' / ' + temp + ' / 降水 ' + rain;
         }).catch(function () {});
       })(cards[i]);
     }
   }
+
+  /* ---------- ステータス / 実行 ---------- */
   function applyStatus(st) {
     var box = byId('status');
     var cancelBtn = byId('cancelBtn');
@@ -1725,8 +2054,8 @@ CONTROL_HTML = """<!doctype html>
     if (st.running && progress != null) {
       progressWrap.className = 'progress-wrap visible';
       progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
-      var eta = detail.eta_sec == null ? '-' : Math.ceil(detail.eta_sec / 60) + '\u5206';
-      progressText.textContent = progress.toFixed ? progress.toFixed(1) + '% / \u6b8b\u308a \u7d04' + eta : progress + '%';
+      var eta = detail.eta_sec == null ? '-' : Math.ceil(detail.eta_sec / 60) + '分';
+      progressText.textContent = progress.toFixed ? progress.toFixed(1) + '% / 残り 約' + eta : progress + '%';
       progressText.className = 'visible';
     } else {
       progressWrap.className = 'progress-wrap';
@@ -1740,7 +2069,7 @@ CONTROL_HTML = """<!doctype html>
   function refreshStatus() {
     if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_status) return Promise.resolve(false);
     return window.pywebview.api.get_status({}).then(function (st) { return applyStatus(st); }).catch(function (e) {
-      byId('status').textContent = '\u9032\u6357\u53d6\u5f97\u30a8\u30e9\u30fc: ' + e;
+      byId('status').textContent = '進捗取得エラー: ' + e;
       return false;
     });
   }
@@ -1756,27 +2085,35 @@ CONTROL_HTML = """<!doctype html>
   }
   function run(method) {
     if (!method || !window.pywebview || !window.pywebview.api || typeof window.pywebview.api[method] !== 'function') {
-      setDetails('\u5b9f\u884c\u3067\u304d\u306a\u3044\u64cd\u4f5c\u3067\u3059: ' + method, true);
+      setDetails('実行できない操作です: ' + method, true);
       return;
     }
     refreshStatus().then(function (running) {
       if (running) {
-        setDetails('\u5225\u306e\u51e6\u7406\u304c\u5b9f\u884c\u4e2d\u3067\u3059\u3002\u5b8c\u4e86\u5f8c\u306b\u518d\u5b9f\u884c\u3057\u3066\u304f\u3060\u3055\u3044\u3002', true);
+        setDetails('別の処理が実行中です。完了後に再実行してください。', true);
         return;
       }
       setActionButtonsDisabled(true);
-      setDetails(method + ' \u5b9f\u884c\u4e2d...', false);
+      setDetails(method + ' 実行中...', false);
       var timer = setInterval(refreshStatus, 1000);
       window.pywebview.api[method](options()).then(function (res) {
-        refreshDashboard();
+        refreshAll();
         if (res && res.ok === false) {
-          var summary = [res.error || res.message || '\u30a8\u30e9\u30fc\u304c\u767a\u751f\u3057\u307e\u3057\u305f', res.hint || ''].filter(function (x) { return Boolean(x); }).join('\\n');
+          var summary = [res.error || res.message || 'エラーが発生しました', res.hint || ''].filter(function (x) { return Boolean(x); }).join('\\n');
           setDetails(summary + '\\n\\n' + JSON.stringify(res, null, 2), true);
         } else {
           setDetails(res, false);
+          // 予想 HTML が更新されるアクション後はプレビューを再読込。
+          // 生成系はそのまま結果を見せる (タブ切替)。
+          if (method === 'run_prediction' || method === 'run_all') {
+            reloadPreview();
+            showTab('preview');
+          } else if (method === 'publish') {
+            reloadPreview();
+          }
         }
       }).catch(function (e) {
-        setDetails('\u30a8\u30e9\u30fc: ' + e, true);
+        setDetails('エラー: ' + e, true);
       }).then(function () {
         clearInterval(timer);
         return refreshStatus();
@@ -1785,47 +2122,29 @@ CONTROL_HTML = """<!doctype html>
       });
     });
   }
-  function applyBuyFilter(f) {
-    if (!f) return;
-    if (f.min_ev != null && byId('filter_ev')) byId('filter_ev').value = f.min_ev;
-    if (f.min_value != null && byId('filter_value')) byId('filter_value').value = f.min_value;
-    if (f.min_odds != null && byId('filter_min_odds')) byId('filter_min_odds').value = f.min_odds;
-    if (f.max_odds != null && byId('filter_max_odds')) byId('filter_max_odds').value = f.max_odds;
-  }
+
+  /* ---------- 起動 ---------- */
   function restoreOptions() {
-    if (!window.pywebview || !window.pywebview.api) return Promise.resolve();
-    // 1) まず Python 側 config.BUY_FILTER_DEFAULT を input 初期値に反映
-    var defaults = window.pywebview.api.get_buy_filter_default
-      ? window.pywebview.api.get_buy_filter_default({}).then(function (res) {
-          if (res && res.filter) applyBuyFilter(res.filter);
-        })
-      : Promise.resolve();
-    // 2) その後で前回ユーザが弄った値があれば上書き
-    return defaults.then(function () {
-      if (!window.pywebview.api.get_last_options) return;
-      return window.pywebview.api.get_last_options({}).then(function (res) {
-        var o = (res && res.options) || {};
-        if (o.from_date) byId('from_date').value = o.from_date;
-        if (o.to_date) byId('to_date').value = o.to_date;
-        if (o.bloodline_fromtime) byId('bloodline_fromtime').value = o.bloodline_fromtime;
-        if (o.backtest_range) backtestRange = String(o.backtest_range);
-        applyBuyFilter(o);
-      });
-    });
+    // Python 側 config.BUY_FILTER_DEFAULT を input 初期値に反映。
+    // HTML に value をハードコードしない (Python 側既定値とズレる事故防止)。
+    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_buy_filter_default) return Promise.resolve();
+    return window.pywebview.api.get_buy_filter_default({}).then(function (res) {
+      if (res && res.filter) applyBuyFilter(res.filter);
+    }).catch(function () {});
   }
   function boot() {
     restoreOptions().then(function () {
       refreshStatus();
-      refreshDashboard();
+      refreshAll();
     });
     var from = byId('from_date');
     var to = byId('to_date');
-    if (from) from.onchange = refreshDashboard;
-    if (to) to.onchange = refreshDashboard;
-    var ids = ['filter_ev','filter_value','filter_min_odds','filter_max_odds'];
+    if (from) from.onchange = function () { refreshAll(); };
+    if (to) to.onchange = function () { refreshAll(); };
+    var ids = ['filter_ev', 'filter_value', 'filter_min_odds', 'filter_max_odds'];
     for (var i = 0; i < ids.length; i += 1) {
       var el = byId(ids[i]);
-      if (el) el.onchange = refreshDashboard;
+      if (el) el.onchange = onFilterChange;
     }
   }
   window.addEventListener('pywebviewready', boot);
@@ -1836,92 +2155,46 @@ CONTROL_HTML = """<!doctype html>
 """
 
 
-PREVIEW_HTML = """<!doctype html>
-<html lang="ja">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>予想プレビュー</title>
-<style>
-  :root {
-    --bg: #eaedf1;
-    --surface: #ffffff;
-    --border: #c2c9d2;
-    --text: #1f242b;
-    --text-dim: #545c67;
-    --accent: #374151;
-  }
-  * { box-sizing: border-box; }
-  html, body {
-    margin: 0;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background: var(--bg);
-    color: var(--text);
-    font-family: "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
-  }
-  .bar {
-    height: 42px;
-    display: flex;
-    align-items: center;
-    gap: .75rem;
-    padding: 0 .75rem;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-  }
-  button {
-    height: 28px;
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    background: #eceff3;
-    color: var(--text);
-    padding: 0 .75rem;
-    font: inherit;
-    cursor: pointer;
-  }
-  button:hover {
-    background: #e1e5eb;
-    color: var(--accent);
-  }
-  .title {
-    font-size: .82rem;
-    color: var(--text-dim);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  iframe {
-    width: 100%;
-    height: calc(100% - 42px);
-    border: 0;
-    display: block;
-    background: white;
-  }
-</style>
-</head>
-<body>
-  <div class="bar">
-    <button type="button" onclick="window.pywebview.api.show_control()">操作画面に戻る</button>
-    <div class="title">予想プレビュー</div>
-  </div>
-  <iframe src="__PREVIEW_URL__"></iframe>
-</body>
-</html>
-"""
+def _write_control_page() -> Path:
+    """CONTROL_HTML を WEB_DIST/_gui/control.html に書き出して Path を返す。
+
+    なぜ file 配信: 右ペインの「予想 HTML」タブは web/dist/index.html を
+    iframe で表示する。load_html (data URI 相当の origin) からは file://
+    iframe の読み込みが Chromium にブロックされるため、コントロールパネル
+    自体を file:// で配信してスキームを揃える (旧 preview.html ラッパーと
+    同じ手法をコントロール側にも適用)。
+    """
+    index = WEB_DIST / "index.html"
+    if not index.exists():
+        index.write_text(
+            "<!doctype html><meta charset='utf-8'>"
+            "<h1>プレビュー未生成</h1>"
+            "<p>「予想生成」を実行すると HTML がここに作られます。</p>",
+            encoding="utf-8",
+        )
+    page_dir = WEB_DIST / "_gui"
+    page_dir.mkdir(parents=True, exist_ok=True)
+    page = page_dir / "control.html"
+    page.write_text(CONTROL_HTML, encoding="utf-8")
+    return page
 
 
 def main() -> None:
     print("[gui.app] creating window...", flush=True)
     api = Api()
+    page = _write_control_page()
+    # 1240x690: ノート PC 基準。1366x768 (タスクバー込み実効 ~720px) と
+    # 1920x1080 の 150% スケーリング (実効 1280x720 相当) のどちらでも
+    # はみ出さない。旧 1100x780 は縦 780 が両ケースで画面外に出ていた。
     webview.create_window(
         title="競馬予想",
-        html=CONTROL_HTML,
+        url=page.as_uri(),
         js_api=api,
-        width=1100,
-        height=780,
-        x=80,
-        y=60,
+        width=1240,
+        height=690,
+        min_size=(960, 600),
+        x=60,
+        y=40,
         on_top=False,
         background_color="#eaedf1",
     )

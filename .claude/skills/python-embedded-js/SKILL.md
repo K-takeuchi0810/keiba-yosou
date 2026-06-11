@@ -118,6 +118,10 @@ print('JS bytes:', len(js))
 
 ### `PREVIEW_HTML` も含めて全部チェック
 
+> 注: 2026-06-12 のタブ化改修で `PREVIEW_HTML` は削除済み (プレビューは
+> CONTROL_HTML 内 iframe に統合)。下のループは `getattr(..., '')` なので
+> 欠落していてもそのまま動く。現存するのは `CONTROL_HTML` のみ。
+
 ```bash
 .venv32/Scripts/python.exe -c "
 import sys, os, tempfile, re, importlib
