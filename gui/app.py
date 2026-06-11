@@ -36,7 +36,7 @@ from predictor.risk import recommended_fraction
 from scripts.backtest import get_payout, horses_for_race, list_races
 from scripts.fetch_odds import race_key
 from web.codes import race_id_to_date, track_name
-from web.generator import BET_MAX_ODDS, BET_MIN_EV, BET_MIN_ODDS, BET_MIN_VALUE, publish_to_icloud, render
+from web.generator import publish_to_icloud, render
 
 ensure_dirs()
 
@@ -48,7 +48,8 @@ _VENV64_PYTHON = _PROJECT_ROOT / ".venv64" / "Scripts" / "python.exe"
 
 
 def _run_render_in_venv64(from_date: str | None, to_date: str | None,
-                         publish: bool = True) -> dict:
+                         publish: bool = True,
+                         cancel_check=None) -> dict:
     """render() を .venv64 subprocess で実行し、結果 dict を返す。
 
     なぜ subprocess: GUI は pywebview 制約で .venv32 (Python 3.13 32-bit) で
@@ -56,6 +57,10 @@ def _run_render_in_venv64(from_date: str | None, to_date: str | None,
     render() を呼ぶと predictor.ml_model.load_lgbm() が失敗し、rule-only
     予測になってしまう (backtest と乖離)。subprocess で .venv64 を kick
     すれば LightGBM v5 ensemble が正しく適用される。
+
+    cancel_check: 定期的に呼ばれる callable。例外 (CancelledError) を
+    投げたら子プロセスを kill して再送出する。予想生成は最長ステージ
+    なのに従来 (subprocess.run ブロック) は中止が届かなかった。
     """
     if not _VENV64_PYTHON.exists():
         # フォールバック: .venv64 が無い環境では in-process render (rule-only)
@@ -73,24 +78,40 @@ def _run_render_in_venv64(from_date: str | None, to_date: str | None,
     # PYTHONIOENCODING=utf-8 を child に渡し、Windows console の cp932 default
     # で stdout が encode されないようにする (日本語パス文字化け防止)。
     child_env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
-    result = subprocess.run(
-        cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, encoding="utf-8", errors="replace",
         cwd=str(_PROJECT_ROOT), env=child_env,
     )
-    if result.returncode != 0:
+    # communicate(timeout) ループ: pipe デッドロックを避けつつ
+    # 0.5 秒ごとに cancel_check を差し込む。
+    while True:
+        try:
+            stdout, stderr = proc.communicate(timeout=0.5)
+            break
+        except subprocess.TimeoutExpired:
+            if cancel_check is None:
+                continue
+            try:
+                cancel_check()
+            except BaseException:
+                proc.kill()
+                proc.communicate()
+                raise
+    if proc.returncode != 0:
         raise RuntimeError(
-            f"venv64 render failed (exit {result.returncode}):\n"
-            f"stderr: {result.stderr[-2000:]}"
+            f"venv64 render failed (exit {proc.returncode}):\n"
+            f"stderr: {stderr[-2000:]}"
         )
     # 最終行から JSON を取り出す (途中の INFO log 等を skip)
     last_json_line = ""
-    for line in result.stdout.strip().split("\n"):
+    for line in stdout.strip().split("\n"):
         line = line.strip()
         if line.startswith("{") and line.endswith("}"):
             last_json_line = line
     if not last_json_line:
         raise RuntimeError(
-            f"venv64 render did not emit JSON. stdout: {result.stdout[-2000:]}"
+            f"venv64 render did not emit JSON. stdout: {stdout[-2000:]}"
         )
     return json.loads(last_json_line)
 
@@ -164,6 +185,10 @@ class Api:
         self._cache_lock = threading.Lock()
         self._pred_cache: dict[tuple[str, str], list] = {}
         self._backtest_cache: dict[tuple[str, str], dict] = {}
+        # 世代カウンタ: invalidate をまたいで走っていた計算が完了後に
+        # 古い結果をキャッシュへ書き戻すのを防ぐ (計算開始時の世代と
+        # 書き込み時の世代が一致するときのみ store する)。
+        self._cache_gen = 0
 
     def _begin_run(self) -> None:
         self._cancel_event.clear()
@@ -172,6 +197,7 @@ class Api:
 
     def _invalidate_caches(self) -> None:
         with self._cache_lock:
+            self._cache_gen += 1
             self._pred_cache.clear()
             self._backtest_cache.clear()
 
@@ -335,7 +361,7 @@ class Api:
         ).fetchone()[0]
         label = f"{(anchor or to_date)[:6]}月" if range_key == "month" else f"直近{range_key}日"
         if not anchor:
-            return {"label": label, "races": 0, "wins": 0, "top3": 0, "return_rate": 0}
+            return {"label": label, "races": 0, "wins": 0, "top3": 0, "return_rate": 0, "low_n": True}
         if range_key == "month":
             start_date = anchor[:6] + "01"
         else:
@@ -357,7 +383,7 @@ class Api:
         ).fetchall()
         dates = sorted([r["d"] for r in rows])
         if not dates:
-            return {"label": label, "races": 0, "wins": 0, "top3": 0, "return_rate": 0}
+            return {"label": label, "races": 0, "wins": 0, "top3": 0, "return_rate": 0, "low_n": True}
         races = list_races(conn, dates[0], dates[-1], jra_only=True)
         date_set = set(dates)
         feature_cache: dict = {}
@@ -391,6 +417,9 @@ class Api:
             "win_rate": round(wins / total * 100, 1) if total else 0,
             "top3_rate": round(top3 / total * 100, 1) if total else 0,
             "return_rate": round(payout / (total * 100) * 100, 1) if total else 0,
+            # n<30 は統計的に参考にならない (回収率の分散が巨大)。
+            # JS 側で「n少・参考値」をマーキングする。
+            "low_n": total < 30,
         }
 
     def _surface_label(self, code: str | None) -> str:
@@ -621,6 +650,7 @@ class Api:
         key = (from_date, to_date)
         with self._cache_lock:
             cached = self._pred_cache.get(key)
+            gen = self._cache_gen
         if cached is not None:
             return cached
         feature_cache: dict = {}
@@ -632,18 +662,24 @@ class Api:
             preds = predict_race(horses, conn=conn, race=race, cache=feature_cache)
             entries.append((race, horses, preds, is_tentative(preds)))
         with self._cache_lock:
-            self._pred_cache = {key: entries}
+            # 計算中に invalidate された (= データ取得が走った) 場合は
+            # stale な結果を書き戻さない。返り値は今回表示用に使ってよい
+            # (直後の refreshAll が fresh で上書きする)。
+            if gen == self._cache_gen:
+                self._pred_cache = {key: entries}
         return entries
 
     def _recent_backtest_cached(self, conn, to_date: str, range_key: str) -> dict:
         key = (to_date, range_key)
         with self._cache_lock:
             hit = self._backtest_cache.get(key)
+            gen = self._cache_gen
         if hit is not None:
             return hit
         result = self._recent_backtest(conn, to_date, range_key)
         with self._cache_lock:
-            self._backtest_cache[key] = result
+            if gen == self._cache_gen:
+                self._backtest_cache[key] = result
         return result
 
     @_safe
@@ -665,12 +701,16 @@ class Api:
         if options.get("force_refresh"):
             self._invalidate_caches()
         from_date, to_date = self._date_range(options)
-        bet_filter = {
-            "min_value": options.get("min_value", BET_MIN_VALUE),
-            "min_ev": options.get("min_ev", BET_MIN_EV),
-            "min_odds": options.get("min_odds", BET_MIN_ODDS),
-            "max_odds": options.get("max_odds", BET_MAX_ODDS),
-        }
+        # 買い目フィルタは config.BUY_FILTER_DEFAULT (採用戦略の単一出典) を
+        # ベースに、GUI input で明示された 4 値だけを上書きする。
+        # 旧実装は 4 キーのみの dict を filter_spec として渡しており、
+        # min_kelly / max_predicted_p (P15 主絞り + S5-3 防御) が脱落して
+        # 「GUI の買い候補 ≠ backtest で検証した集合」になっていた
+        # (2026-06-12 profitability-judge 指摘で是正)。
+        bet_filter = dict(BUY_FILTER_DEFAULT)
+        for key in ("min_value", "min_ev", "min_odds", "max_odds"):
+            if options.get(key) is not None:
+                bet_filter[key] = options[key]
         with open_db() as conn:
             races = list_races(conn, from_date, to_date, jra_only=True)
             race_count = len(races)
@@ -816,6 +856,10 @@ class Api:
         self._check_cancel()
         self._set_status("DBへ取り込み中...", "ingest", running=True)
         ingest_summary = ingest_all()
+        # 実行中にユーザがフィルタ/期間を触ると部分取込み DB でキャッシュが
+        # 再充填されうるため、取り込み完了時にも invalidate して捨てる
+        # (開始時 _begin_run と対になる完了側の防御)。
+        self._invalidate_caches()
         self._set_status("データ取得が完了しました。", "done", running=False)
         return {
             "ok": True,
@@ -852,6 +896,7 @@ class Api:
         self._set_status("\u30aa\u30c3\u30ba\u3092DB\u3078\u53d6\u308a\u8fbc\u307f\u4e2d...", "ingest_odds", running=True)
         self._check_cancel()
         ingest_summary = ingest_all(force=True, dataspecs=["0B31"])
+        self._invalidate_caches()  # 完了側の防御 (fetch_data と同旨)
         if finish:
             self._set_status("\u30aa\u30c3\u30ba\u53d6\u5f97\u304c\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002", "done", running=False)
         return {"ok": True, "races": len(races), "fetch": summaries, "ingest": ingest_summary}
@@ -875,6 +920,7 @@ class Api:
         self._check_cancel()
         self._set_status("血統データをDBへ取り込み中...", "ingest_bloodline", running=True)
         ingest_summary = ingest_all(dataspecs=["DIFN", "BLOD"])
+        self._invalidate_caches()  # 完了側の防御 (fetch_data と同旨)
         with open_db() as conn:
             count = conn.execute("SELECT COUNT(*) FROM horse_masters").fetchone()[0]
         self._set_status(f"血統データ取得が完了しました。horse_masters={count}", "done", running=False)
@@ -888,7 +934,8 @@ class Api:
         from_date = _normalize_date(options.get("from_date")) or None
         to_date = _normalize_date(options.get("to_date")) or from_date
         self._set_status("予想HTMLを生成中... (.venv64 で LightGBM 実行)", "prediction", running=True)
-        result = _run_render_in_venv64(from_date, to_date, publish=False)
+        result = _run_render_in_venv64(from_date, to_date, publish=False,
+                                       cancel_check=self._check_cancel)
         msg = f"生成: {result.get('rendered')}"
         if result.get("warning"):
             msg = f"{msg} (警告: {result['warning']})"
@@ -926,6 +973,7 @@ class Api:
         self._check_cancel()
         self._set_status("一括実行: DB取り込み中...", "ingest", running=True)
         ingest_summary = ingest_all()
+        self._invalidate_caches()  # 完了側の防御 (fetch_data と同旨)
         odds_summary = self._fetch_odds_inner(options, finish=False)
         self._check_cancel()
         options = options or {}
@@ -933,7 +981,8 @@ class Api:
         to_date = _normalize_date(options.get("to_date")) or from_date
         self._set_status("一括実行: 予想生成 + 公開中... (.venv64 で LightGBM)", "prediction", running=True)
         # subprocess で .venv64 を呼び LightGBM v5 ensemble 予測 + iCloud 公開を一括実行
-        result = _run_render_in_venv64(from_date, to_date, publish=True)
+        result = _run_render_in_venv64(from_date, to_date, publish=True,
+                                       cancel_check=self._check_cancel)
         rendered = result.get("rendered")
         published = result.get("published") or "(skipped)"
         now = datetime.now().strftime("%H:%M:%S")
@@ -1269,6 +1318,8 @@ CONTROL_HTML = """<!doctype html>
     padding: .35rem .55rem;
   }
   .filter-panel summary { cursor: pointer; color: var(--accent-hi); font-size: .76rem; }
+  .filter-panel .filter-note { color: var(--text-mute); font-size: .7rem; margin-left: .4rem; }
+  .filter-panel .hint { margin-top: .3rem; }
   .filter-controls {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
@@ -1303,6 +1354,11 @@ CONTROL_HTML = """<!doctype html>
     color: var(--text-mute);
     font-variant-numeric: tabular-nums;
     margin-bottom: .3rem;
+  }
+  /* n<30: 回収率が統計的に参考にならないサンプル数の警告 */
+  .low-n {
+    color: var(--buy);
+    font-weight: 600;
   }
   .bt-note {
     margin-top: .3rem;
@@ -1695,14 +1751,15 @@ CONTROL_HTML = """<!doctype html>
   <div id="dashboardPane">
     <div class="dashboard-grid" id="dashGrid">
       <details class="filter-panel">
-        <summary>買い目フィルタ</summary>
+        <summary>買い目フィルタ <span class="filter-note">__FILTER_BASE_NOTE__</span></summary>
         <div class="filter-controls">
-          <label>EV<input id="filter_ev" type="number" min="0" max="3" step="0.01"></label>
-          <label>Value<input id="filter_value" type="number" min="-50" max="200" step="1"></label>
-          <label>Odds min<input id="filter_min_odds" type="number" min="1" max="100" step="0.1"></label>
-          <label>Odds max<input id="filter_max_odds" type="number" min="1" max="100" step="0.1"></label>
+          <label>EV<input id="filter_ev" type="number" min="0" max="3" step="0.01" placeholder="なし"></label>
+          <label>Value<input id="filter_value" type="number" min="-50" max="200" step="1" placeholder="なし"></label>
+          <label>Odds min<input id="filter_min_odds" type="number" min="1" max="100" step="0.1" placeholder="なし"></label>
+          <label>Odds max<input id="filter_max_odds" type="number" min="1" max="100" step="0.1" placeholder="なし"></label>
           <button type="button" class="filter-reset" onclick="resetFilters()">既定値に戻す</button>
         </div>
+        <div class="hint">空欄 = 制限なし。上記 4 項目以外の採用戦略条件 (左記) は常に適用される。</div>
       </details>
       <section class="card wide">
         <div class="card-title">本日の状況</div>
@@ -1736,6 +1793,7 @@ CONTROL_HTML = """<!doctype html>
 <script>
   var backtestRange = '3';
   var dashSeq = 0;
+  var btSeq = 0;
   var filterTimer = null;
 
   function valueOr(value, fallback) {
@@ -1757,12 +1815,6 @@ CONTROL_HTML = """<!doctype html>
     if (!isFinite(n)) return '0.00';
     return (n * 100).toFixed(2);
   }
-  function inputNumber(id, fallback) {
-    var el = byId(id);
-    if (!el) return fallback;
-    var n = Number(el.value);
-    return el.value !== '' && isFinite(n) ? n : fallback;
-  }
   function shortTime(v) {
     if (!v) return '-';
     var d = new Date(v);
@@ -1776,17 +1828,30 @@ CONTROL_HTML = """<!doctype html>
   function fmtDateInput(d) {
     return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
   }
+  // フィルタ key ↔ input id の対応 (options / applyBuyFilter で共用)
+  var FILTER_INPUTS = {
+    min_ev: 'filter_ev',
+    min_value: 'filter_value',
+    min_odds: 'filter_min_odds',
+    max_odds: 'filter_max_odds'
+  };
   function options() {
-    return {
+    var o = {
       from_date: byId('from_date').value,
       to_date: byId('to_date').value,
       bloodline_fromtime: byId('bloodline_fromtime').value,
-      backtest_range: backtestRange,
-      min_ev: inputNumber('filter_ev', 1.05),
-      min_value: inputNumber('filter_value', 0),
-      min_odds: inputNumber('filter_min_odds', 10),
-      max_odds: inputNumber('filter_max_odds', 20)
+      backtest_range: backtestRange
     };
+    // 空欄の input は送らない → Python 側が config.BUY_FILTER_DEFAULT を使う。
+    // JS にフォールバック定数 (旧: 1.05/0/10/20) を持たない。config と
+    // 乖離した「幻の制約」が常時送信されていた事故 (P21 review 指摘) の再発防止。
+    for (var key in FILTER_INPUTS) {
+      var el = byId(FILTER_INPUTS[key]);
+      if (!el || el.value === '') continue;
+      var n = Number(el.value);
+      if (isFinite(n)) o[key] = n;
+    }
+    return o;
   }
   function setActionButtonsDisabled(disabled) {
     var buttons = document.querySelectorAll('.sidebar button[data-action]');
@@ -1849,10 +1914,14 @@ CONTROL_HTML = """<!doctype html>
   /* ---------- 買い目フィルタ ---------- */
   function applyBuyFilter(f) {
     if (!f) return;
-    if (f.min_ev != null && byId('filter_ev')) byId('filter_ev').value = f.min_ev;
-    if (f.min_value != null && byId('filter_value')) byId('filter_value').value = f.min_value;
-    if (f.min_odds != null && byId('filter_min_odds')) byId('filter_min_odds').value = f.min_odds;
-    if (f.max_odds != null && byId('filter_max_odds')) byId('filter_max_odds').value = f.max_odds;
+    // null は「config 上 制限なし」= input を空欄に戻す。
+    // 旧実装は null を skip していたため「既定値に戻す」がユーザ入力を
+    // クリアできなかった (現 config は 4 値とも None)。
+    for (var key in FILTER_INPUTS) {
+      var el = byId(FILTER_INPUTS[key]);
+      if (!el || !(key in f)) continue;
+      el.value = f[key] == null ? '' : f[key];
+    }
   }
   function resetFilters() {
     if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_buy_filter_default) return;
@@ -1892,6 +1961,7 @@ CONTROL_HTML = """<!doctype html>
   function renderBacktest(bt) {
     if (!bt) return;
     var btPeriod = bt.period ? esc(bt.label) + ' ' + esc(bt.period) : esc(bt.label || '-');
+    if (bt.low_n) btPeriod += ' <span class="low-n">n&lt;30 参考値</span>';
     byId('backtest').innerHTML = '<div class="seg">' +
       ['3', '7', '30', 'month'].map(function (v) {
         return '<button type="button" data-range="' + esc(v) + '" class="' + (backtestRange === v ? 'active' : '') + '">' + (v === 'month' ? '当月' : v + '日') + '</button>';
@@ -1906,12 +1976,12 @@ CONTROL_HTML = """<!doctype html>
     bindBacktestRangeButtons();
   }
   function refreshBacktest() {
-    if (!window.pywebview || !window.pywebview.api) return;
-    if (!window.pywebview.api.get_backtest) {
-      refreshDashboard();
-      return;
-    }
+    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_backtest) return;
+    // 未キャッシュ期間は数十秒かかるため、連打時に古い応答が後着して
+    // 「active ボタン ≠ 表示データ」にならないよう seq ガード
+    var seq = ++btSeq;
     window.pywebview.api.get_backtest(options()).then(function (res) {
+      if (seq !== btSeq) return;
       if (res && res.ok) renderBacktest(res.backtest);
     }).catch(function () {});
   }
@@ -2166,8 +2236,11 @@ def _write_control_page() -> Path:
     """
     index = WEB_DIST / "index.html"
     if not index.exists():
+        # viewport を入れておく: 未生成のまま「公開」されて iPhone で
+        # 開かれるエッジケースでも素の極小表示にならないように。
         index.write_text(
             "<!doctype html><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
             "<h1>プレビュー未生成</h1>"
             "<p>「予想生成」を実行すると HTML がここに作られます。</p>",
             encoding="utf-8",
@@ -2175,8 +2248,25 @@ def _write_control_page() -> Path:
     page_dir = WEB_DIST / "_gui"
     page_dir.mkdir(parents=True, exist_ok=True)
     page = page_dir / "control.html"
-    page.write_text(CONTROL_HTML, encoding="utf-8")
+    page.write_text(CONTROL_HTML.replace(
+        "__FILTER_BASE_NOTE__", _filter_base_note()), encoding="utf-8")
     return page
+
+
+def _filter_base_note() -> str:
+    """買い目フィルタパネルに出す「常時適用される採用戦略条件」の注記。
+
+    config.BUY_FILTER_DEFAULT から動的に組み立てる (HTML に静的記述すると
+    戦略変更時に乖離するため)。GUI input で上書きできる 4 値は含めない。
+    """
+    parts = []
+    if BUY_FILTER_DEFAULT.get("min_kelly") is not None:
+        parts.append(f"Kelly≥{BUY_FILTER_DEFAULT['min_kelly']}")
+    if BUY_FILTER_DEFAULT.get("max_predicted_p") is not None:
+        parts.append(f"p≤{BUY_FILTER_DEFAULT['max_predicted_p']}")
+    if BUY_FILTER_DEFAULT.get("max_odds_age_min") is not None:
+        parts.append(f"オッズ鮮度≤{BUY_FILTER_DEFAULT['max_odds_age_min']}分")
+    return "既定: " + " / ".join(parts) if parts else ""
 
 
 def main() -> None:
