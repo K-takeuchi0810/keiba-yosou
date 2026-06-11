@@ -147,10 +147,15 @@ def _safe(fn):
             return fn(*args, **kwargs)
         except CancelledError:
             if args and hasattr(args[0], "_set_status"):
+                # 中止 = ingest 途中の可能性。部分取込み DB で再充填された
+                # キャッシュが生存しないよう、失敗経路でも必ず invalidate
+                # (正常系の「完了側の防御」と対になる)。
+                args[0]._invalidate_caches()
                 args[0]._set_status("中止しました", "cancelled", running=False)
             return {"ok": False, "cancelled": True, "message": "中止しました"}
         except Exception as e:
             if args and hasattr(args[0], "_set_status"):
+                args[0]._invalidate_caches()
                 args[0]._set_status(f"エラー: {type(e).__name__}: {e}", "error", running=False)
             return {
                 "ok": False,
