@@ -1,0 +1,11 @@
+# pytest 設定のみ。build-system は意図的に未定義
+# (このリポジトリは installable package ではなく、スクリプト群 + GUI のため)。
+# testpaths を固定することで、どの起動ディレクトリからでも
+#   python -m pytest
+# だけで tests/ を収集できる (tests/conftest.py の sys.path ハックへの依存を軽減)。
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# rootdir (= リポジトリルート) を import path に追加。
+# predictor.portfolio が `from config import ...` するための解決を
+# 設定側で担保し、tests/conftest.py の手動 sys.path 注入への依存を減らす。
+pythonpath = ["."]

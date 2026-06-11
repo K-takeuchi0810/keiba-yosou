@@ -1,0 +1,9 @@
+# 開発 / テスト専用依存 (本番の推論・GUI には不要)
+# 64-bit 環境 (.venv64) を前提に導入する:
+#   .venv64\Scripts\python.exe -m pip install -r requirements-dev.txt
+# テスト実行:
+#   .venv64\Scripts\python.exe -m pytest tests/ -q
+# 起動ディレクトリ非依存 (testpaths) の設定は pyproject.toml 参照。
+
+# tests/test_portfolio.py 等の回帰テスト
+pytest>=9.0,<10.0

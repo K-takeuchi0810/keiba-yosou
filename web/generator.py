@@ -17,7 +17,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import (
     BET_KELLY_MAX_PCT,
     BET_KELLY_MODE,
-    BET_PORTFOLIO_MAX_PCT,
     BUY_FILTER_DEFAULT,
     ICLOUD_PUBLISH_DIR,
     WEB_DIST,
@@ -26,6 +25,7 @@ from config import (
 from db import open_db
 from predictor import is_tentative, predict_race
 from predictor.filter import is_buy_candidate
+from predictor.portfolio import compute_day_portfolio
 from predictor.risk import recommended_fraction
 from web.codes import (
     grade_name,
@@ -347,35 +347,11 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
 
     # P20 (2026-06-07): ポートフォリオ推奨投資率の上限チェック。
     # full Kelly 合計だと bankroll の 100% 超 (= 物理的に賭けられない) になる
-    # 事故があったため、recommended_kelly (= quarter + per-bet cap 済) を集計する。
-    # **日単位で集計する** (実際の bankroll は 1 開催日ごとに区切られるため、
-    # 多日窓の買い候補を全部合算すると誤って巨大化する。2026-06-07 修正)。
-    by_day_total: dict[str, float] = {}
-    by_day_count: dict[str, int] = {}
-    for b in buy_candidates:
-        d = b.get("date") or "?"
-        by_day_total[d] = by_day_total.get(d, 0.0) + (b.get("recommended_kelly") or 0)
-        by_day_count[d] = by_day_count.get(d, 0) + 1
-    portfolio_days = []
-    for d in sorted(by_day_total):
-        tot = by_day_total[d]
-        over = tot > BET_PORTFOLIO_MAX_PCT
-        portfolio_days.append({
-            "date": d,
-            "count": by_day_count[d],
-            "total_pct": tot * 100,
-            "over_cap": over,
-            "scale": (BET_PORTFOLIO_MAX_PCT / tot if over and tot > 0 else 1.0),
-        })
-    max_day_pct = max((d["total_pct"] for d in portfolio_days), default=0.0)
-    portfolio_info = {
-        "days": portfolio_days,
-        "max_day_pct": max_day_pct,
-        "any_over_cap": any(d["over_cap"] for d in portfolio_days),
-        "cap_pct": BET_PORTFOLIO_MAX_PCT * 100,
-        "kelly_mode": BET_KELLY_MODE,
-        "per_bet_cap_pct": BET_KELLY_MAX_PCT * 100,
-    }
+    # 事故があったため、recommended_kelly (= quarter + per-bet cap 済) を **日単位**
+    # で集計する (実際の bankroll は 1 開催日ごとに区切られるため、多日窓の買い候補を
+    # 全部合算すると誤って巨大化する)。集計ロジックは gui/app.py と共通の単一出典
+    # predictor.portfolio.compute_day_portfolio に集約 (P20-3 / 2026-06-07)。
+    portfolio_info = compute_day_portfolio(buy_candidates)
 
     # S7-β-4 (2026-05-18): フィルタ条件の header 明示用 context。
     # config.BUY_FILTER_DEFAULT を読み、None でない項目を表示文字列にまとめる。

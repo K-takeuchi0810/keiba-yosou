@@ -30,6 +30,18 @@ cd C:\Users\kizun\dev\keiba-yosou
 
 ## 2. 週次監視 (Windows Task Scheduler 登録)
 
+### 前提条件
+
+`weekly_monitor.bat` は scripts.monitor の前に回帰テスト (pytest) を実行する。
+事前に `.venv64` へ dev 依存を導入しておくこと:
+
+```
+.venv64\Scripts\python.exe -m pip install -r requirements-dev.txt
+```
+
+未導入でも `weekly_monitor.bat` は pytest をスキップして続行する
+(誤警告を出さないようガード済) が、その場合 helper の回帰検知は働かない。
+
 ### Task Scheduler への登録手順
 
 1. `Win + R` → `taskschd.msc` で起動
@@ -55,12 +67,18 @@ cd C:\Users\kizun\dev\keiba-yosou
 ```
 週次自動実行 (weekly_monitor.bat)
   │
+  ├── pytest tests/ -q  (共通 helper の回帰検知)
+  │   └── 失敗で WARNING 表示 + exit code に bit1 (=2) を加算
+  │       (pytest 未導入の env ではスキップ、誤警告なし)
+  │
   ├── scripts.monitor --days 30 --threshold 0.20
   │   ├── 直近 30 日の予測 vs 結果から Brier を計算
   │   ├── 訓練時 baseline (lgbm_meta.json の val_brier 0.0604) と比較
-  │   └── +20%% 悪化 (= Brier > 0.0725) で警告 exit 1
+  │   └── +20%% 悪化 (= Brier > 0.0725) で警告 + exit code に bit0 (=1) を加算
   │
-  └── exit 1 の場合 → コンソールに WARNING 表示
+  └── 最終 exit code (Task Scheduler でログを開かず切り分け可能):
+      0 = 正常 / 1 = Brier drift / 2 = pytest 回帰 / 3 = 両方
+      Brier drift (exit code に 1 を含む) の場合の推奨対応:
       ├── 推奨対応 1: scripts.filter_sweep --recent-3fold で robust 再選定
       ├── 推奨対応 2: scripts.train_lgbm で LGBM 再訓練 (TRAIN を rolling forward)
       └── 推奨対応 3: config.BUY_FILTER_DEFAULT.whitelist_tracks=[] で即サスペンド

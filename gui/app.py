@@ -20,11 +20,19 @@ from pathlib import Path
 import webview
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import BUY_FILTER_DEFAULT, ICLOUD_PUBLISH_DIR, WEB_DIST, ensure_dirs, is_whitelisted_race
+from config import (
+    BUY_FILTER_DEFAULT,
+    ICLOUD_PUBLISH_DIR,
+    WEB_DIST,
+    ensure_dirs,
+    is_whitelisted_race,
+)
 from db import open_db
 from jvlink_client import ALL_DATASPECS, JVLinkClient
 from jvlink_client.ingest import ingest_all
 from predictor import is_tentative, predict_race
+from predictor.portfolio import compute_day_portfolio
+from predictor.risk import recommended_fraction
 from scripts.backtest import get_payout, horses_for_race, list_races
 from scripts.fetch_odds import race_key
 from web.codes import race_id_to_date, track_name
@@ -304,18 +312,31 @@ class Api:
         return max(0, int((datetime.now() - dt).total_seconds() // 60))
 
     def _recent_backtest(self, conn, to_date: str, range_key: str = "3") -> dict:
+        # 確定済みレースは to_date (= 予想対象日 = 当日/未来) の近辺には無く、
+        # 過去にしか存在しない。to_date から素朴に遡ると窓に確定データが
+        # 1 件も入らず全 0 になる (例: 当日 06-07 の「直近3日」は 06-05..06-07 で
+        # 確定レースゼロ)。そこで **to_date 以前で最新の確定開催日 (anchor)** を
+        # 起点に窓を取り、いつ開いても直近の確定結果が出るようにする。
+        anchor = conn.execute(
+            """
+            SELECT MAX(race_year || race_month_day)
+            FROM horse_races
+            WHERE confirmed_order > 0 AND (race_year || race_month_day) <= ?
+            """,
+            (to_date,),
+        ).fetchone()[0]
+        label = f"{(anchor or to_date)[:6]}月" if range_key == "month" else f"直近{range_key}日"
+        if not anchor:
+            return {"label": label, "races": 0, "wins": 0, "top3": 0, "return_rate": 0}
         if range_key == "month":
-            start_date = to_date[:6] + "01"
-            label = f"{to_date[:6]}月"
-            limit = 100
+            start_date = anchor[:6] + "01"
         else:
             days = int(range_key) if str(range_key).isdigit() else 3
             try:
-                start_date = (datetime.strptime(to_date, "%Y%m%d") - timedelta(days=days - 1)).strftime("%Y%m%d")
+                start_date = (datetime.strptime(anchor, "%Y%m%d") - timedelta(days=days - 1)).strftime("%Y%m%d")
             except ValueError:
-                start_date = to_date
-            label = f"直近{range_key}日"
-            limit = 100
+                start_date = anchor
+        limit = 100
         rows = conn.execute(
             """
             SELECT DISTINCT race_year || race_month_day AS d
@@ -324,7 +345,7 @@ class Api:
             ORDER BY d DESC
             LIMIT ?
             """,
-            (start_date, to_date, limit),
+            (start_date, anchor, limit),
         ).fetchall()
         dates = sorted([r["d"] for r in rows])
         if not dates:
@@ -349,7 +370,13 @@ class Api:
                 top3 += 1
             payout += get_payout(conn, race, top.horse_num, "tan")
         return {
-            "label": f"{label} {dates[0]}-{dates[-1]}",
+            "label": label,
+            "period": f"{dates[0]}-{dates[-1]}",
+            # この backtest は **全確定レースで本命 (preds[0]) を単勝 100 円**。
+            # 上段「買い候補」の EV/Kelly/オッズ フィルタは一切通していないため、
+            # ここの回収率は買い候補戦略の期待成績ではない (誤読防止の注記)。
+            # さらに GUI は venv32 (LGBM 無し) で動くため rule-only 予測。
+            "note": "本命単勝・全レース / 買いフィルタ非適用の参考値",
             "races": total,
             "wins": wins,
             "top3": top3,
@@ -612,16 +639,7 @@ class Api:
                 """,
                 (from_date, to_date),
             ).fetchone()
-            race_meta = conn.execute(
-                """
-                SELECT MAX(data_created) AS fetched_at
-                FROM races
-                WHERE (race_year || race_month_day) BETWEEN ? AND ?
-                """,
-                (from_date, to_date),
-            ).fetchone()
             buy_candidates: list[dict] = []
-            top_preview: list[dict] = []
             prediction_items: list[dict] = []
             feature_warning_counts: dict[str, int] = {}
             feature_warning_total = 0
@@ -653,24 +671,21 @@ class Api:
                         "confidence": pred.confidence,
                         "probability": round(pred.win_probability * 100, 1),
                         "ev": pred.expected_value,
+                        # full Kelly (kelly_fraction) は実推奨賭金の ~3-4 倍に相当する
+                        # 過大値。表示・集計には recommended (1/4 Kelly + per-bet cap)
+                        # を使う (web/generator.py P20 の是正と同一方針)。
+                        # recommended_kelly は **fraction (0-1)** で持つ
+                        # (web/generator.py:277 と同一スケール。表示直前にのみ ×100)。
                         "kelly": round(pred.kelly_fraction * 100, 2),
+                        "recommended_kelly": round(
+                            recommended_fraction(pred.kelly_fraction), 4
+                        ),
                         "buy": self._is_buy_candidate(pred, horse, tentative, bet_filter, race=race),
                     }
                     if pred.rank == 1:
                         prediction_items.append(item)
                     if item["buy"]:
                         buy_candidates.append(item)
-                if preds:
-                    pred = preds[0]
-                    horse = horse_by_num.get(pred.horse_num, {})
-                    top_preview.append({
-                        "track": track_name(race["track_code"]),
-                        "race_num": int(race["race_num"]),
-                        "horse_name": horse.get("horse_name") or "",
-                        "odds": round((horse.get("win_odds") or 0) / 10.0, 1),
-                        "confidence": pred.confidence,
-                        "ev": pred.expected_value,
-                    })
             backtest = self._recent_backtest(conn, to_date, str(options.get("backtest_range") or "3"))
             trends = self._track_trends(conn, from_date, to_date)
             if not trends:
@@ -701,6 +716,12 @@ class Api:
                 warnings.append(f"当日傾向 利用率 {rate}% / 朝はデータなし")
         if not buy_candidates:
             warnings.append("買い候補なし: EV/信頼度条件を満たすレースは見送り")
+        # 買い候補ポートフォリオ集計。bankroll は 1 開催日ごとに区切られるため
+        # **日単位** で推奨投資率を合算する (多日窓を全合算すると過大化する)。
+        # 集計ロジックは web/generator.py と共通の単一出典
+        # predictor.portfolio.compute_day_portfolio に集約 (P20-3 / 2026-06-07)。
+        # 想定回収率 (exp_return_pct) は推奨賭金で加重平均した EV。
+        buy_portfolio = compute_day_portfolio(buy_candidates)
         return {
             "ok": True,
             "from_date": from_date,
@@ -713,13 +734,12 @@ class Api:
                 "generated_at": generated_at,
                 "feature_warnings": feature_warning_counts,
                 "last_fetched_odds": odds_fetched_at,
-                "last_fetched_race": race_meta["fetched_at"] if race_meta else None,
                 "odds_dataspec": odds_meta["dataspec"] if odds_meta else None,
                 "odds_age_minutes": odds_age,
                 "bet_filter": bet_filter,
             },
             "buy_candidates": buy_candidates,
-            "top_preview": top_preview[:4],
+            "buy_portfolio": buy_portfolio,
             "backtest": backtest,
             "track_trends": trends,
             "venues": venues,
@@ -909,18 +929,29 @@ CONTROL_HTML = """<!doctype html>
 <title>競馬予想</title>
 <style>
   :root {
-    --bg:          #eef0f3;
-    --surface:     #f8f9fb;
+    --bg:          #eaedf1;
+    --surface:     #ffffff;
     --surface-2:   #eceff3;
-    --border:      #c7cdd5;
-    --border-soft: #d7dce3;
-    --text:        #252a31;
-    --text-dim:    #59616c;
+    --border:      #c2c9d2;
+    --border-soft: #d4dae1;
+    --text:        #1f242b;
+    --text-dim:    #545c67;
     --text-mute:   #7d8591;
-    --accent:      #6b7280;
+    --accent:      #5b626d;
     --accent-hi:   #374151;
-    --accent-soft: rgba(107,114,128,.12);
-    --accent-line: rgba(107,114,128,.35);
+    --accent-soft: rgba(55,65,81,.10);
+    --accent-line: rgba(55,65,81,.30);
+    /* 主要 CTA = 濃色塗りつぶし (白文字)。最重要操作の視認性を担保。
+       base / hover の全状態を :root 単一出典にする (hover の直書き漏れ防止) */
+    --primary:      #2f3a49;
+    --primary-hi:   #1f2937;
+    --primary-soft: #3a4656;
+    --primary-deep: #111827;
+    --on-primary:   #ffffff;
+    /* 買い目 = 金額の色。トークン化して散在を防ぐ (旧: #9f1239 直書き) */
+    --buy:         #9f1239;
+    --buy-bg:      #fff1f2;
+    --buy-border:  #fecdd3;
     --log-fg:      #27313b;
     --log-bg:      #f3f5f7;
   }
@@ -952,7 +983,8 @@ CONTROL_HTML = """<!doctype html>
     padding: .85rem 1rem .9rem;
     border-right: 1px solid var(--border-soft);
     height: 100vh;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     display: flex;
     flex-direction: column;
   }
@@ -962,21 +994,24 @@ CONTROL_HTML = """<!doctype html>
     min-width: 0;
     padding: .65rem .85rem;
     height: 100vh;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 3px;
+    border-radius: 5px;
     padding: .52rem .62rem;
     margin: 0;
+    box-shadow: 0 1px 2px rgba(16,24,40,.05);
   }
   .card-title {
-    font-size: .65rem;
-    letter-spacing: .28em;
+    font-size: .69rem;
+    letter-spacing: .14em;
     text-transform: uppercase;
     color: var(--accent);
-    margin-bottom: .26rem;
+    font-weight: 600;
+    margin-bottom: .3rem;
   }
   .card-empty {
     color: var(--text-mute);
@@ -991,8 +1026,9 @@ CONTROL_HTML = """<!doctype html>
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: .3rem;
-    height: 100%;
-    grid-template-rows: auto auto auto minmax(0, 1fr);
+    min-height: 100%;
+    grid-auto-rows: min-content;
+    align-content: start;
   }
   .wide { grid-column: 1 / -1; }
   .span-2 { grid-column: span 2; }
@@ -1017,26 +1053,28 @@ CONTROL_HTML = """<!doctype html>
     font-variant-numeric: tabular-nums;
   }
   .metric .label {
-    font-size: .66rem;
+    font-size: .68rem;
     color: var(--text-mute);
-    letter-spacing: .08em;
+    letter-spacing: .04em;
     text-transform: uppercase;
+    margin-top: .12rem;
   }
-  .buy-item, .preview-item, .warn-item {
+  .buy-item, .warn-item {
     border-top: 1px solid var(--border-soft);
     padding: .32rem 0;
     min-width: 0;
   }
-  .buy-item:first-child, .preview-item:first-child, .warn-item:first-child { border-top: 0; padding-top: 0; }
-  .buy-main { font-size: .95rem; font-weight: 700; color: #9f1239; }
-  .preview-item strong,
+  .buy-item:first-child, .warn-item:first-child { border-top: 0; padding-top: 0; }
   .buy-main {
+    font-size: .95rem;
+    font-weight: 700;
+    color: var(--buy);
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .buy-sub, .preview-sub, .warn-item {
+  .buy-sub, .warn-item {
     color: var(--text-dim);
     font-size: .74rem;
     margin-top: .12rem;
@@ -1055,7 +1093,7 @@ CONTROL_HTML = """<!doctype html>
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;
   }
-  .pill.buy { background: #fff1f2; border-color: #fecdd3; color: #9f1239; }
+  .pill.buy { background: var(--buy-bg); border-color: var(--buy-border); color: var(--buy); }
   .compact-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1087,18 +1125,37 @@ CONTROL_HTML = """<!doctype html>
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .preview-compact {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: .3rem;
+  /* 買い候補ポートフォリオ集計バー (点数 / 推奨投資率 / 想定回収) */
+  .buy-portfolio {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .25rem .8rem;
+    padding: .3rem .5rem;
+    margin-bottom: .35rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border-soft);
+    border-left: 2px solid var(--accent);
+    border-radius: 3px;
+    font-size: .74rem;
+    color: var(--text-dim);
   }
-  #previewList .mini-card {
-    min-height: 0;
+  .buy-portfolio strong {
+    color: var(--accent-hi);
+    font-variant-numeric: tabular-nums;
   }
-  .dashboard-grid > section:not(.wide):not(.span-2) .preview-compact {
-    grid-template-columns: 1fr;
+  .buy-portfolio .bp-count {
+    font-weight: 700;
+    color: var(--buy);
   }
-  .preview-compact .mini-card { padding: .32rem .38rem; }
+  .buy-portfolio.over {
+    border-left-color: var(--buy);
+    background: var(--buy-bg);
+  }
+  .buy-portfolio .bp-warn {
+    color: var(--buy);
+    font-weight: 700;
+  }
   .filter-panel {
     grid-column: 1 / -1;
     background: var(--surface);
@@ -1127,9 +1184,21 @@ CONTROL_HTML = """<!doctype html>
     font-size: .72rem;
   }
   .seg button.active { background: var(--accent-soft); border-color: var(--accent-hi); }
-  #warnings .warn-item:nth-child(n+4) { display: none; }
-  #venues, #trackTrends, #previewList {
-    overflow: hidden;
+  .bt-period {
+    font-size: .68rem;
+    color: var(--text-mute);
+    font-variant-numeric: tabular-nums;
+    margin-bottom: .3rem;
+  }
+  .bt-note {
+    margin-top: .3rem;
+    font-size: .66rem;
+    color: var(--text-mute);
+    line-height: 1.35;
+  }
+  #warnings {
+    max-height: 9rem;
+    overflow-y: auto;
   }
   @media (max-width: 980px) {
     .dashboard-grid { grid-template-columns: 1fr; }
@@ -1140,9 +1209,9 @@ CONTROL_HTML = """<!doctype html>
   /* ---------- header ---------- */
   header { margin-bottom: .65rem; }
   .brand {
-    font-size: 1.05rem;
-    font-weight: 500;
-    letter-spacing: .32em;
+    font-size: 1.08rem;
+    font-weight: 600;
+    letter-spacing: .22em;
     color: var(--text);
   }
   .brand .ornament {
@@ -1151,8 +1220,8 @@ CONTROL_HTML = """<!doctype html>
     font-size: .95em;
   }
   .subtitle {
-    font-size: .65rem;
-    letter-spacing: .22em;
+    font-size: .67rem;
+    letter-spacing: .16em;
     color: var(--text-mute);
     margin-top: .25rem;
     text-transform: uppercase;
@@ -1220,7 +1289,7 @@ CONTROL_HTML = """<!doctype html>
     font-size: .8rem;
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;
-    word-break: break-all;
+    overflow-wrap: anywhere;
     transition: all .25s ease;
   }
   #cancelBtn {
@@ -1272,10 +1341,11 @@ CONTROL_HTML = """<!doctype html>
 
   /* ---------- section labels ---------- */
   .section-label {
-    font-size: .62rem;
-    letter-spacing: .3em;
+    font-size: .67rem;
+    letter-spacing: .18em;
     color: var(--text-mute);
     text-transform: uppercase;
+    font-weight: 600;
     margin: .72rem 0 .32rem;
     display: flex;
     align-items: center;
@@ -1322,6 +1392,11 @@ CONTROL_HTML = """<!doctype html>
     box-shadow: none;
   }
   button:active { transform: translateY(1px); }
+  button:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--accent-hi);
+    outline-offset: 1px;
+  }
   button .step {
     display: inline-block;
     color: var(--accent);
@@ -1330,22 +1405,29 @@ CONTROL_HTML = """<!doctype html>
     min-width: 1em;
   }
   button.primary {
-    background: linear-gradient(180deg, #f3f4f6 0%, #e1e5eb 100%);
-    border-color: var(--accent);
-    color: var(--accent-hi);
-    padding: .68rem .78rem;
-    font-size: .88rem;
-    letter-spacing: .14em;
+    background: linear-gradient(180deg, var(--primary) 0%, var(--primary-hi) 100%);
+    border-color: var(--primary-hi);
+    color: var(--on-primary);
+    padding: .7rem .78rem;
+    font-size: .9rem;
+    letter-spacing: .1em;
     margin: .35rem 0 .5rem;
     text-align: center;
-    font-weight: 500;
-    text-transform: uppercase;
+    font-weight: 600;
+    box-shadow: 0 2px 6px -2px rgba(31,41,55,.35);
   }
   button.primary:hover {
-    background: linear-gradient(180deg, #e5e7eb 0%, #d1d5db 100%);
-    color: #1f2937;
-    border-color: var(--accent-hi);
-    box-shadow: 0 0 0 1px var(--accent-soft), 0 4px 14px -8px rgba(55,65,81,.35);
+    background: linear-gradient(180deg, var(--primary-soft) 0%, var(--primary-deep) 100%);
+    color: var(--on-primary);
+    border-color: var(--primary-deep);
+    box-shadow: 0 4px 14px -4px rgba(17,24,39,.5);
+  }
+  button.primary:disabled,
+  button.primary:disabled:hover {
+    background: var(--primary);
+    color: var(--on-primary);
+    border-color: var(--primary-hi);
+    box-shadow: none;
   }
 
   /* ---------- details ---------- */
@@ -1465,10 +1547,6 @@ CONTROL_HTML = """<!doctype html>
       <div class="card-title">本日の場別傾向</div>
       <div id="trackTrends" class="card-empty">読み込み中...</div>
     </section>
-    <section class="card wide">
-      <div class="card-title">上位予想プレビュー</div>
-      <div id="previewList" class="card-empty">読み込み中...</div>
-    </section>
   </div>
 </main>
 
@@ -1488,6 +1566,11 @@ CONTROL_HTML = """<!doctype html>
   }
   function metric(label, value) {
     return '<div class="metric"><div class="num">' + esc(value) + '</div><div class="label">' + esc(label) + '</div></div>';
+  }
+  function pct2(frac) {
+    var n = Number(frac);
+    if (!isFinite(n)) return '0.00';
+    return (n * 100).toFixed(2);
   }
   function inputNumber(id, fallback) {
     var el = byId(id);
@@ -1542,13 +1625,23 @@ CONTROL_HTML = """<!doctype html>
     byId('summary').innerHTML =
       metric('\u30ec\u30fc\u30b9', valueOr(s.races, 0)) +
       metric('\u51fa\u8d70\u982d\u6570', valueOr(s.horses, 0)) +
-      metric('\u30aa\u30c3\u30ba', valueOr(s.odds, 0) + '/' + valueOr(s.horses, 0)) +
       metric('\u8cb7\u3044\u5019\u88dc', valueOr(s.buy_count, 0)) +
-      metric('Race\u6700\u65b0', s.last_fetched_race || '-') +
       metric('Odds\u6700\u65b0', shortTime(s.last_fetched_odds) + (s.odds_age_minutes == null ? '' : ' / ' + s.odds_age_minutes + '\u5206\u524d'));
 
     var buys = data.buy_candidates || [];
-    byId('buyList').innerHTML = buys.length ? buys.map(function (b) {
+    var bp = data.buy_portfolio || {};
+    var portfolioHtml = '';
+    if (bp.count) {
+      var investLabel = bp.multi_day ? '\u63a8\u5968\u6295\u8cc7(\u6700\u5927\u65e5)' : '\u63a8\u5968\u6295\u8cc7';
+      var ret = bp.exp_return_pct == null ? '-' : esc(bp.exp_return_pct) + '%';
+      portfolioHtml = '<div class="buy-portfolio' + (bp.any_over_cap ? ' over' : '') + '">' +
+        '<span class="bp-count">' + esc(bp.count) + '\u70b9</span>' +
+        '<span>' + investLabel + ' <strong>' + esc(bp.max_day_pct) + '%</strong> / \u4e0a\u9650 ' + esc(bp.cap_pct) + '%</span>' +
+        '<span>\u60f3\u5b9a\u56de\u53ce <strong>' + ret + '</strong></span>' +
+        (bp.any_over_cap ? '<span class="bp-warn">\u26a0 \u4e0a\u9650\u8d85\u904e</span>' : '') +
+        '</div>';
+    }
+    byId('buyList').innerHTML = buys.length ? portfolioHtml + buys.map(function (b) {
       return '<div class="buy-item">' +
         '<div class="buy-main">' + esc(b.track) + ' ' + esc(b.race_num) + 'R ' + esc(b.horse_num) + ' ' + esc(b.horse_name) + '</div>' +
         '<div class="buy-sub">' + esc(b.start_time) + ' / ' + esc(b.race_name || '') +
@@ -1556,18 +1649,22 @@ CONTROL_HTML = """<!doctype html>
         '<span class="pill">' + esc(b.popularity) + '\u4eba\u6c17</span>' +
         '<span class="pill">P ' + esc(b.probability) + '%</span>' +
         '<span class="pill">EV ' + esc(b.ev) + '</span>' +
-        '<span class="pill">K ' + esc(b.kelly) + '%</span></div></div>';
+        '<span class="pill" title="1/4 Kelly + 1\u70b9\u4e0a\u9650cap\u6e08\u307f\u306e\u63a8\u5968\u6295\u8cc7\u7387">\u63a8\u5968 ' + pct2(b.recommended_kelly) + '%</span></div></div>';
     }).join('') : '<div class="card-empty">\u8cb7\u3044\u5019\u88dc\u306a\u3057\u3002EV/\u4fe1\u983c\u5ea6\u6761\u4ef6\u3067\u306f\u898b\u9001\u308a\u3067\u3059\u3002</div>';
 
     var bt = data.backtest || {};
+    var btPeriod = bt.period ? esc(bt.label) + ' ' + esc(bt.period) : esc(bt.label || '-');
     byId('backtest').innerHTML = '<div class="seg">' +
       ['3','7','30','month'].map(function (v) {
         return '<button type="button" data-range="' + esc(v) + '" class="' + (backtestRange === v ? 'active' : '') + '">' + (v === 'month' ? '\u5f53\u6708' : v + '\u65e5') + '</button>';
-      }).join('') + '</div><div class="metric-row">' +
-      metric('\u5bfe\u8c61', bt.label || '-') +
+      }).join('') + '</div>' +
+      '<div class="bt-period">' + btPeriod + '</div>' +
+      '<div class="metric-row">' +
+      metric('\u5bfe\u8c61R', valueOr(bt.races, 0)) +
       metric('\u5358\u52dd', valueOr(bt.wins, 0) + '/' + valueOr(bt.races, 0)) +
       metric('3\u7740\u5185', valueOr(bt.top3, 0) + '/' + valueOr(bt.races, 0)) +
-      metric('\u56de\u53ce\u7387', valueOr(bt.return_rate, 0) + '%') + '</div>';
+      metric('\u56de\u53ce\u7387', valueOr(bt.return_rate, 0) + '%') + '</div>' +
+      (bt.note ? '<div class="bt-note">' + esc(bt.note) + '</div>' : '');
     bindBacktestRangeButtons();
 
     var warnings = data.warnings || [];
@@ -1587,12 +1684,6 @@ CONTROL_HTML = """<!doctype html>
       return '<div class="mini-card"><div class="mini-title">' + esc(t.track) + ' <span class="pill">3\u7740\u5185 ' + esc(t.top3_samples) + '</span></div>' +
         '<div class="mini-line">' + esc(t.surface) + ' / ' + esc(t.leg) + ' / ' + esc(t.gate) + '</div><div class="mini-line">' + esc(t.note) + '</div></div>';
     }).join('') + '</div>' : '<div class="card-empty">\u78ba\u5b9a\u6e08\u307f\u306e\u5f53\u65e5\u7d50\u679c\u304c\u307e\u3060\u5c11\u306a\u304f\u3001\u50be\u5411\u306f\u8868\u793a\u3067\u304d\u307e\u305b\u3093\u3002</div>';
-
-    var preview = data.top_preview || [];
-    byId('previewList').innerHTML = preview.length ? '<div class="preview-compact">' + preview.map(function (p) {
-      return '<div class="mini-card"><div class="mini-title">' + esc(p.track) + ' ' + esc(p.race_num) + 'R</div>' +
-        '<div class="mini-line">' + esc(p.horse_name) + '</div><div class="mini-line">' + esc(p.odds) + '\u500d / ' + esc(p.confidence) + ' / EV ' + esc(p.ev) + '</div></div>';
-    }).join('') + '</div>' : '<div class="card-empty">\u4e88\u60f3\u30c7\u30fc\u30bf\u304c\u3042\u308a\u307e\u305b\u3093\u3002</div>';
   }
   function refreshDashboard() {
     if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_dashboard) return;
@@ -1753,11 +1844,11 @@ PREVIEW_HTML = """<!doctype html>
 <title>予想プレビュー</title>
 <style>
   :root {
-    --bg: #eef0f3;
-    --surface: #f8f9fb;
-    --border: #c7cdd5;
-    --text: #252a31;
-    --text-dim: #59616c;
+    --bg: #eaedf1;
+    --surface: #ffffff;
+    --border: #c2c9d2;
+    --text: #1f242b;
+    --text-dim: #545c67;
     --accent: #374151;
   }
   * { box-sizing: border-box; }
@@ -1832,7 +1923,7 @@ def main() -> None:
         x=80,
         y=60,
         on_top=False,
-        background_color="#eef0f3",
+        background_color="#eaedf1",
     )
     print("[gui.app] starting event loop...", flush=True)
     webview.start()
