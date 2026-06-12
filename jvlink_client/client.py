@@ -246,6 +246,10 @@ class JVLinkClient:
         current_handle = None
         last_progress = time.time()
         bad_files: list[str] = []  # rc=-403 で破損していたファイル
+        # この fetch で書き出したファイル名。呼び出し側が ingest_all(only_files=...)
+        # に渡すことで「同名ファイルの内容更新 (週次 RACE)」を確実に再取込する
+        # (2026-06-13 v2 監査: only_files 機構が誰にも配線されていなかった)。
+        filenames: list[str] = []
 
         try:
             while True:
@@ -303,6 +307,7 @@ class JVLinkClient:
                         files_done += 1
                     current_filename = filename
                     current_handle = open(out_dir / filename, "wb")
+                    filenames.append(filename)
 
                 # rc は SJIS バイト数。buf にそのバイト列が入っているのでそのまま書き込む。
                 current_handle.write(buf)
@@ -341,6 +346,7 @@ class JVLinkClient:
             "records_total": records_total,
             "last_timestamp": last_timestamp,
             "bad_files": bad_files,
+            "filenames": filenames,
         }
 
     def fetch_all(

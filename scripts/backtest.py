@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import subprocess
 import sys
 import time
@@ -21,6 +22,8 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+logger = logging.getLogger(__name__)
 
 from db import open_db
 from predictor.calibration import (
@@ -462,6 +465,19 @@ def run_backtest(
         k: _finish_bet_stats(v)
         for k, v in sorted(confidence_stats.items())
     }
+    meta = _snapshot_meta()
+    # 評価期間が calibrator の fit 期間と重なる場合は in-sample 評価として
+    # 明示フラグを立てる (2026-06-13 v2 監査: 2025val 評価が calibrator fit
+    # 期間 (2025 通年) 内で行われ「独立 dataset」と誤認されていた)。
+    # Brier 等の calibration 指標は in-sample では証拠力が無い。
+    calibration_in_sample = False
+    ctf, ctt = meta.get("calibrator_trained_from"), meta.get("calibrator_trained_to")
+    if ctf and ctt and from_date <= str(ctt) and str(ctf) <= to_date:
+        calibration_in_sample = True
+        logger.warning(
+            "評価期間 %s-%s は calibrator fit 期間 %s-%s と重複しています。"
+            "calibration 指標 (Brier 等) は in-sample であり証拠力がありません。",
+            from_date, to_date, ctf, ctt)
     return {
         "from_date": from_date,
         "to_date": to_date,
@@ -469,7 +485,8 @@ def run_backtest(
         "elapsed_sec": round(elapsed, 1),
         # P17 A2 Step 0: 実行時の calibrator / LGBM / git_sha を snapshot。
         # backtest 結果単体で「どの校正器・モデルで出した数字か」を再現可能。
-        "meta": _snapshot_meta(),
+        "meta": meta,
+        "calibration_in_sample": calibration_in_sample,
         "races_total": n_total_races,
         "races_no_horses": n_no_horses,
         "races_no_pick": n_no_pick,

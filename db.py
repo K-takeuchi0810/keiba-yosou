@@ -37,6 +37,9 @@ def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    # GUI スレッド + .venv64 subprocess (render) + 外部スクリプトが並走するため、
+    # writer 競合時に即 "database is locked" にせず最大 5 秒待つ (2026-06-13)。
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 

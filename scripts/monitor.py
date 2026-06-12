@@ -1,4 +1,4 @@
-"""Phase 5 (2026-05-13): Brier ドリフト監視と自動再訓練アラート。
+r"""Phase 5 (2026-05-13): Brier ドリフト監視と自動再訓練アラート。
 
 直近 N 日の予測 vs 結果から Brier を計算し、訓練時 (`predictor/lgbm_meta.json`
 または `predictor/calibrator.json`) の値より一定割合悪化していたら警告。
@@ -28,11 +28,35 @@ from scripts.backtest import horses_for_race, list_races
 
 logger = logging.getLogger(__name__)
 
-DEGRADATION_THRESHOLD = 0.20  # train Brier 比 +20% で警告
+DEGRADATION_THRESHOLD = 0.20  # baseline Brier 比 +20% で警告
+
+# 採用時に凍結する baseline (本番 pipeline と同一コードパスで計測した
+# backtest の calibration.brier_score)。--freeze-baseline で更新する。
+BASELINE_FILE = PROJECT_ROOT / "data" / "backtest" / "baseline_brier.json"
 
 
 def _read_baseline_brier() -> tuple[str, float] | None:
-    """訓練時 Brier の baseline。LGBM meta → 無ければ calibrator meta。"""
+    """ドリフト判定の baseline Brier。
+
+    優先: 採用時に凍結した BASELINE_FILE (measure_recent_brier と同じ
+    本番 pipeline = ensemble + calibrated で計測した値)。
+    フォールバック: 訓練時メタ (LGBM 単体 / calibrator fit 時) — ただし
+    計測コードパスが異なるためドリフト閾値が系統的にずれる
+    (2026-06-13 v2 監査指摘。実測で既に +7.9% 下駄があった)。
+    """
+    if BASELINE_FILE.exists():
+        try:
+            d = json.loads(BASELINE_FILE.read_text(encoding="utf-8"))
+            b = d.get("brier_score")
+            if b:
+                return (f"frozen:{d.get('source', '?')}", float(b))
+        except Exception:
+            logger.warning("baseline_brier.json の読込に失敗", exc_info=True)
+    logger.warning(
+        "凍結 baseline (%s) が無いため訓練時メタにフォールバックします。"
+        "計測経路が本番 pipeline と異なり閾値がずれるため、採用時の backtest "
+        "JSON から `python -m scripts.monitor --freeze-baseline <path>` で"
+        "凍結してください。", BASELINE_FILE)
     lgbm_meta = PROJECT_ROOT / "predictor" / "lgbm_meta.json"
     if lgbm_meta.exists():
         try:
@@ -100,11 +124,31 @@ def main() -> int:
                     help="baseline 比悪化率の警告閾値 (既定 0.20 = +20%%)")
     ap.add_argument("--auto-retrain", action="store_true",
                     help="閾値超過時に LightGBM 自動再訓練を kick (.venv64 で実行)")
+    ap.add_argument("--freeze-baseline", metavar="BACKTEST_JSON", default=None,
+                    help="指定 backtest JSON の calibration.brier_score を "
+                         "baseline_brier.json に凍結して終了 (戦略/校正の採用時に実行)")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
     if not args.quiet:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+    if args.freeze_baseline:
+        src_path = Path(args.freeze_baseline)
+        d = json.loads(src_path.read_text(encoding="utf-8"))
+        brier = (d.get("calibration") or {}).get("brier_score")
+        if not brier:
+            print(f"ERROR: {src_path} に calibration.brier_score が無い", file=sys.stderr)
+            return 2
+        BASELINE_FILE.write_text(json.dumps({
+            "brier_score": brier,
+            "source": src_path.name,
+            "rule_version": d.get("rule_version"),
+            "period": [d.get("from_date"), d.get("to_date")],
+            "frozen_at": datetime.now().isoformat(timespec="seconds"),
+        }, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"baseline frozen: brier={brier} from {src_path.name}")
+        return 0
 
     baseline = _read_baseline_brier()
     if not baseline:

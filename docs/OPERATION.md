@@ -155,6 +155,39 @@ $env:PRED_DISABLE_LGBM=1   # LGBM 無効化 (rule のみで動作)
 $env:BET_WHITELIST=0       # whitelist 無効化
 ```
 
+## 6.5 バックアップ / 復旧 runbook (2026-06-13 追加)
+
+`data/keiba.db` (約 430MB) は唯一のデータストア。破損・誤削除に備える。
+
+### 週次バックアップ (推奨)
+
+```powershell
+# WAL を本体へ反映してからコピー (sqlite3 CLI がある場合)
+# 無い場合は GUI / スクリプトが動いていない状態で 3 ファイルをまとめてコピー
+Copy-Item data\keiba.db     data\backup\keiba_$(Get-Date -Format yyyyMMdd).db
+Copy-Item data\fetch_state.json data\backup\fetch_state_$(Get-Date -Format yyyyMMdd).json
+# 世代は 4 つ程度残す (約 1.7GB)
+```
+
+### DB 破損時の復旧手順
+
+1. **バックアップがある場合**: 最新の `data/backup/keiba_*.db` を `data/keiba.db` に戻す。
+   `fetch_state.json` も同日付のものに戻す (戻さないと差分取得の起点がずれるが、
+   UPSERT 冪等なので重複取得しても壊れない)
+2. **バックアップが無い場合**: raw (`data/raw/`, 約 6.3GB) から全量再構築:
+   ```powershell
+   Remove-Item data\keiba.db, data\keiba.db-wal, data\keiba.db-shm
+   .venv32\Scripts\python.exe -c "from jvlink_client.ingest import ingest_all; print(ingest_all(force=True))"
+   ```
+   - 処理順は ingest_all 内で RACE → マスタ → 0B* (リアルタイム) に固定済み
+     (0B* は horse_races 行への UPDATE のため RACE が先に必要)
+   - 所要時間は数時間規模 (未実測。初回実行時にここへ実測値を記録すること)
+   - **注意**: 事前オッズスナップショット (0B31 の途中経過) は raw に残っている
+     最終版のみ復元される
+3. `fetch_state.json` が壊れた場合: そのまま起動してよい (fromtime が 1986 に
+   戻り全量再取得になるだけ。warning ログが出る)。時間を節約したいなら
+   バックアップから戻すか、`data/raw/` の最新ファイル名の日時を参考に手で書く
+
 ## 7. 関連スキル / ドキュメント
 
 - [.claude/skills/project-state/SKILL.md](../.claude/skills/project-state/SKILL.md) — 現状サマリ

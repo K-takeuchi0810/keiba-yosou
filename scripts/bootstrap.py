@@ -79,7 +79,10 @@ def main() -> None:
     print()
     print("=== ingest into SQLite ===")
     print("（現状 RA / SE のみ DB 投入。他の dataspec は raw のみ保存）")
-    ingest_summary = ingest_all()
+    # 今回 fetch したファイルは ingest 済み記録があっても強制再取込
+    # (JV-Link の同名ファイル内容更新への対応、2026-06-13)
+    fetched = {n for s in summaries for n in (s.get("filenames") or [])}
+    ingest_summary = ingest_all(only_files=fetched or None)
     print(f"  {ingest_summary}")
 
     elapsed = time.time() - started

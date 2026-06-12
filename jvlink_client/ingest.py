@@ -173,9 +173,14 @@ def ingest_all(
 
     JV-Link は **同名ファイル名のまま内容を更新** する運用 (週次 RACE 等) のため、
     is_file_ingested による「ファイル名ベース重複判定」だけでは新着内容を取り
-    こぼす。直近の取得で書き出されたファイルだけ再 ingest したい場合は、
-    `only_files` (ファイル名 set) または `modified_since` (Unix epoch 秒) で
-    対象を絞ってください。これらが指定されれば force=False でも処理されます。
+    こぼす。fetch 直後の取り込みでは `only_files` に fetch が返した filenames を
+    渡すこと (該当ファイルは ingest 済みでも強制再取込)。
+
+    only_files の指定外ファイルは「通常判定」(未取り込みなら処理) に落ちる。
+    旧仕様 (指定外を全 skip) は、fetch 後・ingest 前にクラッシュした取り残し
+    ファイルが永久に未取込になる回復性の穴があった (2026-06-13 v2 監査指摘)。
+    `modified_since` (Unix epoch 秒) は従来どおり「それ以降の変更だけに絞る」
+    制限フィルタとして機能する。
 
     過去バルクデータ (data/raw_old_bstr/) のような別ディレクトリから読み込みたい
     ときは `raw_dir` を渡す。
@@ -196,8 +201,20 @@ def ingest_all(
     if not root.exists():
         return summary
 
+    # 処理順: RACE (レース/出走馬の基礎行) → その他マスタ → 0B* (リアルタイム系)。
+    # update_win_odds 等の 0B* 取り込みは horse_races 行への UPDATE-only で、
+    # 行が無ければ黙って 0 件になる。素朴な辞書順 ("0B14" < "RACE") だと
+    # 空 DB からの raw 全量再構築でリアルタイムオッズが全損していた
+    # (2026-06-13 v2 監査指摘)。
+    def _dir_priority(name: str) -> tuple:
+        if name == "RACE":
+            return (0, name)
+        if name.startswith("0B"):
+            return (2, name)
+        return (1, name)
+
     with open_db() as conn:
-        for ds_dir in sorted(root.iterdir()):
+        for ds_dir in sorted(root.iterdir(), key=lambda p: _dir_priority(p.name)):
             if not ds_dir.is_dir():
                 continue
             if dataspecs is not None and ds_dir.name not in dataspecs:
@@ -205,14 +222,16 @@ def ingest_all(
             for f in sorted(ds_dir.iterdir()):
                 if not f.suffix == ".jvd":
                     continue
-                # only_files / modified_since が指定されたら、それに該当する
-                # ファイルは強制的に再 ingest (force 相当)。指定外はスキップ。
+                # only_files に該当 → ingest 済みでも強制再取込 (同名更新対応)。
+                # modified_since 該当も同様。それ以外は通常判定に落ちる
+                # (未取り込みなら処理 = クラッシュ取り残しの回復性を維持)。
                 fresh = False
                 if only_files is not None and f.name in only_files:
                     fresh = True
                 if modified_since is not None and f.stat().st_mtime >= modified_since:
                     fresh = True
-                if (only_files is not None or modified_since is not None) and not fresh:
+                if modified_since is not None and only_files is None and not fresh:
+                    # modified_since 単独指定は従来互換の「制限フィルタ」
                     summary["files_skipped"] += 1
                     continue
                 if not fresh and not force and is_file_ingested(conn, f.name):

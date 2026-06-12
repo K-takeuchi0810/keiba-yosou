@@ -142,6 +142,16 @@ def _normalize_date(value: object) -> str:
     return "".join(ch for ch in str(value or "") if ch.isdigit())
 
 
+def _fetched_filenames(summaries: list[dict]) -> set[str] | None:
+    """fetch_all の戻りから書き出されたファイル名 set を作る。
+
+    ingest_all(only_files=...) に渡して「同名ファイルの内容更新」(週次 RACE) を
+    確実に再取込する。1 件も無ければ None (= 通常の全体スキャン)。
+    """
+    names = {n for s in summaries for n in (s.get("filenames") or [])}
+    return names or None
+
+
 def _error_hint(e: Exception) -> str:
     text = f"{type(e).__name__}: {e}"
     if "venv64" in text or "did not emit JSON" in text:
@@ -897,7 +907,9 @@ class Api:
             summaries = cli.fetch_all(option=1, dataspecs=["RACE", "HOSE"], on_progress=self._progress)
         self._check_cancel()
         self._set_status("DBへ取り込み中...", "ingest", running=True)
-        ingest_summary = ingest_all()
+        # 今回 fetch したファイルは ingest 済みでも強制再取込 (同名更新対応)。
+        # 空なら通常の全体スキャン (未取り込み分の回復)。
+        ingest_summary = ingest_all(only_files=_fetched_filenames(summaries))
         # 実行中にユーザがフィルタ/期間を触ると部分取込み DB でキャッシュが
         # 再充填されうるため、取り込み完了時にも invalidate して捨てる
         # (開始時 _begin_run と対になる完了側の防御)。
@@ -961,7 +973,8 @@ class Api:
             )
         self._check_cancel()
         self._set_status("血統データをDBへ取り込み中...", "ingest_bloodline", running=True)
-        ingest_summary = ingest_all(dataspecs=["DIFN", "BLOD"])
+        ingest_summary = ingest_all(dataspecs=["DIFN", "BLOD"],
+                                    only_files=_fetched_filenames(summaries))
         self._invalidate_caches()  # 完了側の防御 (fetch_data と同旨)
         with open_db() as conn:
             count = conn.execute("SELECT COUNT(*) FROM horse_masters").fetchone()[0]
@@ -1018,7 +1031,7 @@ class Api:
             summaries = cli.fetch_all(option=1, dataspecs=["RACE", "HOSE"], on_progress=self._progress)
         self._check_cancel()
         self._set_status("一括実行: DB取り込み中...", "ingest", running=True)
-        ingest_summary = ingest_all()
+        ingest_summary = ingest_all(only_files=_fetched_filenames(summaries))
         self._invalidate_caches()  # 完了側の防御 (fetch_data と同旨)
         odds_summary = self._fetch_odds_inner(options, finish=False)
         self._check_cancel()
