@@ -124,30 +124,34 @@ def main() -> int:
                     help="baseline 比悪化率の警告閾値 (既定 0.20 = +20%%)")
     ap.add_argument("--auto-retrain", action="store_true",
                     help="閾値超過時に LightGBM 自動再訓練を kick (.venv64 で実行)")
-    ap.add_argument("--freeze-baseline", metavar="BACKTEST_JSON", default=None,
-                    help="指定 backtest JSON の calibration.brier_score を "
-                         "baseline_brier.json に凍結して終了 (戦略/校正の採用時に実行)")
+    ap.add_argument("--freeze-baseline-days", type=int, metavar="N", default=None,
+                    help="measure_recent_brier(N日) を baseline_brier.json に凍結して終了。"
+                         "戦略/校正の採用時に実行する。週次監視と同一の計測コードパス "
+                         "(本番 pipeline の最終 win_probability) で測るのが要点 — "
+                         "backtest JSON の calibration.brier は raw_blended ベースで"
+                         "経路が異なるため使わない")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
     if not args.quiet:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    if args.freeze_baseline:
-        src_path = Path(args.freeze_baseline)
-        d = json.loads(src_path.read_text(encoding="utf-8"))
-        brier = (d.get("calibration") or {}).get("brier_score")
-        if not brier:
-            print(f"ERROR: {src_path} に calibration.brier_score が無い", file=sys.stderr)
+    if args.freeze_baseline_days:
+        m = measure_recent_brier(args.freeze_baseline_days)
+        if not m.get("brier_score") or not m.get("n_records"):
+            print(f"ERROR: 計測できる確定レースが無い ({m['from_date']}-{m['to_date']})",
+                  file=sys.stderr)
             return 2
         BASELINE_FILE.write_text(json.dumps({
-            "brier_score": brier,
-            "source": src_path.name,
-            "rule_version": d.get("rule_version"),
-            "period": [d.get("from_date"), d.get("to_date")],
+            "brier_score": m["brier_score"],
+            "log_loss": m["log_loss"],
+            "n_records": m["n_records"],
+            "source": "measure_recent_brier (本番 pipeline と同一経路)",
+            "period": [m["from_date"], m["to_date"]],
             "frozen_at": datetime.now().isoformat(timespec="seconds"),
         }, indent=2, ensure_ascii=False), encoding="utf-8")
-        print(f"baseline frozen: brier={brier} from {src_path.name}")
+        print(f"baseline frozen: brier={m['brier_score']:.4f} "
+              f"(n={m['n_records']}, {m['from_date']}-{m['to_date']})")
         return 0
 
     baseline = _read_baseline_brier()
