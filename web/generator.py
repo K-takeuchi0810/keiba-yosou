@@ -338,6 +338,12 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
             "tentative": tentative_by_race.get(race_key, False),
         })
 
+    # P22-2 (2026-06-12): 開催日ごとの買い候補数。テンプレート 2 箇所
+    # (day-nav チップ / day-section h2) が使う値の単一出典。
+    # テンプレート側 selectattr の重複式 (code-quality 指摘) を解消。
+    for d in days.values():
+        d["buy_count"] = sum(1 for race in d["races"] if race["has_bet"])
+
     # S7-β-2 (2026-05-18): buy_candidates を kelly_fraction 降順でソート。
     # 強いシグナル (Kelly 高) を最上位に表示することでユーザーが最初に目にする
     # 情報の価値を高める。同 Kelly 内は発走時刻昇順。

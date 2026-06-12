@@ -120,12 +120,23 @@ class CancelledError(Exception):
     pass
 
 
+# GUI ミニ backtest の統計ガード閾値。表示文字列も Python 側で組み立てて
+# JS に渡す (閾値 30 が Python 判定と JS 表示文字列に二重直書きになる事故防止)。
+BT_LOW_N_THRESHOLD = 30
+BT_LOW_N_NOTE = f"n<{BT_LOW_N_THRESHOLD} 参考値"
+# anchor (確定データの最新日) が表示対象日からこれ以上古いと警告表示
+BT_ANCHOR_STALE_DAYS = 7
+
+
 def _normalize_date(value: object) -> str:
     return "".join(ch for ch in str(value or "") if ch.isdigit())
 
 
 def _error_hint(e: Exception) -> str:
     text = f"{type(e).__name__}: {e}"
+    if "venv64" in text or "did not emit JSON" in text:
+        return ("予想 HTML 生成 (.venv64) で失敗しています。.venv64/Scripts/python.exe の存在と、"
+                "コンソールで `python -m web.generator --no-publish` が単体で通るか確認してください。")
     if "JVInit" in text or "JV-Link" in text:
         return "JV-Link が起動できません。JV-Link の設定と 32bit Python で起動しているか確認してください。"
     if "32" in text and "bit" in text:
@@ -365,8 +376,25 @@ class Api:
             (to_date,),
         ).fetchone()[0]
         label = f"{(anchor or to_date)[:6]}月" if range_key == "month" else f"直近{range_key}日"
+        # anchor 鮮度: 「直近3日」と表示しながら実は数週間前の確定データを
+        # 見せている事故の検知 (validation-process-auditor 5 回持ち越し分)。
+        anchor_age_days = None
+        if anchor:
+            try:
+                anchor_age_days = (
+                    datetime.strptime(to_date, "%Y%m%d") - datetime.strptime(anchor, "%Y%m%d")
+                ).days
+            except ValueError:
+                anchor_age_days = None
+        anchor_stale = anchor_age_days is not None and anchor_age_days > BT_ANCHOR_STALE_DAYS
+        common = {
+            "label": label,
+            "low_n_note": BT_LOW_N_NOTE,
+            "anchor_age_days": anchor_age_days,
+            "anchor_stale": anchor_stale,
+        }
         if not anchor:
-            return {"label": label, "races": 0, "wins": 0, "top3": 0, "return_rate": 0, "low_n": True}
+            return {**common, "races": 0, "wins": 0, "top3": 0, "return_rate": 0, "low_n": True}
         if range_key == "month":
             start_date = anchor[:6] + "01"
         else:
@@ -388,7 +416,7 @@ class Api:
         ).fetchall()
         dates = sorted([r["d"] for r in rows])
         if not dates:
-            return {"label": label, "races": 0, "wins": 0, "top3": 0, "return_rate": 0, "low_n": True}
+            return {**common, "races": 0, "wins": 0, "top3": 0, "return_rate": 0, "low_n": True}
         races = list_races(conn, dates[0], dates[-1], jra_only=True)
         date_set = set(dates)
         feature_cache: dict = {}
@@ -409,7 +437,7 @@ class Api:
                 top3 += 1
             payout += get_payout(conn, race, top.horse_num, "tan")
         return {
-            "label": label,
+            **common,
             "period": f"{dates[0]}-{dates[-1]}",
             # この backtest は **全確定レースで本命 (preds[0]) を単勝 100 円**。
             # 上段「買い候補」の EV/Kelly/オッズ フィルタは一切通していないため、
@@ -422,9 +450,9 @@ class Api:
             "win_rate": round(wins / total * 100, 1) if total else 0,
             "top3_rate": round(top3 / total * 100, 1) if total else 0,
             "return_rate": round(payout / (total * 100) * 100, 1) if total else 0,
-            # n<30 は統計的に参考にならない (回収率の分散が巨大)。
-            # JS 側で「n少・参考値」をマーキングする。
-            "low_n": total < 30,
+            # 件数が少ない回収率は分散が巨大で参考にならない。
+            # JS 側で low_n_note (Python 組み立て) をマーキングする。
+            "low_n": total < BT_LOW_N_THRESHOLD,
         }
 
     def _surface_label(self, code: str | None) -> str:
@@ -1983,7 +2011,8 @@ CONTROL_HTML = """<!doctype html>
   function renderBacktest(bt) {
     if (!bt) return;
     var btPeriod = bt.period ? esc(bt.label) + ' ' + esc(bt.period) : esc(bt.label || '-');
-    if (bt.low_n) btPeriod += ' <span class="low-n">n&lt;30 参考値</span>';
+    if (bt.low_n) btPeriod += ' <span class="low-n">' + esc(bt.low_n_note || 'n少 参考値') + '</span>';
+    if (bt.anchor_stale) btPeriod += ' <span class="low-n">確定データ' + esc(bt.anchor_age_days) + '日前</span>';
     byId('backtest').innerHTML = '<div class="seg">' +
       ['3', '7', '30', 'month'].map(function (v) {
         return '<button type="button" data-range="' + esc(v) + '" class="' + (backtestRange === v ? 'active' : '') + '">' + (v === 'month' ? '当月' : v + '日') + '</button>';

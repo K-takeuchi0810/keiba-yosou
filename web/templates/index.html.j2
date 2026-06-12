@@ -96,7 +96,7 @@
   .day-nav::-webkit-scrollbar { display: none; }
   .day-nav a {
     flex: 0 0 auto;
-    padding: 0.25rem 0.6rem;
+    padding: 0.45rem 0.7rem;
     border: 1px solid var(--border);
     border-radius: 999px;
     background: var(--card);
@@ -105,6 +105,10 @@
     text-decoration: none;
   }
   .day-nav a .nav-buy { color: var(--buy-board-fg); font-weight: 700; }
+  /* アンカー遷移時に sticky ヘッダの下へ着地点が潜らないようオフセット確保。
+     モバイル実測 (375px) でヘッダ 166px (filter-summary 2 行折返し時) が
+     最悪値なので 176px 着地 = ~10px クリアランス */
+  .day-section, details.race { scroll-margin-top: 11rem; }
   main { padding: 0.5rem; max-width: 720px; margin: 0 auto; }
   .buy-board {
     margin: 0.5rem 0 1rem;
@@ -195,7 +199,7 @@
   .filter-summary {
     margin-top: 0.3rem;
     padding: 0.2rem 0.5rem;
-    background: var(--bg-mute, rgba(127,127,127,.08));
+    background: var(--bg-mute);
     border-left: 3px solid var(--buy-board-fg);
     font-size: 0.72rem;
     color: var(--fg-mute);
@@ -259,7 +263,9 @@
   .day-buy-count {
     font-size: 0.78rem;
     font-weight: 700;
-    background: rgba(255,255,255,.18);
+    /* 暗色チップ: accent 背景上で白文字のコントラストを確保
+       (dark モードの rgba(255,255,255,.18) は ~2:1 で AA fail だった) */
+    background: rgba(0,0,0,.28);
     border-radius: 999px;
     padding: 0.08rem 0.55rem;
     white-space: nowrap;
@@ -444,8 +450,7 @@
   {% if days | length > 1 %}
   <nav class="day-nav">
     {% for day in days %}
-    {% set day_buys = day.races | selectattr('has_bet') | list | length %}
-    <a href="#day-{{ loop.index }}">{{ day.date[5:] }} {{ day.track }}{% if day_buys %} <span class="nav-buy">買{{ day_buys }}</span>{% endif %}</a>
+    <a href="#day-{{ loop.index }}">{{ day.date[5:] }} {{ day.track }}{% if day.buy_count %} <span class="nav-buy">買{{ day.buy_count }}</span>{% endif %}</a>
     {% endfor %}
   </nav>
   {% endif %}
@@ -504,8 +509,7 @@
 {% endif %}
 {% for day in days %}
   <section class="day-section" id="day-{{ loop.index }}">
-    {% set day_buys = day.races | selectattr('has_bet') | list | length %}
-    <h2><span>{{ day.date }}（{{ day.weekday }}）{{ day.track }}</span>{% if day_buys %}<span class="day-buy-count">買い候補 {{ day_buys }}</span>{% endif %}</h2>
+    <h2><span>{{ day.date }}（{{ day.weekday }}）{{ day.track }}</span>{% if day.buy_count %}<span class="day-buy-count">買い候補 {{ day.buy_count }}</span>{% endif %}</h2>
     {% for race in day.races %}
     <details id="{{ race.anchor }}" class="race {% if race.has_bet %}buy-race{% endif %}">
       <summary class="race-head">
