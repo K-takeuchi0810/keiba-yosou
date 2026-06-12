@@ -181,6 +181,8 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
     horses_by_race: dict[tuple, list] = {}
     top_picks_by_race: dict[tuple, list] = {}
     tentative_by_race: dict[tuple, bool] = {}
+    # オッズ鮮度 (max_odds_age_min) だけで買い候補から落ちた件数
+    stale_suppressed = 0
     # race_key → race dict のマップ（特徴量計算で必要）
     race_by_key: dict[tuple, dict] = {}
     with open_db() as conn:
@@ -249,19 +251,24 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
                 if horse_for_pred is None:
                     continue
                 tent = tentative_by_race.get(key, False)
+                bet_ok = is_buy_candidate(
+                    p, horse_for_pred, tent, race=race_dict, now=datetime.now())
+                # 鮮度だけで落ちた候補を数える (now なし評価なら通る場合)。
+                # 「候補ゼロ」と「オッズが古いだけ」をユーザが区別できるように
+                # テンプレートで件数を出す。
+                if not bet_ok and is_buy_candidate(
+                        p, horse_for_pred, tent, race=race_dict):
+                    stale_suppressed += 1
                 top_picks_for_race.append({
                     "mark": p.mark,
                     "num": p.horse_num.lstrip("0") or "0",
                     "name": horse_for_pred.get("horse_name", ""),
                     "odds": (horse_for_pred.get("win_odds", 0) or 0) / 10.0,
                     "popularity": horse_for_pred.get("win_popularity", 0) or 0,
-                    # now を渡してオッズ鮮度 (max_odds_age_min) も評価する。
+                    # now つき評価 = オッズ鮮度 (max_odds_age_min) 込み。
                     # 旧実装は鮮度未評価で、古いオッズの候補が公開 HTML に
                     # 出うる経路乖離があった (2026-06-13 v2 監査指摘)。
-                    "bet_candidate": is_buy_candidate(
-                        p, horse_for_pred, tent, race=race_dict,
-                        now=datetime.now(),
-                    ),
+                    "bet_candidate": bet_ok,
                     "rationale": _trim_rationale(p.rationale),
                     "confidence": p.confidence,
                     "confidence_gap": p.confidence_gap,
@@ -371,6 +378,7 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
         "buy_candidates": buy_candidates,
         "days": list(days.values()),
         "filter_summary": filter_summary,
+        "stale_suppressed": stale_suppressed,
         "version_info": version_info,
         "portfolio_info": portfolio_info,
     }

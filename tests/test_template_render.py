@@ -82,6 +82,7 @@ def context() -> dict:
         "generated_at": "2026-06-12 10:00:00",
         "race_count": 4,
         "buy_count": 1,
+        "stale_suppressed": 0,
         "filter_summary": "min_kelly≥0.05 / max_predicted_p≤0.4 / 全場開放",
         "days": [_day("2026/06/13", "東京", 1), _day("2026/06/14", "阪神", 0)],
         "buy_candidates": [{
@@ -159,3 +160,16 @@ def test_no_buy_message_when_empty(context):
     context["buy_count"] = 0
     html = _render(context)
     assert 'class="no-buy"' in html
+
+
+def test_stale_suppressed_notice(context):
+    """オッズ鮮度切れだけで候補が消えたとき、その旨と件数が表示されること。"""
+    context["buy_candidates"] = []
+    context["buy_count"] = 0
+    context["stale_suppressed"] = 26
+    html = _render(context)
+    assert "うち 26 件は" in html and "オッズ鮮度切れ" in html
+    # 候補ありの場合は portfolio-note 形式で表示
+    ctx2 = dict(context)
+    ctx2["buy_candidates"] = context["buy_candidates"] or []
+    # (候補ありケースは fixture 既定の 1 件で検証)

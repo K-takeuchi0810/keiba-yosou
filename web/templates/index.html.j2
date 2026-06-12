@@ -488,6 +488,9 @@
       {% if portfolio_info.any_over_cap %}<br>⚠ 1日上限 {{ "%.0f"|format(portfolio_info.cap_pct) }}% 超過の日は、該当日内で各点を表示倍率に縮小推奨。{% endif %}
     </div>
     {% endif %}
+    {% if stale_suppressed %}
+    <div class="portfolio-note">⚠ 他に {{ stale_suppressed }} 件がオッズ鮮度切れのみを理由に除外されています (最新オッズ取得後に再生成で復帰)。</div>
+    {% endif %}
     {% for b in buy_candidates %}
       <a class="buy-card" href="#{{ b.anchor }}">
         <div class="buy-card-main">
@@ -514,7 +517,8 @@
   </section>
   {% endif %}
 {% else %}
-  <section class="no-buy">表示中の期間に買い候補はありません。予想印は下に表示していますが、EV/信頼度条件を満たすレースは見送り判定です。</section>
+  <section class="no-buy">表示中の期間に買い候補はありません。予想印は下に表示していますが、EV/信頼度条件を満たすレースは見送り判定です。
+  {%- if stale_suppressed %}<br>⚠ うち {{ stale_suppressed }} 件は<strong>オッズ鮮度切れ</strong>のみが理由で除外されています。最新オッズ取得後に再生成すると候補に戻る可能性があります。{% endif %}</section>
 {% endif %}
 {% for day in days %}
   <section class="day-section" id="day-{{ loop.index }}">
