@@ -1,154 +1,93 @@
 {
-  "type": "bin",
-  "bin_size": 0.05,
-  "min_count": 20,
-  "source_count": 142713,
-  "brier_score": 0.021864,
-  "log_loss": 0.120761,
-  "bins": [
-    {
-      "lower": 0.0,
-      "upper": 0.05,
-      "count": 70165,
-      "avg_probability": 0.0375,
-      "calibrated_probability": 0.0175
-    },
-    {
-      "lower": 0.05,
-      "upper": 0.1,
-      "count": 47390,
-      "avg_probability": 0.0691,
-      "calibrated_probability": 0.0116
-    },
-    {
-      "lower": 0.1,
-      "upper": 0.15,
-      "count": 13175,
-      "avg_probability": 0.1201,
-      "calibrated_probability": 0.0133
-    },
-    {
-      "lower": 0.15,
-      "upper": 0.2,
-      "count": 5213,
-      "avg_probability": 0.1721,
-      "calibrated_probability": 0.0238
-    },
-    {
-      "lower": 0.2,
-      "upper": 0.25,
-      "count": 3128,
-      "avg_probability": 0.2227,
-      "calibrated_probability": 0.0253
-    },
-    {
-      "lower": 0.25,
-      "upper": 0.3,
-      "count": 1830,
-      "avg_probability": 0.2734,
-      "calibrated_probability": 0.0372
-    },
-    {
-      "lower": 0.3,
-      "upper": 0.35,
-      "count": 1177,
-      "avg_probability": 0.3192,
-      "calibrated_probability": 0.0323
-    },
-    {
-      "lower": 0.35,
-      "upper": 0.4,
-      "count": 525,
-      "avg_probability": 0.3729,
-      "calibrated_probability": 0.0286
-    },
-    {
-      "lower": 0.4,
-      "upper": 0.45,
-      "count": 93,
-      "avg_probability": 0.4168,
-      "calibrated_probability": 0.0538
-    },
-    {
-      "lower": 0.45,
-      "upper": 0.5,
-      "count": 15,
-      "avg_probability": 0.4689,
-      "calibrated_probability": 0.4689
-    },
-    {
-      "lower": 0.5,
-      "upper": 0.55,
-      "count": 2,
-      "avg_probability": 0.5063,
-      "calibrated_probability": 0.5063
-    },
-    {
-      "lower": 0.55,
-      "upper": 0.6,
-      "count": 0,
-      "avg_probability": 0.0,
-      "calibrated_probability": 0.0
-    },
-    {
-      "lower": 0.6,
-      "upper": 0.65,
-      "count": 0,
-      "avg_probability": 0.0,
-      "calibrated_probability": 0.0
-    },
-    {
-      "lower": 0.65,
-      "upper": 0.7,
-      "count": 0,
-      "avg_probability": 0.0,
-      "calibrated_probability": 0.0
-    },
-    {
-      "lower": 0.7,
-      "upper": 0.75,
-      "count": 0,
-      "avg_probability": 0.0,
-      "calibrated_probability": 0.0
-    },
-    {
-      "lower": 0.75,
-      "upper": 0.8,
-      "count": 0,
-      "avg_probability": 0.0,
-      "calibrated_probability": 0.0
-    },
-    {
-      "lower": 0.8,
-      "upper": 0.85,
-      "count": 0,
-      "avg_probability": 0.0,
-      "calibrated_probability": 0.0
-    },
-    {
-      "lower": 0.85,
-      "upper": 0.9,
-      "count": 0,
-      "avg_probability": 0.0,
-      "calibrated_probability": 0.0
-    },
-    {
-      "lower": 0.9,
-      "upper": 0.95,
-      "count": 0,
-      "avg_probability": 0.0,
-      "calibrated_probability": 0.0
-    },
-    {
-      "lower": 0.95,
-      "upper": 1.0,
-      "count": 0,
-      "avg_probability": 0.0,
-      "calibrated_probability": 0.0
-    }
+  "type": "isotonic",
+  "x_knots": [
+    0.000336,
+    0.035445,
+    0.035475,
+    0.060872,
+    0.060873,
+    0.076896,
+    0.076898,
+    0.080908,
+    0.08091,
+    0.081397,
+    0.081398,
+    0.093659,
+    0.09366,
+    0.09681,
+    0.096814,
+    0.114268,
+    0.114281,
+    0.114992,
+    0.114998,
+    0.142788,
+    0.142807,
+    0.162658,
+    0.16266,
+    0.174844,
+    0.17485,
+    0.183267,
+    0.18327,
+    0.293443,
+    0.293496,
+    0.300586,
+    0.30065,
+    0.908615
   ],
-  "trained_from": "20210101",
-  "trained_to": "20231231",
-  "generated_at": "2026-05-12T23:12:38",
-  "rule_version": "p07-train-21-23"
+  "y_knots": [
+    0.0,
+    0.0,
+    0.0002743735138101335,
+    0.0002743735138101335,
+    0.0031124130355181254,
+    0.0031124130355181254,
+    0.004542013626040878,
+    0.004542013626040878,
+    0.007518796992481203,
+    0.007518796992481203,
+    0.010068107787977496,
+    0.010068107787977496,
+    0.01282051282051282,
+    0.01282051282051282,
+    0.014234071396294623,
+    0.014234071396294623,
+    0.019230769230769232,
+    0.019230769230769232,
+    0.023823028927963695,
+    0.023823028927963695,
+    0.02545348156816852,
+    0.02545348156816852,
+    0.027796161482461945,
+    0.027796161482461945,
+    0.031862745098039214,
+    0.031862745098039214,
+    0.03488372093023256,
+    0.03488372093023256,
+    0.039473684210526314,
+    0.039473684210526314,
+    0.06540880503144654,
+    0.06540880503144654
+  ],
+  "source_count": 48058,
+  "brier_score": 0.028802,
+  "log_loss": 0.149149,
+  "trained_from": "20250101",
+  "trained_to": "20251231",
+  "generated_at": "2026-05-17T12:51:53",
+  "rule_version": "p17_A2_records_2025_isotonic",
+  "calibrator_type": "isotonic",
+  "source_records_meta": {
+    "calibrator_type": "bin",
+    "calibrator_rule_version": "p07-train-21-23",
+    "calibrator_generated_at": "2026-05-12T23:12:38",
+    "calibrator_trained_from": "20210101",
+    "calibrator_trained_to": "20231231",
+    "calibrator_source_count": 142713,
+    "lgbm_rule_version": "lgbm-v5-tier23",
+    "lgbm_generated_at": "2026-05-16T08:54:23",
+    "lgbm_trained_from": "20210101",
+    "lgbm_trained_to": "20231231",
+    "lgbm_val_brier": 0.060627912231015935,
+    "git_sha": "d3e0dd124bea8f8f5e72abd38b494d140a6b34be"
+  }
 }

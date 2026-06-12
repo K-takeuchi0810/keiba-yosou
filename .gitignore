@@ -38,3 +38,7 @@ docs/*
 
 # 生成物 (web/generator.py が render 毎に再生成)
 web/dist/
+
+# calibrator refit の入力 records (数 MB 級)。DB + filtered JSON の meta から
+# 再生成可能なため untracked とする (2026-06-13)
+data/backtest/*_records.json
