@@ -68,8 +68,11 @@ def _is_bet_candidate(pred, horse: dict, tentative: bool, race: dict) -> bool:
     本関数は後方互換のためのラッパー (scripts/predict.py 外から `_is_bet_candidate` で
     参照されていたかもしれないため残す)。新規コードは `is_buy_candidate` を直接呼ぶ。
     """
+    from datetime import datetime
+
     from predictor.filter import is_buy_candidate
-    return is_buy_candidate(pred, horse, tentative, race=race)
+    # CLI 予想はライブ運用なので now を渡してオッズ鮮度も評価する (2026-06-13)
+    return is_buy_candidate(pred, horse, tentative, race=race, now=datetime.now())
 
 
 def latest_race_date(conn) -> str | None:

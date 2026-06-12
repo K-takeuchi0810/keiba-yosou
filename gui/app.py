@@ -49,7 +49,8 @@ _VENV64_PYTHON = _PROJECT_ROOT / ".venv64" / "Scripts" / "python.exe"
 
 def _run_render_in_venv64(from_date: str | None, to_date: str | None,
                          publish: bool = True,
-                         cancel_check=None) -> dict:
+                         cancel_check=None,
+                         on_elapsed=None) -> dict:
     """render() を .venv64 subprocess で実行し、結果 dict を返す。
 
     なぜ subprocess: GUI は pywebview 制約で .venv32 (Python 3.13 32-bit) で
@@ -84,12 +85,17 @@ def _run_render_in_venv64(from_date: str | None, to_date: str | None,
         cwd=str(_PROJECT_ROOT), env=child_env,
     )
     # communicate(timeout) ループ: pipe デッドロックを避けつつ
-    # 0.5 秒ごとに cancel_check を差し込む。
+    # 0.5 秒ごとに cancel_check と経過通知 (on_elapsed) を差し込む。
+    # 予想生成は最長ステージ (分単位) なのに従来は静止表示のままで
+    # 「固まったように見える」UX だった (2026-06-13 v2 監査指摘)。
+    start = time.time()
     while True:
         try:
             stdout, stderr = proc.communicate(timeout=0.5)
             break
         except subprocess.TimeoutExpired:
+            if on_elapsed is not None:
+                on_elapsed(time.time() - start)
             if cancel_check is None:
                 continue
             try:
@@ -118,6 +124,10 @@ def _run_render_in_venv64(from_date: str | None, to_date: str | None,
 
 class CancelledError(Exception):
     pass
+
+
+class BusyError(Exception):
+    """別アクション実行中の二重起動。_safe が status を触らずに返すための専用型。"""
 
 
 # GUI ミニ backtest の統計ガード閾値。表示文字列も Python 側で組み立てて
@@ -156,6 +166,10 @@ def _safe(fn):
     def wrapper(*args, **kwargs):
         try:
             return fn(*args, **kwargs)
+        except BusyError as e:
+            # 実行中アクションの status には触らない (上書きすると走っている
+            # 本体の running 表示・キャッシュが壊れる)。busy はそのまま返す。
+            return {"ok": False, "busy": True, "message": str(e)}
         except CancelledError:
             if args and hasattr(args[0], "_set_status"):
                 # 中止 = ingest 途中の可能性。部分取込み DB で再充填された
@@ -207,6 +221,14 @@ class Api:
         self._cache_gen = 0
 
     def _begin_run(self) -> None:
+        # Python 側の二重実行ガード。JS の「refreshStatus → disable」の間の
+        # TOCTOU 窓 (数十 ms) で 2 操作が滑り込むと JV-Link COM が二重 Open
+        # しうるため、running フラグの check-and-set を lock 内で原子的に行う
+        # (2026-06-13 v2 監査 gui-ux 指摘の閉鎖)。
+        with self._status_lock:
+            if self._status.get("running"):
+                raise BusyError("別の処理が実行中です。完了後に再実行してください。")
+            self._status["running"] = True
         self._cancel_event.clear()
         self._progress_samples = []
         self._invalidate_caches()
@@ -334,32 +356,19 @@ class Api:
         filters: dict | None = None,
         race: dict | None = None,
     ) -> bool:
-        """買い候補判定。S7-α-2 (2026-05-18) で predictor.filter.is_buy_candidate に集約。
+        """買い候補判定。predictor.filter.is_buy_candidate に全面委譲。
 
-        gui/app.py 特有の odds_age チェック (BUY_FILTER_DEFAULT["max_odds_age_min"]) は
-        集約関数に持っていないので、ここで先に評価する。
+        オッズ鮮度 (max_odds_age_min) も 2026-06-13 に集約関数へ統合済み
+        (now を渡すとライブ評価)。GUI 独自実装は持たない。
         """
-        filters = filters or {}
-        # gui 特有: odds の取得時刻 age チェック (古いオッズの予想を弾く)
-        odds_age = self._odds_age_minutes(horse.get("odds_fetched_at"))
-        max_age_min = int(filters.get("max_odds_age_min", BUY_FILTER_DEFAULT["max_odds_age_min"]))
-        if odds_age is not None and odds_age > max_age_min:
-            return False
-        # 残りは集約関数 (rank / mark / tentative / whitelist / value / ev / odds /
-        # kelly / max_predicted_p / popularity / kelly>0) に委譲
         from predictor.filter import is_buy_candidate
-        # filters が空 dict の場合は BUY_FILTER_DEFAULT を使う
         spec = filters if filters else None
-        return is_buy_candidate(pred, horse, tentative, race=race, filter_spec=spec)
+        return is_buy_candidate(
+            pred, horse, tentative, race=race, filter_spec=spec, now=datetime.now())
 
     def _odds_age_minutes(self, fetched_at: str | None) -> int | None:
-        if not fetched_at:
-            return None
-        try:
-            dt = datetime.fromisoformat(str(fetched_at))
-        except ValueError:
-            return None
-        return max(0, int((datetime.now() - dt).total_seconds() // 60))
+        from predictor.filter import odds_age_minutes
+        return odds_age_minutes(fetched_at, datetime.now())
 
     def _recent_backtest(self, conn, to_date: str, range_key: str = "3") -> dict:
         # 確定済みレースは to_date (= 予想対象日 = 当日/未来) の近辺には無く、
@@ -967,8 +976,12 @@ class Api:
         from_date = _normalize_date(options.get("from_date")) or None
         to_date = _normalize_date(options.get("to_date")) or from_date
         self._set_status("予想HTMLを生成中... (.venv64 で LightGBM 実行)", "prediction", running=True)
-        result = _run_render_in_venv64(from_date, to_date, publish=False,
-                                       cancel_check=self._check_cancel)
+        result = _run_render_in_venv64(
+            from_date, to_date, publish=False,
+            cancel_check=self._check_cancel,
+            on_elapsed=lambda s: self._set_status(
+                f"予想HTMLを生成中... 経過 {int(s)}秒 (.venv64 で LightGBM 実行)",
+                "prediction", running=True))
         msg = f"生成: {result.get('rendered')}"
         if result.get("warning"):
             msg = f"{msg} (警告: {result['warning']})"
@@ -1014,8 +1027,12 @@ class Api:
         to_date = _normalize_date(options.get("to_date")) or from_date
         self._set_status("一括実行: 予想生成 + 公開中... (.venv64 で LightGBM)", "prediction", running=True)
         # subprocess で .venv64 を呼び LightGBM v5 ensemble 予測 + iCloud 公開を一括実行
-        result = _run_render_in_venv64(from_date, to_date, publish=True,
-                                       cancel_check=self._check_cancel)
+        result = _run_render_in_venv64(
+            from_date, to_date, publish=True,
+            cancel_check=self._check_cancel,
+            on_elapsed=lambda s: self._set_status(
+                f"一括実行: 予想生成 + 公開中... 経過 {int(s)}秒 (.venv64 で LightGBM)",
+                "prediction", running=True))
         rendered = result.get("rendered")
         published = result.get("published") or "(skipped)"
         now = datetime.now().strftime("%H:%M:%S")
@@ -1050,7 +1067,10 @@ CONTROL_HTML = """<!doctype html>
     --border-soft: #d4dae1;
     --text:        #1f242b;
     --text-dim:    #545c67;
-    --text-mute:   #7d8591;
+    /* 旧 #7d8591 は surface 上 3.73:1 / bg 上 3.17:1 で WCAG AA (4.5:1) fail。
+       metric ラベル・ETA・hint 等の機能テキストに使われるため #5d6570
+       (surface 5.90 / surface-2 5.11 / bg 5.02) に変更 (2026-06-13 実測)。 */
+    --text-mute:   #5d6570;
     --accent:      #5b626d;
     --accent-hi:   #374151;
     --accent-soft: rgba(55,65,81,.10);
@@ -1745,7 +1765,7 @@ CONTROL_HTML = """<!doctype html>
 </div>
 
 <div class="status-row">
-  <div id="status">準備完了。</div>
+  <div id="status" role="status" aria-live="polite">準備完了。</div>
   <button id="cancelBtn" type="button" onclick="cancelRun()">中止</button>
   <div id="progressWrap" class="progress-wrap"><div id="progressBar"></div></div>
   <div id="progressText"></div>

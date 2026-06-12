@@ -44,10 +44,9 @@
     "third": 0
   },
   "final3f": {
-    "_comment": "上がり 3F の評価。sprint バケットでは sprint_multiplier 倍",
+    "_comment": "上がり 3F の評価。旧 sprint_multiplier (1.5) は 2026-06-13 の ablation で削除 (2025val 無影響 / 2026 PROD は無い方が all +3.7pt。導入根拠が n=25 で過適合的だった)",
     "elite": 4,
-    "good": 2,
-    "sprint_multiplier": 1.5
+    "good": 2
   },
   "confidence": {
     "_comment": "「高信頼」と判定する閾値。直近で大外しが多かったので厳しく",
@@ -57,8 +56,6 @@
     "negative_gap": 28
   },
   "risk": {
-    "graded_unproven_penalty": 5,
-    "long_unproven_penalty": 4,
     "long_value_penalty": 10,
     "graded_value_penalty": 10,
     "op_value_penalty": 8,

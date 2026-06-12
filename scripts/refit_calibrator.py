@@ -33,6 +33,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from predictor.calibration import fit_isotonic_calibrator
+from predictor.rules import RULES_VERSION
 
 
 CALIBRATOR_PATH = Path(__file__).resolve().parent.parent / "predictor" / "calibrator.json"
@@ -83,6 +84,9 @@ def main() -> int:
         "trained_to": data.get("to_date"),
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "rule_version": rule_version,
+        # fit 時点の予想ルール版。predictor.rules._load_calibrator が現行
+        # RULES_VERSION と照合し、不一致なら「旧 mapping を別分布に適用」警告を出す。
+        "expected_rules_version": RULES_VERSION,
         "calibrator_type": "isotonic",
         # 後追い再現用に元 records の出自を残す
         "source_records_meta": data.get("meta", {}),

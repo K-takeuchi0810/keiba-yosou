@@ -18,6 +18,10 @@
     --card: #ffffff;
     --border: #e0e0e0;
     --accent: #1a5fb4;
+    /* 白文字を載せる塗り背景用。dark では --accent が明色 (#6aa6ff) になり
+       白文字 2.47:1 で AA fail するため、塗り用は別トークンで濃色を維持する
+       (2026-06-13 v2 監査でコントラスト全ペア実測し是正)。 */
+    --accent-bg: #1a5fb4;
     --turf: #2a8a4f;
     --dirt: #b07b3a;
     --jump: #6a3eb0;
@@ -39,6 +43,7 @@
       --card: #232323;
       --border: #383838;
       --accent: #6aa6ff;
+      --accent-bg: #1f5aa8;
       /* ダークモードでも見える「買い」アクセント。背景が黒系なので
          pinkish 背景は捨て、グレー枠 + 強アクセント文字で表現。 */
       --buy-board-bg: #2b1c1c;
@@ -47,7 +52,11 @@
       --tag-bg: #2d2d2d;
       --tag-fg: #cfd4dc;
       --top-picks-bg: rgba(106,166,255,.10);
-      --grade: #ff8a7a;
+      /* --grade の dark 上書き (#ff8a7a) は 2026-06-13 に削除。
+         --grade は全箇所が「白文字を載せる塗り」用途で、明色化すると
+         買い候補ボード等 6 種が 白/2.29:1 の AA fail になっていた。
+         dark でも #c0392b のまま (白文字 5.4:1 / 背景との分離 3.3:1)。
+         テキスト用の赤は --buy-board-fg が担う。 */
       --turf: #4cb96f;
       --dirt: #d0975a;
       --jump: #b591f0;
@@ -74,7 +83,7 @@
   header h1 { margin: 0 0 0.15rem; font-size: 1.1rem; display: inline-block; margin-right: 0.6rem; }
   .updated {
     display: inline-block;
-    background: var(--accent); color: #fff;
+    background: var(--accent-bg); color: #fff;
     padding: 0.15rem 0.5rem; border-radius: 4px;
     font-size: 0.85rem; font-weight: 600;
     font-variant-numeric: tabular-nums;
@@ -252,7 +261,7 @@
     font-size: 1rem;
     margin: 0 0 0.5rem;
     padding: 0.4rem 0.6rem;
-    background: var(--accent);
+    background: var(--accent-bg);
     color: #fff;
     border-radius: 6px;
     display: flex;
@@ -536,7 +545,7 @@
           {% if race.tentative %}<div class="tent-tag-line"><span class="tent-tag">暫定</span> 予想根拠が薄いためマイニング/オッズ確定後に再生成してください</div>{% endif %}
           {% for p in race.top_picks %}
             <div class="top-pick">
-              <div class="pick-line"><span class="mark">{{ p.mark }}</span><span class="pick-num">{{ p.num }}</span> {{ p.name }}<span class="odds-note">{{ "%.1f"|format(p.odds) }}倍{% if p.popularity %} {{ p.popularity }}人気{% endif %}</span>{% if p.win_probability %}<span class="conf-tag">P {{ "%.1f"|format(p.win_probability * 100) }}%</span>{% endif %}{% if p.expected_value %}<span class="conf-tag">EV {{ "%.2f"|format(p.expected_value) }}</span>{% endif %}{% if p.confidence %}<span class="conf-tag">{{ p.confidence }}</span>{% endif %}{% if p.bet_candidate %}<span class="bet-tag">買い</span>{% endif %}</div>
+              <div class="pick-line"><span class="mark">{{ p.mark }}</span><span class="pick-num">{{ p.num }}</span> {{ p.name }}<span class="odds-note">{% if p.odds %}{{ "%.1f"|format(p.odds) }}倍{% else %}オッズ未確定{% endif %}{% if p.popularity %} {{ p.popularity }}人気{% endif %}</span>{% if p.win_probability %}<span class="conf-tag">P {{ "%.1f"|format(p.win_probability * 100) }}%</span>{% endif %}{% if p.expected_value %}<span class="conf-tag">EV {{ "%.2f"|format(p.expected_value) }}</span>{% endif %}{% if p.confidence %}<span class="conf-tag">{{ p.confidence }}</span>{% endif %}{% if p.bet_candidate %}<span class="bet-tag">買い</span>{% endif %}</div>
               <div class="pick-reason">{{ p.rationale }}</div>
             </div>
           {% endfor %}

@@ -47,15 +47,10 @@ TEMPLATES = Path(__file__).resolve().parent / "templates"
 # シンボル名はそのまま残し、実体を config からたどる薄いシムにしている。
 # None なら「制約なし」を意味するため、odds は (-inf, +inf) へフォールバック、
 # value / ev も -inf。2026-05-16 P15 採用以降は min_odds / max_odds 共に None。
-_mo = BUY_FILTER_DEFAULT.get("min_odds")
-BET_MIN_ODDS: float = float(_mo) if _mo is not None else float("-inf")
-_xo = BUY_FILTER_DEFAULT.get("max_odds")
-BET_MAX_ODDS: float = float(_xo) if _xo is not None else float("inf")
-_mv = BUY_FILTER_DEFAULT.get("min_value")
-BET_MIN_VALUE: float = float(_mv) if _mv is not None else float("-inf")
-_me = BUY_FILTER_DEFAULT.get("min_ev")
-BET_MIN_EV: float = float(_me) if _me is not None else float("-inf")
-BET_MAX_ODDS_AGE_MIN: int = int(BUY_FILTER_DEFAULT.get("max_odds_age_min") or 30)
+# 旧 BET_MIN_ODDS / BET_MAX_ODDS / BET_MIN_VALUE / BET_MIN_EV /
+# BET_MAX_ODDS_AGE_MIN は 2026-06-13 に削除 (全箇所 dead constant 化していた)。
+# 買い目フィルタの単一出典は config.BUY_FILTER_DEFAULT +
+# predictor.filter.is_buy_candidate であり、ここに定数を複製しない。
 SYNC_DIAGNOSTIC_RETENTION = 20
 
 
@@ -260,8 +255,12 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
                     "name": horse_for_pred.get("horse_name", ""),
                     "odds": (horse_for_pred.get("win_odds", 0) or 0) / 10.0,
                     "popularity": horse_for_pred.get("win_popularity", 0) or 0,
+                    # now を渡してオッズ鮮度 (max_odds_age_min) も評価する。
+                    # 旧実装は鮮度未評価で、古いオッズの候補が公開 HTML に
+                    # 出うる経路乖離があった (2026-06-13 v2 監査指摘)。
                     "bet_candidate": is_buy_candidate(
-                        p, horse_for_pred, tent, race=race_dict
+                        p, horse_for_pred, tent, race=race_dict,
+                        now=datetime.now(),
                     ),
                     "rationale": _trim_rationale(p.rationale),
                     "confidence": p.confidence,

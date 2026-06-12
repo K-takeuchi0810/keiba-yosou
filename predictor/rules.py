@@ -31,6 +31,13 @@ logger = logging.getLogger(__name__)
 
 MARKS = ["◎", "○", "▲", "△", "☆"]
 
+# スコアリング / 特徴量の変更で raw_blended_probability の分布が変わるたびに bump する。
+# calibrator.json はこの版のスコア分布に対して fit されるため、不一致のまま運用すると
+# 「別物の分布に旧 mapping を適用」する静かな劣化が起きる (2026-06-13 v2 監査で
+# p17 fit の calibrator を p20-2 ルールに適用していた実例を検出)。
+# _load_calibrator が expected_rules_version と照合して warning を出す。
+RULES_VERSION = "p21-2026-06-13"
+
 # 環境変数で OP/重賞専用ロジック (Phase 1 / v2-grade) の有効/無効を切替可能にし、
 # v1 (旧重み) との A/B 比較ができるようにする。デフォルトは有効 (=1)。
 V2_GRADE_ENABLED = os.environ.get("V2_GRADE", "1") != "0"
@@ -432,17 +439,21 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
 
     best_3f = feat.get("best_final_3f")
     avg_3f = feat.get("avg_final_3f")
-    # 短距離 (sprint <= 1400m) は上がり脚 / トップスピードの依存度が高い。
-    # 直近 2 日の backtest で sprint 回収率 21.6% (25 戦 2 勝) と劣勢のため、
-    # sprint バケットで上がり 3F 系の評価を厚くする。
+    # 旧 sprint_multiplier (上がり 3F を sprint バケットで 1.5 倍) は
+    # 2026-06-13 の ablation で削除。導入根拠が n=25 (直近 2 日) と過適合的
+    # だったため P20-2 と同形式で検証した結果:
+    #   - 2025val (20250401-0510): ON/OFF 完全同値 (buy_only 93.1% / Brier 同値)
+    #   - 2026 PROD (20260401-0510): OFF の方が all-bets +3.7pt (84.6→88.3%)、
+    #     buy_only 47.6→47.1% は同 4 的中でノイズ域
+    # → 存在を正当化する証拠なし + 簡素化优先で撤去
+    # (evidence: data/backtest/*p21-abl-sprint-off-*.json)
     is_sprint = feat.get("current_bucket") == "sprint"
-    sprint_mul = _w("final3f.sprint_multiplier", 1.5) if is_sprint else 1.0
     if best_3f:
         if best_3f <= 345:
-            score += _w("final3f.elite", 4) * sprint_mul
+            score += _w("final3f.elite", 4)
             reasons.append(f"上がり最速級{best_3f / 10:.1f}")
         elif best_3f <= 360:
-            score += _w("final3f.good", 2) * sprint_mul
+            score += _w("final3f.good", 2)
             reasons.append(f"上がり良好{best_3f / 10:.1f}")
     if is_sprint and (feat.get("same_distance_top3", 0) or 0) == 0 and (not best_3f or best_3f > 360):
         score -= _w("risk.sprint_unproven_score_penalty", 3)
@@ -589,13 +600,19 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     # 少頭数 (< 12 頭) では人気が薄いので補正なし。
     starter_count = feat.get("current_starter_count", 0) or 0
     popularity = horse.get("win_popularity") or 0
+    # 重みが 0 (現設定: 市場エコー無効化) のときは reason も出さない。
+    # 寄与ゼロのシグナルが根拠文に出るのは虚偽表示 (2026-06-13 v2 監査指摘)。
     if starter_count >= _w("popularity.min_field", 12):
         if popularity == 1:
-            score += _w("popularity.first", 6)
-            reasons.append("市場1人気")
+            w = _w("popularity.first", 6)
+            score += w
+            if w:
+                reasons.append("市場1人気")
         elif popularity == 2:
-            score += _w("popularity.second", 3)
-            reasons.append("市場2人気")
+            w = _w("popularity.second", 3)
+            score += w
+            if w:
+                reasons.append("市場2人気")
         elif popularity == 3:
             score += _w("popularity.third", 1)
 
@@ -773,6 +790,14 @@ def _load_calibrator() -> dict | None:
             "calibrator has no trained_from/trained_to metadata. "
             "Re-fit with `python -m scripts.backtest --save-calibrator "
             "--from <train_from> --to <train_to>` to record provenance."
+        )
+    expected = data.get("expected_rules_version")
+    if expected != RULES_VERSION:
+        logger.warning(
+            "calibrator rules-version mismatch: calibrator=%s current=%s. "
+            "スコア分布が変わった後の旧 mapping を適用している可能性があります。"
+            "scripts.refit_calibrator で再 fit してください。",
+            expected, RULES_VERSION,
         )
     _CALIBRATOR_CACHE = (mtime, data)
     return data
