@@ -75,6 +75,17 @@ def _snapshot_meta() -> dict:
         meta["git_sha"] = sha
     except (subprocess.CalledProcessError, FileNotFoundError, OSError):
         meta["git_sha"] = None
+    # 挙動を変える環境変数の実行時値 (2026-06-13 v2 監査: env override が
+    # 予想経路を無言で変える — temperature/blend は calibrator の前提分布も
+    # 崩す — のに実験ログから事後検証できなかった)。設定されたものだけ記録。
+    import os as _os
+    env_keys = (
+        "PRED_PROB_TEMPERATURE", "PRED_BLEND_W_RULE", "PRED_DISABLE_CALIBRATOR",
+        "PRED_DISABLE_DISCOUNT", "PRED_DISABLE_LGBM", "PRED_CALIBRATOR_ALPHA",
+        "PRED_CALIBRATOR_MIN_COUNT", "V2_GRADE", "V2_DIST", "BET_WHITELIST",
+    )
+    overrides = {k: _os.environ[k] for k in env_keys if k in _os.environ}
+    meta["env_overrides"] = overrides  # 空 dict = デフォルト挙動の証明
     return meta
 
 

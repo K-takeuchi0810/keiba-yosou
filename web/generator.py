@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import shutil
 import sys
@@ -11,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+logger = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -457,6 +460,14 @@ def render(
     out = output_path or (WEB_DIST / "index.html")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
+    # サイズ予算の監視 (mobile-html-reviewer 3 回指摘): file:// 配信は
+    # キャッシュも遅延読込も無いため、1.5MB 超で iPhone Files の初回パースが
+    # 体感に乗り始める。超過したら warning (生成は止めない)。
+    size = out.stat().st_size
+    if size > 1_500_000:
+        logger.warning(
+            "index.html が %0.2fMB とサイズ予算 (1.5MB) を超過。対象期間の"
+            "短縮や古い開催の間引きを検討してください。", size / 1e6)
     return out
 
 
