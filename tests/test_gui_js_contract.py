@@ -89,6 +89,27 @@ def test_portfolio_keys_cover_js():
         f"JS が参照する portfolio キー {sorted(missing)} が compute_day_portfolio の返り値にない")
 
 
+def _control_html_interpreted() -> str:
+    """CONTROL_HTML を Python のエスケープ解釈**後**の文字列として取り出す。
+
+    過去 4 回再発した JS 死バグの機構は「JS 文字列内の \\n を単一バックスラッシュで
+    書くと、Python が実改行に展開して JS 文字列リテラルが割れる」というもの。
+    解釈前のソーステキストを node --check しても正当なエスケープに見えるため
+    検出できない (2026-06-13 v2 監査 code-quality 反証で発覚)。
+    gui.app の import は pywebview 依存になるので、ast.literal_eval で
+    代入式の値だけを解釈する (依存ゼロのまま解釈後を得る)。
+    """
+    import ast
+
+    tree = ast.parse(SRC)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for t in node.targets:
+                if isinstance(t, ast.Name) and t.id == "CONTROL_HTML":
+                    return ast.literal_eval(node.value)
+    raise AssertionError("CONTROL_HTML の代入が見つからない")
+
+
 def test_control_html_js_parses():
     """JS シンタックスエラーで全ボタンが死ぬ既知バグクラス (4 回以上再発) の自動検査。
 
@@ -102,14 +123,9 @@ def test_control_html_js_parses():
     node = shutil.which("node")
     if not node:
         pytest.skip("node not available")
-    html_start = SRC.index('CONTROL_HTML = """')
-    html_end = SRC.index('"""', html_start + 20)
-    html = SRC[html_start:html_end]
+    html = _control_html_interpreted()
     scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
     assert scripts, "CONTROL_HTML に <script> が見つからない"
-    # 注意: ここで取れるのは「Python エスケープ解釈前」のソース。\\n 等は
-    # 解釈後も同形なので node --check の構文判定には十分 (役割は import 不要の
-    # 簡易ゲート。厳密な解釈後検証は python-embedded-js skill が担う)。
     js = "\n".join(scripts)
     with tempfile.NamedTemporaryFile(
             "w", suffix=".js", delete=False, encoding="utf-8") as f:

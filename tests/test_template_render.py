@@ -169,7 +169,3 @@ def test_stale_suppressed_notice(context):
     context["stale_suppressed"] = 26
     html = _render(context)
     assert "うち 26 件は" in html and "オッズ鮮度切れ" in html
-    # 候補ありの場合は portfolio-note 形式で表示
-    ctx2 = dict(context)
-    ctx2["buy_candidates"] = context["buy_candidates"] or []
-    # (候補ありケースは fixture 既定の 1 件で検証)

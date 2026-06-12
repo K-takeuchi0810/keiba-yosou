@@ -94,16 +94,17 @@ def _run_render_in_venv64(from_date: str | None, to_date: str | None,
             stdout, stderr = proc.communicate(timeout=0.5)
             break
         except subprocess.TimeoutExpired:
+            # cancel_check を先に評価する (逆順だと中止押下後の 0.5 秒間
+            # 「中止しています...」が経過表示で上書きされてチラつく)
+            if cancel_check is not None:
+                try:
+                    cancel_check()
+                except BaseException:
+                    proc.kill()
+                    proc.communicate()
+                    raise
             if on_elapsed is not None:
                 on_elapsed(time.time() - start)
-            if cancel_check is None:
-                continue
-            try:
-                cancel_check()
-            except BaseException:
-                proc.kill()
-                proc.communicate()
-                raise
     if proc.returncode != 0:
         raise RuntimeError(
             f"venv64 render failed (exit {proc.returncode}):\n"
@@ -328,12 +329,20 @@ class Api:
 
     @_safe
     def cancel(self, options: dict | None = None) -> dict:
-        with self._status_lock:
-            running = bool(self._status.get("running"))
-        if not running:
-            return {"ok": True, "message": "実行中の処理はありません"}
+        # check-and-set を 1 つの lock 区間で行う。旧実装は「lock 内で読み →
+        # lock 外で running=True を書く」非原子で、その間にワーカーが正常完了
+        # すると誰も下ろさない running=True が恒久化し全ボタン disable +
+        # BusyError 永続 (再起動でしか回復しない) というロックアップ経路が
+        # あった (2026-06-13 v2 監査 gui-ux 反証で発見)。
+        # _set_status は lock 非再入のため使わず、フィールドを直接更新する。
         self._cancel_event.set()
-        self._set_status("中止しています...", "cancelling", running=True)
+        with self._status_lock:
+            if not self._status.get("running"):
+                self._cancel_event.clear()
+                return {"ok": True, "message": "実行中の処理はありません"}
+            self._status["message"] = "中止しています..."
+            self._status["stage"] = "cancelling"
+            self._status["updated_at"] = datetime.now().strftime("%H:%M:%S")
         return {"ok": True, "message": "中止要求を送信しました"}
 
     def _date_range(self, options: dict | None = None) -> tuple[str, str]:

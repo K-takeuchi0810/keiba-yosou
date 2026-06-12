@@ -54,8 +54,8 @@ def _read_baseline_brier() -> tuple[str, float] | None:
             logger.warning("baseline_brier.json の読込に失敗", exc_info=True)
     logger.warning(
         "凍結 baseline (%s) が無いため訓練時メタにフォールバックします。"
-        "計測経路が本番 pipeline と異なり閾値がずれるため、採用時の backtest "
-        "JSON から `python -m scripts.monitor --freeze-baseline <path>` で"
+        "計測経路が本番 pipeline と異なり閾値がずれるため、"
+        "`python -m scripts.monitor --freeze-baseline-days 30` で"
         "凍結してください。", BASELINE_FILE)
     lgbm_meta = PROJECT_ROOT / "predictor" / "lgbm_meta.json"
     if lgbm_meta.exists():
