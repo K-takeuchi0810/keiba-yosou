@@ -35,6 +35,11 @@ docs/*
 # Claude Code (worktree 状態 / ローカル設定は共有しない)
 .claude/worktrees/
 .claude/settings.local.json
+.claude/launch.json
+
+# 他エージェントツールのローカル設定 (Codex / agents 定義) は共有しない
+.agents/
+.codex/
 
 # 生成物 (web/generator.py が render 毎に再生成)
 web/dist/
