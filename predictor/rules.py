@@ -23,6 +23,7 @@ import math
 import json
 import sqlite3
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 from .features import compute_features
@@ -36,7 +37,7 @@ MARKS = ["◎", "○", "▲", "△", "☆"]
 # 「別物の分布に旧 mapping を適用」する静かな劣化が起きる (2026-06-13 v2 監査で
 # p17 fit の calibrator を p20-2 ルールに適用していた実例を検出)。
 # _load_calibrator が expected_rules_version と照合して warning を出す。
-RULES_VERSION = "p21-2026-06-13"
+RULES_VERSION = "p25-market-pop-score-2026-06-14"
 
 # 環境変数で OP/重賞専用ロジック (Phase 1 / v2-grade) の有効/無効を切替可能にし、
 # v1 (旧重み) との A/B 比較ができるようにする。デフォルトは有効 (=1)。
@@ -96,6 +97,30 @@ class Prediction:
     # を raw_blended_probability に切替え、校正位置不整合と確率正規化問題を
     # 同時解消する。
     raw_blended_probability: float = 0.0
+
+
+def _market_snapshot_age_min(horse: dict, feat: dict) -> int | None:
+    fetched_at = horse.get("odds_fetched_at")
+    race_date = str(feat.get("current_race_date") or "")
+    start_time = str(feat.get("current_start_time") or "").strip().zfill(4)
+    if not fetched_at or len(race_date) != 8 or len(start_time) < 4:
+        return None
+    try:
+        fetched = datetime.fromisoformat(str(fetched_at))
+        if fetched.tzinfo is not None:
+            fetched = fetched.astimezone().replace(tzinfo=None)
+        race_start = datetime.strptime(race_date + start_time[:4], "%Y%m%d%H%M")
+    except ValueError:
+        return None
+    return max(0, int((race_start - fetched).total_seconds() // 60))
+
+
+def _market_popularity_is_fresh(horse: dict, feat: dict) -> bool:
+    max_age = _w("popularity.max_snapshot_age_min", 30)
+    if max_age is None:
+        return True
+    age = _market_snapshot_age_min(horse, feat)
+    return age is not None and age <= float(max_age)
 
 
 def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
@@ -600,21 +625,24 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     # 少頭数 (< 12 頭) では人気が薄いので補正なし。
     starter_count = feat.get("current_starter_count", 0) or 0
     popularity = horse.get("win_popularity") or 0
-    # 重みが 0 (現設定: 市場エコー無効化) のときは reason も出さない。
+    # 重みが 0 (ablation 等で市場エコー無効化) のときは reason も出さない。
     # 寄与ゼロのシグナルが根拠文に出るのは虚偽表示 (2026-06-13 v2 監査指摘)。
-    if starter_count >= _w("popularity.min_field", 12):
+    if starter_count >= _w("popularity.min_field", 12) and _market_popularity_is_fresh(horse, feat):
         if popularity == 1:
-            w = _w("popularity.first", 6)
+            w = _w("popularity.first", 7)
             score += w
             if w:
                 reasons.append("市場1人気")
         elif popularity == 2:
-            w = _w("popularity.second", 3)
+            w = _w("popularity.second", 4)
             score += w
             if w:
                 reasons.append("市場2人気")
         elif popularity == 3:
-            score += _w("popularity.third", 1)
+            w = _w("popularity.third", 2)
+            score += w
+            if w:
+                reasons.append("市場3人気")
 
     return score, reasons
 

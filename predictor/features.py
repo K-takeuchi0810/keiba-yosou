@@ -986,6 +986,8 @@ def compute_features(
         "last_finish": None,
         "days_since_last": None,
         "burden_delta": None,
+        "current_race_date": before,
+        "current_start_time": (race.get("start_time") or "").strip(),
         "current_starter_count": int(race.get("starter_count") or 0),
         "current_race_level": _race_level(race.get("grade_code"), race.get("race_symbol_code")),
         "current_distance": int(race.get("distance") or 0),

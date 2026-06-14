@@ -37,11 +37,12 @@
     "over30": 0.72
   },
   "popularity": {
-    "_comment": "多頭数 (>=min_field) で 1-3 人気にスコアボーナス。市場との極端な乖離を抑える",
+    "_comment": "多頭数 (>=min_field) で 1-3 人気にスコアボーナス。P24 診断と favorite-longshot bias 知見に基づき、市場人気を◎決定前にも反映する",
     "min_field": 12,
-    "first": 0,
-    "second": 0,
-    "third": 0
+    "max_snapshot_age_min": 30,
+    "first": 7,
+    "second": 4,
+    "third": 2
   },
   "final3f": {
     "_comment": "上がり 3F の評価。旧 sprint_multiplier (1.5) は 2026-06-13 の ablation で削除 (2025val 無影響 / 2026 PROD は無い方が all +3.7pt。導入根拠が n=25 で過適合的だった)",
