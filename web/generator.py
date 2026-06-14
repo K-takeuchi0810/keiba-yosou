@@ -403,6 +403,12 @@ def _build_filter_summary() -> str:
         parts.append(f"min_odds≥{spec['min_odds']}")
     if spec.get("max_odds") is not None:
         parts.append(f"max_odds≤{spec['max_odds']}")
+    min_pop = spec.get("min_popularity")
+    max_pop = spec.get("max_popularity")
+    if min_pop is not None or max_pop is not None:
+        lo = min_pop if min_pop is not None else 1
+        hi = max_pop if max_pop is not None else "-"
+        parts.append(f"{lo}-{hi}番人気")
     wl_mode = spec.get("whitelist_mode")
     wl_tracks = spec.get("whitelist_tracks") or []
     if wl_mode and wl_tracks:

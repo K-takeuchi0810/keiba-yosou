@@ -118,12 +118,20 @@ def test_exclude_confidence():
 
 
 def test_default_spec_matches_adopted_strategy():
-    """filter_spec=None → config.BUY_FILTER_DEFAULT。採用戦略の主絞りが効くこと。"""
+    """filter_spec=None → config.BUY_FILTER_DEFAULT。採用戦略の主絞りが効くこと。
+
+    2026-06-14 答え合わせ診断で min_kelly 閾値は撤廃 (anti-predictive と確証)、
+    主絞りは market favorite pop1-3 に転換。本テストはその境界を固定する。
+    """
     from config import BUY_FILTER_DEFAULT
-    assert BUY_FILTER_DEFAULT["min_kelly"] is not None
-    assert BUY_FILTER_DEFAULT["max_predicted_p"] is not None
-    weak = FakePred(kelly_fraction=BUY_FILTER_DEFAULT["min_kelly"] - 0.001)
-    assert not is_buy_candidate(weak, horse(), False)
+    assert BUY_FILTER_DEFAULT["min_popularity"] == 1
+    assert BUY_FILTER_DEFAULT["max_popularity"] == 3
+    # 1-3 番人気 + kelly>0 (EV>1) は通る
+    assert is_buy_candidate(FakePred(), horse(win_popularity=3), False)
+    # 4 番人気以降は主絞り (pop1-3) で落ちる
+    assert not is_buy_candidate(FakePred(), horse(win_popularity=5), False)
+    # popularity 不明 (0) も落ちる
+    assert not is_buy_candidate(FakePred(), horse(win_popularity=0), False)
 
 
 def test_odds_age_minutes_parsing():

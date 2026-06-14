@@ -2372,6 +2372,12 @@ def _filter_base_note() -> str:
     parts = []
     if BUY_FILTER_DEFAULT.get("min_kelly") is not None:
         parts.append(f"Kelly≥{BUY_FILTER_DEFAULT['min_kelly']}")
+    _min_pop = BUY_FILTER_DEFAULT.get("min_popularity")
+    _max_pop = BUY_FILTER_DEFAULT.get("max_popularity")
+    if _min_pop is not None or _max_pop is not None:
+        _lo = _min_pop if _min_pop is not None else 1
+        _hi = _max_pop if _max_pop is not None else "-"
+        parts.append(f"{_lo}-{_hi}番人気")
     if BUY_FILTER_DEFAULT.get("max_predicted_p") is not None:
         parts.append(f"p≤{BUY_FILTER_DEFAULT['max_predicted_p']}")
     if BUY_FILTER_DEFAULT.get("max_odds_age_min") is not None:

@@ -97,18 +97,18 @@ BUY_FILTER_DEFAULT: dict = {
     "min_value": None,
     "min_odds": None,
     "max_odds": None,
-    # ----- min_kelly: 主絞り条件 -----
-    # P16 A1 (2026-05-16) で Kelly cap を 0.05 → 1.0 に撤廃したため、
-    # kelly_fraction は uncap 連続値 (0-1) になった。閾値 0.05 = フル Kelly で
-    # 資金 5% を賭けるべきとモデルが判断したエッジ。bet sizing は
-    # kelly_quarter モードで内部 cap を掛けつつ Kelly に比例した賭金になる。
-    #
-    # 注意 (2026-05-17 実測で更新): kelly_quarter モードでは bet_unit >= 10000 円
-    # を強く推奨。当初 plan の「>= 1000 円推奨」は理論計算ベースで楽観的すぎた。
-    # Phase A2 後 Kelly は 0.05〜0.27 帯に広がったが、丸めで縮退する区間は残る。
-    # 適切な閾値は S6 で `filter_sweep --recent-3fold` (最新 fold は 2026
-    # PRODUCTION を含む) で grid 評価する。
-    "min_kelly": 0.05,
+    # ----- min_kelly: 撤廃 (2026-06-14 答え合わせ診断) -----
+    # 旧 P15-A2 では min_kelly>=0.05 を主絞り条件にしていたが、全 JRA
+    # 2024-2026 dump (8,509 戦) の答え合わせで **モデルの EV/Kelly/value 信号は
+    # anti-predictive** と確証 (data/scorecards/20260614_0700_pred_accuracy.md):
+    #   - EV bucket → 実回収率: TEST EV[1.5+)=72.6% / EV[0.8,1.0)=100.6%、
+    #     2026 EV[1.5+)=31.5% — 高 EV ほど実回収が低い (理想と逆)
+    #   - 4-fold 単勝回収 MIN: 現行 kelly>=.05 構成=45% << all ◎ベタ=62%
+    # filter.py の「kelly_fraction>0 (=EV>1)」ハードゲートが買い候補を
+    # anti-predictive な高 EV 馬に強制限定していた。閾値 0.05 はその上に重ねて
+    # 更に反予測側へ寄せていたため撤廃 (None)。ゲート自体は betting 意味論維持の
+    # ため filter.py に残置。利益エッジは主張しない (下記 popularity 参照)。
+    "min_kelly": None,
     # ----- max_predicted_p: 高 p 帯破綻防御 (S5-3 で追加、2026-05-17) -----
     # Phase A2 完了後の Step 3 holdout で、bin [0.50, 0.55) actual=5.4% /
     # bin [0.70+] actual=0% という reliability 破綻が観測された。S5-1 の
@@ -119,8 +119,20 @@ BUY_FILTER_DEFAULT: dict = {
     # するまでの暫定対処。0.40 は「[0.35, 0.40) で gap -0.24 まで許容、
     # それ以上は不安定すぎる」という Step 3 reliability bins からの判断。
     "max_predicted_p": 0.40,
-    "min_popularity": None,
-    "max_popularity": None,
+    # ----- popularity 1-3 必須 (2026-06-14 答え合わせ診断) -----
+    # 答え合わせで **唯一頑健な正信号は「◎が市場人気馬 (1-3 番人気) か」** と判明。
+    # ◎の単勝/複勝回収を 4-fold (2024 / 2025H1 / 2025H2 / 2026P) で見ると:
+    #   - pop1-3:   単勝 MIN 68% / 複勝 MIN 81% (唯一 all ◎ベタ を上回り頑健)
+    #   - pop4+:    単勝 19-79% (反選択域、◎が市場逆張りした非人気本命は人気馬に負ける)
+    # Phase3 不一致分析でも、◎が外れユーザー的中の 51 戦中 34 戦は勝ち馬が
+    # 1-3 番人気で、モデルはそれらを rank 2-6 に降格していた (逆張りの失敗)。
+    # ★重要: pop1-3 でも 2026 holdout は単勝 68%/複勝 81% で 100% (控除率) 未満。
+    #   = 利益エッジは存在しない。本フィルタは「観察用に最も妥当な候補」を出す
+    #   ためのもので、実弾投入を推奨するものではない (memory:現状の買い候補を…)。
+    # モデル内部の anti-predictivity 是正 (market_blend 引き下げ / 校正後 race内
+    # 再正規化の見直し / LGBM v6) は検証付きで別セッション (follow-up) に持ち越し。
+    "min_popularity": 1,
+    "max_popularity": 3,
     "exclude_confidence": [],
     "max_odds_age_min": 30,
     # ----- 場別 whitelist (S5-3 で全場開放、2026-05-17) -----
