@@ -81,20 +81,24 @@ def main() -> int:
         })
     bcon.close()
 
-    # keiba.db からレース結果 + 馬特徴を引く
-    _cm = open_db(args.db) if args.db else open_db()
-    kcon = _cm.__enter__()
+    # keiba.db からレース結果 + 馬特徴を bet レース分だけ prefetch する。
+    # `with` で接続を確定的に閉じる (P24 data-pipeline review: 旧実装の
+    # 手動 __enter__/__exit__ は例外時に conn を leak する欠陥だった)。
+    horses_by_key: dict[tuple, list[dict]] = {}
+    with open_db(args.db) if args.db else open_db() as kcon:
+        for k in bet_races:
+            rows = kcon.execute(
+                "SELECT horse_num,finish_order,confirmed_order,win_popularity,win_odds,"
+                "leg_quality_code,final_3f,mining_predicted_order,horse_weight,"
+                "weight_change_diff,age,sex_code FROM horse_races "
+                "WHERE race_year=? AND race_month_day=? AND track_code=? AND kaiji=? "
+                "AND nichiji=? AND race_num=? AND TRIM(horse_num) NOT IN ('','00')",
+                k,
+            ).fetchall()
+            horses_by_key[k] = [dict(r) for r in rows]
 
     def horses(k: tuple) -> list[dict]:
-        rows = kcon.execute(
-            "SELECT horse_num,finish_order,confirmed_order,win_popularity,win_odds,"
-            "leg_quality_code,final_3f,mining_predicted_order,horse_weight,"
-            "weight_change_diff,age,sex_code FROM horse_races "
-            "WHERE race_year=? AND race_month_day=? AND track_code=? AND kaiji=? "
-            "AND nichiji=? AND race_num=? AND TRIM(horse_num) NOT IN ('','00')",
-            k,
-        ).fetchall()
-        return [dict(r) for r in rows]
+        return horses_by_key.get(k, [])
 
     # 統計
     n_bet_races = 0
@@ -201,7 +205,6 @@ def main() -> int:
               f"{ni(d['winner']['horse_num'])} | {d['winner_yrank']} | "
               f"{','.join(d['types'].keys())} |")
 
-    _cm.__exit__(None, None, None)
     return 0
 
 

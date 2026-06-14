@@ -765,8 +765,8 @@ class Api:
         # 買い目フィルタは config.BUY_FILTER_DEFAULT (採用戦略の単一出典) を
         # ベースに、GUI input で明示された 4 値だけを上書きする。
         # 旧実装は 4 キーのみの dict を filter_spec として渡しており、
-        # min_kelly / max_predicted_p (P15 主絞り + S5-3 防御) が脱落して
-        # 「GUI の買い候補 ≠ backtest で検証した集合」になっていた
+        # 主絞り条件 (P24 以降は pop1-3 + max_predicted_p。旧 P15 は min_kelly)
+        # が脱落して「GUI の買い候補 ≠ backtest で検証した集合」になっていた
         # (2026-06-12 profitability-judge 指摘で是正)。
         bet_filter = dict(BUY_FILTER_DEFAULT)
         for key in ("min_value", "min_ev", "min_odds", "max_odds"):

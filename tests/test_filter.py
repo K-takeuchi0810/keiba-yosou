@@ -134,6 +134,26 @@ def test_default_spec_matches_adopted_strategy():
     assert not is_buy_candidate(FakePred(), horse(win_popularity=0), False)
 
 
+def test_filter_summary_tracks_config():
+    """_build_filter_summary が BUY_FILTER_DEFAULT に追随すること。
+
+    P24 review (code-quality #1) で「戦略変更時に filter 要約文字列が静かに
+    乖離する (テスト未保護)」と指摘されたため固定する。web/gui の要約は
+    config 単一出典から動的生成される契約を恒久ブロックする。
+    """
+    from config import BUY_FILTER_DEFAULT
+    from web.generator import _build_filter_summary
+    summary = _build_filter_summary()
+    # 人気帯制約が設定されていれば要約に必ず現れる
+    if BUY_FILTER_DEFAULT.get("min_popularity") or BUY_FILTER_DEFAULT.get("max_popularity"):
+        lo = BUY_FILTER_DEFAULT.get("min_popularity") or 1
+        hi = BUY_FILTER_DEFAULT.get("max_popularity") or "-"
+        assert f"{lo}-{hi}番人気" in summary
+    # min_kelly が None なら "min_kelly" 表記は出ない (撤廃の固定)
+    if BUY_FILTER_DEFAULT.get("min_kelly") is None:
+        assert "min_kelly" not in summary
+
+
 def test_odds_age_minutes_parsing():
     assert odds_age_minutes(None, NOW) is None
     assert odds_age_minutes("not-a-date", NOW) is None

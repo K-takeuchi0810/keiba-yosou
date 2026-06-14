@@ -83,7 +83,7 @@ def context() -> dict:
         "race_count": 4,
         "buy_count": 1,
         "stale_suppressed": 0,
-        "filter_summary": "min_kelly≥0.05 / max_predicted_p≤0.4 / 全場開放",
+        "filter_summary": "max_predicted_p≤0.4 / 1-3番人気 / 全場開放",
         "days": [_day("2026/06/13", "東京", 1), _day("2026/06/14", "阪神", 0)],
         "buy_candidates": [{
             "anchor": "race-20260613-05-1",

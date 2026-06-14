@@ -143,8 +143,9 @@ BUY_FILTER_DEFAULT: dict = {
     # 新潟は P15 採用時の recent-3fold の偶然性 (1.5 ヶ月 smoke で 161% だった)
     # で WL に入っていたが、PRODUCTION では他場と差なく控除率以下。
     # 阪神は本物の好成績だが、阪神のみに絞ると機会が極めて薄くなる。
-    # 「全場開放 + max_predicted_p + min_kelly で絞る」方針に転換。
-    # 場別の優位性は S6 で `filter_sweep --recent-3fold` 場別解析で再評価。
+    # 「全場開放 + 市場人気 pop1-3 + max_predicted_p で絞る」方針 (P24, 2026-06-14
+    # で min_kelly→pop1-3 に転換。min_kelly は anti-predictive ゆえ撤廃)。
+    # 場別の優位性は `filter_sweep --recent-3fold` 場別解析で再評価。
     "whitelist_mode": False,
     "whitelist_grades": [],
     "whitelist_tracks": [],
