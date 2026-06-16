@@ -77,12 +77,15 @@ def test_backtest_keys_cover_js():
 
 
 def test_portfolio_keys_cover_js():
-    from predictor.portfolio import compute_day_portfolio
+    from predictor.portfolio import apply_daily_budget, compute_day_portfolio
     sample = compute_day_portfolio([{
         "date": "2026/06/13", "recommended_kelly": 0.03, "buy": True,
     }])
+    budget_sample = apply_daily_budget([{
+        "date": "2026/06/13", "recommended_kelly": 0.03, "buy": True,
+    }], 10000)
     empty = compute_day_portfolio([])
-    py = set(sample.keys()) | set(empty.keys())
+    py = set(sample.keys()) | set(budget_sample.keys()) | set(empty.keys())
     js = _js_props("bp")
     missing = js - py
     assert not missing, (

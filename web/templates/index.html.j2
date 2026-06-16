@@ -192,6 +192,38 @@
     font-weight: 700;
     background: var(--buy-board-bg);
   }
+  .race-tickets {
+    padding: 0.55rem 0.75rem;
+    border-top: 1px solid var(--buy-card-border);
+    background: var(--buy-board-bg);
+  }
+  .race-ticket {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.55rem;
+    color: var(--buy-board-fg);
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+  .race-ticket + .race-ticket { margin-top: 0.35rem; }
+  .race-ticket .ticket-meta {
+    color: var(--fg-mute);
+    font-weight: 500;
+    font-size: 0.76rem;
+  }
+  .ticket-section-title {
+    color: var(--fg-mute);
+    font-weight: 800;
+    font-size: 0.76rem;
+    margin-bottom: 0.35rem;
+  }
+  .race-ticket.hit .ticket-meta { color: #166534; font-weight: 800; }
+  .race-ticket.miss .ticket-meta { color: #7f1d1d; }
+  @media (prefers-color-scheme: dark) {
+    .race-ticket.hit .ticket-meta { color: #86efac; }
+    .race-ticket.miss .ticket-meta { color: #fca5a5; }
+  }
   /* S7-β-3: Kelly>=10% で「★強い買い」バッジ。買い候補内の重要度を一目で示す */
   .strong-buy-badge {
     display: inline-block;
@@ -385,6 +417,8 @@
     /* タップ領域確保 */
     summary.race-head { padding: 0.75rem 0.7rem; min-height: 44px; }
     .buy-card { padding: 0.85rem 0.75rem; min-height: 44px; }
+    .race-ticket { display: block; }
+    .race-ticket .ticket-meta { display: block; margin-top: 0.15rem; }
     /* P20: 狭画面では推奨/full Kelly を改行配置し 1 行の数字密度を下げる */
     .full-kelly-note { display: block; margin-left: 0; margin-top: 0.1rem; }
     .portfolio-note { padding: 0.4rem 0.5rem; line-height: 1.45; }
@@ -455,6 +489,9 @@
   {% if filter_summary %}
   <div class="filter-summary">買い候補フィルタ: {{ filter_summary }}</div>
   {% endif %}
+  {% if ignore_odds_freshness | default(false) %}
+  <div class="filter-summary">検証モード: オッズ鮮度を無視して買い目を表示</div>
+  {% endif %}
   {# P22: 複数開催のとき、各開催セクションへのワンタップナビ (買い候補数つき) #}
   {% if days | length > 1 %}
   <nav class="day-nav">
@@ -488,6 +525,19 @@
       {% if portfolio_info.any_over_cap %}<br>⚠ 1日上限 {{ "%.0f"|format(portfolio_info.cap_pct) }}% 超過の日は、該当日内で各点を表示倍率に縮小推奨。{% endif %}
     </div>
     {% endif %}
+    {% if portfolio_info.get("daily_budget_yen") %}
+    {% set unit_yen = portfolio_info.get("unit_yen") or 100 %}
+    <div class="portfolio-note">
+      日予算 {{ portfolio_info.get("daily_budget_yen") }}円 /
+      {% if portfolio_info.get("multi_day") %}
+      合計表示買付 {{ portfolio_info.get("total_allocated_yen") or portfolio_info.get("allocated_yen") or 0 }}円
+      （{% for d in portfolio_info.get("budget_days", []) %}{{ d.date[5:] }} {{ d.allocated_yen }}円{% if not loop.last %} / {% endif %}{% endfor %}）
+      {% else %}
+      表示買付 {{ portfolio_info.get("allocated_yen") or 0 }}円
+      {% endif %}
+      ({{ unit_yen }}円単位)
+    </div>
+    {% endif %}
     {% if stale_suppressed %}
     <div class="portfolio-note">⚠ 他に {{ stale_suppressed }} 件がオッズ鮮度切れのみを理由に除外されています (最新オッズ取得後に再生成で復帰)。</div>
     {% endif %}
@@ -501,13 +551,21 @@
             {% if b.recommended_kelly * 100 >= portfolio_info.per_bet_cap_pct %}<span class="strong-buy-badge">★ 上限張り</span>{% endif %}
             {{ b.date }} {{ b.track }} {{ b.race_num }}R {% if b.race_name %}{{ b.race_name }}{% endif %}
           </strong>
-          <div class="buy-meta">{{ b.start_time }} / {{ b.mark }} {{ b.num }} {{ b.name }} / {{ "%.1f"|format(b.odds) }}倍{% if b.popularity %} {{ b.popularity }}人気{% endif %}</div>
+          <div class="buy-meta">{{ b.start_time }} / 買い目 {{ b.ticket }} / {{ b.mark }} {{ b.num }} {{ b.name }} / {{ "%.1f"|format(b.odds) }}倍{% if b.popularity %} {{ b.popularity }}人気{% endif %}</div>
+          {% if b.candidate_summary %}<div class="buy-meta">候補 {{ b.candidate_picks | length }}頭: {{ b.candidate_summary }}</div>{% endif %}
+          {% if b.recommended_tickets %}<div class="buy-meta">推奨買い目 {{ b.recommended_tickets | length }}種: {% for t in b.recommended_tickets %}{{ t.bet_type }}{% if not loop.last %}・{% endif %}{% endfor %}</div>{% endif %}
           <div class="buy-metrics">P {{ "%.1f"|format(b.win_probability * 100) }}% / EV {{ "%.2f"|format(b.expected_value) }}<span class="full-kelly-note">（full Kelly {{ "%.1f"|format(b.kelly_fraction * 100) }}%）</span></div>
         </div>
         {# P22: 「実際に賭ける数字」= 推奨投資率を右側に大きく分離表示 #}
         <div class="buy-reco">
+          {% if portfolio_info.get("daily_budget_yen") %}
+          <span class="buy-reco-num">{{ b.stake_yen or 0 }}円</span>
+          <span class="buy-reco-label">買付額</span>
+          <span class="buy-reco-label">推奨 {{ "%.2f"|format(b.recommended_kelly * 100) }}%</span>
+          {% else %}
           <span class="buy-reco-num">{{ "%.2f"|format(b.recommended_kelly * 100) }}%</span>
           <span class="buy-reco-label">推奨投資</span>
+          {% endif %}
         </div>
       </a>
     {% endfor %}
@@ -552,6 +610,32 @@
               <div class="pick-line"><span class="mark">{{ p.mark }}</span><span class="pick-num">{{ p.num }}</span> {{ p.name }}<span class="odds-note">{% if p.odds %}{{ "%.1f"|format(p.odds) }}倍{% else %}オッズ未確定{% endif %}{% if p.popularity %} {{ p.popularity }}人気{% endif %}</span>{% if p.win_probability %}<span class="conf-tag">P {{ "%.1f"|format(p.win_probability * 100) }}%</span>{% endif %}{% if p.expected_value %}<span class="conf-tag">EV {{ "%.2f"|format(p.expected_value) }}</span>{% endif %}{% if p.confidence %}<span class="conf-tag">{{ p.confidence }}</span>{% endif %}{% if p.bet_candidate %}<span class="bet-tag">買い</span>{% endif %}</div>
               <div class="pick-reason">{{ p.rationale }}</div>
             </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if race.get("candidate_picks") %}
+        <div class="race-tickets">
+          {% for p in race.get("candidate_picks") %}
+          <div class="race-ticket">
+            <span>{% if p.bet_candidate %}本線{% else %}候補{% endif %} {{ p.ticket }}{% if p.bet_candidate and portfolio_info.get("daily_budget_yen") %} / {{ p.stake_yen or 0 }}円{% endif %}</span>
+            <span class="ticket-meta">{{ p.name }} / {{ "%.1f"|format(p.odds) }}倍{% if p.popularity %} / {{ p.popularity }}人気{% endif %}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if race.get("recommended_tickets") %}
+        <div class="race-tickets">
+          <div class="ticket-section-title">推奨買い目（確定結果・最終オッズ検証）</div>
+          {% for t in race.get("recommended_tickets") %}
+          <div class="race-ticket{% if t.hit is sameas true %} hit{% elif t.hit is sameas false %} miss{% endif %}">
+            <span>{{ t.category }} {{ t.ticket }}（{{ t.stake_label | default(t.stake_units ~ "点") }} / {{ t.stake_yen }}円）</span>
+            <span class="ticket-meta">
+              {{ t.result_label }}
+              {% if t.hit_combo %} / 的中 {{ t.hit_combo }}{% endif %}
+              {% if t.return_pct is not none %} / 回収 {{ "%.1f"|format(t.return_pct) }}%{% endif %}
+              {% if t.final_odds %} / 最終 {{ "%.1f"|format(t.final_odds) }}倍{% endif %}
+            </span>
+          </div>
           {% endfor %}
         </div>
         {% endif %}

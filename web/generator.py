@@ -27,9 +27,16 @@ from config import (
 )
 from db import open_db
 from predictor import is_tentative, predict_race
+from predictor.candidates import (
+    BUY_CANDIDATE_MAX,
+    mark_single_race_buy_pick,
+    select_buy_candidate_picks,
+    select_race_buy_pick,
+)
 from predictor.filter import is_buy_candidate
-from predictor.portfolio import compute_day_portfolio
+from predictor.portfolio import apply_daily_budget, compute_day_portfolio, sync_actual_stakes
 from predictor.risk import recommended_fraction
+from predictor.tickets import build_recommended_tickets, ticket_stake_yen
 from web.codes import (
     grade_name,
     ground_name,
@@ -138,7 +145,12 @@ def _trim_rationale(rationale: str, max_signals: int = 4) -> str:
     return "; ".join(kept)
 
 
-def build_view_model(from_date: str | None = None, to_date: str | None = None) -> dict:
+def build_view_model(
+    from_date: str | None = None,
+    to_date: str | None = None,
+    daily_budget_yen: int | None = None,
+    ignore_odds_freshness: bool = False,
+) -> dict:
     """DB → テンプレートに渡す dict 構造。
 
     過去走の予想根拠用データは別ロジックで参照する想定で、
@@ -170,6 +182,13 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
             """,
             (from_y + from_md, to_y + to_md),
         ).fetchall()
+        payout_rows = conn.execute(
+            """
+            SELECT * FROM payouts
+            WHERE (race_year || race_month_day) BETWEEN ? AND ?
+            """,
+            (from_y + from_md, to_y + to_md),
+        ).fetchall()
 
     # race_id ごとに raw 行をまとめる（予想スコアリングで全フィールドが必要）
     raw_horses_by_race: dict[tuple, list[dict]] = {}
@@ -179,6 +198,13 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
             h["kaiji"], h["nichiji"], h["race_num"],
         )
         raw_horses_by_race.setdefault(key, []).append(dict(h))
+    payouts_by_race: dict[tuple, dict] = {}
+    for row in payout_rows:
+        key = (
+            row["race_year"], row["race_month_day"], row["track_code"],
+            row["kaiji"], row["nichiji"], row["race_num"],
+        )
+        payouts_by_race[key] = dict(row)
 
     # 予想を計算し馬番→印 のマップを作る（過去走ベース・本格版）
     horses_by_race: dict[tuple, list] = {}
@@ -186,6 +212,9 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
     tentative_by_race: dict[tuple, bool] = {}
     # オッズ鮮度 (max_odds_age_min) だけで買い候補から落ちた件数
     stale_suppressed = 0
+    buy_filter = dict(BUY_FILTER_DEFAULT)
+    if ignore_odds_freshness:
+        buy_filter["max_odds_age_min"] = None
     # race_key → race dict のマップ（特徴量計算で必要）
     race_by_key: dict[tuple, dict] = {}
     with open_db() as conn:
@@ -245,9 +274,7 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
             # 持ち、S5-3 で追加した min_kelly / max_predicted_p が反映されず、HTML に
             # 全 ◎ 馬が買い候補として表示される重大バグの原因だった。
             top_picks_for_race = []
-            for p in preds[:3]:
-                if not p.mark:
-                    continue
+            for p in preds[:BUY_CANDIDATE_MAX]:
                 horse_for_pred = next(
                     (r for r in raws if r["horse_num"] == p.horse_num), None
                 )
@@ -255,17 +282,24 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
                     continue
                 tent = tentative_by_race.get(key, False)
                 bet_ok = is_buy_candidate(
-                    p, horse_for_pred, tent, race=race_dict, now=datetime.now())
+                    p, horse_for_pred, tent, race=race_dict,
+                    filter_spec=buy_filter, now=datetime.now())
                 # 鮮度だけで落ちた候補を数える (now なし評価なら通る場合)。
                 # 「候補ゼロ」と「オッズが古いだけ」をユーザが区別できるように
                 # テンプレートで件数を出す。
-                if not bet_ok and is_buy_candidate(
-                        p, horse_for_pred, tent, race=race_dict):
+                if (
+                    not ignore_odds_freshness
+                    and not bet_ok
+                    and is_buy_candidate(p, horse_for_pred, tent, race=race_dict)
+                ):
                     stale_suppressed += 1
+                ticket = f"単勝 {p.horse_num.lstrip('0') or '0'}番"
                 top_picks_for_race.append({
                     "mark": p.mark,
                     "num": p.horse_num.lstrip("0") or "0",
                     "name": horse_for_pred.get("horse_name", ""),
+                    "bet_type": "単勝",
+                    "ticket": ticket,
                     "odds": (horse_for_pred.get("win_odds", 0) or 0) / 10.0,
                     "popularity": horse_for_pred.get("win_popularity", 0) or 0,
                     # now つき評価 = オッズ鮮度 (max_odds_age_min) 込み。
@@ -317,8 +351,12 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
             p for p in top_picks
             if p.get("bet_candidate") and (p.get("kelly_fraction") or 0) >= 0.0001
         ]
+        race_candidate_picks = select_buy_candidate_picks(top_picks) if bet_picks else []
+        race_buy_pick = select_race_buy_pick(bet_picks)
+        race_candidate_picks = mark_single_race_buy_pick(race_candidate_picks, race_buy_pick)
+        candidate_summary = "・".join(p.get("ticket", "") for p in race_candidate_picks)
         anchor = f"race-{r['race_year']}{r['race_month_day']}-{r['track_code']}-{int(r['race_num'])}"
-        for p in bet_picks:
+        if race_buy_pick:
             buy_candidates.append({
                 "anchor": anchor,
                 "date": race_id_to_date(r["race_year"], r["race_month_day"]),
@@ -326,7 +364,11 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
                 "race_num": int(r["race_num"]),
                 "race_name": r["race_name"] or r["race_short10"] or "",
                 "start_time": time_hhmm(r["start_time"] or ""),
-                **p,
+                "candidate_picks": race_candidate_picks,
+                "candidate_summary": candidate_summary,
+                "recommended_tickets": [],
+                "_payout_row": payouts_by_race.get(race_key),
+                **race_buy_pick,
             })
         days[date_key]["races"].append({
             "anchor": anchor,
@@ -344,6 +386,10 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
             "top_picks": top_picks,
             "has_bet": bool(bet_picks),
             "bet_picks": bet_picks,
+            "candidate_picks": race_candidate_picks,
+            "candidate_summary": candidate_summary,
+            "recommended_tickets": [],
+            "_payout_row": payouts_by_race.get(race_key),
             "tentative": tentative_by_race.get(race_key, False),
         })
 
@@ -366,7 +412,41 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
     # で集計する (実際の bankroll は 1 開催日ごとに区切られるため、多日窓の買い候補を
     # 全部合算すると誤って巨大化する)。集計ロジックは gui/app.py と共通の単一出典
     # predictor.portfolio.compute_day_portfolio に集約 (P20-3 / 2026-06-07)。
+    budget_info = apply_daily_budget(buy_candidates, daily_budget_yen)
     portfolio_info = compute_day_portfolio(buy_candidates)
+    portfolio_info.update(budget_info)
+    unit_yen = portfolio_info.get("unit_yen") or 100
+    tickets_by_anchor: dict[str, list[dict]] = {}
+    stake_by_anchor: dict[str, dict] = {}
+    for b in buy_candidates:
+        allocated_stake_yen = b.get("stake_yen")
+        b["allocated_stake_yen"] = allocated_stake_yen
+        tickets = build_recommended_tickets(
+            b.get("candidate_picks", []),
+            b.pop("_payout_row", None),
+            max_stake_yen=allocated_stake_yen,
+            unit_yen=unit_yen,
+        ) if b.get("candidate_picks") else []
+        b["recommended_tickets"] = tickets
+        if allocated_stake_yen is not None:
+            b["stake_yen"] = ticket_stake_yen(tickets)
+        anchor = str(b.get("anchor") or "")
+        tickets_by_anchor[anchor] = tickets
+        stake_by_anchor[anchor] = b
+    sync_actual_stakes(buy_candidates, portfolio_info)
+    for d in days.values():
+        for race in d["races"]:
+            matched = stake_by_anchor.get(str(race.get("anchor") or ""))
+            for p in race.get("bet_picks", []) + race.get("candidate_picks", []):
+                if matched and str(p.get("num")) == str(matched.get("num")):
+                    p["stake_yen"] = matched.get("stake_yen")
+                    p["raw_stake_yen"] = matched.get("raw_stake_yen")
+                    p["budget_scale"] = matched.get("budget_scale")
+            race["recommended_tickets"] = tickets_by_anchor.get(
+                str(race.get("anchor") or ""),
+                [],
+            )
+            race.pop("_payout_row", None)
 
     # S7-β-4 (2026-05-18): フィルタ条件の header 明示用 context。
     # config.BUY_FILTER_DEFAULT を読み、None でない項目を表示文字列にまとめる。
@@ -384,6 +464,7 @@ def build_view_model(from_date: str | None = None, to_date: str | None = None) -
         "stale_suppressed": stale_suppressed,
         "version_info": version_info,
         "portfolio_info": portfolio_info,
+        "ignore_odds_freshness": ignore_odds_freshness,
     }
 
 
@@ -455,13 +536,20 @@ def render(
     output_path: Path | None = None,
     from_date: str | None = None,
     to_date: str | None = None,
+    daily_budget_yen: int | None = None,
+    ignore_odds_freshness: bool = False,
 ) -> Path:
     env = Environment(
         loader=FileSystemLoader(str(TEMPLATES)),
         autoescape=select_autoescape(["html", "xml"]),
     )
     tmpl = env.get_template("index.html.j2")
-    html = tmpl.render(**build_view_model(from_date=from_date, to_date=to_date))
+    html = tmpl.render(**build_view_model(
+        from_date=from_date,
+        to_date=to_date,
+        daily_budget_yen=daily_budget_yen,
+        ignore_odds_freshness=ignore_odds_freshness,
+    ))
 
     out = output_path or (WEB_DIST / "index.html")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -556,12 +644,21 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--from", dest="from_date", default=None, help="YYYYMMDD")
     ap.add_argument("--to", dest="to_date", default=None, help="YYYYMMDD")
+    ap.add_argument("--daily-budget-yen", type=int, default=None,
+                    help="daily betting budget in yen for stake display")
+    ap.add_argument("--ignore-odds-freshness", action="store_true",
+                    help="verification mode: do not suppress buy picks by odds age")
     ap.add_argument("--no-publish", action="store_true",
                     help="iCloud Drive へのコピーをスキップ")
     ap.add_argument("--json", action="store_true",
                     help="結果を JSON で stdout に 1 行出力")
     args = ap.parse_args()
-    p = render(from_date=args.from_date, to_date=args.to_date)
+    p = render(
+        from_date=args.from_date,
+        to_date=args.to_date,
+        daily_budget_yen=args.daily_budget_yen,
+        ignore_odds_freshness=args.ignore_odds_freshness,
+    )
     published = None
     if not args.no_publish:
         try:

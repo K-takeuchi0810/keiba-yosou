@@ -104,3 +104,149 @@ def compute_day_portfolio(
         "per_bet_cap_pct": round(per_bet * 100, 1),
         "kelly_mode": mode,
     }
+
+
+def normalize_daily_budget_yen(value) -> int | None:
+    """Return a positive yen budget rounded down to a whole yen, or None."""
+    if value in (None, ""):
+        return None
+    try:
+        budget = int(float(value))
+    except (TypeError, ValueError):
+        return None
+    return budget if budget > 0 else None
+
+
+def apply_daily_budget(
+    candidates: list[dict],
+    daily_budget_yen,
+    *,
+    portfolio_cap: float | None = None,
+    unit_yen: int = 100,
+) -> dict:
+    """Annotate buy candidates with yen stakes derived from recommended_kelly.
+
+    The daily budget is treated as that day's bankroll.  We do not force the
+    whole budget to be spent; each candidate starts from recommended_kelly,
+    then is rounded to the betting unit.  If rounding/minimum units exceed the
+    daily budget, lower-ranked candidates are reduced first.
+    """
+    budget = normalize_daily_budget_yen(daily_budget_yen)
+    cap = portfolio_cap if portfolio_cap is not None else BET_PORTFOLIO_MAX_PCT
+    if unit_yen <= 0:
+        unit_yen = 100
+    for c in candidates:
+        c.pop("stake_yen", None)
+        c.pop("raw_stake_yen", None)
+        c.pop("budget_scale", None)
+    if budget is None:
+        return {
+            "daily_budget_yen": None,
+            "allocated_yen": None,
+            "total_allocated_yen": None,
+            "remaining_yen": None,
+            "total_remaining_yen": None,
+            "unit_yen": unit_yen,
+        }
+
+    total_allocated = 0
+    by_day: dict[str, list[dict]] = {}
+    for c in candidates:
+        by_day.setdefault(str(c.get("date") or "?"), []).append(c)
+
+    day_infos = []
+    for day, items in sorted(by_day.items()):
+        rec_sum = sum(max(float(c.get("recommended_kelly") or 0.0), 0.0) for c in items)
+        scale = 1.0
+        if cap > 0 and rec_sum > cap:
+            scale = cap / rec_sum
+        ranked = sorted(
+            items,
+            key=lambda c: (
+                -(float(c.get("recommended_kelly") or 0.0)),
+                str(c.get("start_time") or ""),
+            ),
+        )
+        day_allocated = 0
+        for c in ranked:
+            rec = max(float(c.get("recommended_kelly") or 0.0), 0.0)
+            raw = budget * rec * scale
+            stake = int(raw // unit_yen * unit_yen) if raw > 0 else 0
+            if raw > 0 and stake < unit_yen:
+                stake = unit_yen
+            c["raw_stake_yen"] = round(raw, 1)
+            c["stake_yen"] = stake
+            c["budget_scale"] = round(scale, 4)
+            day_allocated += stake
+
+        if day_allocated > budget:
+            overflow = day_allocated - budget
+            for c in reversed(ranked):
+                if overflow <= 0:
+                    break
+                reducible = min(int(c.get("stake_yen") or 0), overflow)
+                if reducible <= 0:
+                    continue
+                reduce_by = ((reducible + unit_yen - 1) // unit_yen) * unit_yen
+                reduce_by = min(int(c.get("stake_yen") or 0), reduce_by)
+                c["stake_yen"] = int(c.get("stake_yen") or 0) - reduce_by
+                overflow -= reduce_by
+                day_allocated -= reduce_by
+
+        total_allocated += day_allocated
+        day_infos.append({
+            "date": day,
+            "allocated_yen": day_allocated,
+            "remaining_yen": max(budget - day_allocated, 0),
+            "budget_scale": round(scale, 4),
+        })
+
+    return {
+        "daily_budget_yen": budget,
+        "allocated_yen": total_allocated,
+        "total_allocated_yen": total_allocated,
+        "remaining_yen": sum(d["remaining_yen"] for d in day_infos),
+        "total_remaining_yen": sum(d["remaining_yen"] for d in day_infos),
+        "unit_yen": unit_yen,
+        "budget_days": day_infos,
+        "multi_day": len(day_infos) > 1,
+    }
+
+
+def sync_actual_stakes(candidates: list[dict], budget_info: dict) -> dict:
+    """Update budget totals after a ticket plan has reduced actual stake."""
+    budget = budget_info.get("daily_budget_yen")
+    if budget is None:
+        return budget_info
+    try:
+        budget_yen = int(budget)
+    except (TypeError, ValueError):
+        return budget_info
+
+    by_day: dict[str, int] = {}
+    for c in candidates:
+        day = str(c.get("date") or "?")
+        by_day[day] = by_day.get(day, 0) + max(int(c.get("stake_yen") or 0), 0)
+
+    total = sum(by_day.values())
+    old_days = {
+        str(d.get("date") or "?"): d
+        for d in budget_info.get("budget_days", []) or []
+    }
+    day_infos = []
+    for day, allocated in sorted(by_day.items()):
+        old = dict(old_days.get(day, {}))
+        old.update({
+            "date": day,
+            "allocated_yen": allocated,
+            "remaining_yen": max(budget_yen - allocated, 0),
+        })
+        day_infos.append(old)
+
+    budget_info["allocated_yen"] = total
+    budget_info["total_allocated_yen"] = total
+    budget_info["remaining_yen"] = sum(d["remaining_yen"] for d in day_infos)
+    budget_info["total_remaining_yen"] = budget_info["remaining_yen"]
+    budget_info["budget_days"] = day_infos
+    budget_info["multi_day"] = len(day_infos) > 1
+    return budget_info

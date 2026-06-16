@@ -31,8 +31,20 @@ from db import open_db
 from jvlink_client import ALL_DATASPECS, JVLinkClient
 from jvlink_client.ingest import ingest_all
 from predictor import is_tentative, predict_race
-from predictor.portfolio import compute_day_portfolio
+from predictor.candidates import (
+    BUY_CANDIDATE_MAX,
+    mark_single_race_buy_pick,
+    select_buy_candidate_picks,
+    select_race_buy_pick,
+)
+from predictor.portfolio import (
+    apply_daily_budget,
+    compute_day_portfolio,
+    normalize_daily_budget_yen,
+    sync_actual_stakes,
+)
 from predictor.risk import recommended_fraction
+from predictor.tickets import build_recommended_tickets, payout_row_for_race, ticket_stake_yen
 from scripts.backtest import get_payout, horses_for_race, list_races
 from scripts.fetch_odds import race_key
 from web.codes import race_id_to_date, track_name
@@ -49,6 +61,8 @@ _VENV64_PYTHON = _PROJECT_ROOT / ".venv64" / "Scripts" / "python.exe"
 
 def _run_render_in_venv64(from_date: str | None, to_date: str | None,
                          publish: bool = True,
+                         daily_budget_yen: int | None = None,
+                         ignore_odds_freshness: bool = False,
                          cancel_check=None,
                          on_elapsed=None) -> dict:
     """render() を .venv64 subprocess で実行し、結果 dict を返す。
@@ -65,7 +79,12 @@ def _run_render_in_venv64(from_date: str | None, to_date: str | None,
     """
     if not _VENV64_PYTHON.exists():
         # フォールバック: .venv64 が無い環境では in-process render (rule-only)
-        path = render(from_date=from_date, to_date=to_date)
+        path = render(
+            from_date=from_date,
+            to_date=to_date,
+            daily_budget_yen=daily_budget_yen,
+            ignore_odds_freshness=ignore_odds_freshness,
+        )
         pub = publish_to_icloud() if publish else None
         return {"rendered": str(path), "published": str(pub) if pub else None,
                 "warning": "venv64 not found, fell back to rule-only render"}
@@ -74,6 +93,10 @@ def _run_render_in_venv64(from_date: str | None, to_date: str | None,
         cmd += ["--from", from_date]
     if to_date:
         cmd += ["--to", to_date]
+    if daily_budget_yen is not None:
+        cmd += ["--daily-budget-yen", str(daily_budget_yen)]
+    if ignore_odds_freshness:
+        cmd += ["--ignore-odds-freshness"]
     if not publish:
         cmd += ["--no-publish"]
     # PYTHONIOENCODING=utf-8 を child に渡し、Windows console の cp932 default
@@ -772,6 +795,9 @@ class Api:
         for key in ("min_value", "min_ev", "min_odds", "max_odds"):
             if options.get(key) is not None:
                 bet_filter[key] = options[key]
+        ignore_odds_freshness = bool(options.get("ignore_odds_freshness"))
+        if ignore_odds_freshness:
+            bet_filter["max_odds_age_min"] = None
         with open_db() as conn:
             races = list_races(conn, from_date, to_date, jra_only=True)
             race_count = len(races)
@@ -806,7 +832,8 @@ class Api:
             entries = self._predictions_cached(conn, from_date, to_date, races)
             for race, horses, preds, tentative in entries:
                 horse_by_num = {h["horse_num"]: h for h in horses}
-                for pred in preds[:3]:
+                race_items: list[dict] = []
+                for pred in preds[:BUY_CANDIDATE_MAX]:
                     if pred.rank == 1:
                         feature_warning_total += 1
                         for w in pred.feature_warnings:
@@ -821,6 +848,8 @@ class Api:
                         "mark": pred.mark,
                         "horse_num": int(pred.horse_num or 0),
                         "horse_name": horse.get("horse_name") or "",
+                        "bet_type": "単勝",
+                        "ticket": f"単勝 {int(pred.horse_num or 0)}番",
                         "odds": round((horse.get("win_odds") or 0) / 10.0, 1),
                         "popularity": horse.get("win_popularity") or 0,
                         "confidence": pred.confidence,
@@ -835,12 +864,28 @@ class Api:
                         "recommended_kelly": round(
                             recommended_fraction(pred.kelly_fraction), 4
                         ),
+                        "stake_yen": None,
+                        "raw_stake_yen": None,
+                        "budget_scale": None,
+                        "candidate_picks": [],
+                        "candidate_summary": "",
+                        "recommended_tickets": [],
                         "buy": self._is_buy_candidate(pred, horse, tentative, bet_filter, race=race),
                     }
                     if pred.rank == 1:
                         prediction_items.append(item)
-                    if item["buy"]:
-                        buy_candidates.append(item)
+                    race_items.append(item)
+                race_buy = select_race_buy_pick(race_items)
+                if race_buy:
+                    candidate_picks = select_buy_candidate_picks(race_items)
+                    candidate_picks = mark_single_race_buy_pick(candidate_picks, race_buy)
+                    payout_row = payout_row_for_race(conn, race)
+                    race_buy["candidate_picks"] = candidate_picks
+                    race_buy["candidate_summary"] = "・".join(
+                        c.get("ticket", "") for c in candidate_picks)
+                    race_buy["recommended_tickets"] = []
+                    race_buy["_payout_row"] = payout_row
+                    buy_candidates.append(race_buy)
             # skip_backtest: JS ダッシュボードは backtest を get_backtest で
             # 分離取得するため常に skip を指定してくる (本体描画を 100 日分の
             # 再予測で待たせない)。同梱取得はスクリプト等の直叩き用に残す。
@@ -863,9 +908,11 @@ class Api:
             warnings.append(f"オッズ未取得: {horse_count - odds_count}頭")
         odds_fetched_at = odds_meta["fetched_at"] if odds_meta else None
         odds_age = self._odds_age_minutes(odds_fetched_at)
-        max_age = int(BUY_FILTER_DEFAULT["max_odds_age_min"])
-        if odds_age is not None and odds_age > max_age:
+        max_age = bet_filter.get("max_odds_age_min")
+        if odds_age is not None and max_age is not None and odds_age > int(max_age):
             warnings.append(f"オッズ鮮度警告: {odds_age}分前 (>{max_age}分) / 買い候補から除外")
+        if ignore_odds_freshness:
+            warnings.append("検証モード: オッズ鮮度を無視して買い目を表示")
         if feature_warning_total:
             leg_missing = feature_warning_counts.get("leg_quality_unavailable", 0)
             same_day_missing = feature_warning_counts.get("same_day_bias_unavailable", 0)
@@ -882,7 +929,23 @@ class Api:
         # 集計ロジックは web/generator.py と共通の単一出典
         # predictor.portfolio.compute_day_portfolio に集約 (P20-3 / 2026-06-07)。
         # 想定回収率 (exp_return_pct) は推奨賭金で加重平均した EV。
+        daily_budget_yen = normalize_daily_budget_yen(options.get("daily_budget_yen"))
+        budget_info = apply_daily_budget(buy_candidates, daily_budget_yen)
         buy_portfolio = compute_day_portfolio(buy_candidates)
+        buy_portfolio.update(budget_info)
+        unit_yen = buy_portfolio.get("unit_yen") or 100
+        for b in buy_candidates:
+            allocated_stake_yen = b.get("stake_yen")
+            b["allocated_stake_yen"] = allocated_stake_yen
+            b["recommended_tickets"] = build_recommended_tickets(
+                b.get("candidate_picks", []),
+                b.pop("_payout_row", None),
+                max_stake_yen=allocated_stake_yen,
+                unit_yen=unit_yen,
+            ) if b.get("candidate_picks") else []
+            if allocated_stake_yen is not None:
+                b["stake_yen"] = ticket_stake_yen(b["recommended_tickets"])
+        sync_actual_stakes(buy_candidates, buy_portfolio)
         return {
             "ok": True,
             "from_date": from_date,
@@ -898,6 +961,8 @@ class Api:
                 "odds_dataspec": odds_meta["dataspec"] if odds_meta else None,
                 "odds_age_minutes": odds_age,
                 "bet_filter": bet_filter,
+                "daily_budget_yen": daily_budget_yen,
+                "ignore_odds_freshness": ignore_odds_freshness,
             },
             "buy_candidates": buy_candidates,
             "buy_portfolio": buy_portfolio,
@@ -997,9 +1062,12 @@ class Api:
         options = options or {}
         from_date = _normalize_date(options.get("from_date")) or None
         to_date = _normalize_date(options.get("to_date")) or from_date
+        daily_budget_yen = normalize_daily_budget_yen(options.get("daily_budget_yen"))
+        ignore_odds_freshness = bool(options.get("ignore_odds_freshness"))
         self._set_status("予想HTMLを生成中... (.venv64 で LightGBM 実行)", "prediction", running=True)
         result = _run_render_in_venv64(
-            from_date, to_date, publish=False,
+            from_date, to_date, publish=False, daily_budget_yen=daily_budget_yen,
+            ignore_odds_freshness=ignore_odds_freshness,
             cancel_check=self._check_cancel,
             on_elapsed=lambda s: self._set_status(
                 f"予想HTMLを生成中... 経過 {int(s)}秒 (.venv64 で LightGBM 実行)",
@@ -1047,10 +1115,13 @@ class Api:
         options = options or {}
         from_date = _normalize_date(options.get("from_date")) or None
         to_date = _normalize_date(options.get("to_date")) or from_date
+        daily_budget_yen = normalize_daily_budget_yen(options.get("daily_budget_yen"))
+        ignore_odds_freshness = bool(options.get("ignore_odds_freshness"))
         self._set_status("一括実行: 予想生成 + 公開中... (.venv64 で LightGBM)", "prediction", running=True)
         # subprocess で .venv64 を呼び LightGBM v5 ensemble 予測 + iCloud 公開を一括実行
         result = _run_render_in_venv64(
-            from_date, to_date, publish=True,
+            from_date, to_date, publish=True, daily_budget_yen=daily_budget_yen,
+            ignore_odds_freshness=ignore_odds_freshness,
             cancel_check=self._check_cancel,
             on_elapsed=lambda s: self._set_status(
                 f"一括実行: 予想生成 + 公開中... 経過 {int(s)}秒 (.venv64 で LightGBM)",
@@ -1786,6 +1857,15 @@ CONTROL_HTML = """<!doctype html>
   <button type="button" onclick="presetLatest()" title="データが存在する最新の開催日を表示 (平日など当日にレースが無いときに)">最新開催</button>
 </div>
 
+<div class="field-row">
+  <div class="field">
+    <label>日予算 (円)</label>
+    <input id="daily_budget_yen" type="number" min="0" step="100" placeholder="例: 10000">
+    <div class="hint">空欄なら推奨%のみ表示。入力時は100円単位で買付額を表示します。</div>
+    <label><input id="ignore_odds_freshness" type="checkbox"> 検証用: オッズ鮮度を無視</label>
+  </div>
+</div>
+
 <div class="status-row">
   <div id="status" role="status" aria-live="polite">準備完了。</div>
   <button id="cancelBtn" type="button" onclick="cancelRun()">中止</button>
@@ -1897,6 +1977,11 @@ CONTROL_HTML = """<!doctype html>
     if (!isFinite(n)) return '0.00';
     return (n * 100).toFixed(2);
   }
+  function yen(v) {
+    var n = Number(v);
+    if (!isFinite(n)) return '-';
+    return Math.round(n).toLocaleString('ja-JP') + '円';
+  }
   function shortTime(v) {
     if (!v) return '-';
     var d = new Date(v);
@@ -1925,6 +2010,8 @@ CONTROL_HTML = """<!doctype html>
     var o = {
       from_date: byId('from_date').value,
       to_date: byId('to_date').value,
+      daily_budget_yen: byId('daily_budget_yen').value,
+      ignore_odds_freshness: byId('ignore_odds_freshness').checked,
       bloodline_fromtime: byId('bloodline_fromtime').value,
       backtest_range: backtestRange
     };
@@ -2126,7 +2213,16 @@ CONTROL_HTML = """<!doctype html>
     if (bp.count) {
       var investLabel = bp.multi_day ? '推奨投資(最大日)' : '推奨投資';
       var ret = bp.exp_return_pct == null ? '-' : esc(bp.exp_return_pct) + '%';
+      var budgetLabel = '';
+      if (bp.daily_budget_yen) {
+        var unit = bp.unit_yen || 100;
+        var allocated = bp.total_allocated_yen == null ? bp.allocated_yen : bp.total_allocated_yen;
+        budgetLabel = '<span>日予算 <strong>' + esc(yen(bp.daily_budget_yen)) + '</strong> / ' +
+          (bp.multi_day ? '合計買付 ' : '買付 ') + esc(yen(allocated || 0)) +
+          ' / ' + esc(unit) + '円単位</span>';
+      }
       portfolioHtml = '<div class="buy-portfolio' + (bp.any_over_cap ? ' over' : '') + '">' +
+        budgetLabel +
         '<span class="bp-count">' + esc(bp.count) + '点</span>' +
         '<span>' + investLabel + ' <strong>' + esc(bp.max_day_pct) + '%</strong> / 上限 ' + esc(bp.cap_pct) + '%</span>' +
         '<span>想定回収 <strong>' + ret + '</strong></span>' +
@@ -2134,13 +2230,22 @@ CONTROL_HTML = """<!doctype html>
         '</div>';
     }
     byId('buyList').innerHTML = buys.length ? portfolioHtml + buys.map(function (b) {
+      var stakePill = bp.daily_budget_yen ? '<span class="pill buy">' + (Number(b.stake_yen) > 0 ? '買付 ' + esc(yen(b.stake_yen)) : '買付 0円') + '</span>' : '';
+      var ticketSummary = (b.recommended_tickets || []).map(function (t) {
+        var stake = Number(t.stake_yen) > 0 ? ' ' + yen(t.stake_yen) : '';
+        return (t.ticket || t.bet_type || '') + stake + (t.hit === true ? ' 的中' : (t.hit === false ? ' 不的中' : ''));
+      }).join(' / ');
       return '<div class="buy-item">' +
         '<div class="buy-main">' + esc(b.track) + ' ' + esc(b.race_num) + 'R ' + esc(b.horse_num) + ' ' + esc(b.horse_name) + '</div>' +
         '<div class="buy-sub">' + esc(b.start_time) + ' / ' + esc(b.race_name || '') +
+        '<span class="pill buy">買い目 ' + esc(b.ticket || '') + '</span>' +
+        (b.candidate_summary ? '<span class="pill buy">候補 ' + esc((b.candidate_picks || []).length) + '頭 ' + esc(b.candidate_summary) + '</span>' : '') +
+        (ticketSummary ? '<span class="pill buy">推奨 ' + esc(ticketSummary) + '</span>' : '') +
         '<span class="pill buy">' + esc(b.odds) + '倍</span>' +
         '<span class="pill">' + esc(b.popularity) + '人気</span>' +
         '<span class="pill">P ' + esc(b.probability) + '%</span>' +
         '<span class="pill">EV ' + esc(b.ev) + '</span>' +
+        stakePill +
         '<span class="pill" title="1/4 Kelly + 1点上限cap済みの推奨投資率">推奨 ' + pct2(b.recommended_kelly) + '%</span></div></div>';
     }).join('') : '<div class="card-empty">買い候補なし。EV/信頼度条件では見送りです。</div>';
 
@@ -2314,6 +2419,10 @@ CONTROL_HTML = """<!doctype html>
     var to = byId('to_date');
     if (from) from.onchange = function () { refreshAll(); };
     if (to) to.onchange = function () { refreshAll(); };
+    var budget = byId('daily_budget_yen');
+    if (budget) budget.onchange = function () { refreshDashboard(); };
+    var ignoreFreshness = byId('ignore_odds_freshness');
+    if (ignoreFreshness) ignoreFreshness.onchange = function () { refreshDashboard(); };
     var ids = ['filter_ev', 'filter_value', 'filter_min_odds', 'filter_max_odds'];
     for (var i = 0; i < ids.length; i += 1) {
       var el = byId(ids[i]);

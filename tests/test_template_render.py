@@ -39,6 +39,7 @@ def _top_pick(num: int, mark: str = "◎") -> dict:
         "mark": mark,
         "num": str(num),
         "name": f"テストホース{num}",
+        "ticket": f"単勝 {num}番",
         "odds": 4.2,
         "popularity": 2,
         "win_probability": 0.21,
@@ -50,6 +51,13 @@ def _top_pick(num: int, mark: str = "◎") -> dict:
 
 
 def _race(num: int, has_bet: bool = False) -> dict:
+    top_picks = [
+        _top_pick(1),
+        _top_pick(2, "○"),
+        _top_pick(3, "▲"),
+        _top_pick(4, "△"),
+        _top_pick(5, "☆"),
+    ]
     return {
         "anchor": f"race-20260613-05-{num}",
         "race_num": num,
@@ -61,8 +69,23 @@ def _race(num: int, has_bet: bool = False) -> dict:
         "start_time": "10:10",
         "has_bet": has_bet,
         "tentative": num == 2,
-        "top_picks": [_top_pick(1), _top_pick(2, "○")],
-        "horses": [_horse(1, "◎"), _horse(2, "○"), _horse(3)],
+        "top_picks": top_picks,
+        "bet_picks": [top_picks[0]] if has_bet else [],
+        "candidate_picks": top_picks if has_bet else [],
+        "candidate_summary": "・".join(p["ticket"] for p in top_picks) if has_bet else "",
+        "recommended_tickets": [{
+            "category": "本線",
+            "bet_type": "単勝",
+            "ticket": "単勝 1番",
+            "stake_units": 1,
+            "stake_yen": 100,
+            "result_label": "的中 払戻 420円",
+            "hit": True,
+            "hit_combo": "1",
+            "return_pct": 420.0,
+            "final_odds": 4.2,
+        }] if has_bet else [],
+        "horses": [_horse(1, "◎"), _horse(2, "○"), _horse(3, "▲"), _horse(4, "△"), _horse(5, "☆")],
     }
 
 
@@ -95,12 +118,29 @@ def context() -> dict:
             "mark": "◎",
             "num": "1",
             "name": "テストホース1",
+            "ticket": "単勝 1番",
             "odds": 4.2,
             "popularity": 2,
             "win_probability": 0.21,
             "expected_value": 1.1,
             "kelly_fraction": 0.12,
             "recommended_kelly": 0.03,
+            "candidate_picks": [_top_pick(i, m) for i, m in [
+                (1, "◎"), (2, "○"), (3, "▲"), (4, "△"), (5, "☆")
+            ]],
+            "candidate_summary": "単勝 1番・単勝 2番・単勝 3番・単勝 4番・単勝 5番",
+            "recommended_tickets": [{
+                "category": "本線",
+                "bet_type": "単勝",
+                "ticket": "単勝 1番",
+                "stake_units": 1,
+                "stake_yen": 100,
+                "result_label": "的中 払戻 420円",
+                "hit": True,
+                "hit_combo": "1",
+                "return_pct": 420.0,
+                "final_odds": 4.2,
+            }],
         }],
         "portfolio_info": {
             "kelly_mode": "quarter",
@@ -109,6 +149,7 @@ def context() -> dict:
             "any_over_cap": False,
             "days": [{"date": "2026-06-13", "total_pct": 3.0, "count": 1,
                       "over_cap": False, "scale": 1.0}],
+            "unit_yen": 100,
         },
         "version_info": {
             "calibrator_type": "isotonic",
@@ -124,6 +165,29 @@ def context() -> dict:
 def _render(context: dict) -> str:
     env = Environment(loader=FileSystemLoader(str(TEMPLATES)), undefined=StrictUndefined)
     return env.get_template("index.html.j2").render(**context)
+
+
+def test_candidate_picks_uses_three_to_five_window():
+    from predictor.candidates import (
+        mark_single_race_buy_pick,
+        select_buy_candidate_picks,
+        select_race_buy_pick,
+    )
+
+    picks = [{"ticket": f"ticket-{i}"} for i in range(1, 7)]
+    assert select_buy_candidate_picks([]) == []
+    assert len(select_buy_candidate_picks(picks[:2])) == 2
+    assert len(select_buy_candidate_picks(picks[:3])) == 3
+    assert len(select_buy_candidate_picks(picks[:6])) == 5
+    assert select_race_buy_pick([{"num": "1"}, {"num": "2", "bet_candidate": True}]) == {
+        "num": "2",
+        "bet_candidate": True,
+    }
+    marked = mark_single_race_buy_pick(
+        [{"num": "1", "bet_candidate": True}, {"num": "2", "bet_candidate": True}],
+        {"num": "1", "bet_candidate": True},
+    )
+    assert [p["bet_candidate"] for p in marked] == [True, False]
 
 
 def test_render_succeeds_with_strict_undefined(context):
@@ -143,6 +207,13 @@ def test_new_sections_present(context):
     # P22: 推奨投資率の分離表示
     assert 'class="buy-reco-num"' in html
     assert "3.00%" in html  # recommended_kelly 0.03 → 3.00%
+    assert "買い目" in html
+    assert "単勝 1番" in html
+    assert "候補 5頭" in html
+    assert "単勝 5番" in html
+    assert "推奨買い目" in html
+    assert "確定結果・最終オッズ検証" in html
+    assert "的中 払戻 420円" in html
     # P22-2: アンカー遷移の sticky ヘッダ被り対策
     assert "scroll-margin-top" in html
     # 印付き行ハイライト (枠番セル除外)
