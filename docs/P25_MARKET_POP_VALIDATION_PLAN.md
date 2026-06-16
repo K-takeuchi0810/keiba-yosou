@@ -1,0 +1,277 @@
+# P25 市場人気補正 検証設計書
+
+作成日: 2026-06-14
+
+## 目的
+
+P25 は、予想◎が市場オッズを見ずに逆張り寄りになる問題を抑えるための検証対象である。
+
+上位ゴールは `docs/OPERATION.md` の「年間 180%, 月次変動は許容」。ただし、P24/P25 時点では利益エッジは未確認であり、実弾投入ではなく観察・検証フェーズに置く。
+
+この設計書の目的は、重い全期 dump や追加コード改修の前に、P25 をどの条件で採用・棄却・保留するかを固定すること。
+
+## 背景
+
+P24 診断では以下が確認された。
+
+- 現行モデルの EV / Kelly / value 信号は anti-predictive。高EVほど実回収が悪化した。
+- `min_kelly` フィルタは反選択で、4-fold 単勝回収 MIN が all ◎ベタより悪かった。
+- 唯一頑健な正信号は市場人気 `pop1-3` だった。
+- ただし `pop1-3` でも 2026 holdout は 100% 未満で、利益エッジは未確認。
+
+P25 では、`win_popularity` 1-3 番人気を◎決定前スコアへ加点する補正を追加した。レビュー中に freshness guard も追加し、発走30分超過または欠損 snapshot では市場人気補正を効かせないようにした。
+
+P25 scorecard の結論は「ランキング補助として観察対象、正式採用には長期 paired A/B、calibrator refit、fold 検証が必要」。
+
+## 直近の軽量検証メモ
+
+重い dump 前の DB 直接集計では、以下を確認済み。
+
+### クリーンオッズ窓
+
+2025 年は 6 月を境に全頭オッズ付き race の性質が変わる。
+
+| 期間 | 所見 |
+|---|---|
+| 2025-01〜05 | clean 2.6%〜3.0%。検証主窓には使わない |
+| 2025-06 | clean 73.3%。移行月として扱う |
+| 2025-07〜12 | clean 92.5%〜96.9%。主検証窓 |
+| 2026-01〜06 | clean 83.0%〜97.6%。forward holdout |
+
+したがって P25 の主評価窓は `2025-07-01` 以降の clean odds window とする。必要に応じて `2025-06-01` 以降を副窓にする。
+
+### 人気別回収率
+
+2025-2026 clean 限定では、以前見えた「2人気だけが極端に良い」は弱まった。
+
+- 1-3人気は、穴側を避ける市場アンカーとしては有効。
+- 10人気以下は単複とも弱く、抑制対象として安定。
+- `1人気 / 2人気 / 3人気` を過剰に細分化して最適化する根拠はまだ弱い。
+
+### 3連複 E5
+
+単勝人気ベースの3連複 BOX は、主窓 `2025-07-01〜2026-06-14` で ROI 72%〜81% 程度に収束した。
+
+現時点では P25 の主検証から外す。3連複は払戻分布の観察対象に留め、採用判断には使わない。
+
+## 検証対象
+
+正式 A/B では、同一期間・同一コード経路で以下の popularity weights を比較する。
+
+| variant | first | second | third | 用途 |
+|---|---:|---:|---:|---|
+| `pop_0_0_0` | 0 | 0 | 0 | P25 無効 baseline |
+| `pop_4_2_1` | 4 | 2 | 1 | 弱い市場アンカー |
+| `pop_7_4_2` | 7 | 4 | 2 | 現 P25 |
+| `pop_10_6_3` | 10 | 6 | 3 | 強い市場アンカー |
+
+比較はフィルタ変更と交絡させない。`BUY_FILTER_DEFAULT` の戦略変更とは別セッション、別 rule_version、別 scorecard で扱う。
+
+## 評価窓
+
+### 主窓
+
+- fit / design: `2025-07-01` 〜 `2025-12-31`
+- forward holdout: `2026-01-01` 〜 現在取得済み最終日
+
+### 副窓
+
+- `2025-06-01` 〜 `2025-12-31`
+- `2025-07-01` 〜 `2026-06-14` の通期 clean window
+
+### 除外
+
+- 2025-01〜05 の市場オッズ clean 率が極端に低い期間
+- 全頭 `win_odds > 0` かつ `win_popularity > 0` を満たさない race
+- `payouts` 欠損 race
+- 中止・異常 race が検出できる場合は除外
+
+## 評価指標
+
+### 予測品質
+
+- Brier score
+- logloss
+- reliability curve
+- top-1 `win_probability` の calibration gap
+- raw_blended 分布の変化
+
+### 馬券品質
+
+- ◎単勝 hit rate / return rate
+- ◎複勝 hit rate / return rate
+- `BUY_FILTER_DEFAULT` 適用後の buy_only return
+- 4-fold MIN return
+- bootstrap CI
+
+### fold 定義
+
+4-fold は以下の期間境界で固定する。結果を見てから fold を選び直すことは禁止。
+
+| fold | 期間 |
+|---:|---|
+| 1 | 2025-07-01 〜 2025-09-30 |
+| 2 | 2025-10-01 〜 2025-12-31 |
+| 3 | 2026-01-01 〜 2026-03-31 |
+| 4 | 2026-04-01 〜 取得済み最終日 |
+
+fold 1-2 が design 窓、fold 3-4 が forward holdout に対応する。
+合格条件の「4-fold MIN」は上記 4 fold のうち最低の回収率を指す。
+
+### bootstrap 仕様
+
+- サンプリング単位: **race 単位** (horse 単位ではない)。1 race 内の出走馬・賭け結果をまとめてリサンプリングする。
+- 理由: 同一 race 内の horse は相関が強く、horse 単位だと CI が過小評価される。
+- リサンプル回数: 10,000 回。
+- CI 報告: 2.5 パーセンタイル / 97.5 パーセンタイル (95% CI)。
+
+### 市場 snapshot 品質
+
+backtest JSON には以下を保存する。
+
+- fresh / stale / unknown snapshot counts
+- `market_snapshot.snapshot_age_min` の分布
+- 市場人気補正を実際に使えた頭数
+- race 単位で市場人気補正が有効だった頭数
+
+P25 は freshness guard に依存するため、これらを記録できない状態では正式評価に進まない。
+
+## 合格条件
+
+P25 variant を採用候補に昇格する条件は以下のすべて。
+
+1. 2026 holdout の Brier または logloss が baseline `pop_0_0_0` より悪化しない。
+2. reliability curve が高p帯で過剰自信を悪化させない。
+3. ◎単勝 / 複勝の 4-fold MIN が baseline より悪化しない。
+4. buy_only の return が baseline より悪化しない。
+5. fresh snapshot が十分に存在し、補正が実際に発火していることを JSON で確認できる。
+6. calibrator mismatch を残したまま本番採用しない。
+
+利益エッジ採用の条件はさらに厳しく、以下をすべて満たすこと。
+
+- 2026 holdout ROI が 180% 以上。
+- bootstrap CI 下限が 100% 以上。
+- 4-fold MIN が 80% 以上。
+- `market_snapshot.popularity_bonus_candidate_horses` が 500 頭以上、または `market_snapshot.races_with_popularity_bonus_candidate` が 150 race 以上。
+
+100% 超に留まる場合は「損益分岐超えの観察候補」であり、年間目標達成候補とは扱わない。
+`fresh_horses=0` または `popularity_bonus_candidate_horses=0` の run は、freshness guard の確認には使えるが、P25 の収益効果検証からは除外する。
+
+## 棄却条件
+
+以下のいずれかに該当した variant は棄却する。
+
+- 2026 holdout の Brier / logloss が baseline より明確に悪化する。
+- 1-3人気への過加点で◎が市場人気へ寄りすぎ、回収率が低下する。
+- fresh snapshot が少なく、補正発火 race が評価に足りない。
+- stale / unknown snapshot を使っている疑いが残る。
+- 2025 design だけ良く、2026 forward で崩れる。
+- 2026 holdout ROI が 180% 未満で、年間目標達成候補としての根拠がない。
+
+## 実行順序
+
+1. backtest / dump に市場 snapshot 観測性を追加する。 ← **完了 (2026-06-14)**
+2. `pop_0_0_0` baseline を同一コード経路で保存する。 ← **完了 (2026-06-15)**
+3. `pop_7_4_2` を同一コード経路で保存する。 ← **完了 (2026-06-15)**
+4. **fresh odds 取得を運用化する** (下記参照)。 ← **スクリプト作成済み、スケジューラ登録は次開催日**
+5. fresh odds が蓄積された期間 (数週間) で A/B を再実行する。
+6. raw_blended 分布を比較し、calibrator refit が必要な variant を特定する。
+7. 2025 fit / 2026 holdout で calibrator refit 検証を行う。
+8. 結果を scorecard に保存し、expert-review を通す。
+
+30分以上の重い dump / backtest を起動する場合は、AGENTS.md の 1-ter pre-flight checklist を完了してから実行する。
+
+### A/B 中間結果 (Step 2-3)
+
+2025-07-01 〜 2026-06-14 の全期間 backtest では P25 補正の差がほぼゼロだった。
+
+| 指標 | pop_0_0_0 | pop_7_4_2 | diff |
+|---|--:|--:|--:|
+| all return % | 67.12 | 67.17 | +0.05 |
+| buy_only return % | 65.77 | 65.77 | 0.00 |
+| Brier | 0.0631 | 0.0631 | -0.000 |
+| bonus_candidate_horses | 0 | 33 | +33 |
+| races_with_bonus | 0 | 11 | +11 |
+| fresh_horses | 193 | 193 | 0 |
+
+原因: 全 46,287 頭のうち fresh (発走30分以内) はわずか 193 頭 (0.4%)。
+P25 補正が発火したのは 33 頭 / 11 レースのみで、評価に足りない。
+
+**結論**: P25 の重み値の良否を判断する前に、fresh odds の供給量を増やす必要がある。
+
+## fresh odds 取得の運用
+
+### 背景
+
+P25 市場人気補正は `odds_fetched_at` が発走 30 分以内のときだけ発火する。
+現状のオッズ取得は手動実行 (GUI「Ⅱ最新オッズ取得」) であり、発走の数時間前に
+1 回だけ取得するため、ほぼ全馬が stale/unknown になっている。
+
+### 解決: `scripts/fetch_fresh_odds.py`
+
+発走 2〜25 分前のレースだけを対象に `JVRTOpen("0B31")` で再取得するスクリプト。
+Windows Task Scheduler で 10 分おきに自動実行する。
+
+```
+schtasks /create /tn "keiba-fresh-odds" /tr ^
+  "C:\Users\kizun\dev\keiba-yosou\scripts\fetch_fresh_odds.bat" ^
+  /sc minute /mo 10 /st 09:00 /et 16:40 ^
+  /sd 2026/06/20 /f
+```
+
+### 期待効果
+
+- 各レースが発走前に最低 1〜2 回 fresh odds を取得
+- 1 開催日あたり 36 レース × 平均 13 頭 ≈ 468 頭が fresh になる
+- 4 週間 (8 開催日) で約 3,744 頭の fresh データが蓄積
+- P25 の bonus_candidate が数百頭規模に達し、A/B 評価が可能になる
+
+### 前提条件
+
+- PC が開催時間中に起動していること
+- JV-Link が認証済みで COM 接続可能なこと
+- `.venv32` (32bit Python) が利用可能なこと
+
+## GUI / HTML 可視化の follow-up
+
+P25 は最新オッズ依存が強いため、正式A/B後に採用候補へ進む場合は GUI / HTML 側にも以下を出す。
+
+- 「市場人気補正は発走30分以内の最新オッズのみ有効」の説明
+- fresh / stale / unknown snapshot counts
+- popularity bonus candidate counts
+- `Odds最新` が `MAX(odds_fetched_at)` だけで誤解されないための警告表示
+
+## 生成物
+
+想定する成果物:
+
+- `data/backtest/<timestamp>_tan_p25-pop-<variant>-filtered.json`
+- `data/diag/dump_p25_pop_<variant>_picks_*.csv`
+- `data/diag/dump_p25_pop_<variant>_races_*.csv`
+- `data/scorecards/<timestamp>_p25_market_pop_ab.md`
+
+JSON / CSV には `rule_version`, `git_sha`, `variant`, `popularity_weights`, `clean_window`, `snapshot_counts` を含める。
+
+## 実装状況
+
+- 2026-06-14: `scripts/backtest.py` に `market_snapshot` 集計を追加。
+  - fresh / stale / unknown horse counts
+  - post-start snapshot counts
+  - clean market race counts
+  - snapshot age min / p50 / p90 / max
+  - popularity bonus candidate horse / race counts
+  - `weights.json` の `popularity.min_field`, `max_snapshot_age_min`, `first/second/third` を記録
+- 2026-06-16: fresh odds 運用と検証証跡を強化。
+  - `scripts/fetch_fresh_odds.py` を `records_total` 判定に修正し、取得成否ログの誤判定を防止。
+  - `fetch_realtime()` の `filenames` を `ingest_all(only_files=...)` に接続し、10分ごとの全量 0B31 再取込を回避。
+  - 0 byte raw 削除、レース単位の例外継続、取得直前の発走時刻再判定、lock heartbeat を追加。
+  - `scripts/backtest.py` に `meta.git_dirty` / `meta.git_status_short` と払戻欠損カウンタを追加。
+  - fresh odds fake test、market snapshot env override test、payout missing test を追加。
+
+## 現時点の判断
+
+P25 は、年間 180% へ直接到達する利益戦略ではまだない。
+
+現時点の正しい位置づけは、P24 で確認された「逆張り◎」「anti-predictive EV」を緩和するための市場アンカー候補である。
+
+したがって次の作業は、重い全期 dump ではなく、まず市場 snapshot 観測性を検証ログに追加し、正式 A/B を再現可能な形で走らせること。

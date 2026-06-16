@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -32,6 +33,220 @@ from predictor.calibration import (
     fit_isotonic_calibrator,
 )
 from predictor.rules import is_tentative, predict_race
+
+
+def _safe_int(value, default: int, errors: list[str], key: str) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        errors.append(f"{key}={value!r} -> {default}")
+        return default
+
+
+def _safe_float(value, default: float | None, errors: list[str], key: str) -> float | None:
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        errors.append(f"{key}={value!r} -> {default}")
+        return default
+
+
+def _popularity_config() -> dict:
+    """Return the market-popularity scoring knobs recorded in weights.json."""
+    root = Path(__file__).resolve().parent.parent
+    errors: list[str] = []
+    try:
+        data = json.loads((root / "predictor" / "weights.json").read_text(encoding="utf-8"))
+        pop = data.get("popularity") or {}
+    except (OSError, json.JSONDecodeError) as exc:
+        pop = {}
+        errors.append(f"weights.json read failed: {exc}")
+    def _env_float(json_val, default, env_key, label):
+        env_val = os.environ.get(env_key)
+        if env_val is not None:
+            return _safe_float(env_val, default, errors, f"env:{label}")
+        return _safe_float(json_val, default, errors, label)
+
+    def _env_int(json_val, default, env_key, label):
+        env_val = os.environ.get(env_key)
+        if env_val is not None:
+            return _safe_int(env_val, default, errors, f"env:{label}")
+        return _safe_int(json_val, default, errors, label)
+
+    cfg = {
+        "min_field": _env_int(
+            pop.get("min_field", 12),
+            12,
+            "PRED_W_popularity_min_field",
+            "popularity.min_field",
+        ),
+        "max_snapshot_age_min": _env_float(
+            pop.get("max_snapshot_age_min", 30),
+            30,
+            "PRED_W_popularity_max_snapshot_age_min",
+            "popularity.max_snapshot_age_min",
+        ),
+        # Keep fallbacks aligned with predictor.rules._score_one + PRED_W_ env override.
+        "first": _env_float(
+            pop.get("first", 7),
+            7, "PRED_W_popularity_first", "popularity.first"),
+        "second": _env_float(
+            pop.get("second", 4),
+            4, "PRED_W_popularity_second", "popularity.second"),
+        "third": _env_float(
+            pop.get("third", 2),
+            2, "PRED_W_popularity_third", "popularity.third"),
+        "config_error": "; ".join(errors) if errors else None,
+    }
+    if errors:
+        logger.warning("market snapshot popularity config fallback: %s", cfg["config_error"])
+    return cfg
+
+
+def _race_start_datetime(race: dict) -> datetime | None:
+    race_year = str(race.get("race_year") or "")
+    race_month_day = str(race.get("race_month_day") or "").zfill(4)
+    start_time = str(race.get("start_time") or "").strip().zfill(4)
+    if len(race_year) != 4 or len(race_month_day) != 4 or len(start_time) < 4:
+        return None
+    try:
+        return datetime.strptime(race_year + race_month_day + start_time[:4], "%Y%m%d%H%M")
+    except ValueError:
+        return None
+
+
+def _snapshot_age_min(horse: dict, race: dict) -> int | None:
+    # Counterpart: predictor.rules._market_snapshot_age_min (age<0 → None).
+    # This function returns negative ages as-is for post_start classification.
+    fetched_at = horse.get("odds_fetched_at")
+    race_start = _race_start_datetime(race)
+    if not fetched_at or race_start is None:
+        return None
+    try:
+        fetched = datetime.fromisoformat(str(fetched_at))
+        if fetched.tzinfo is not None:
+            fetched = fetched.astimezone().replace(tzinfo=None)
+    except ValueError:
+        return None
+    return int((race_start - fetched).total_seconds() // 60)
+
+
+def _empty_market_snapshot_stats(pop_cfg: dict) -> dict:
+    return {
+        "max_snapshot_age_min": pop_cfg.get("max_snapshot_age_min"),
+        "min_field": pop_cfg.get("min_field"),
+        "scope": "races_with_horses_before_tentative_filter",
+        "config_error": pop_cfg.get("config_error"),
+        "popularity_weights": {
+            "first": pop_cfg.get("first"),
+            "second": pop_cfg.get("second"),
+            "third": pop_cfg.get("third"),
+        },
+        "races": 0,
+        "clean_market_races": 0,
+        "races_with_fresh_snapshot": 0,
+        "races_with_stale_snapshot": 0,
+        "races_with_unknown_snapshot": 0,
+        "races_with_post_start_snapshot": 0,
+        "races_with_popularity_bonus_candidate": 0,
+        "horses": 0,
+        "horses_with_market_odds": 0,
+        "fresh_horses": 0,
+        "stale_horses": 0,
+        "unknown_horses": 0,
+        "post_start_horses": 0,
+        "pop1_3_horses": 0,
+        "popularity_bonus_candidate_horses": 0,
+        "_ages": [],
+    }
+
+
+def _add_market_snapshot_race(stats: dict, race: dict, horses: list[dict], pop_cfg: dict) -> None:
+    max_age = pop_cfg.get("max_snapshot_age_min")
+    min_field = int(pop_cfg.get("min_field", 12) or 12)
+    field_size = len(horses)
+    starter_count = _safe_int(race.get("starter_count") or field_size, field_size, [], "race.starter_count")
+    weight_by_pop = {
+        1: pop_cfg.get("first"),
+        2: pop_cfg.get("second"),
+        3: pop_cfg.get("third"),
+    }
+    stats["races"] += 1
+    if horses and all((h.get("win_odds") or 0) > 0 and (h.get("win_popularity") or 0) > 0 for h in horses):
+        stats["clean_market_races"] += 1
+
+    race_has_fresh = False
+    race_has_stale = False
+    race_has_unknown = False
+    race_has_post_start = False
+    race_has_bonus_candidate = False
+    for horse in horses:
+        stats["horses"] += 1
+        pop = _safe_int(horse.get("win_popularity") or 0, 0, [], "horse.win_popularity")
+        has_market_odds = (horse.get("win_odds") or 0) > 0 and pop > 0
+        if has_market_odds:
+            stats["horses_with_market_odds"] += 1
+        if 1 <= pop <= 3:
+            stats["pop1_3_horses"] += 1
+
+        age = _snapshot_age_min(horse, race)
+        if age is None:
+            stats["unknown_horses"] += 1
+            race_has_unknown = True
+            is_fresh = False
+        elif age < 0:
+            stats["post_start_horses"] += 1
+            race_has_post_start = True
+            is_fresh = False
+        else:
+            stats["_ages"].append(age)
+            is_fresh = max_age is None or age <= float(max_age)
+            if is_fresh:
+                stats["fresh_horses"] += 1
+                race_has_fresh = True
+            else:
+                stats["stale_horses"] += 1
+                race_has_stale = True
+
+        if starter_count >= min_field and (weight_by_pop.get(pop) or 0) and is_fresh:
+            stats["popularity_bonus_candidate_horses"] += 1
+            race_has_bonus_candidate = True
+
+    if race_has_fresh:
+        stats["races_with_fresh_snapshot"] += 1
+    if race_has_stale:
+        stats["races_with_stale_snapshot"] += 1
+    if race_has_unknown:
+        stats["races_with_unknown_snapshot"] += 1
+    if race_has_post_start:
+        stats["races_with_post_start_snapshot"] += 1
+    if race_has_bonus_candidate:
+        stats["races_with_popularity_bonus_candidate"] += 1
+
+
+def _finish_market_snapshot_stats(stats: dict) -> dict:
+    ages = sorted(stats.pop("_ages", []) or [])
+    if ages:
+        def q(p: float) -> int:
+            return ages[int((len(ages) - 1) * p)]
+        stats["snapshot_age_min"] = {
+            "count": len(ages),
+            "min": ages[0],
+            "p50": q(0.50),
+            "p90": q(0.90),
+            "max": ages[-1],
+        }
+    else:
+        stats["snapshot_age_min"] = {
+            "count": 0,
+            "min": None,
+            "p50": None,
+            "p90": None,
+            "max": None,
+        }
+    return stats
 
 
 def _snapshot_meta() -> dict:
@@ -75,15 +290,26 @@ def _snapshot_meta() -> dict:
         meta["git_sha"] = sha
     except (subprocess.CalledProcessError, FileNotFoundError, OSError):
         meta["git_sha"] = None
+    try:
+        status = subprocess.check_output(
+            ["git", "-C", str(root), "status", "--short"],
+            stderr=subprocess.DEVNULL,
+        ).decode("utf-8", errors="replace")
+        meta["git_dirty"] = bool(status.strip())
+        meta["git_status_short"] = status.splitlines()
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        meta["git_dirty"] = None
+        meta["git_status_short"] = None
     # 挙動を変える環境変数の実行時値 (2026-06-13 v2 監査: env override が
     # 予想経路を無言で変える — temperature/blend は calibrator の前提分布も
     # 崩す — のに実験ログから事後検証できなかった)。設定されたものだけ記録。
     import os as _os
-    env_keys = (
+    env_keys = {
         "PRED_PROB_TEMPERATURE", "PRED_BLEND_W_RULE", "PRED_DISABLE_CALIBRATOR",
         "PRED_DISABLE_DISCOUNT", "PRED_DISABLE_LGBM", "PRED_CALIBRATOR_ALPHA",
         "PRED_CALIBRATOR_MIN_COUNT", "V2_GRADE", "V2_DIST", "BET_WHITELIST",
-    )
+    }
+    env_keys.update(k for k in _os.environ if k.startswith("PRED_W_"))
     overrides = {k: _os.environ[k] for k in env_keys if k in _os.environ}
     meta["env_overrides"] = overrides  # 空 dict = デフォルト挙動の証明
     return meta
@@ -202,12 +428,7 @@ def horses_for_race(conn, race: dict) -> list[dict]:
     ]
 
 
-def get_payout(conn, race: dict, horse_num: str, bet_type: str) -> int:
-    """馬番が的中していれば払戻金を返す、外れなら 0。
-
-    payouts テーブルは 1 レース 1 行で、同着考慮で配当 1〜3 (単勝) / 1〜5 (複勝) を持つ。
-    horse_num の払戻があるかを順に照合する。
-    """
+def get_payout_row(conn, race: dict) -> dict | None:
     row = conn.execute(
         """
         SELECT * FROM payouts
@@ -220,8 +441,18 @@ def get_payout(conn, race: dict, horse_num: str, bet_type: str) -> int:
         ),
     ).fetchone()
     if not row:
+        return None
+    return dict(row)
+
+
+def payout_from_row(row: dict | None, horse_num: str, bet_type: str) -> int:
+    """馬番が的中していれば払戻金を返す、外れ/払戻行なしなら 0。
+
+    payouts テーブルは 1 レース 1 行で、同着考慮で配当 1〜3 (単勝) / 1〜5 (複勝) を持つ。
+    horse_num の払戻があるかを順に照合する。
+    """
+    if not row:
         return 0
-    row = dict(row)
     if bet_type == "tan":
         for i in (1, 2, 3):
             if row.get(f"tan_horse_num{i}") == horse_num:
@@ -231,6 +462,15 @@ def get_payout(conn, race: dict, horse_num: str, bet_type: str) -> int:
             if row.get(f"fuku_horse_num{i}") == horse_num:
                 return row.get(f"fuku_payout{i}") or 0
     return 0
+
+
+def get_payout(conn, race: dict, horse_num: str, bet_type: str) -> int:
+    return payout_from_row(get_payout_row(conn, race), horse_num, bet_type)
+
+
+def get_payout_with_presence(conn, race: dict, horse_num: str, bet_type: str) -> tuple[int, bool]:
+    row = get_payout_row(conn, race)
+    return payout_from_row(row, horse_num, bet_type), row is not None
 
 
 def _empty_bet_stats() -> dict:
@@ -330,6 +570,8 @@ def run_backtest(
 ) -> dict:
     started = time.time()
     buy_filter = buy_filter_from_generator() if filter_from_config else None
+    pop_cfg = _popularity_config()
+    market_snapshot_stats = _empty_market_snapshot_stats(pop_cfg)
     if buy_filter is not None:
         if min_odds is not None:
             buy_filter["min_odds"] = min_odds
@@ -356,6 +598,10 @@ def run_backtest(
         n_tentative_skipped = 0
         n_bet = 0
         n_hit = 0
+        n_missing_payouts = 0
+        n_filtered_missing_payouts = 0
+        n_buy_only_missing_payouts = 0
+        n_whitelist_only_missing_payouts = 0
         total_bet = 0
         total_return = 0
         all_stats = _empty_bet_stats()
@@ -365,6 +611,7 @@ def run_backtest(
         whitelist_only_stats = _empty_bet_stats()
         calibration_records: list[dict] = []
         confidence_stats: dict[str, dict] = defaultdict(_empty_bet_stats)
+        buy_only_confidence_stats: dict[str, dict] = defaultdict(_empty_bet_stats)
         # 会場別ブレイクダウン (track_code → [bet, return, hits])
         track_stats: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
         # グレード別 (graded/op/cond/jraded) ブレイクダウン
@@ -387,6 +634,7 @@ def run_backtest(
             if not horses:
                 n_no_horses += 1
                 continue
+            _add_market_snapshot_race(market_snapshot_stats, race, horses, pop_cfg)
 
             preds = predict_race(horses, conn=conn, race=race, cache=feature_cache)
             tentative = is_tentative(preds)
@@ -423,17 +671,26 @@ def run_backtest(
                         "confidence": pred.confidence,
                     }
                 )
-            payout = get_payout(conn, race, top.horse_num, bet_type)
+            payout, payout_present = get_payout_with_presence(conn, race, top.horse_num, bet_type)
+            if not payout_present:
+                n_missing_payouts += 1
             _add_bet(all_stats, payout)
             _add_bet(confidence_stats[top.confidence], payout)
-            if _matches_buy_filter(top, top_horse, tentative, buy_filter, race=race):
+            buy_only_match = _matches_buy_filter(top, top_horse, tentative, buy_filter, race=race)
+            if buy_only_match:
                 _add_bet(buy_only_stats, payout)
+                _add_bet(buy_only_confidence_stats[top.confidence], payout)
+                if not payout_present:
+                    n_buy_only_missing_payouts += 1
             # 重賞ホワイトリスト単独 (EV/Odds 等のフィルタ無視) でのベタ買い結果。
             # 暫定だけは除外。BET_WHITELIST=0 のときは is_whitelisted_race が
             # 常に True を返すので、この集計は all_stats と同等になる。
             from config import is_whitelisted_race  # 循環回避のため局所 import
-            if not tentative and is_whitelisted_race(race):
+            whitelist_only_match = not tentative and is_whitelisted_race(race)
+            if whitelist_only_match:
                 _add_bet(whitelist_only_stats, payout)
+                if not payout_present:
+                    n_whitelist_only_missing_payouts += 1
             if top_horse:
                 odds = (top_horse.get("win_odds") or 0) / 10.0
                 popularity = top_horse.get("win_popularity") or 0
@@ -451,6 +708,8 @@ def run_backtest(
                     continue
 
             n_bet += 1
+            if not payout_present:
+                n_filtered_missing_payouts += 1
             total_bet += 100
             tcode = race["track_code"]
             cclass = race_class_label(race.get("grade_code"))
@@ -476,6 +735,16 @@ def run_backtest(
         k: _finish_bet_stats(v)
         for k, v in sorted(confidence_stats.items())
     }
+    buy_only_by_confidence = {
+        k: _finish_bet_stats(v)
+        for k, v in sorted(buy_only_confidence_stats.items())
+    }
+    for confidence, stats in buy_only_by_confidence.items():
+        all_bets_for_confidence = by_confidence.get(confidence, {}).get("bets", 0)
+        stats["adoption_rate"] = (
+            stats["bets"] / all_bets_for_confidence
+            if all_bets_for_confidence else 0
+        )
     meta = _snapshot_meta()
     # 評価期間が calibrator の fit 期間と重なる場合は in-sample 評価として
     # 明示フラグを立てる (2026-06-13 v2 監査: 2025val 評価が calibrator fit
@@ -503,7 +772,10 @@ def run_backtest(
         "races_no_pick": n_no_pick,
         "races_filtered": n_filtered,
         "races_tentative_skipped": n_tentative_skipped,
+        "races_missing_payouts": n_missing_payouts,
         "races_bet": n_bet,
+        "bets_missing_payouts": n_missing_payouts,
+        "filtered_bets_missing_payouts": n_filtered_missing_payouts,
         "hits": n_hit,
         "hit_rate": (n_hit / n_bet) if n_bet else 0,
         "bet_total": total_bet,
@@ -521,6 +793,7 @@ def run_backtest(
         "buy_only_hit_rate": buy_only_stats["hit_rate"],
         "buy_only_return_total": buy_only_stats["return_total"],
         "buy_only_return_rate": buy_only_stats["return_rate"],
+        "buy_only_bets_missing_payouts": n_buy_only_missing_payouts,
         # Phase 4 (2026-05-13): Wilson hit_rate / bootstrap return_rate の 95% CI。
         # n が小さいほど CI 広く、点推定だけでの本番投入判断を防ぐ。
         "buy_only_hit_rate_ci95": buy_only_stats.get("hit_rate_ci95"),
@@ -533,12 +806,15 @@ def run_backtest(
         "whitelist_only_hit_rate": whitelist_only_stats["hit_rate"],
         "whitelist_only_return_total": whitelist_only_stats["return_total"],
         "whitelist_only_return_rate": whitelist_only_stats["return_rate"],
+        "whitelist_only_bets_missing_payouts": n_whitelist_only_missing_payouts,
         "whitelist_only_hit_rate_ci95": whitelist_only_stats.get("hit_rate_ci95"),
         "whitelist_only_return_rate_ci95": whitelist_only_stats.get("return_rate_ci95"),
         "calibration": calibration_report(calibration_records),
         "calibrator": fit_bin_calibrator(calibration_records),
         "_calibration_records": calibration_records,  # 内部用 (--save 時には除外したい)
+        "market_snapshot": _finish_market_snapshot_stats(market_snapshot_stats),
         "by_confidence": by_confidence,
+        "buy_only_by_confidence": buy_only_by_confidence,
         "filters": {
             "min_odds": min_odds,
             "max_odds": max_odds,
@@ -590,6 +866,7 @@ def format_report(r: dict) -> str:
     lines.append(f"  暫定スキップ: {r['races_tentative_skipped']:,}")
     lines.append(f"  ◎付かず:      {r['races_no_pick']:,}")
     lines.append(f"  条件外:        {r.get('races_filtered', 0):,}")
+    lines.append(f"  払戻欠損:      {r.get('races_missing_payouts', 0):,}")
     lines.append(f"  実際に賭けた: {r['races_bet']:,}")
     lines.append("")
     lines.append(f"的中数:         {r['hits']:,}")
@@ -607,11 +884,27 @@ def format_report(r: dict) -> str:
     lines.append(
         f"  絞り運用:   {r.get('buy_only_bets', 0):,} 点  的中 {r.get('buy_only_hits', 0):,}  "
         f"回収率 {r.get('buy_only_return_rate', 0) * 100:.1f}%"
+        f"  欠損 {r.get('buy_only_bets_missing_payouts', 0):,}"
     )
     lines.append(
         f"  WL単独:     {r.get('whitelist_only_bets', 0):,} 点  的中 {r.get('whitelist_only_hits', 0):,}  "
-        f"回収率 {r.get('whitelist_only_return_rate', 0) * 100:.1f}%  (重賞+WL場ベタ買い)"
+        f"回収率 {r.get('whitelist_only_return_rate', 0) * 100:.1f}%"
+        f"  欠損 {r.get('whitelist_only_bets_missing_payouts', 0):,}  (重賞+WL場ベタ買い)"
     )
+    snap = r.get("market_snapshot") or {}
+    if snap:
+        age = snap.get("snapshot_age_min") or {}
+        lines.append("")
+        lines.append(
+            "market snapshot: "
+            f"clean_races={snap.get('clean_market_races', 0):,}/{snap.get('races', 0):,} "
+            f"fresh_horses={snap.get('fresh_horses', 0):,} "
+            f"stale_horses={snap.get('stale_horses', 0):,} "
+            f"unknown_horses={snap.get('unknown_horses', 0):,} "
+            f"post_start_horses={snap.get('post_start_horses', 0):,} "
+            f"bonus_candidates={snap.get('popularity_bonus_candidate_horses', 0):,} "
+            f"age_min/p50/p90/max={age.get('min')}/{age.get('p50')}/{age.get('p90')}/{age.get('max')}"
+        )
     cal = r.get("calibration") or {}
     if cal.get("count"):
         lines.append("")
@@ -626,6 +919,15 @@ def format_report(r: dict) -> str:
             lines.append(
                 f"  {name}: {v['bets']:,} 点  的中 {v['hits']:,} "
                 f"({v['hit_rate'] * 100:.1f}%)  回収率 {v['return_rate'] * 100:.1f}%"
+            )
+    if r.get("buy_only_by_confidence"):
+        lines.append("")
+        lines.append("絞り運用 confidence別:")
+        for name, v in r["buy_only_by_confidence"].items():
+            lines.append(
+                f"  {name}: {v['bets']:,} 点  採用率 {v.get('adoption_rate', 0) * 100:.1f}%  "
+                f"的中 {v['hits']:,} ({v['hit_rate'] * 100:.1f}%)  "
+                f"回収率 {v['return_rate'] * 100:.1f}%"
             )
     if r["by_track"]:
         lines.append("")

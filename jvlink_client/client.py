@@ -452,6 +452,7 @@ class JVLinkClient:
                 "no_data": True,
                 "files_written": 0,
                 "records_total": 0,
+                "filenames": [],
             }
         if rc < 0:
             raise JVLinkError(
@@ -467,6 +468,23 @@ class JVLinkClient:
         files_done = 0
         current_filename = f"{dataspec}_{key}_{int(time.time())}.jvd"
         current_handle = open(out_dir / current_filename, "wb")
+        filenames: list[str] = []
+
+        def close_current_file() -> None:
+            nonlocal current_handle, files_done
+            if current_handle is None:
+                return
+            path = Path(current_handle.name)
+            current_handle.close()
+            current_handle = None
+            try:
+                if path.stat().st_size == 0:
+                    path.unlink()
+                else:
+                    files_done += 1
+                    filenames.append(path.name)
+            except OSError:
+                logger.warning("failed to finalize realtime raw file: %s", path, exc_info=True)
 
         # rc=-3 (未配信) は時間が経てば届くことが多いが、未開催レース等で
         # 永久に届かないケースがある。このタイムアウトに到達したら諦めて抜ける。
@@ -489,9 +507,7 @@ class JVLinkClient:
                 if rc == 0:
                     break
                 if rc == -1:
-                    if current_handle is not None:
-                        current_handle.close()
-                        files_done += 1
+                    close_current_file()
                     current_filename = f"{filename or dataspec}_{key}_{int(time.time())}.jvd"
                     current_handle = open(out_dir / current_filename, "wb")
                     no_data_started = None
@@ -537,9 +553,7 @@ class JVLinkClient:
                 no_data_started = None
 
                 if filename != current_filename:
-                    if current_handle is not None:
-                        current_handle.close()
-                        files_done += 1
+                    close_current_file()
                     current_filename = filename
                     current_handle = open(out_dir / current_filename, "wb")
                 current_handle.write(buf)
@@ -558,9 +572,7 @@ class JVLinkClient:
                     )
                     last_heartbeat = now
         finally:
-            if current_handle is not None:
-                current_handle.close()
-                files_done += 1
+            close_current_file()
             try:
                 self._jv.JVClose()
             except Exception:
@@ -575,4 +587,5 @@ class JVLinkClient:
             "timed_out": timed_out,
             "files_written": files_done,
             "records_total": records_total,
+            "filenames": filenames,
         }

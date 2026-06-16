@@ -54,9 +54,12 @@ def test_market_popularity_bonus_requires_fresh_snapshot():
     score_stale, reasons_stale = _score_one(
         {"win_popularity": 1, "odds_fetched_at": "2026-06-07T11:45:00"}, feat)
     score_missing, reasons_missing = _score_one({"win_popularity": 1}, feat)
+    score_post_start, _ = _score_one(
+        {"win_popularity": 1, "odds_fetched_at": "2026-06-07T12:31:00"}, feat)
 
     assert score_fresh - score_stale == _w("popularity.first", 7)
     assert score_missing == score_stale
+    assert score_post_start == score_stale
     assert "市場1人気" in reasons_fresh
     assert "市場1人気" not in reasons_stale
     assert "市場1人気" not in reasons_missing

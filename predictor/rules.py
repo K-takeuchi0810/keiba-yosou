@@ -64,6 +64,13 @@ def _weights() -> dict:
 
 
 def _w(path: str, default: float) -> float:
+    env_key = "PRED_W_" + path.replace(".", "_")
+    env_val = os.environ.get(env_key)
+    if env_val is not None:
+        try:
+            return float(env_val)
+        except (TypeError, ValueError):
+            pass
     cur = _weights()
     for part in path.split("."):
         if not isinstance(cur, dict) or part not in cur:
@@ -100,6 +107,8 @@ class Prediction:
 
 
 def _market_snapshot_age_min(horse: dict, feat: dict) -> int | None:
+    # Counterpart: scripts.backtest._snapshot_age_min (returns negative ages for post_start counting).
+    # This function returns None for age<0 so that _market_popularity_is_fresh → False.
     fetched_at = horse.get("odds_fetched_at")
     race_date = str(feat.get("current_race_date") or "")
     start_time = str(feat.get("current_start_time") or "").strip().zfill(4)
@@ -112,7 +121,10 @@ def _market_snapshot_age_min(horse: dict, feat: dict) -> int | None:
         race_start = datetime.strptime(race_date + start_time[:4], "%Y%m%d%H%M")
     except ValueError:
         return None
-    return max(0, int((race_start - fetched).total_seconds() // 60))
+    age = int((race_start - fetched).total_seconds() // 60)
+    if age < 0:
+        return None
+    return age
 
 
 def _market_popularity_is_fresh(horse: dict, feat: dict) -> bool:
