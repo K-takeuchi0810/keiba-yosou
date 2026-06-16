@@ -77,6 +77,16 @@ def _run_render_in_venv64(from_date: str | None, to_date: str | None,
     投げたら子プロセスを kill して再送出する。予想生成は最長ステージ
     なのに従来 (subprocess.run ブロック) は中止が届かなかった。
     """
+    # 検証モード (オッズ鮮度無視) と iCloud 公開の併用は禁止。
+    # web.generator CLI 側にもセーフティを置いてあるが、GUI からは
+    # 暗黙に publish=False に倒し、結果に warning を入れて UI に出す。
+    stale_publish_warning: str | None = None
+    if ignore_odds_freshness and publish:
+        publish = False
+        stale_publish_warning = (
+            "検証モード (オッズ鮮度無視) では iCloud 公開を強制的にスキップしました。"
+            "実弾運用の HTML として外部に出さないためのセーフティです。"
+        )
     if not _VENV64_PYTHON.exists():
         # フォールバック: .venv64 が無い環境では in-process render (rule-only)
         path = render(
@@ -86,8 +96,11 @@ def _run_render_in_venv64(from_date: str | None, to_date: str | None,
             ignore_odds_freshness=ignore_odds_freshness,
         )
         pub = publish_to_icloud() if publish else None
+        fallback_warn = "venv64 not found, fell back to rule-only render"
+        if stale_publish_warning:
+            fallback_warn = stale_publish_warning + " / " + fallback_warn
         return {"rendered": str(path), "published": str(pub) if pub else None,
-                "warning": "venv64 not found, fell back to rule-only render"}
+                "warning": fallback_warn}
     cmd = [str(_VENV64_PYTHON), "-m", "web.generator", "--json"]
     if from_date:
         cmd += ["--from", from_date]
@@ -143,7 +156,13 @@ def _run_render_in_venv64(from_date: str | None, to_date: str | None,
         raise RuntimeError(
             f"venv64 render did not emit JSON. stdout: {stdout[-2000:]}"
         )
-    return json.loads(last_json_line)
+    result = json.loads(last_json_line)
+    if stale_publish_warning:
+        existing = result.get("warning")
+        result["warning"] = (
+            stale_publish_warning if not existing else f"{stale_publish_warning} / {existing}"
+        )
+    return result
 
 
 class CancelledError(Exception):
@@ -1608,6 +1627,28 @@ CONTROL_HTML = """<!doctype html>
     font-size: .7rem;
     margin: .2rem 0 0;
   }
+  /* 検証モード (オッズ鮮度無視) チェック ON 時の警告。実弾運用で
+     うっかり使うと iCloud に古いオッズの買い目を出してしまうため、
+     ON のときは強い赤バナーで注意喚起する。CSS だけで切替できるよう
+     :has() を使い、対応していない古い WebView 向けに JS でも hidden 属性を更新する。 */
+  .verification-toggle { display: inline-block; cursor: help; }
+  .verification-warning {
+    margin: .3rem 0 0;
+    padding: .4rem .55rem;
+    background: #b3261e;
+    color: #ffffff;
+    border-radius: 5px;
+    font-size: .72rem;
+    line-height: 1.35;
+    font-weight: 700;
+  }
+  .field:has(#ignore_odds_freshness:checked) .verification-warning {
+    display: block !important;
+  }
+  .field:has(#ignore_odds_freshness:checked) {
+    border-left: 3px solid #b3261e;
+    padding-left: .5rem;
+  }
   .chip-row {
     display: flex;
     gap: .3rem;
@@ -1852,8 +1893,8 @@ CONTROL_HTML = """<!doctype html>
   </div>
 </div>
 <div class="chip-row">
-  <button type="button" onclick="presetToday()">今日</button>
-  <button type="button" onclick="presetWeekend()">今週末</button>
+  <button type="button" onclick="presetToday()" title="From/To を本日に揃える">今日</button>
+  <button type="button" onclick="presetWeekend()" title="From を直近の土曜、To を直近の日曜に揃える (週末開催を一括対象に)">今週末</button>
   <button type="button" onclick="presetLatest()" title="データが存在する最新の開催日を表示 (平日など当日にレースが無いときに)">最新開催</button>
 </div>
 
@@ -1862,28 +1903,45 @@ CONTROL_HTML = """<!doctype html>
     <label>日予算 (円)</label>
     <input id="daily_budget_yen" type="number" min="0" step="100" placeholder="例: 10000">
     <div class="hint">空欄なら推奨%のみ表示。入力時は100円単位で買付額を表示します。</div>
-    <label><input id="ignore_odds_freshness" type="checkbox"> 検証用: オッズ鮮度を無視</label>
+    <label class="verification-toggle" title="チェックすると、オッズが古くても買い候補に出します。確定オッズで過去日を答え合わせするときだけ使用し、未来日の実弾運用には絶対に使わないでください (iCloud 公開は自動でスキップされます)。">
+      <input id="ignore_odds_freshness" type="checkbox"> 検証用: オッズ鮮度を無視
+    </label>
+    <div id="verification_warning" class="verification-warning" role="alert" hidden>
+      ⚠ 検証モード ON: 過去の答え合わせ専用。iCloud 公開と本予想プレビューでの実弾参照は禁止。
+    </div>
   </div>
 </div>
 
 <div class="status-row">
   <div id="status" role="status" aria-live="polite">準備完了。</div>
-  <button id="cancelBtn" type="button" onclick="cancelRun()">中止</button>
+  <button id="cancelBtn" type="button" onclick="cancelRun()" title="現在進行中のアクション (取得 / オッズ取得 / 予想生成 / 公開) を中止する。完了済みステップは保持される。">中止</button>
   <div id="progressWrap" class="progress-wrap"><div id="progressBar"></div></div>
   <div id="progressText"></div>
 </div>
 
-<button class="primary" data-action="run_all" onclick="runAction(this)">取得 → 予想 → 公開</button>
+<button class="primary" data-action="run_all" onclick="runAction(this)" title="Ⅰ〜Ⅳ を順に一括実行 (JVLink でデータ取得 → 最新オッズ取得 → 予想生成 → iCloud 公開)。所要時間は対象期間に応じ数分〜十数分。">取得 → 予想 → 公開</button>
 
 <div class="section-label">個別実行</div>
-<button data-action="fetch_data" onclick="runAction(this)"><span class="step">Ⅰ</span>JVLink でデータ取得</button>
-<button data-action="fetch_odds" onclick="runAction(this)"><span class="step">Ⅱ</span>最新オッズ取得</button>
-<button data-action="run_prediction" onclick="runAction(this)"><span class="step">Ⅲ</span>予想生成</button>
-<button data-action="publish" onclick="runAction(this)"><span class="step">Ⅳ</span>iCloud Drive へ公開</button>
-<button data-action="fetch_bloodline" onclick="runAction(this)"><span class="step">＊</span>血統データ取得</button>
+<button data-action="fetch_data" onclick="runAction(this)" title="JV-Link COM 経由で RA/SE/HR/UM 等の確定レースデータを取得し SQLite に取り込む (32bit Python)">
+  <span class="step">Ⅰ</span>JVLink でデータ取得
+</button>
+<button data-action="fetch_odds" onclick="runAction(this)" title="JVRTOpen で最新オッズ (0B*) を取得。発走前 ~30 分以内のスナップショットは「fresh」扱いで市場人気補正に使われる">
+  <span class="step">Ⅱ</span>最新オッズ取得
+</button>
+<button data-action="run_prediction" onclick="runAction(this)" title="LightGBM v5 ensemble + rule blend で予想を計算し web/dist/index.html を生成する (.venv64 subprocess)">
+  <span class="step">Ⅲ</span>予想生成
+</button>
+<button data-action="publish" onclick="runAction(this)" title="生成済み web/dist/index.html を iCloud Drive 公開フォルダにコピー。iPhone から file:// で閲覧可能になる">
+  <span class="step">Ⅳ</span>iCloud Drive へ公開
+</button>
+<button data-action="fetch_bloodline" onclick="runAction(this)" title="UM (馬基本) と血統データを取得。長時間かかるため詳細設定の開始時刻指定も検討">
+  <span class="step">＊</span>血統データ取得
+</button>
 
 <div class="section-label">確認</div>
-<button data-action="open_icloud_folder" onclick="runAction(this)"><span class="step">›</span>iCloud 公開先を Explorer で開く</button>
+<button data-action="open_icloud_folder" onclick="runAction(this)" title="iCloud Drive 公開フォルダを Explorer で開く。公開済み index.html の存在を目視確認できる">
+  <span class="step">›</span>iCloud 公開先を Explorer で開く
+</button>
 
 <details class="adv">
   <summary>詳細設定</summary>
@@ -2209,6 +2267,20 @@ CONTROL_HTML = """<!doctype html>
 
     var buys = data.buy_candidates || [];
     var bp = data.buy_portfolio || {};
+    // Python 側で計算した unit_yen を input#daily_budget_yen の step/min と
+    // hint 文言に反映する (UI と実バックエンド単位の二重管理を解消)。
+    var unitYen = bp.unit_yen || 100;
+    var budgetInput = byId('daily_budget_yen');
+    if (budgetInput && Number(budgetInput.step) !== unitYen) {
+      budgetInput.step = String(unitYen);
+      budgetInput.min = String(unitYen);
+    }
+    var budgetHint = budgetInput && budgetInput.parentNode
+      ? budgetInput.parentNode.querySelector('.hint') : null;
+    if (budgetHint) {
+      budgetHint.textContent =
+        '空欄なら推奨%のみ表示。入力時は' + unitYen + '円単位で買付額を表示します。';
+    }
     var portfolioHtml = '';
     if (bp.count) {
       var investLabel = bp.multi_day ? '推奨投資(最大日)' : '推奨投資';
@@ -2422,7 +2494,22 @@ CONTROL_HTML = """<!doctype html>
     var budget = byId('daily_budget_yen');
     if (budget) budget.onchange = function () { refreshDashboard(); };
     var ignoreFreshness = byId('ignore_odds_freshness');
-    if (ignoreFreshness) ignoreFreshness.onchange = function () { refreshDashboard(); };
+    function syncVerificationWarning() {
+      var warn = byId('verification_warning');
+      if (!warn || !ignoreFreshness) return;
+      if (ignoreFreshness.checked) {
+        warn.removeAttribute('hidden');
+      } else {
+        warn.setAttribute('hidden', '');
+      }
+    }
+    if (ignoreFreshness) {
+      ignoreFreshness.onchange = function () {
+        syncVerificationWarning();
+        refreshDashboard();
+      };
+      syncVerificationWarning();
+    }
     var ids = ['filter_ev', 'filter_value', 'filter_min_odds', 'filter_max_odds'];
     for (var i = 0; i < ids.length; i += 1) {
       var el = byId(ids[i]);

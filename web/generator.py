@@ -650,9 +650,24 @@ if __name__ == "__main__":
                     help="verification mode: do not suppress buy picks by odds age")
     ap.add_argument("--no-publish", action="store_true",
                     help="iCloud Drive へのコピーをスキップ")
+    ap.add_argument(
+        "--allow-stale-publish", action="store_true",
+        help="--ignore-odds-freshness と publish を併用するセーフティを明示的に解除する "
+             "(検証 HTML を意図的に iCloud に出すときだけ使う)",
+    )
     ap.add_argument("--json", action="store_true",
                     help="結果を JSON で stdout に 1 行出力")
     args = ap.parse_args()
+    # 検証モード (オッズ鮮度無視) で生成した HTML をうっかり iCloud 公開しないよう、
+    # publish と --ignore-odds-freshness の併用は明示的な解除フラグを要求する。
+    if args.ignore_odds_freshness and not args.no_publish and not args.allow_stale_publish:
+        print(
+            "ERROR: --ignore-odds-freshness と publish を併用するには --no-publish か "
+            "--allow-stale-publish のどちらかが必要です。検証用 HTML を実弾運用面に"
+            "出さないためのセーフティです。",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     p = render(
         from_date=args.from_date,
         to_date=args.to_date,

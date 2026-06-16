@@ -88,3 +88,26 @@ def test_market_popularity_can_change_predict_race_mark_order():
     assert preds[0].horse_num == "02"
     assert preds[0].mark == "◎"
     assert "市場1人気" in preds[0].rationale
+
+
+def test_market_popularity_layer_a_can_be_ablated_via_env(monkeypatch):
+    """二重取り込みリスク監査: 層 (A) _market_score の人気ボーナスを ablation
+    したいときは PRED_W_popularity_first/second/third=0 で完全無効化できる。
+
+    これにより層 (A) を切ったまま層 (B) _investment_probability の market_blend
+    だけを単体評価でき、A/B 両方が同方向に作用しているか実測で確認できる。
+    """
+    monkeypatch.setenv("PRED_W_popularity_first", "0")
+    monkeypatch.setenv("PRED_W_popularity_second", "0")
+    monkeypatch.setenv("PRED_W_popularity_third", "0")
+    feat = {
+        "current_starter_count": 16,
+        "current_race_date": "20260607",
+        "current_start_time": "1230",
+    }
+    fresh = {"odds_fetched_at": "2026-06-07T12:05:00"}
+    score_pop1, reasons_pop1 = _score_one({"win_popularity": 1, **fresh}, feat)
+    score_pop4, _ = _score_one({"win_popularity": 4, **fresh}, feat)
+    assert score_pop1 == score_pop4, "weight=0 のとき 1 人気と 4 人気のスコア差は無くなる"
+    assert not any("市場" in r for r in reasons_pop1), \
+        "weight=0 のとき rationale に '市場N人気' を出さない (虚偽表示防止)"

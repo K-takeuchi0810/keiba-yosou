@@ -148,6 +148,61 @@ class JVLinkClient:
                 logger.warning("JVClose at __exit__ failed", exc_info=True)
             self._initialized = False
 
+    def _wait_download_complete(
+        self,
+        downloadcount: int,
+        dataspec: str,
+        on_progress=None,
+        *,
+        sleep: callable = time.sleep,
+        clock: callable = time.time,
+    ) -> None:
+        """JVStatus を polling し downloadcount に達するまで待つ。
+
+        - 全体: JVLINK_DOWNLOAD_TIMEOUT_SEC 経過で JVLinkError
+        - ストール: 進捗が JVLINK_DOWNLOAD_STALL_SEC 動かなければ JVLinkError
+        - sleep / clock を差し替え可能にしてユニットテストで秒待ちを回避
+        """
+        try:
+            total_timeout = max(0, int(os.environ.get("JVLINK_DOWNLOAD_TIMEOUT_SEC", "1800")))
+        except (TypeError, ValueError):
+            total_timeout = 1800
+        try:
+            stall_timeout = max(0, int(os.environ.get("JVLINK_DOWNLOAD_STALL_SEC", "120")))
+        except (TypeError, ValueError):
+            stall_timeout = 120
+        start_wait = clock()
+        last_progress_at = start_wait
+        last_status = -1
+        while True:
+            status = self._jv.JVStatus()
+            if status < 0:
+                raise JVLinkError(f"JVStatus failed: rc={status}")
+            if on_progress:
+                on_progress(
+                    "download",
+                    {"dataspec": dataspec, "remaining": downloadcount - status},
+                )
+            if status >= downloadcount:
+                return
+            now = clock()
+            if status > last_status:
+                last_status = status
+                last_progress_at = now
+            if total_timeout and (now - start_wait) >= total_timeout:
+                raise JVLinkError(
+                    f"JVStatus download timed out: dataspec={dataspec} "
+                    f"got {status}/{downloadcount} after {int(now - start_wait)}s "
+                    f"(JVLINK_DOWNLOAD_TIMEOUT_SEC={total_timeout})"
+                )
+            if stall_timeout and (now - last_progress_at) >= stall_timeout:
+                raise JVLinkError(
+                    f"JVStatus download stalled: dataspec={dataspec} "
+                    f"stuck at {status}/{downloadcount} for {int(now - last_progress_at)}s "
+                    f"(JVLINK_DOWNLOAD_STALL_SEC={stall_timeout})"
+                )
+            sleep(1.0)
+
     def fetch(
         self,
         dataspec: str,
@@ -222,20 +277,13 @@ class JVLinkClient:
                 },
             )
 
-        # ダウンロード完了を待つ
+        # ダウンロード完了を待つ。非リアルタイム JVStatus() は無制限待ちだった
+        # ため、ネット断や JV-Link 内部ストールでハングし続ける事故があった
+        # (2026-06-16 scorecard 指摘)。全体タイムアウトと「進捗が止まったまま」
+        # ストールタイムアウトの 2 段を _wait_download_complete に切り出し、
+        # ユニットテスト可能にした。env で上書き可。
         if downloadcount > 0:
-            while True:
-                status = self._jv.JVStatus()
-                if status < 0:
-                    raise JVLinkError(f"JVStatus failed: rc={status}")
-                if on_progress:
-                    on_progress(
-                        "download",
-                        {"dataspec": dataspec, "remaining": downloadcount - status},
-                    )
-                if status >= downloadcount:
-                    break
-                time.sleep(1.0)
+            self._wait_download_complete(downloadcount, dataspec, on_progress)
 
         # 読み出しループ（ストリーム書き込み + 進捗報告）
         out_dir = RAW_DIR / dataspec

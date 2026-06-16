@@ -39,6 +39,23 @@ MARKS = ["◎", "○", "▲", "△", "☆"]
 # _load_calibrator が expected_rules_version と照合して warning を出す。
 RULES_VERSION = "p25-market-pop-score-2026-06-14"
 
+# 現行 RULES_VERSION に対して「raw_blended_probability の分布が実質変わらないため、
+# その calibrator をそのまま使ってよい」と判断できる過去 rules-version のテーブル。
+# 計量的根拠 (Brier 等) を必ず併記する。エントリを増やす際は scripts.backtest の
+# 同一条件 A/B 数値を参照すること。安易に追加してはならない。
+CALIBRATOR_COMPATIBLE_RULES_VERSIONS: dict[str, dict[str, str]] = {
+    "p25-market-pop-score-2026-06-14": {
+        "p21-2026-06-13": (
+            "P25 は P21 に fresh-odds (発走30分以内) 限定の人気1-3番補正を足したのみ。"
+            "2026-06-14 backtest (2025-07-01〜2026-06-14) では fresh 馬が 46,287 中 193 (0.4%)、"
+            "補正発火は 33 馬 / 11 race、Brier 差 -0.000、buy_only return 差 0.00pt。"
+            "raw_blended_probability 分布の実質変化は無視可能で、P21 fit の calibrator を流用しても"
+            "同等以上の Brier / logloss が期待できる。fresh odds 蓄積後 (Plan Step 5-7) に"
+            "再 fit して本テーブルから削除する。"
+        ),
+    },
+}
+
 # 環境変数で OP/重賞専用ロジック (Phase 1 / v2-grade) の有効/無効を切替可能にし、
 # v1 (旧重み) との A/B 比較ができるようにする。デフォルトは有効 (=1)。
 V2_GRADE_ENABLED = os.environ.get("V2_GRADE", "1") != "0"
@@ -635,6 +652,35 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     # 6 件で勝ち馬を予想 7 位以下)。多頭数レースでは人気は強いシグナル
     # なので、極端な乖離を抑える方向にスコアを補正する。
     # 少頭数 (< 12 頭) では人気が薄いので補正なし。
+    #
+    # 市場シグナルの多段経路 (2026-06-17 二重取り込みリスク監査):
+    # 競馬予想は次の 3 経路で市場情報を取り込み、それぞれ目的と作用点が異なる。
+    # 完全独立ではないが、意図的な「層」として設計されているため、改修時は
+    # どの層を触っているかを明示すること。
+    #
+    #   (A) 本関数 _market_score: スコアリング段で離散順位 (1/2/3 位) を加点。
+    #       影響は ◎ などのランキング決定および raw_blended_probability の
+    #       softmax 重み。fresh odds (発走30分以内) 限定で発火。weight=0 で
+    #       無効化可 (weights.json popularity.first/second/third または
+    #       env PRED_W_popularity_first 等)。
+    #
+    #   (B) _investment_probability: calibrator 適用後の投資確率を
+    #       連続的 market_probability (odds 由来) と blend。confidence ごとの
+    #       model_weight (0.30〜0.72) で混合し、win_probability に直接作用。
+    #       freshness gate なし (古いオッズでも動く)。env PRED_DISABLE_DISCOUNT=1
+    #       で odds_discount だけ無効化できるが blend 自体は常時有効。
+    #
+    #   (C) _value_score: 買い候補抽出用の付随スコア (7〜30 倍の中穴帯に
+    #       value 加点)。買い目フィルタの参考値で、calibrator/EV/Kelly には
+    #       戻らないため確率の二重カウントは起きない。
+    #
+    # 「二重取り込み」リスクが顕在化する条件: (A) と (B) が同じ horse に
+    # 同方向 (= 人気馬を更に押す方向) で作用するケース。現状は (A) が
+    # fresh-only かつ低 weight (7/4/2) なので、2026-06-14 backtest では
+    # raw_blended 分布変化が Brier 差 -0.000 で実質ゼロ。fresh rate が
+    # 上がった段階で改めて raw_blended / win_probability / 回収率の
+    # 並走 A/B を取り、必要なら (A) の weight 縮小か (B) の model_weight
+    # 引き上げで二重作用を緩める。Plan Step 6 参照。
     starter_count = feat.get("current_starter_count", 0) or 0
     popularity = horse.get("win_popularity") or 0
     # 重みが 0 (ablation 等で市場エコー無効化) のときは reason も出さない。
@@ -833,12 +879,21 @@ def _load_calibrator() -> dict | None:
         )
     expected = data.get("expected_rules_version")
     if expected != RULES_VERSION:
-        logger.warning(
-            "calibrator rules-version mismatch: calibrator=%s current=%s. "
-            "スコア分布が変わった後の旧 mapping を適用している可能性があります。"
-            "scripts.refit_calibrator で再 fit してください。",
-            expected, RULES_VERSION,
-        )
+        compat = CALIBRATOR_COMPATIBLE_RULES_VERSIONS.get(RULES_VERSION, {})
+        rationale = compat.get(expected)
+        if rationale:
+            logger.info(
+                "calibrator rules-version compat: calibrator=%s current=%s (許容済み). %s",
+                expected, RULES_VERSION, rationale,
+            )
+        else:
+            logger.warning(
+                "calibrator rules-version mismatch: calibrator=%s current=%s. "
+                "スコア分布が変わった後の旧 mapping を適用している可能性があります。"
+                "scripts.refit_calibrator で再 fit するか、互換と判定できるなら "
+                "predictor.rules.CALIBRATOR_COMPATIBLE_RULES_VERSIONS に根拠付きで登録してください。",
+                expected, RULES_VERSION,
+            )
     _CALIBRATOR_CACHE = (mtime, data)
     return data
 

@@ -240,3 +240,23 @@ def test_stale_suppressed_notice(context):
     context["stale_suppressed"] = 26
     html = _render(context)
     assert "うち 26 件は" in html and "オッズ鮮度切れ" in html
+
+
+def test_verification_banner_hidden_by_default(context):
+    """ignore_odds_freshness が無いか False のとき、警告バナーは出ない。"""
+    html = _render(context)
+    assert 'class="verification-banner"' not in html
+    context["ignore_odds_freshness"] = False
+    assert 'class="verification-banner"' not in _render(context)
+
+
+def test_verification_banner_visible_when_ignore_odds_freshness(context):
+    """ignore_odds_freshness=True のとき、role=alert の強警告バナーが出ること。
+
+    実弾運用 HTML として誤って iCloud 公開しないための視覚的セーフティ。
+    """
+    context["ignore_odds_freshness"] = True
+    html = _render(context)
+    assert 'class="verification-banner"' in html
+    assert 'role="alert"' in html
+    assert "実弾運用には使えません" in html
