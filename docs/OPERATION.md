@@ -195,10 +195,10 @@ Copy-Item data\fetch_state.json data\backup\fetch_state_$(Get-Date -Format yyyyM
 - [.claude/skills/keiba-backtest/SKILL.md](../.claude/skills/keiba-backtest/SKILL.md) — backtest 設計
 - [CLAUDE.md](../CLAUDE.md) — 必須ルール 4 で本書を参照
 
-## 8. 目標 (2026-05-16 設定)
+## 8. 目標 (2026-06-14 改定)
 
-**年間 110%, 月次変動は許容** (P14 採用と同時に設定)
+**年間 180%, 月次変動は許容** (P25 検証設計時に上方改定)
 
-- 年間 +10% = 月平均 +0.8% (= 100 円ベースで月 8 円利益 / 100 円賭金)
+- 年間 +80% = 月平均 +6.7% (= 100 円ベースで月 6.7 円利益 / 100 円賭金)
 - 月次は -20% 〜 +50% の variance を許容
 - 連続 3 ヶ月 -10% 未満 → 自動サスペンド + 戦略再選定
