@@ -67,6 +67,54 @@ P25 scorecard の結論は「ランキング補助として観察対象、正式
 
 比較はフィルタ変更と交絡させない。`BUY_FILTER_DEFAULT` の戦略変更とは別セッション、別 rule_version、別 scorecard で扱う。
 
+### 3 層 factorial 設計 (二重取り込みリスクの単離)
+
+`predictor/rules.py` の docstring (A/B/C の多段経路) で示した通り、市場シグナルは
+3 経路から取り込まれる。利益・損失への寄与を **独立に**測るためには、popularity
+weights の 4 値を試すだけでは不足で、3 層 (A/B/C) を on/off で切り換えた
+factorial 設計が必要。`(A, B, C) ∈ {on, off}^3` の 8 セルから、最低 4 セルを
+paired run する。
+
+| セル | 層 (A) `_market_score` 人気加点 | 層 (B) `_investment_probability` blend | 層 (C) `_value_score` odds-band | 設定方法 |
+|---|---|---|---|---|
+| C1 (baseline) | OFF | OFF | OFF | `PRED_W_popularity_first/second/third=0` + `PRED_DISABLE_BLEND=1` + `PRED_W_discount_*=0` |
+| C2 (A only) | ON | OFF | OFF | (A デフォルト) + (B/C は env で OFF) |
+| C3 (B only) | OFF | ON | OFF | (A を env で OFF) + (B デフォルト) + (C を env で OFF) |
+| C4 (A+B) | ON | ON | OFF | (A/B デフォルト) + (C を env で OFF) |
+| C5 (A+B+C = 現状) | ON | ON | ON | env override なし (現状値) |
+| C6 (B+C) | OFF | ON | ON | (A を env で OFF) + (B/C デフォルト) |
+| C7 (A+C) | ON | OFF | ON | (A デフォルト) + (B を env で OFF) + (C デフォルト) |
+| C8 (C only) | OFF | OFF | ON | (A を env で OFF) + (B を env で OFF) + (C デフォルト) |
+
+**最低限走らせる 4 セル**: C1 (baseline) / C2 (A only) / C3 (B only) / C5 (現状)
+→ A 単独寄与・B 単独寄与・両ON 寄与 (二重取り込み) を 3 種の paired 差分で測定可能。
+
+**理想は 8 セル全数**: C4 / C6 / C7 / C8 を追加すれば odds-band C の寄与も含めた
+完全 ANOVA 分析が可能。各セルは独立 backtest 出力 (`*-filtered.json`) として保存
+し、`buy_only_return_rate` / `bonus_subset_metrics.brier_score` / aggregate Brier
+の 3 系列を比較する。
+
+**注意点**:
+
+- 各セルの env override は `meta.env_overrides` フィールドに自動記録 (P21 で
+  実装済み) → 再現性監査に使う。
+- C1 (baseline) では `_market_popularity_is_fresh` が True でも weight=0 なので
+  rationale に「市場N人気」が出ない (虚偽表示防止のテスト済み)。
+- C3 / C6 で `PRED_DISABLE_BLEND` は現状 env として実装されていない。実装
+  必要なら本書追記後の TODO として `predictor/rules.py:_investment_probability`
+  に追加する。代替として `PRED_W_model_blend_*=1.0` を全 confidence に設定し
+  blend を実質無効化する経路も可。
+- factorial 比較は 同一期間 paired backtest が前提。期間ズレで loss を起こす
+  ことが多いので、4-fold 境界と評価窓は本 Plan の主窓を使う。
+
+**現状の進捗**:
+
+- C1 (pop_0_0_0) / C5 (pop_7_4_2): 通期 (`2025-07-01〜2026-06-14`) で完了済
+  (`20260615_095016_*-filtered.json` / `20260615_110607_*-filtered.json`)
+- 他セルは未実行。次の重い backtest を起動するときに C2 / C3 から追加する。
+- factorial の数値解析 (ANOVA, 主効果分解) は scorecard `validation-process-auditor`
+  領分で、scripts/backtest 出力 JSON を後段の集計スクリプトで処理する。
+
 ## 評価窓
 
 ### 主窓
