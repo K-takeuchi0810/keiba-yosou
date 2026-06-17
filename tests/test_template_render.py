@@ -260,3 +260,18 @@ def test_verification_banner_visible_when_ignore_odds_freshness(context):
     assert 'class="verification-banner"' in html
     assert 'role="alert"' in html
     assert "実弾運用には使えません" in html
+
+
+def test_body_has_verification_mode_class_when_ignore_odds_freshness(context):
+    """ignore_odds_freshness=True で <body class="verification-mode"> となり、
+    scroll-margin-top が 13.5rem に切替わって verification-banner 高さを吸収できる"""
+    context["ignore_odds_freshness"] = True
+    html = _render(context)
+    assert '<body class="verification-mode">' in html
+    assert "body.verification-mode .day-section" in html
+
+
+def test_body_has_no_verification_mode_class_in_normal_mode(context):
+    html = _render(context)
+    assert '<body class="verification-mode">' not in html
+    assert '<body>' in html

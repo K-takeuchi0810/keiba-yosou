@@ -565,13 +565,37 @@ def render(
     return out
 
 
-def publish_to_icloud() -> Path:
-    """生成済み web/dist/index.html を iCloud Drive 公開ディレクトリにコピー。"""
+class StalePublishRefused(RuntimeError):
+    """検証モード HTML を iCloud に出そうとしたときに raise する。
+
+    Python から render(ignore_odds_freshness=True) + publish_to_icloud() を直接呼ぶ
+    第三経路の保護。CLI/GUI ではこのチェックに来る前に publish_safety で塞いでいる。
+    """
+
+
+def publish_to_icloud(allow_stale: bool = False) -> Path:
+    """生成済み web/dist/index.html を iCloud Drive 公開ディレクトリにコピー。
+
+    allow_stale=False (デフォルト) で index.html に verification-banner が含まれて
+    いる (= ignore_odds_freshness=True で render された) と StalePublishRefused を
+    raise する。直 import 経路 (CLI/GUI 以外) の保護層。
+    """
     src = WEB_DIST / "index.html"
     if not src.exists():
         raise FileNotFoundError(
             f"{src} が無い。先に render() を実行してください。"
         )
+    if not allow_stale:
+        try:
+            preview_head = src.read_text(encoding="utf-8", errors="replace")[:5000]
+        except OSError:
+            preview_head = ""
+        if 'class="verification-banner"' in preview_head:
+            raise StalePublishRefused(
+                "index.html は検証モード (オッズ鮮度無視) で生成されています。"
+                "iCloud 公開を中止しました。意図的に公開する場合は "
+                "publish_to_icloud(allow_stale=True) を渡してください。"
+            )
     src_stat = src.stat()
     src_digest = _file_sha256(src)
     ICLOUD_PUBLISH_DIR.mkdir(parents=True, exist_ok=True)
@@ -658,13 +682,17 @@ if __name__ == "__main__":
     ap.add_argument("--json", action="store_true",
                     help="結果を JSON で stdout に 1 行出力")
     args = ap.parse_args()
-    # 検証モード (オッズ鮮度無視) で生成した HTML をうっかり iCloud 公開しないよう、
-    # publish と --ignore-odds-freshness の併用は明示的な解除フラグを要求する。
-    if args.ignore_odds_freshness and not args.no_publish and not args.allow_stale_publish:
+    # 検証モード × publish の安全判定は web.publish_safety に集約 (CLI/GUI/直 import 共通)。
+    from web.publish_safety import assert_safe_to_publish
+    publish_decision, safety_warning = assert_safe_to_publish(
+        ignore_odds_freshness=args.ignore_odds_freshness,
+        publish=not args.no_publish,
+        allow_stale=args.allow_stale_publish,
+    )
+    if safety_warning is not None:
         print(
-            "ERROR: --ignore-odds-freshness と publish を併用するには --no-publish か "
-            "--allow-stale-publish のどちらかが必要です。検証用 HTML を実弾運用面に"
-            "出さないためのセーフティです。",
+            f"ERROR: {safety_warning} --no-publish か --allow-stale-publish の"
+            f"どちらかを明示してください。",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -675,11 +703,14 @@ if __name__ == "__main__":
         ignore_odds_freshness=args.ignore_odds_freshness,
     )
     published = None
-    if not args.no_publish:
+    if publish_decision:
         try:
-            published = publish_to_icloud()
+            published = publish_to_icloud(allow_stale=args.allow_stale_publish)
         except FileNotFoundError as e:
             print(f"publish skipped: {e}", file=sys.stderr)
+        except StalePublishRefused as e:
+            print(f"publish refused (banner detected): {e}", file=sys.stderr)
+            sys.exit(2)
     if args.json:
         # ensure_ascii=True: 日本語パス (例: iCloudDrive/競馬予想/) を Unicode
         # escape にし、Windows console (cp932) と utf-8 parent の codec 差で

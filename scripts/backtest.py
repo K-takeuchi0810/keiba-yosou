@@ -133,6 +133,45 @@ def _snapshot_age_min(horse: dict, race: dict) -> int | None:
     return int((race_start - fetched).total_seconds() // 60)
 
 
+def _horse_bonus_candidate(horse: dict, race: dict, pop_cfg: dict) -> bool:
+    """その馬が「市場人気ボーナス対象」(P25 fresh-odds 補正の発火対象) か。
+
+    判定ロジックは predictor.rules._market_score と同じ:
+      starter_count >= min_field  かつ
+      win_popularity ∈ {1, 2, 3}  かつ
+      weight_by_pop > 0  かつ
+      market_snapshot が fresh (age <= max_snapshot_age_min, age >= 0)
+
+    _add_market_snapshot_race と _bonus_subset_metrics の双方で再利用する
+    ことで「発火帯」の定義が複数箇所で食い違うことを防ぐ。
+    """
+    pop = horse.get("win_popularity") or 0
+    if pop <= 0:
+        return False
+    weight_by_pop = {
+        1: pop_cfg.get("first"),
+        2: pop_cfg.get("second"),
+        3: pop_cfg.get("third"),
+    }
+    if not (weight_by_pop.get(pop) or 0):
+        return False
+    min_field = int(pop_cfg.get("min_field", 12) or 12)
+    field_size_hint = race.get("starter_count")
+    try:
+        starter_count = int(field_size_hint) if field_size_hint else 0
+    except (TypeError, ValueError):
+        starter_count = 0
+    if starter_count < min_field:
+        return False
+    max_age = pop_cfg.get("max_snapshot_age_min")
+    age = _snapshot_age_min(horse, race)
+    if age is None or age < 0:
+        return False
+    if max_age is not None and age > float(max_age):
+        return False
+    return True
+
+
 def _empty_market_snapshot_stats(pop_cfg: dict) -> dict:
     return {
         "max_snapshot_age_min": pop_cfg.get("max_snapshot_age_min"),
@@ -165,14 +204,10 @@ def _empty_market_snapshot_stats(pop_cfg: dict) -> dict:
 
 def _add_market_snapshot_race(stats: dict, race: dict, horses: list[dict], pop_cfg: dict) -> None:
     max_age = pop_cfg.get("max_snapshot_age_min")
-    min_field = int(pop_cfg.get("min_field", 12) or 12)
     field_size = len(horses)
-    starter_count = _safe_int(race.get("starter_count") or field_size, field_size, [], "race.starter_count")
-    weight_by_pop = {
-        1: pop_cfg.get("first"),
-        2: pop_cfg.get("second"),
-        3: pop_cfg.get("third"),
-    }
+    # race.starter_count を horses 数で代替する経路もあるので _horse_bonus_candidate
+    # と判定が完全一致するように race dict に補完してから渡す。
+    race_for_bonus = race if race.get("starter_count") else {**race, "starter_count": field_size}
     stats["races"] += 1
     if horses and all((h.get("win_odds") or 0) > 0 and (h.get("win_popularity") or 0) > 0 for h in horses):
         stats["clean_market_races"] += 1
@@ -195,11 +230,9 @@ def _add_market_snapshot_race(stats: dict, race: dict, horses: list[dict], pop_c
         if age is None:
             stats["unknown_horses"] += 1
             race_has_unknown = True
-            is_fresh = False
         elif age < 0:
             stats["post_start_horses"] += 1
             race_has_post_start = True
-            is_fresh = False
         else:
             stats["_ages"].append(age)
             is_fresh = max_age is None or age <= float(max_age)
@@ -210,7 +243,7 @@ def _add_market_snapshot_race(stats: dict, race: dict, horses: list[dict], pop_c
                 stats["stale_horses"] += 1
                 race_has_stale = True
 
-        if starter_count >= min_field and (weight_by_pop.get(pop) or 0) and is_fresh:
+        if _horse_bonus_candidate(horse, race_for_bonus, pop_cfg):
             stats["popularity_bonus_candidate_horses"] += 1
             race_has_bonus_candidate = True
 
@@ -247,6 +280,38 @@ def _finish_market_snapshot_stats(stats: dict) -> dict:
             "max": None,
         }
     return stats
+
+
+def _bonus_subset_metrics(calibration_records: list[dict]) -> dict:
+    """市場人気ボーナス発火帯 (= bonus_candidate=True) の馬群だけで Brier /
+    log_loss / reliability bins を再算出する。
+
+    互換テーブル (CALIBRATOR_COMPATIBLE_RULES_VERSIONS) の数値根拠を、
+    全馬集約 Brier (発火 33/46,287 = 0.07% で希釈されゼロに見える) ではなく、
+    実際に補正が効いた発火帯サブセットで判定するためのもの。
+
+    出力:
+      - count: 発火帯馬数
+      - brier_score / log_loss / bins: calibration_report と同形式
+      - actual_win_rate: 発火帯馬の平均勝率 (Plan の高p帯 reliability 検証用)
+      - mean_raw_blended: probability の平均 (calibrator 入力分布の代表値)
+    """
+    subset = [r for r in calibration_records if r.get("bonus_candidate")]
+    base = calibration_report(subset)
+    if base["count"] == 0:
+        return {
+            "count": 0,
+            "brier_score": None,
+            "log_loss": None,
+            "bins": [],
+            "actual_win_rate": None,
+            "mean_raw_blended": None,
+        }
+    actuals = [1 if r.get("actual") else 0 for r in subset]
+    probs = [max(0.0, min(1.0, float(r.get("probability") or 0.0))) for r in subset]
+    base["actual_win_rate"] = round(sum(actuals) / len(actuals), 6)
+    base["mean_raw_blended"] = round(sum(probs) / len(probs), 6)
+    return base
 
 
 def _snapshot_meta() -> dict:
@@ -652,6 +717,7 @@ def run_backtest(
                 n_no_pick += 1
                 continue
             horse_by_num = {h.get("horse_num"): h for h in horses}
+            race_for_bonus = race if race.get("starter_count") else {**race, "starter_count": len(horses)}
             for pred in preds:
                 horse = horse_by_num.get(pred.horse_num)
                 if not horse:
@@ -663,12 +729,17 @@ def run_backtest(
                 #     適用前、race 内 Σ=1 正規化済)
                 # 旧 win_probability は `investment_probability` フィールドに保持
                 # (後方互換・後追い分析用)。
+                # P25 (2026-06-17): bonus_candidate フラグを記録し、後段で
+                # 発火帯限定 (= 市場人気補正が実際に効いた馬群) の reliability
+                # を別途算出する。互換テーブル登録の数値根拠を「希釈された
+                # 集約 Brier」ではなく「発火帯 subset の Brier」に上げる。
                 calibration_records.append(
                     {
                         "probability": pred.raw_blended_probability,
                         "investment_probability": pred.win_probability,
                         "actual": 1 if horse.get("confirmed_order") == 1 else 0,
                         "confidence": pred.confidence,
+                        "bonus_candidate": _horse_bonus_candidate(horse, race_for_bonus, pop_cfg),
                     }
                 )
             payout, payout_present = get_payout_with_presence(conn, race, top.horse_num, bet_type)
@@ -812,7 +883,14 @@ def run_backtest(
         "calibration": calibration_report(calibration_records),
         "calibrator": fit_bin_calibrator(calibration_records),
         "_calibration_records": calibration_records,  # 内部用 (--save 時には除外したい)
-        "market_snapshot": _finish_market_snapshot_stats(market_snapshot_stats),
+        # market_snapshot に bonus_subset_metrics (= P25 補正発火帯限定 Brier 等) を統合。
+        # _finish_market_snapshot_stats と bonus_subset_metrics は別ステップだが、
+        # 互換テーブルの数値根拠としては同じ "発火帯" 定義に基づく対応物なので
+        # 同一フィールドの下にまとめる。
+        "market_snapshot": {
+            **_finish_market_snapshot_stats(market_snapshot_stats),
+            "bonus_subset_metrics": _bonus_subset_metrics(calibration_records),
+        },
         "by_confidence": by_confidence,
         "buy_only_by_confidence": buy_only_by_confidence,
         "filters": {

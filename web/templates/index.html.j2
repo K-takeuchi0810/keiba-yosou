@@ -130,6 +130,11 @@
      モバイル実測 (375px) でヘッダ 166px (filter-summary 2 行折返し時) が
      最悪値なので 176px 着地 = ~10px クリアランス */
   .day-section, details.race { scroll-margin-top: 11rem; }
+  /* 検証モード時は verification-banner (高 ≈ 52px) が sticky header に追加されるため、
+     アンカー着地点が ~28px 食い込む (モバイル監査 2026-06-17 指摘)。
+     body.verification-mode で scroll-margin を 13.5rem (216px) に上げ、被りを解消 */
+  body.verification-mode .day-section,
+  body.verification-mode details.race { scroll-margin-top: 13.5rem; }
   main { padding: 0.5rem; max-width: 720px; margin: 0 auto; }
   .buy-board {
     margin: 0.5rem 0 1rem;
@@ -527,7 +532,7 @@
   }
 </style>
 </head>
-<body>
+<body{% if ignore_odds_freshness | default(false) %} class="verification-mode"{% endif %}>
 <header>
   <h1>競馬予想</h1>
   <div class="updated">更新 {{ generated_at }}</div>

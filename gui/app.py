@@ -49,6 +49,7 @@ from scripts.backtest import get_payout, horses_for_race, list_races
 from scripts.fetch_odds import race_key
 from web.codes import race_id_to_date, track_name
 from web.generator import publish_to_icloud, render
+from web.publish_safety import assert_safe_to_publish
 
 ensure_dirs()
 
@@ -78,15 +79,13 @@ def _run_render_in_venv64(from_date: str | None, to_date: str | None,
     なのに従来 (subprocess.run ブロック) は中止が届かなかった。
     """
     # 検証モード (オッズ鮮度無視) と iCloud 公開の併用は禁止。
-    # web.generator CLI 側にもセーフティを置いてあるが、GUI からは
-    # 暗黙に publish=False に倒し、結果に warning を入れて UI に出す。
-    stale_publish_warning: str | None = None
-    if ignore_odds_freshness and publish:
-        publish = False
-        stale_publish_warning = (
-            "検証モード (オッズ鮮度無視) では iCloud 公開を強制的にスキップしました。"
-            "実弾運用の HTML として外部に出さないためのセーフティです。"
-        )
+    # 判定は web.publish_safety.assert_safe_to_publish に集約 (CLI/GUI 共通の単一出典)。
+    # GUI からは allow_stale=False で呼び、warning が返ったら publish=False に倒す。
+    publish, stale_publish_warning = assert_safe_to_publish(
+        ignore_odds_freshness=ignore_odds_freshness,
+        publish=publish,
+        allow_stale=False,
+    )
     if not _VENV64_PYTHON.exists():
         # フォールバック: .venv64 が無い環境では in-process render (rule-only)
         path = render(

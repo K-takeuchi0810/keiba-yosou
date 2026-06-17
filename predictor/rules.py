@@ -41,20 +41,126 @@ RULES_VERSION = "p25-market-pop-score-2026-06-14"
 
 # 現行 RULES_VERSION に対して「raw_blended_probability の分布が実質変わらないため、
 # その calibrator をそのまま使ってよい」と判断できる過去 rules-version のテーブル。
-# 計量的根拠 (Brier 等) を必ず併記する。エントリを増やす際は scripts.backtest の
-# 同一条件 A/B 数値を参照すること。安易に追加してはならない。
-CALIBRATOR_COMPATIBLE_RULES_VERSIONS: dict[str, dict[str, str]] = {
+#
+# エントリの値は dict 構造:
+#   {
+#     "rationale": str,                   # 計量根拠 (60 文字以上必須、test で検査)
+#     "max_fresh_rate": float | None,     # backtest market_snapshot の
+#                                         # fresh_horses / horses_total の上限。
+#                                         # 超過すると compat 失効 (warning に昇格)。
+#     "max_bonus_candidate_rate": float | None,  # bonus_candidate_horses / horses の上限
+#     "expires_on": str | None,           # "YYYY-MM-DD" 形式、過ぎたら自動失効
+#   }
+#
+# 失効トリガを機械化することで「人間が忘れたら永久に info」(2026-06-17 検証監査人指摘)
+# を防ぐ。閾値超過時は scripts.backtest や scripts.refit_calibrator の case-by-case 判定に
+# 戻り、必要なら新 RULES_VERSION で entry を更新する。
+#
+# 互換テーブル登録は **ログノイズ抑制であって本番採用判定ではない**。
+# 実弾投入条件は docs/P25_MARKET_POP_VALIDATION_PLAN.md の合格条件を別途満たすこと。
+CALIBRATOR_COMPATIBLE_RULES_VERSIONS: dict[str, dict[str, dict]] = {
     "p25-market-pop-score-2026-06-14": {
-        "p21-2026-06-13": (
-            "P25 は P21 に fresh-odds (発走30分以内) 限定の人気1-3番補正を足したのみ。"
-            "2026-06-14 backtest (2025-07-01〜2026-06-14) では fresh 馬が 46,287 中 193 (0.4%)、"
-            "補正発火は 33 馬 / 11 race、Brier 差 -0.000、buy_only return 差 0.00pt。"
-            "raw_blended_probability 分布の実質変化は無視可能で、P21 fit の calibrator を流用しても"
-            "同等以上の Brier / logloss が期待できる。fresh odds 蓄積後 (Plan Step 5-7) に"
-            "再 fit して本テーブルから削除する。"
-        ),
+        "p21-2026-06-13": {
+            "rationale": (
+                "P25 は P21 に fresh-odds (発走30分以内) 限定の人気1-3番補正を足したのみ。"
+                "2026-06-14 backtest (2025-07-01〜2026-06-14) では fresh 馬が 46,287 中 193 (0.4%)、"
+                "補正発火は 33 馬 / 11 race、Brier 差 -0.000、buy_only return 差 0.00pt。"
+                "raw_blended_probability 分布の実質変化は無視可能で、P21 fit の calibrator を流用しても"
+                "同等以上の Brier / logloss が期待できる。fresh odds 蓄積後 (Plan Step 5-7) に"
+                "再 fit して本テーブルから削除する。"
+            ),
+            # fresh rate が 5% を超えたら「P25 補正が分布を実質変えない」前提が崩れる。
+            # 0.4% 観測時点から見て安全係数 ~12 倍。
+            "max_fresh_rate": 0.05,
+            # bonus_candidate_horses / horses_total が 1% を超えたら raw_blended への
+            # 影響が aggregated Brier でも見え始める。
+            "max_bonus_candidate_rate": 0.01,
+            # P25 検証 Plan Step 7 (fresh odds 蓄積後 calibrator refit) の想定完了時期。
+            # この日を過ぎても refit していなければ warning に昇格して再評価を強制する。
+            "expires_on": "2026-09-30",
+        },
     },
 }
+
+
+def evaluate_calibrator_compat(
+    rules_version: str,
+    calibrator_version: str | None,
+    market_snapshot: dict | None = None,
+    *,
+    today: str | None = None,
+) -> tuple[str, str]:
+    """互換テーブル登録状態 + 最近の market_snapshot を見て、calibrator の
+    使用ステータスを判定する。
+
+    戻り値: (status, message)
+      status ∈ {"match", "compat", "expired", "mismatch"}
+      message: ログ出力用の文字列 (info / warning 双方で使う)
+
+    - "match": calibrator_version == rules_version、警告不要
+    - "compat": 互換テーブル登録あり、閾値も満たしており info ログ
+    - "expired": 互換テーブル登録はあるが閾値超過 or 期限切れ、warning 昇格
+    - "mismatch": 互換テーブル未登録、従来通り warning
+    """
+    if calibrator_version == rules_version:
+        return ("match", f"calibrator matches RULES_VERSION={rules_version}")
+    compat_table = CALIBRATOR_COMPATIBLE_RULES_VERSIONS.get(rules_version, {})
+    entry = compat_table.get(calibrator_version or "")
+    if not entry:
+        return (
+            "mismatch",
+            f"calibrator rules-version mismatch: calibrator={calibrator_version} "
+            f"current={rules_version}. スコア分布が変わった後の旧 mapping を適用している"
+            f"可能性があります。scripts.refit_calibrator で再 fit するか、"
+            f"互換と判定できるなら predictor.rules.CALIBRATOR_COMPATIBLE_RULES_VERSIONS "
+            f"に根拠付きで登録してください。",
+        )
+    # 失効条件 (期限切れ)
+    expires_on = entry.get("expires_on")
+    if expires_on:
+        today = today or datetime.now().strftime("%Y-%m-%d")
+        if today > expires_on:
+            return (
+                "expired",
+                f"calibrator compat EXPIRED: calibrator={calibrator_version} "
+                f"current={rules_version}. 互換登録の有効期限 {expires_on} を超過しました "
+                f"(今日={today})。Plan Step 7 の calibrator refit を実行してから "
+                f"CALIBRATOR_COMPATIBLE_RULES_VERSIONS からエントリを削除してください。",
+            )
+    # 失効条件 (fresh rate / bonus_candidate rate 超過)
+    if market_snapshot:
+        horses_total = market_snapshot.get("horses") or 0
+        if horses_total > 0:
+            max_fresh = entry.get("max_fresh_rate")
+            if max_fresh is not None:
+                fresh_rate = (market_snapshot.get("fresh_horses") or 0) / horses_total
+                if fresh_rate > max_fresh:
+                    return (
+                        "expired",
+                        f"calibrator compat EXPIRED by fresh_rate: "
+                        f"calibrator={calibrator_version} current={rules_version}. "
+                        f"fresh_rate={fresh_rate:.4f} > 閾値 {max_fresh:.4f}。"
+                        f"P25 補正が分布を実質変えない前提が崩れたため "
+                        f"calibrator refit が必要です。",
+                    )
+            max_bonus = entry.get("max_bonus_candidate_rate")
+            if max_bonus is not None:
+                bonus = market_snapshot.get("popularity_bonus_candidate_horses") or 0
+                bonus_rate = bonus / horses_total
+                if bonus_rate > max_bonus:
+                    return (
+                        "expired",
+                        f"calibrator compat EXPIRED by bonus_candidate_rate: "
+                        f"calibrator={calibrator_version} current={rules_version}. "
+                        f"bonus_candidate_rate={bonus_rate:.4f} > 閾値 {max_bonus:.4f}。"
+                        f"P25 補正の発火頻度が想定を超え、calibrator refit が必要です。",
+                    )
+    rationale = entry.get("rationale", "")
+    return (
+        "compat",
+        f"calibrator rules-version compat: calibrator={calibrator_version} "
+        f"current={rules_version} (許容済み). {rationale}",
+    )
 
 # 環境変数で OP/重賞専用ロジック (Phase 1 / v2-grade) の有効/無効を切替可能にし、
 # v1 (旧重み) との A/B 比較ができるようにする。デフォルトは有効 (=1)。
@@ -661,26 +767,32 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     #   (A) 本関数 _market_score: スコアリング段で離散順位 (1/2/3 位) を加点。
     #       影響は ◎ などのランキング決定および raw_blended_probability の
     #       softmax 重み。fresh odds (発走30分以内) 限定で発火。weight=0 で
-    #       無効化可 (weights.json popularity.first/second/third または
+    #       無効化可 (weights.json `popularity.{first,second,third}` または
     #       env PRED_W_popularity_first 等)。
     #
     #   (B) _investment_probability: calibrator 適用後の投資確率を
     #       連続的 market_probability (odds 由来) と blend。confidence ごとの
-    #       model_weight (0.30〜0.72) で混合し、win_probability に直接作用。
-    #       freshness gate なし (古いオッズでも動く)。env PRED_DISABLE_DISCOUNT=1
-    #       で odds_discount だけ無効化できるが blend 自体は常時有効。
+    #       model_weight (weights.json `model_blend.{high,standard,close,tight,tentative}`
+    #       で外出し済み、現行値は weights.json を参照) で混合し、
+    #       win_probability に直接作用。freshness gate なし (古いオッズでも動く)。
+    #       env PRED_DISABLE_DISCOUNT=1 で odds_discount だけ無効化できるが
+    #       blend 自体は常時有効。
     #
-    #   (C) _value_score: 買い候補抽出用の付随スコア (7〜30 倍の中穴帯に
-    #       value 加点)。買い目フィルタの参考値で、calibrator/EV/Kelly には
-    #       戻らないため確率の二重カウントは起きない。
+    #   (C) _value_score: 買い候補抽出用の付随スコア (weights.json
+    #       `discount.{over8,over15,over30}` で外出しした odds-band 加点)。
+    #       買い目フィルタの参考値で、calibrator/EV/Kelly には戻らないため
+    #       確率の二重カウントは起きない。
     #
     # 「二重取り込み」リスクが顕在化する条件: (A) と (B) が同じ horse に
     # 同方向 (= 人気馬を更に押す方向) で作用するケース。現状は (A) が
-    # fresh-only かつ低 weight (7/4/2) なので、2026-06-14 backtest では
-    # raw_blended 分布変化が Brier 差 -0.000 で実質ゼロ。fresh rate が
-    # 上がった段階で改めて raw_blended / win_probability / 回収率の
-    # 並走 A/B を取り、必要なら (A) の weight 縮小か (B) の model_weight
-    # 引き上げで二重作用を緩める。Plan Step 6 参照。
+    # fresh-only かつ低 weight (weights.json `popularity` の絶対値が個人 score
+    # スケールに比べ十分小さい) なので、2026-06-14 backtest では raw_blended
+    # 分布変化が Brier 差 -0.000 で実質ゼロ。fresh rate が上がった段階で
+    # 改めて raw_blended / win_probability / 回収率の並走 A/B を取り、必要なら
+    # (A) の weight 縮小か (B) の model_weight 引き上げで二重作用を緩める。
+    # Plan Step 6 参照。docstring に固定数値を書かないのは、weights.json と
+    # docstring の数値ズレで運用判断がミスリードされる事故 (2026-06-17 検証監査
+    # 指摘) を避けるため。実値は weights.json を直接読むこと。
     starter_count = feat.get("current_starter_count", 0) or 0
     popularity = horse.get("win_popularity") or 0
     # 重みが 0 (ablation 等で市場エコー無効化) のときは reason も出さない。
@@ -879,23 +991,65 @@ def _load_calibrator() -> dict | None:
         )
     expected = data.get("expected_rules_version")
     if expected != RULES_VERSION:
-        compat = CALIBRATOR_COMPATIBLE_RULES_VERSIONS.get(RULES_VERSION, {})
-        rationale = compat.get(expected)
-        if rationale:
-            logger.info(
-                "calibrator rules-version compat: calibrator=%s current=%s (許容済み). %s",
-                expected, RULES_VERSION, rationale,
-            )
+        # 互換テーブルの判定は evaluate_calibrator_compat に集約。
+        # 直近 backtest JSON の market_snapshot を best-effort で読み、fresh_rate /
+        # bonus_candidate_rate 閾値超過 or 期限切れなら warning に昇格する。
+        snapshot = _latest_backtest_market_snapshot()
+        status, message = evaluate_calibrator_compat(
+            RULES_VERSION, expected, market_snapshot=snapshot
+        )
+        if status == "compat":
+            logger.info(message)
         else:
-            logger.warning(
-                "calibrator rules-version mismatch: calibrator=%s current=%s. "
-                "スコア分布が変わった後の旧 mapping を適用している可能性があります。"
-                "scripts.refit_calibrator で再 fit するか、互換と判定できるなら "
-                "predictor.rules.CALIBRATOR_COMPATIBLE_RULES_VERSIONS に根拠付きで登録してください。",
-                expected, RULES_VERSION,
-            )
+            # mismatch / expired は warning
+            logger.warning(message)
     _CALIBRATOR_CACHE = (mtime, data)
     return data
+
+
+_LATEST_BACKTEST_SNAPSHOT_CACHE: tuple[float, dict | None] | None = None
+
+
+def _latest_backtest_market_snapshot() -> dict | None:
+    """data/backtest/*-filtered.json から最新の market_snapshot を best-effort で取得。
+
+    互換テーブルの失効トリガ判定 (fresh_rate / bonus_candidate_rate) に使う。
+    取得失敗 (ファイル無し、JSON 不正、市場 snapshot 未保存) は None を返し、
+    その場合は閾値判定をスキップ (rationale ベースの compat 判定のみで進める)。
+
+    キャッシュは mtime ベースで _load_calibrator と同一寿命。
+    """
+    global _LATEST_BACKTEST_SNAPSHOT_CACHE
+    backtest_dir = Path(__file__).resolve().parent.parent / "data" / "backtest"
+    if not backtest_dir.exists():
+        return None
+    try:
+        candidates = sorted(
+            backtest_dir.glob("*-filtered.json"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+    except OSError:
+        return None
+    if not candidates:
+        return None
+    latest = candidates[0]
+    try:
+        mtime = latest.stat().st_mtime
+    except OSError:
+        return None
+    if _LATEST_BACKTEST_SNAPSHOT_CACHE and _LATEST_BACKTEST_SNAPSHOT_CACHE[0] == mtime:
+        return _LATEST_BACKTEST_SNAPSHOT_CACHE[1]
+    try:
+        data = json.loads(latest.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        _LATEST_BACKTEST_SNAPSHOT_CACHE = (mtime, None)
+        return None
+    snapshot = data.get("market_snapshot")
+    if not isinstance(snapshot, dict):
+        snapshot = None
+    _LATEST_BACKTEST_SNAPSHOT_CACHE = (mtime, snapshot)
+    return snapshot
 
 
 def _apply_calibrator(probabilities: dict[str, float]) -> dict[str, float]:

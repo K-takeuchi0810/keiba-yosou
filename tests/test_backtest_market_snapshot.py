@@ -4,8 +4,10 @@ import os
 
 from scripts.backtest import (
     _add_market_snapshot_race,
+    _bonus_subset_metrics,
     _empty_market_snapshot_stats,
     _finish_market_snapshot_stats,
+    _horse_bonus_candidate,
     _popularity_config,
     _snapshot_meta,
     _snapshot_age_min,
@@ -168,6 +170,62 @@ def test_payout_from_row_distinguishes_missing_row_from_losing_ticket():
     assert payout_from_row(row, "07", "fuku") == 180
     assert payout_from_row(row, "01", "tan") == 0
     assert payout_from_row(None, "03", "tan") == 0
+
+
+def test_bonus_subset_metrics_isolates_firing_horses():
+    """発火帯 (bonus_candidate=True) だけで Brier/log_loss/勝率を別途算出する。
+
+    集約 Brier では希釈されて見えない発火帯固有の校正ズレを、互換テーブル登録時の
+    数値根拠として読めるようにするための観測層。
+    """
+    records = [
+        # bonus_candidate=True: 期待勝率 0.50 / 実際勝率 0.5 (1/2)
+        {"probability": 0.6, "actual": 1, "bonus_candidate": True},
+        {"probability": 0.4, "actual": 0, "bonus_candidate": True},
+        # bonus_candidate=False: 含まれてはいけない
+        {"probability": 0.05, "actual": 0, "bonus_candidate": False},
+        {"probability": 0.05, "actual": 1, "bonus_candidate": False},
+    ]
+    metrics = _bonus_subset_metrics(records)
+    assert metrics["count"] == 2
+    # Brier = ((0.6-1)^2 + (0.4-0)^2) / 2 = (0.16 + 0.16) / 2 = 0.16
+    assert metrics["brier_score"] == 0.16
+    # actual_win_rate = 1/2 = 0.5
+    assert metrics["actual_win_rate"] == 0.5
+    # mean_raw_blended = (0.6 + 0.4) / 2 = 0.5
+    assert metrics["mean_raw_blended"] == 0.5
+
+
+def test_bonus_subset_metrics_empty_when_no_firing_horses():
+    records = [
+        {"probability": 0.1, "actual": 0, "bonus_candidate": False},
+        {"probability": 0.2, "actual": 1, "bonus_candidate": False},
+    ]
+    metrics = _bonus_subset_metrics(records)
+    assert metrics["count"] == 0
+    assert metrics["brier_score"] is None
+    assert metrics["actual_win_rate"] is None
+    assert metrics["mean_raw_blended"] is None
+
+
+def test_horse_bonus_candidate_matches_market_snapshot_definition():
+    """_horse_bonus_candidate と _add_market_snapshot_race の発火判定が一致する。
+
+    定義が複数箇所で食い違うと「発火 33 馬」と subset_metrics の count が
+    乖離して互換テーブルの根拠が壊れる。同一馬群で count が一致することを保証。
+    """
+    pop_cfg = cfg(min_field=3)
+    horses = [
+        horse("01", 1, "2026-06-07T12:05:00"),  # fresh, pop1 → 候補
+        horse("02", 2, "2026-06-07T12:05:00"),  # fresh, pop2 → 候補
+        horse("03", 5, "2026-06-07T12:05:00"),  # fresh, pop5 → 非候補
+        horse("04", 1, "2026-06-07T11:00:00"),  # stale → 非候補
+    ]
+    race = {**RACE, "starter_count": len(horses)}
+    direct = sum(1 for h in horses if _horse_bonus_candidate(h, race, pop_cfg))
+    stats = _empty_market_snapshot_stats(pop_cfg)
+    _add_market_snapshot_race(stats, race, horses, pop_cfg)
+    assert direct == stats["popularity_bonus_candidate_horses"] == 2
 
 
 def test_snapshot_meta_records_any_pred_w_env_override():
