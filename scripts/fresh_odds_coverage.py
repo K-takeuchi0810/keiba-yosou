@@ -1,0 +1,175 @@
+"""fresh odds 取得 coverage の後追い集計。
+
+scripts/fetch_fresh_odds.py が 10 分おきに append している JSONL
+(data/logs/fresh_odds_coverage.jsonl) を読み、開催日別の取得成功率と
+失敗理由を一覧表示する。
+
+P25 Plan Step 4 (2026-06-17 外部レビュー追記) の「fresh odds 取得の安定稼働確認」
+完了条件を満たしているかを検証するための監視用スクリプト。
+
+usage:
+    python -m scripts.fresh_odds_coverage              # 全期間
+    python -m scripts.fresh_odds_coverage --last 14    # 直近 14 日
+    python -m scripts.fresh_odds_coverage --date 20260620
+
+出力:
+    対象日: 2026-06-20
+      起動回数:        45
+      eligible races:  142 (中央値 4 / 起動、p90 8)
+      fetched races:   138 (97.2%)
+      ingested rate:   97.2%
+      ok rate:         96.5%
+      失敗理由:        TimeoutError=2, ComError=3
+      鮮度 (p50/p90):  8min / 22min
+      compute_total_records: 1,820
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import statistics
+import sys
+from collections import Counter, defaultdict
+from datetime import datetime, timedelta
+from pathlib import Path
+
+
+COVERAGE_LOG_PATH = Path(__file__).resolve().parent.parent / "data" / "logs" / "fresh_odds_coverage.jsonl"
+
+
+def _load_records(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    out: list[dict] = []
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except ValueError:
+                continue
+    return out
+
+
+def _filter_records(records: list[dict], *, last_days: int | None, target_date: str | None) -> list[dict]:
+    if target_date:
+        return [r for r in records if r.get("target_date") == target_date]
+    if last_days is not None:
+        cutoff = (datetime.now() - timedelta(days=last_days)).strftime("%Y%m%d")
+        return [r for r in records if (r.get("target_date") or "") >= cutoff]
+    return list(records)
+
+
+def _group_by_date(records: list[dict]) -> dict[str, list[dict]]:
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    for r in records:
+        grouped[r.get("target_date") or "?"].append(r)
+    return dict(sorted(grouped.items()))
+
+
+def _aggregate(date_records: list[dict]) -> dict:
+    """1 開催日分の起動ログを集計し、coverage 指標 dict を返す。"""
+    runs = len(date_records)
+    eligible_per_run = [int(r.get("eligible_races") or 0) for r in date_records]
+    fetched_per_run = [int(r.get("fetched_races") or 0) for r in date_records]
+    ok_per_run = [int(r.get("ok_races") or 0) for r in date_records]
+    error_per_run = [int(r.get("error_races") or 0) for r in date_records]
+    total_records = sum(int(r.get("total_records") or 0) for r in date_records)
+    failed_reasons: Counter[str] = Counter()
+    for r in date_records:
+        for k, v in (r.get("failed_reason") or {}).items():
+            failed_reasons[k] += int(v)
+    lock_skipped = sum(1 for r in date_records if r.get("lock_skipped"))
+
+    def pct(num: int, den: int) -> float:
+        return (num / den * 100) if den > 0 else 0.0
+
+    total_eligible = sum(eligible_per_run)
+    total_fetched = sum(fetched_per_run)
+    total_ok = sum(ok_per_run)
+    return {
+        "runs": runs,
+        "lock_skipped": lock_skipped,
+        "eligible_total": total_eligible,
+        "eligible_p50": int(statistics.median(eligible_per_run)) if eligible_per_run else 0,
+        "eligible_p90": int(_p90(eligible_per_run)) if eligible_per_run else 0,
+        "fetched_total": total_fetched,
+        "fetched_rate_pct": round(pct(total_fetched, total_eligible), 1),
+        "ok_total": total_ok,
+        "ok_rate_pct": round(pct(total_ok, total_eligible), 1),
+        "error_total": sum(error_per_run),
+        "total_records": total_records,
+        "failed_reasons": dict(failed_reasons),
+    }
+
+
+def _p90(values: list[int]) -> float:
+    if not values:
+        return 0.0
+    sorted_vals = sorted(values)
+    idx = max(0, int(round(0.9 * (len(sorted_vals) - 1))))
+    return float(sorted_vals[idx])
+
+
+def _print_report(grouped: dict[str, list[dict]]) -> None:
+    if not grouped:
+        print("(no coverage records)")
+        return
+    print(f"date          runs  eligible  fetched  ok%   total_records  failed_reasons")
+    print(f"-" * 90)
+    for date, recs in grouped.items():
+        agg = _aggregate(recs)
+        reasons = ",".join(f"{k}={v}" for k, v in agg["failed_reasons"].items()) or "-"
+        print(
+            f"{date:<10}  {agg['runs']:>5}  {agg['eligible_total']:>8}  "
+            f"{agg['fetched_total']:>7}  {agg['ok_rate_pct']:>5.1f}  "
+            f"{agg['total_records']:>13,}  {reasons}"
+        )
+
+    # 全体サマリ + Plan 完了条件チェック (popularity_bonus_candidate_horses ≥ 500 馬
+    # or races ≥ 150 は本スクリプトでは観測できない。ここでは「実取得 race 数」までを
+    # 出し、補正候補数は backtest 側の market_snapshot で検証する仕様。)
+    all_recs = [r for recs in grouped.values() for r in recs]
+    total_agg = _aggregate(all_recs)
+    print()
+    print(f"合計起動: {total_agg['runs']} 回 (lock_skipped={total_agg['lock_skipped']})")
+    print(f"  eligible races (累計): {total_agg['eligible_total']}")
+    print(f"  fetched races (累計):  {total_agg['fetched_total']}  ({total_agg['fetched_rate_pct']}%)")
+    print(f"  ok races (累計):       {total_agg['ok_total']}  ({total_agg['ok_rate_pct']}%)")
+    print(f"  total records (累計):  {total_agg['total_records']:,}")
+    if total_agg['failed_reasons']:
+        print(f"  failed reasons:        {total_agg['failed_reasons']}")
+    # Plan 完了条件の参考表示 (実 race 数で間接的に評価)
+    expected_per_day = 36  # 1 開催日あたり最大 race 数 (Plan の期待値計算より)
+    open_days = len(grouped)
+    expected_eligible = expected_per_day * open_days
+    if expected_eligible:
+        ratio = total_agg['eligible_total'] / expected_eligible
+        print(f"\nPlan Step 4 参考: eligible races / 期待値 ({expected_per_day}×{open_days}={expected_eligible}) "
+              f"= {ratio:.2f}")
+        if total_agg['ok_rate_pct'] < 80.0:
+            print("  WARN: ok_rate が 80% 未満。スケジューラ稼働 / JV-Link 認証 / "
+                  "コンテキスト manager 漏れ等を確認してください。")
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--last", type=int, default=None, help="直近 N 日分のみ集計")
+    ap.add_argument("--date", default=None, help="特定の target_date (YYYYMMDD) のみ")
+    ap.add_argument("--path", default=None, help="coverage JSONL のパス (デフォルト data/logs/fresh_odds_coverage.jsonl)")
+    args = ap.parse_args()
+    path = Path(args.path) if args.path else COVERAGE_LOG_PATH
+    records = _load_records(path)
+    if not records:
+        print(f"(no coverage records at {path})")
+        return 0
+    filtered = _filter_records(records, last_days=args.last, target_date=args.date)
+    grouped = _group_by_date(filtered)
+    _print_report(grouped)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -172,6 +172,26 @@ def _horse_bonus_candidate(horse: dict, race: dict, pop_cfg: dict) -> bool:
     return True
 
 
+def _age_tier(age: int | None) -> str:
+    """snapshot_age_min から 4 段階 + unknown を返す観測用タグ。
+
+    閾値は P25 Plan 「snapshot age 4 段階記録」セクションで固定:
+      a: 0〜10 (critical)、b: 10〜20 (primary)、c: 20〜30 (secondary)、
+      d: 30 超 (stale)、unknown: age 取得失敗。
+    """
+    if age is None:
+        return "tier_unknown"
+    if age < 0:
+        return "tier_unknown"  # post_start は別系統 (post_start_horses) で集計済み
+    if age < 10:
+        return "tier_a_critical"
+    if age < 20:
+        return "tier_b_primary"
+    if age < 30:
+        return "tier_c_secondary"
+    return "tier_d_stale"
+
+
 def _empty_market_snapshot_stats(pop_cfg: dict) -> dict:
     return {
         "max_snapshot_age_min": pop_cfg.get("max_snapshot_age_min"),
@@ -198,6 +218,23 @@ def _empty_market_snapshot_stats(pop_cfg: dict) -> dict:
         "post_start_horses": 0,
         "pop1_3_horses": 0,
         "popularity_bonus_candidate_horses": 0,
+        # 2026-06-17 外部レビュー追記: snapshot age 4 段階バケット (観測用)。
+        # 30 分以内 fresh の閾値自体は事前固定。tier 別カウントは「30 分以内の
+        # 中でも age が浅いほど補正効果が強いか」を後段で確認するための観測値。
+        # tier 区分: a (0-10) / b (10-20) / c (20-30) / d (30+ stale)。
+        "age_tier_horses": {
+            "tier_a_critical": 0,
+            "tier_b_primary": 0,
+            "tier_c_secondary": 0,
+            "tier_d_stale": 0,
+            "tier_unknown": 0,
+        },
+        "age_tier_bonus_candidate_horses": {
+            "tier_a_critical": 0,
+            "tier_b_primary": 0,
+            "tier_c_secondary": 0,
+            "tier_d_stale": 0,
+        },
         "_ages": [],
     }
 
@@ -227,6 +264,11 @@ def _add_market_snapshot_race(stats: dict, race: dict, horses: list[dict], pop_c
             stats["pop1_3_horses"] += 1
 
         age = _snapshot_age_min(horse, race)
+        tier = _age_tier(age)
+        # tier_unknown は age=None と age<0 (post_start) の合算。両者は別系統で
+        # 既に集計済 (unknown_horses / post_start_horses) なので tier 集計では
+        # まとめて扱う (運用上は「使えなかった snapshot」というカテゴリ)。
+        stats["age_tier_horses"][tier] = stats["age_tier_horses"].get(tier, 0) + 1
         if age is None:
             stats["unknown_horses"] += 1
             race_has_unknown = True
@@ -246,6 +288,8 @@ def _add_market_snapshot_race(stats: dict, race: dict, horses: list[dict], pop_c
         if _horse_bonus_candidate(horse, race_for_bonus, pop_cfg):
             stats["popularity_bonus_candidate_horses"] += 1
             race_has_bonus_candidate = True
+            if tier in stats["age_tier_bonus_candidate_horses"]:
+                stats["age_tier_bonus_candidate_horses"][tier] += 1
 
     if race_has_fresh:
         stats["races_with_fresh_snapshot"] += 1
@@ -295,8 +339,23 @@ def _bonus_subset_metrics(calibration_records: list[dict]) -> dict:
       - brier_score / log_loss / bins: calibration_report と同形式
       - actual_win_rate: 発火帯馬の平均勝率 (Plan の高p帯 reliability 検証用)
       - mean_raw_blended: probability の平均 (calibrator 入力分布の代表値)
+      - by_age_tier (2026-06-17 追加): age tier 別の同 metrics dict。tier 別の
+        効果差を観測する用 (閾値最適化に使ってはいけない、事前固定運用)
     """
     subset = [r for r in calibration_records if r.get("bonus_candidate")]
+    base = _subset_metrics_payload(subset)
+    base["by_age_tier"] = {
+        tier: _subset_metrics_payload([r for r in subset if _age_tier(r.get("snapshot_age_min")) == tier])
+        for tier in ("tier_a_critical", "tier_b_primary", "tier_c_secondary", "tier_d_stale", "tier_unknown")
+    }
+    return base
+
+
+def _subset_metrics_payload(subset: list[dict]) -> dict:
+    """指定 subset (calibration_records 部分集合) の Brier / log_loss / bins /
+    actual_win_rate / mean_raw_blended を一括算出。_bonus_subset_metrics 本体と
+    by_age_tier の両方で再利用する内部ヘルパー。
+    """
     base = calibration_report(subset)
     if base["count"] == 0:
         return {
@@ -740,6 +799,9 @@ def run_backtest(
                         "actual": 1 if horse.get("confirmed_order") == 1 else 0,
                         "confidence": pred.confidence,
                         "bonus_candidate": _horse_bonus_candidate(horse, race_for_bonus, pop_cfg),
+                        # 2026-06-17 外部レビュー追記: age tier 別 reliability の
+                        # 後追い計算用。post_start は None として扱う。
+                        "snapshot_age_min": _snapshot_age_min(horse, race),
                     }
                 )
             payout, payout_present = get_payout_with_presence(conn, race, top.horse_num, bet_type)

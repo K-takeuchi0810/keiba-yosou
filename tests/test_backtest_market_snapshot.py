@@ -4,6 +4,7 @@ import os
 
 from scripts.backtest import (
     _add_market_snapshot_race,
+    _age_tier,
     _bonus_subset_metrics,
     _empty_market_snapshot_stats,
     _finish_market_snapshot_stats,
@@ -206,6 +207,72 @@ def test_bonus_subset_metrics_empty_when_no_firing_horses():
     assert metrics["brier_score"] is None
     assert metrics["actual_win_rate"] is None
     assert metrics["mean_raw_blended"] is None
+
+
+def test_age_tier_boundaries():
+    """snapshot age を 4 段階 + unknown に分類する (P25 Plan 2026-06-17 追記)。
+
+    閾値は事前固定。tier 別最適化禁止 (multiple testing で偽陽性を量産する)。
+    """
+    assert _age_tier(0) == "tier_a_critical"
+    assert _age_tier(9) == "tier_a_critical"
+    assert _age_tier(10) == "tier_b_primary"
+    assert _age_tier(19) == "tier_b_primary"
+    assert _age_tier(20) == "tier_c_secondary"
+    assert _age_tier(29) == "tier_c_secondary"
+    assert _age_tier(30) == "tier_d_stale"
+    assert _age_tier(120) == "tier_d_stale"
+    assert _age_tier(None) == "tier_unknown"
+    assert _age_tier(-3) == "tier_unknown"  # post_start は別系統で別途集計済
+
+
+def test_age_tier_horses_accumulate_per_race():
+    pop_cfg = cfg(min_field=3)
+    horses = [
+        horse("01", 1, "2026-06-07T12:25:00"),  # age=5 → critical
+        horse("02", 2, "2026-06-07T12:15:00"),  # age=15 → primary
+        horse("03", 3, "2026-06-07T12:05:00"),  # age=25 → secondary
+        horse("04", 4, "2026-06-07T11:50:00"),  # age=40 → stale
+        horse("05", 5, None),                   # → unknown
+    ]
+    stats = _empty_market_snapshot_stats(pop_cfg)
+    _add_market_snapshot_race(stats, RACE, horses, pop_cfg)
+    tiers = stats["age_tier_horses"]
+    assert tiers["tier_a_critical"] == 1
+    assert tiers["tier_b_primary"] == 1
+    assert tiers["tier_c_secondary"] == 1
+    assert tiers["tier_d_stale"] == 1
+    assert tiers["tier_unknown"] == 1
+    # 補正候補は pop1-3 + fresh (= 30 分以内) なので 1/2/3 番のみ。
+    bonus = stats["age_tier_bonus_candidate_horses"]
+    assert bonus["tier_a_critical"] == 1
+    assert bonus["tier_b_primary"] == 1
+    assert bonus["tier_c_secondary"] == 1
+    assert bonus["tier_d_stale"] == 0
+
+
+def test_bonus_subset_metrics_breakdown_by_age_tier():
+    """発火帯 subset Brier を age tier 別に分解する (P25 Plan 2026-06-17 追記)。"""
+    records = [
+        # critical: 2 馬、勝率 1/2
+        {"probability": 0.6, "actual": 1, "bonus_candidate": True, "snapshot_age_min": 5},
+        {"probability": 0.4, "actual": 0, "bonus_candidate": True, "snapshot_age_min": 8},
+        # primary: 1 馬、勝率 0/1
+        {"probability": 0.5, "actual": 0, "bonus_candidate": True, "snapshot_age_min": 15},
+        # secondary: 0 馬
+        # stale: bonus_candidate=True ありえないが防御的に
+        # 非発火: subset に含まれない
+        {"probability": 0.1, "actual": 1, "bonus_candidate": False, "snapshot_age_min": 5},
+    ]
+    metrics = _bonus_subset_metrics(records)
+    assert metrics["count"] == 3
+    by_tier = metrics["by_age_tier"]
+    assert by_tier["tier_a_critical"]["count"] == 2
+    assert by_tier["tier_a_critical"]["actual_win_rate"] == 0.5
+    assert by_tier["tier_b_primary"]["count"] == 1
+    assert by_tier["tier_b_primary"]["actual_win_rate"] == 0.0
+    assert by_tier["tier_c_secondary"]["count"] == 0
+    assert by_tier["tier_c_secondary"]["brier_score"] is None
 
 
 def test_horse_bonus_candidate_matches_market_snapshot_definition():
