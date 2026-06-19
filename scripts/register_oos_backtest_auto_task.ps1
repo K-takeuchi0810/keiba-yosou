@@ -42,33 +42,64 @@ Write-Host "登録中: $TaskName (**初期 disabled**)"
 Write-Host "  TR: $tr"
 Write-Host "  Schedule: 毎日 ${StartTime} (開催日後) / 開始日=${StartDate}"
 
-# 既存があれば削除
-$exists = schtasks /query /tn "$TaskName" 2>&1
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "既存タスクあり、削除して再登録"
-    schtasks /delete /tn "$TaskName" /f 2>&1 | Out-Null
+# 既存タスクの確認 (schtasks /query は未存在時に stderr で停止するため Get-ScheduledTask を使う)
+$existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+if ($existing) {
+    Write-Host "既存タスクあり (State=$($existing.State)) → 削除して再登録"
+    try {
+        $deleteOut = & schtasks /delete /tn "$TaskName" /f 2>&1
+    } catch {
+        $deleteOut = $_.Exception.Message
+    }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "schtasks /delete 失敗 (exit=$LASTEXITCODE): $deleteOut"
+        exit 1
+    }
+} else {
+    Write-Host "既存タスクなし (初回登録)"
 }
 
 # /sc daily で毎日起動 (開催日でない日は exit 2 (HOLD) で早期 return する想定)
-$result = schtasks /create `
-    /tn "$TaskName" `
-    /tr "$tr" `
-    /sc daily `
-    /st $StartTime `
-    /sd $StartDate `
-    /f
-
+$createOut = $null
+try {
+    $createOut = & schtasks /create `
+        /tn "$TaskName" `
+        /tr "$tr" `
+        /sc daily `
+        /st $StartTime `
+        /sd $StartDate `
+        /f 2>&1
+} catch {
+    $createOut = $_.Exception.Message
+}
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "schtasks /create 失敗 (exit=$LASTEXITCODE): $result"
+    Write-Error "schtasks /create 失敗 (exit=$LASTEXITCODE): $createOut"
     exit 1
 }
 
-# 登録直後に **無効化** する
-# schtasks /change /tn ... /disable は標準的な方法
-$disableResult = schtasks /change /tn "$TaskName" /disable
-if ($LASTEXITCODE -ne 0) {
-    Write-Warning "disable 失敗 (exit=$LASTEXITCODE): $disableResult"
-    Write-Warning "手動で Disable-ScheduledTask -TaskName $TaskName を実行してください"
+# 登録直後に **無効化** する。
+# 優先: Disable-ScheduledTask (cmdlet、State をオブジェクトで返す)。
+# fallback: schtasks /change /disable (native command)。
+$disabled = $false
+try {
+    Disable-ScheduledTask -TaskName $TaskName -ErrorAction Stop | Out-Null
+    $disabled = $true
+} catch {
+    Write-Warning "Disable-ScheduledTask 失敗: $($_.Exception.Message)。schtasks /change にフォールバック"
+    try {
+        $disableOut = & schtasks /change /tn "$TaskName" /disable 2>&1
+    } catch {
+        $disableOut = $_.Exception.Message
+    }
+    if ($LASTEXITCODE -eq 0) {
+        $disabled = $true
+    } else {
+        Write-Warning "schtasks /change /disable も失敗 (exit=$LASTEXITCODE): $disableOut"
+        Write-Warning "手動で Disable-ScheduledTask -TaskName $TaskName を実行してください"
+    }
+}
+if (-not $disabled) {
+    Write-Warning "**重要**: $TaskName が enabled のままになっている可能性があります。確認してください"
 }
 
 # 確認: 状態が Disabled になっているか

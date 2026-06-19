@@ -40,23 +40,44 @@ Write-Host "登録中: $TaskName"
 Write-Host "  TR: $tr"
 Write-Host "  Schedule: 毎 ${IntervalMinutes} 分 ${StartTime}-${EndTime} 開始日=${StartDate}"
 
-# 既存があれば削除してから作成 (/f で上書きより明示的)
-$exists = schtasks /query /tn "$TaskName" 2>&1
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "既存タスクあり、削除して再登録"
-    schtasks /delete /tn "$TaskName" /f 2>&1 | Out-Null
+# 既存タスクの確認。
+# PowerShell 5.1 + $ErrorActionPreference="Stop" の下では `schtasks /query` が
+# 未存在時に stderr へ「指定されたファイルが見つかりません」を出し、
+# NativeCommandError として停止する。これを避けるため Get-ScheduledTask を使う。
+$existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+if ($existing) {
+    Write-Host "既存タスクあり (State=$($existing.State)) → 削除して再登録"
+    # schtasks /delete の stderr 経路も NativeCommandError 化を避けるため
+    # try/catch + LASTEXITCODE で安全に処理する
+    try {
+        $deleteOut = & schtasks /delete /tn "$TaskName" /f 2>&1
+    } catch {
+        # 例外まで上がるケースは稀だが catch しておく
+        $deleteOut = $_.Exception.Message
+    }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "schtasks /delete 失敗 (exit=$LASTEXITCODE): $deleteOut"
+        exit 1
+    }
+} else {
+    Write-Host "既存タスクなし (初回登録)"
 }
 
-$result = schtasks /create `
-    /tn "$TaskName" `
-    /tr "$tr" `
-    /sc minute /mo $IntervalMinutes `
-    /st $StartTime /et $EndTime `
-    /sd $StartDate `
-    /f
-
+# /f で「同名が残っていたら上書き」も担保 (Get-ScheduledTask の TOCTOU 対策)
+$createOut = $null
+try {
+    $createOut = & schtasks /create `
+        /tn "$TaskName" `
+        /tr "$tr" `
+        /sc minute /mo $IntervalMinutes `
+        /st $StartTime /et $EndTime `
+        /sd $StartDate `
+        /f 2>&1
+} catch {
+    $createOut = $_.Exception.Message
+}
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "schtasks /create 失敗 (exit=$LASTEXITCODE): $result"
+    Write-Error "schtasks /create 失敗 (exit=$LASTEXITCODE): $createOut"
     exit 1
 }
 
