@@ -1,4 +1,4 @@
-# OS 管理プロセスで OOS backtest を再実行するための PowerShell スクリプト。
+﻿# OS 管理プロセスで OOS backtest を再実行するための PowerShell スクリプト。
 #
 # 2026-06-18 の bg backtest 死亡 (Claude セッション切断で子プロセス kill) を受け、
 # 親セッション寿命に依存しない形で長時間 backtest を走らせる。
