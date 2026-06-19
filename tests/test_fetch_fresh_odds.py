@@ -3,7 +3,22 @@ from __future__ import annotations
 import sys
 from datetime import datetime, timedelta
 
+import pytest
+
 import scripts.fetch_fresh_odds as mod
+
+
+@pytest.fixture(autouse=True)
+def _isolate_coverage_log(monkeypatch, tmp_path):
+    """テスト実行で運用 JSONL (data/logs/fresh_odds_coverage.jsonl) を汚染しないよう、
+    すべてのテストで COVERAGE_LOG_PATH を tmp_path 配下にリダイレクトする。
+    個別テストで自分の coverage_path を assertion したい場合は同じ patch を上書きできる。
+    """
+    monkeypatch.setattr(
+        mod,
+        "COVERAGE_LOG_PATH",
+        tmp_path / "_autouse_isolation_fresh_odds_coverage.jsonl",
+    )
 
 
 class _Rows:
@@ -89,6 +104,9 @@ def test_fetch_fresh_odds_ingests_successful_files_even_if_later_race_fails(
     ingest_calls = []
 
     monkeypatch.setattr(mod, "LOCK_PATH", tmp_path / "fetch_fresh_odds.lock")
+    # COVERAGE_LOG_PATH も必ず patch (運用 JSONL へのテストデータ漏出を防ぐ、
+    # 2026-06-20 検出)
+    monkeypatch.setattr(mod, "COVERAGE_LOG_PATH", tmp_path / "fresh_odds_coverage.jsonl")
     monkeypatch.setattr(mod, "open_db", lambda: _Conn(rows))
     monkeypatch.setattr(mod, "JVLinkClient", _FakeJV)
     monkeypatch.setattr(mod, "ingest_all", lambda **kw: ingest_calls.append(kw) or {"ok": True})
@@ -123,6 +141,9 @@ def test_fetch_fresh_odds_returns_nonzero_when_all_fetches_fail(monkeypatch, tmp
     ingest_calls = []
 
     monkeypatch.setattr(mod, "LOCK_PATH", tmp_path / "fetch_fresh_odds.lock")
+    # COVERAGE_LOG_PATH も必ず patch (運用 JSONL へのテストデータ漏出を防ぐ、
+    # 2026-06-20 検出)
+    monkeypatch.setattr(mod, "COVERAGE_LOG_PATH", tmp_path / "fresh_odds_coverage.jsonl")
     monkeypatch.setattr(mod, "open_db", lambda: _Conn(rows))
     monkeypatch.setattr(mod, "JVLinkClient", _FailingJV)
     monkeypatch.setattr(mod, "ingest_all", lambda **kw: ingest_calls.append(kw) or {"ok": True})
