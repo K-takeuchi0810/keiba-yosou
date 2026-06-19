@@ -15,6 +15,9 @@ data/*
 !data/scorecards/**
 !data/backtest/
 !data/backtest/**
+# 失敗 run の埋葬先 (再発防止のための証跡保全)
+!data/failed_runs/
+!data/failed_runs/**
 
 # OS / エディタ
 .DS_Store
