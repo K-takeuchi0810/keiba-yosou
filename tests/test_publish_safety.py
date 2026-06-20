@@ -8,7 +8,11 @@ from __future__ import annotations
 import pytest
 
 
-from web.publish_safety import STALE_PUBLISH_WARNING, assert_safe_to_publish
+from web.publish_safety import (
+    STALE_PUBLISH_WARNING,
+    VERIFICATION_BANNER_MARKER,
+    assert_safe_to_publish,
+)
 
 
 def test_normal_mode_publish_true_returns_unchanged():
@@ -118,3 +122,33 @@ def test_publish_to_icloud_passes_clean_html(tmp_path, monkeypatch):
 
     out = generator.publish_to_icloud()
     assert out.exists()
+
+
+def test_verification_banner_marker_matches_template_output():
+    """VERIFICATION_BANNER_MARKER (publish_safety) と template (index.html.j2)
+    の class 名が一致することの integration test。
+    どちらかを変更したときに、もう片方が気付かず publish ガードが沈黙する
+    変更失敗モードを CI で検出する。
+    """
+    from pathlib import Path
+    tpl = Path(__file__).resolve().parent.parent / "web" / "templates" / "index.html.j2"
+    content = tpl.read_text(encoding="utf-8")
+    assert VERIFICATION_BANNER_MARKER in content, (
+        f"VERIFICATION_BANNER_MARKER={VERIFICATION_BANNER_MARKER!r} が "
+        f"web/templates/index.html.j2 に見つからない。template の class 名と "
+        f"publish_safety の定数が同期していない"
+    )
+
+
+def test_marker_is_used_by_publish_to_icloud_scanner():
+    """publish_to_icloud のスキャナが VERIFICATION_BANNER_MARKER 定数を参照
+    していることをソース上で確認 (リテラル直書きへの回帰を防ぐ)。
+    """
+    from pathlib import Path
+    gen = Path(__file__).resolve().parent.parent / "web" / "generator.py"
+    source = gen.read_text(encoding="utf-8")
+    assert "VERIFICATION_BANNER_MARKER" in source, (
+        "web/generator.py が VERIFICATION_BANNER_MARKER を import していない。"
+        "marker 直書き (= class 名変更で publish ガードが沈黙する変更失敗モード) "
+        "への回帰を疑う"
+    )

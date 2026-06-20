@@ -121,7 +121,7 @@
     gap: 0.3rem;
   }
   .day-nav a .nav-buy {
-    /* AA: #c0392b on #ffffff = 5.4:1, #ff8a7a on #232323 = 7.4:1 (実測) */
+    /* AA: light #c0392b on #ffffff = 5.4:1, dark #ff8a7a on #232323 = 6.40:1 (実測、2026-06-17 mobile auditor 指摘で訂正) */
     color: var(--buy-board-fg);
     font-weight: 700;
     font-size: 0.82rem;
@@ -290,10 +290,14 @@
   }
   .verification-banner .vb-sub {
     display: block;
-    font-weight: 400;
-    font-size: 0.72rem;
-    opacity: 0.95;
-    margin-top: 0.15rem;
+    /* 「実弾運用には使えません」は banner 中で最重要の safety message。
+       2026-06-17 監査で 0.72rem(11.5px)/weight 400 が最小フォント逆転と指摘。
+       0.82rem(13.1px)/weight 600 に引き上げ、Apple HIG キャプション下限
+       (11pt=14.7px) を超えるサイズに近づけつつ banner 主文との階層も維持。
+       opacity 0.95 撤廃 (実測コントラストを純粋な #ffffff on #b3261e=5.94:1 に揃える) */
+    font-weight: 600;
+    font-size: 0.82rem;
+    margin-top: 0.2rem;
   }
   @media (prefers-color-scheme: dark) {
     .verification-banner { background: #9b1a13; }

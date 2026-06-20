@@ -48,7 +48,7 @@ from predictor.tickets import build_recommended_tickets, payout_row_for_race, ti
 from scripts.backtest import get_payout, horses_for_race, list_races
 from scripts.fetch_odds import race_key
 from web.codes import race_id_to_date, track_name
-from web.generator import publish_to_icloud, render
+from web.generator import StalePublishRefused, publish_to_icloud, render
 from web.publish_safety import assert_safe_to_publish
 
 ensure_dirs()
@@ -1100,7 +1100,29 @@ class Api:
     def publish(self, options: dict | None = None) -> dict:
         self._begin_run()
         self._set_status("iCloud Driveへ公開中...", "publish", running=True)
-        path = publish_to_icloud()
+        try:
+            path = publish_to_icloud()
+        except StalePublishRefused:
+            # 検証モードで render された HTML (verification-banner 入り) を
+            # publish しようとした → publish_safety 経由でガード済の意図的拒否。
+            # ユーザに対しては型名を出さず、何をすべきか分かる日本語案内に変換する。
+            now = datetime.now().strftime("%H:%M:%S")
+            self._set_status(
+                "公開を中止しました (検証モードで生成された HTML)。",
+                "error",
+                running=False,
+            )
+            return {
+                "ok": False,
+                "refused": True,
+                "refused_at": now,
+                "message": (
+                    "iCloud 公開を中止しました。"
+                    "現在の HTML は『検証モード (オッズ鮮度を無視)』で生成されています。"
+                    "実弾運用面には出せません。通常モード (チェックを外す) で予想を"
+                    "再生成してから再度公開してください。"
+                ),
+            }
         now = datetime.now().strftime("%H:%M:%S")
         self._set_status("公開が完了しました。", "done", running=False)
         return {

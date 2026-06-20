@@ -587,10 +587,16 @@ def publish_to_icloud(allow_stale: bool = False) -> Path:
         )
     if not allow_stale:
         try:
-            preview_head = src.read_text(encoding="utf-8", errors="replace")[:5000]
+            # verification-banner は index.html の <body> 内 (~500 行目前後) に
+            # 必ず出るため、先頭 8KB をスキャンすれば確実に検出できる。
+            # 大規模 HTML (1.5MB) 全読み込みコストを避けるための最適化。
+            preview_head = src.read_text(encoding="utf-8", errors="replace")[:8000]
         except OSError:
             preview_head = ""
-        if 'class="verification-banner"' in preview_head:
+        # marker 文字列は web.publish_safety で集約。テンプレート側の class 名と
+        # 一致しなくなった瞬間に tests/test_publish_safety の integration test が fail する
+        from web.publish_safety import VERIFICATION_BANNER_MARKER
+        if VERIFICATION_BANNER_MARKER in preview_head:
             raise StalePublishRefused(
                 "index.html は検証モード (オッズ鮮度無視) で生成されています。"
                 "iCloud 公開を中止しました。意図的に公開する場合は "
