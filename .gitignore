@@ -18,6 +18,9 @@ data/*
 # 失敗 run の埋葬先 (再発防止のための証跡保全)
 !data/failed_runs/
 !data/failed_runs/**
+# 日次検証 CSV (予測 + 結果 + 払戻 の固定証跡、scripts/build_daily_results.py が生成)
+!data/results/
+!data/results/**
 
 # OS / エディタ
 .DS_Store

@@ -1,0 +1,28 @@
+{
+  "date": "20260621",
+  "generated_at": "2026-06-21T20:58:20",
+  "source_html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-06-21\\predictions_source_20260621_1023.html",
+  "source_html_sha256": "2e951809b07322559abf4168e12b772bae74c4a1655c9ce89f0687d1d0b4355c",
+  "version_meta": {
+    "calibrator": "isotonic (p21_records_2025_isotonic, 2026-06-13)",
+    "lgbm": "lgbm-v5-tier23 (2026-05-16)",
+    "git_sha": "2df45f6"
+  },
+  "counts": {
+    "html_races_parsed": 36,
+    "html_horses_parsed": 501,
+    "html_top_picks_parsed": 180,
+    "predictions": 501,
+    "final_odds": 537,
+    "race_results": 537,
+    "payouts": 36,
+    "evaluation_summary": 501
+  },
+  "csv_sha256": {
+    "predictions.csv": "9a5cb4d26ecad9c37ca208cf50ee407210f7f270971dd3ced52ec60c2811b9b1",
+    "final_odds.csv": "fe529b6ced09420d03b505cbac1cf2b0de64a79adfb053fc399930ecd7f521c8",
+    "race_results.csv": "e37b0fad0b6a64b489f49afa556a67573895d15902c19ec2a86397c50e76e30c",
+    "payouts.csv": "356b2315eaa2409f5a68473ac77dcc387fb282f95967bd3d0ce97e263d957ec1",
+    "evaluation_summary.csv": "c600a1309d4b0b7a4679aba1f86b89c691b4c5a093f6c28fab7e4b59db42f460"
+  }
+}
