@@ -1,37 +1,35 @@
-﻿# Windows Task Scheduler に fresh odds health check タスクを登録する。
+﻿# Windows Task Scheduler に keiba-fresh-odds (本体) を登録する。
 #
-# 09:15 から 16:55 まで 15 分おきに自動起動。
+# 09:00 から 16:40 まで 10 分おきに scripts/fetch_fresh_odds.bat を起動。
 #
-# 重要 (2026-06-21 修正):
-#   旧版は `schtasks /sc minute /sd ... /st ... /et ...` を使っていたが、
-#   これは `<TimeTrigger>` (= その日限りの 1 回 trigger に repetition を付けた形)
-#   として登録され、翌日 EndBoundary 経過後は二度と発火しない。
-#   PowerShell の `Register-ScheduledTask` + `New-ScheduledTaskTrigger -Daily` +
-#   Repetition の組み合わせで CalendarTrigger ベースに切り替える。
-#
-# 初期状態: Ready (enabled)。
+# 重要 (2026-06-21 新規):
+#   従来は手動 `schtasks /create /sc minute /sd ... /st ... /et ...` で登録
+#   していたが、これは `<TimeTrigger>` (1 日限り) として保存され、翌日以降
+#   発火しないバグが発覚 (2026-06-21 Day2 監視で検出)。
+#   本スクリプトは `Register-ScheduledTask` + Daily CalendarTrigger +
+#   Repetition の組み合わせで毎日繰り返す形に登録する。
 #
 # usage:
-#   powershell -ExecutionPolicy Bypass -File scripts/register_fresh_odds_healthcheck_task.ps1
+#   powershell -ExecutionPolicy Bypass -File scripts/register_fresh_odds_task.ps1
 
 param(
-    [string]$TaskName = "keiba-fresh-odds-healthcheck",
-    [string]$StartTime = "09:15",
-    [int]$IntervalMinutes = 15,
-    [int]$DurationMinutes = 460  # 09:15 → 16:55 = 7h40m = 460 分
+    [string]$TaskName = "keiba-fresh-odds",
+    [string]$StartTime = "09:00",
+    [int]$IntervalMinutes = 10,
+    [int]$DurationMinutes = 460  # 09:00 → 16:40 = 7h40m = 460 分
 )
 
 $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
-$psScript = Join-Path $projectRoot "scripts\check_fresh_odds_health.ps1"
-if (-not (Test-Path $psScript)) {
-    Write-Error "$psScript が無い。先に作成してください"
+$batScript = Join-Path $projectRoot "scripts\fetch_fresh_odds.bat"
+if (-not (Test-Path $batScript)) {
+    Write-Error "$batScript が無い。先に作成してください"
     exit 1
 }
 
 Write-Host "登録中: $TaskName"
-Write-Host "  実行ファイル: $psScript"
+Write-Host "  実行ファイル: $batScript"
 Write-Host "  Schedule: 毎日 ${StartTime} 開始、${IntervalMinutes} 分おき、${DurationMinutes} 分間"
 
 # 既存タスクの削除
@@ -48,14 +46,12 @@ if ($existing) {
     Write-Host "既存タスクなし (初回登録)"
 }
 
-# Action: powershell.exe で PS1 を実行
+# Action: cmd.exe /c で .bat を実行
 $action = New-ScheduledTaskAction `
-    -Execute "powershell.exe" `
-    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$psScript`""
+    -Execute "cmd.exe" `
+    -Argument "/c `"$batScript`""
 
-# Trigger: 毎日 $StartTime に発火、$DurationMinutes 分間 $IntervalMinutes 分おきに繰り返し。
-# PowerShell 5.1 の New-ScheduledTaskTrigger -Daily は Repetition プロパティを直接
-# 設定できないため、-Once trigger の Repetition を借用して Daily trigger に貼る。
+# Trigger: 毎日 $StartTime に発火、$DurationMinutes 分間 $IntervalMinutes 分おきに繰り返し
 $dailyTrigger = New-ScheduledTaskTrigger -Daily -At $StartTime
 $tmpOnceTrigger = New-ScheduledTaskTrigger -Once -At $StartTime `
     -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes) `
@@ -75,7 +71,7 @@ try {
         -Action $action `
         -Trigger $dailyTrigger `
         -Settings $settings `
-        -Description "fresh odds 取得運用 health check (P25 Plan Step 4 / 2026-06-21 daily trigger 修正版)" `
+        -Description "fresh odds 取得 (P25 Plan Step 4 / 2026-06-21 daily trigger 修正版)" `
         -ErrorAction Stop | Out-Null
 } catch {
     Write-Error "Register-ScheduledTask 失敗: $($_.Exception.Message)"
@@ -93,11 +89,5 @@ Write-Host ("  LastRunTime:  {0}" -f $info.LastRunTime)
 Write-Host ""
 Write-Host "確認コマンド:"
 Write-Host "  Get-ScheduledTask -TaskName $TaskName | Get-ScheduledTaskInfo"
-Write-Host ""
-Write-Host "無効化:"
-Write-Host "  Disable-ScheduledTask -TaskName $TaskName"
-Write-Host ""
-Write-Host "削除:"
-Write-Host "  Unregister-ScheduledTask -TaskName $TaskName -Confirm:`$false"
 
 exit 0
