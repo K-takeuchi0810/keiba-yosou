@@ -1,0 +1,129 @@
+{
+  "type": "ev_bucket_oos_analysis",
+  "rule_version": "p25-market-pop-score-2026-06-14",
+  "generated_at": "2026-06-28T16:47:05",
+  "window": {
+    "from": "20260101",
+    "to": "20260614"
+  },
+  "second_blend": {
+    "trained_from": "20250101",
+    "trained_to": "20251231",
+    "source_count": 32677,
+    "coefficients": {
+      "intercept": -0.4763640522272813,
+      "log_model": 0.15120557736512252,
+      "log_market": 0.5601945076447923
+    }
+  },
+  "ev_edges": [
+    0.0,
+    0.8,
+    1.0,
+    1.2,
+    1.5,
+    "inf"
+  ],
+  "n_top_picks": 1578,
+  "overall_roi": 0.6438,
+  "linear_buckets": [
+    {
+      "bucket": "[0.0,0.8)",
+      "count": 869,
+      "hit_rate": 0.2681,
+      "return_rate": 0.6719,
+      "mean_ev": 0.5467,
+      "payout_total": 58390
+    },
+    {
+      "bucket": "[0.8,1.0)",
+      "count": 190,
+      "hit_rate": 0.1526,
+      "return_rate": 0.5679,
+      "mean_ev": 0.8921,
+      "payout_total": 10790
+    },
+    {
+      "bucket": "[1.0,1.2)",
+      "count": 145,
+      "hit_rate": 0.1931,
+      "return_rate": 0.9834,
+      "mean_ev": 1.0924,
+      "payout_total": 14260
+    },
+    {
+      "bucket": "[1.2,1.5)",
+      "count": 131,
+      "hit_rate": 0.1832,
+      "return_rate": 0.8901,
+      "mean_ev": 1.3399,
+      "payout_total": 11660
+    },
+    {
+      "bucket": "[1.5,inf)",
+      "count": 243,
+      "hit_rate": 0.037,
+      "return_rate": 0.2671,
+      "mean_ev": 3.2398,
+      "payout_total": 6490
+    }
+  ],
+  "logit_buckets": [
+    {
+      "bucket": "[0.0,0.8)",
+      "count": 1141,
+      "hit_rate": 0.2559,
+      "return_rate": 0.6833,
+      "mean_ev": 0.5636,
+      "payout_total": 77970
+    },
+    {
+      "bucket": "[0.8,1.0)",
+      "count": 207,
+      "hit_rate": 0.1159,
+      "return_rate": 0.7894,
+      "mean_ev": 0.8891,
+      "payout_total": 16340
+    },
+    {
+      "bucket": "[1.0,1.2)",
+      "count": 101,
+      "hit_rate": 0.0594,
+      "return_rate": 0.5465,
+      "mean_ev": 1.0938,
+      "payout_total": 5520
+    },
+    {
+      "bucket": "[1.2,1.5)",
+      "count": 70,
+      "hit_rate": 0.0143,
+      "return_rate": 0.2514,
+      "mean_ev": 1.3332,
+      "payout_total": 1760
+    },
+    {
+      "bucket": "[1.5,inf)",
+      "count": 59,
+      "hit_rate": 0.0,
+      "return_rate": 0.0,
+      "mean_ev": 2.2498,
+      "payout_total": 0
+    }
+  ],
+  "linear_paired": {
+    "auc_ev_vs_hit": 0.3637,
+    "spearman_ev_vs_return": -0.1593
+  },
+  "logit_paired": {
+    "auc_ev_vs_hit": 0.2889,
+    "spearman_ev_vs_return": -0.2463
+  },
+  "pop13": {
+    "count": 1221,
+    "roi": 0.6853
+  },
+  "max_predicted_p_gate": 0.4,
+  "gate_flips": 103,
+  "gate_flips_pop13": 101,
+  "elapsed_sec": 2813.3
+}

@@ -170,8 +170,10 @@ V2_GRADE_ENABLED = os.environ.get("V2_GRADE", "1") != "0"
 V2_DIST_ENABLED = os.environ.get("V2_DIST", "1") != "0"
 CALIBRATOR_PATH = Path(__file__).resolve().parent / "calibrator.json"
 WEIGHTS_PATH = Path(__file__).resolve().parent / "weights.json"
+SECOND_BLEND_PATH = Path(__file__).resolve().parent / "second_blend.json"
 _CALIBRATOR_CACHE: tuple[float, dict] | None = None
 _WEIGHTS_CACHE: tuple[float, dict] | None = None
+_SECOND_BLEND_CACHE: tuple[float, dict | None] | None = None
 
 
 def _weights() -> dict:
@@ -1144,6 +1146,49 @@ def _market_probabilities(scored: list[tuple[dict, float, list[str], float]]) ->
     return {num: p / total for num, p in implied}
 
 
+def _load_second_blend() -> dict | None:
+    """二段ロジット再ブレンド (Benter 補正) の係数を second_blend.json から読む。
+
+    fit: scripts/fit_second_blend.py / 設計: docs/SECOND_LOGIT_BLEND_DESIGN.md。
+    存在しない / 壊れている / 係数欠落のときは None を返し、呼び出し側は
+    線形 blend に安全フォールバックする (calibrator 不在時と同じ思想)。
+    `PRED_DISABLE_SECOND_BLEND=1` で明示無効化も可。mtime ベースキャッシュ。
+    """
+    global _SECOND_BLEND_CACHE
+    if os.environ.get("PRED_DISABLE_SECOND_BLEND") == "1":
+        return None
+    if not SECOND_BLEND_PATH.exists():
+        return None
+    try:
+        mtime = SECOND_BLEND_PATH.stat().st_mtime
+    except OSError:
+        return None
+    if _SECOND_BLEND_CACHE and _SECOND_BLEND_CACHE[0] == mtime:
+        return _SECOND_BLEND_CACHE[1]
+    try:
+        data = json.loads(SECOND_BLEND_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = None
+    if isinstance(data, dict):
+        if data.get("rule_version") not in (None, RULES_VERSION):
+            logger.warning(
+                "second_blend.json rule_version mismatch: expected=%s actual=%s。"
+                "linear blend に fallback します。",
+                RULES_VERSION,
+                data.get("rule_version"),
+            )
+            data = None
+    if isinstance(data, dict):
+        coef = data.get("coefficients") or {}
+        if not all(k in coef for k in ("intercept", "log_model", "log_market")):
+            logger.warning("second_blend.json に係数が揃っていません。linear blend に fallback します。")
+            data = None
+    else:
+        data = None
+    _SECOND_BLEND_CACHE = (mtime, data)
+    return data
+
+
 def _investment_probability(
     model_probability: float,
     market_probability: float,
@@ -1152,13 +1197,40 @@ def _investment_probability(
 ) -> float:
     """投資判断用の確率。
 
-    - calibrator 適用済み model_probability と市場確率を信頼度別重みで blend
-    - オッズ帯別 discount は重複ヒューリスティックで EV を消滅させがちなので、
-      `weights.json` の `discount` で外出し、環境変数 `PRED_DISABLE_DISCOUNT=1`
-      で全無効化 (= 1.0) できるようにした。デフォルトは現行値を維持。
+    - 既定 (`PRED_BLEND_MODE=linear`): calibrator 適用済み model_probability と
+      市場確率を信頼度別重みで線形 blend。
+    - `PRED_BLEND_MODE=logit`: Benter 補正の二段ロジット再ブレンド。
+      `z = b0 + b1*log(model) + b2*log(market)`, `p = sigmoid(z)`。
+      モデルが市場へ regress する分を outcome-fit 係数で補正する
+      (設計: docs/SECOND_LOGIT_BLEND_DESIGN.md)。second_blend.json 不在時は
+      linear に安全フォールバック。logit fit が odds 依存も吸収するため、
+      logit mode では odds discount を通さない (二重補正回避)。
+    - オッズ帯別 discount (linear mode) は重複ヒューリスティックで EV を消滅させ
+      がちなので `weights.json` の `discount` で外出し、`PRED_DISABLE_DISCOUNT=1`
+      で全無効化できる。
     """
     if model_probability <= 0:
         return 0.0
+    # 層 (B) ablation: blend 自体を無効化して calibrator 後の model_probability を
+    # そのまま返す (market blend も odds discount も通さない)。
+    # `PRED_W_model_blend_*=1.0` (model 100% だが discount は残る) とは別物で、
+    # こちらは discount も含めて全段バイパスする。factorial C3/C6 (B-only ablation)
+    # の前提 env。
+    if os.environ.get("PRED_DISABLE_BLEND") == "1":
+        return model_probability
+    # 二段ロジット再ブレンド (Benter 補正)。係数があり market_probability>0 の
+    # ときだけ適用。無ければ下の linear blend にフォールバック。
+    if os.environ.get("PRED_BLEND_MODE", "linear") == "logit" and market_probability > 0:
+        sb = _load_second_blend()
+        if sb:
+            c = sb["coefficients"]
+            z = (
+                c["intercept"]
+                + c["log_model"] * math.log(model_probability)
+                + c["log_market"] * math.log(market_probability)
+            )
+            z = max(-60.0, min(60.0, z))
+            return max(0.0, min(1.0, 1.0 / (1.0 + math.exp(-z))))
     model_weight = {
         "高信頼": _w("model_blend.high", 0.72),
         "標準": _w("model_blend.standard", 0.62),

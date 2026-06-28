@@ -1,0 +1,21 @@
+{
+  "type": "second_logit_blend",
+  "rule_version": "p25-market-pop-score-2026-06-14",
+  "trained_from": "20250101",
+  "trained_to": "20251231",
+  "generated_at": "2026-06-28T15:54:42",
+  "source_count": 32677,
+  "races_used": 3343,
+  "positive_count": 2479,
+  "base_rate": 0.075864,
+  "C": 10000.0,
+  "skip_tentative": false,
+  "coefficients": {
+    "intercept": -0.4763640522272813,
+    "log_model": 0.15120557736512252,
+    "log_market": 0.5601945076447923
+  },
+  "train_logloss": 0.242224,
+  "elapsed_sec": 5577.4,
+  "apply_note": "z = intercept + log_model*log(model_prob) + log_market*log(market_prob); p = sigmoid(z). Current opt-in implementation applies sigmoid(z) directly and does not enable production by default."
+}

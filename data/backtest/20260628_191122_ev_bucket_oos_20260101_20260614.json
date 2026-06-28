@@ -1,0 +1,334 @@
+{
+  "type": "ev_bucket_oos_analysis",
+  "rule_version": "p25-market-pop-score-2026-06-14",
+  "generated_at": "2026-06-28T19:11:22",
+  "window": {
+    "from": "20260101",
+    "to": "20260614"
+  },
+  "meta": {
+    "git_sha": "10677e3f7c1ff631917310acad506a5fb4f681b2",
+    "git_dirty": true,
+    "git_status_short": [
+      "M predictor/rules.py",
+      " M scripts/backtest.py",
+      " M tests/test_backtest_market_snapshot.py",
+      " M tests/test_market_popularity_scoring.py",
+      "?? data/backtest/20260628_131245_tan_p25-pop-0-0-0-oos-rerun-filtered.json",
+      "?? data/backtest/20260628_140437_tan_p25-pop-7-4-2-oos-rerun-filtered.json",
+      "?? data/backtest/20260628_164705_ev_bucket_oos_20260101_20260614.json",
+      "?? data/scorecards/20260628_1710_second_logit_blend_refuted.md",
+      "?? docs/SECOND_LOGIT_BLEND_DESIGN.md",
+      "?? predictor/second_blend.json",
+      "?? scripts/analyze_ev_buckets.py",
+      "?? scripts/fit_second_blend.py"
+    ],
+    "env_overrides": {},
+    "second_blend_sha256": "57e683c7f178b2da7e04c4f35bbe6c2aec7811cc5c8ed242157f1201cae147fb",
+    "analysis_note": "linear_ev is current production with odds discount; linear_ev_no_discount removes the discount for symmetric comparison with logit_ev."
+  },
+  "second_blend": {
+    "trained_from": "20250101",
+    "trained_to": "20251231",
+    "source_count": 32677,
+    "coefficients": {
+      "intercept": -0.4763640522272813,
+      "log_model": 0.15120557736512252,
+      "log_market": 0.5601945076447923
+    }
+  },
+  "ev_edges": [
+    0.0,
+    0.8,
+    1.0,
+    1.2,
+    1.5,
+    "inf"
+  ],
+  "n_top_picks": 1578,
+  "overall_roi": 0.6438,
+  "linear_buckets": [
+    {
+      "bucket": "[0.0,0.8)",
+      "count": 869,
+      "hit_rate": 0.2681,
+      "return_rate": 0.6719,
+      "mean_ev": 0.5467,
+      "payout_total": 58390
+    },
+    {
+      "bucket": "[0.8,1.0)",
+      "count": 190,
+      "hit_rate": 0.1526,
+      "return_rate": 0.5679,
+      "mean_ev": 0.8921,
+      "payout_total": 10790
+    },
+    {
+      "bucket": "[1.0,1.2)",
+      "count": 145,
+      "hit_rate": 0.1931,
+      "return_rate": 0.9834,
+      "mean_ev": 1.0924,
+      "payout_total": 14260
+    },
+    {
+      "bucket": "[1.2,1.5)",
+      "count": 131,
+      "hit_rate": 0.1832,
+      "return_rate": 0.8901,
+      "mean_ev": 1.3399,
+      "payout_total": 11660
+    },
+    {
+      "bucket": "[1.5,inf)",
+      "count": 243,
+      "hit_rate": 0.037,
+      "return_rate": 0.2671,
+      "mean_ev": 3.2398,
+      "payout_total": 6490
+    }
+  ],
+  "linear_no_discount_buckets": [
+    {
+      "bucket": "[0.0,0.8)",
+      "count": 760,
+      "hit_rate": 0.2605,
+      "return_rate": 0.6233,
+      "mean_ev": 0.5631,
+      "payout_total": 47370
+    },
+    {
+      "bucket": "[0.8,1.0)",
+      "count": 228,
+      "hit_rate": 0.2412,
+      "return_rate": 0.7934,
+      "mean_ev": 0.891,
+      "payout_total": 18090
+    },
+    {
+      "bucket": "[1.0,1.2)",
+      "count": 144,
+      "hit_rate": 0.1806,
+      "return_rate": 0.7785,
+      "mean_ev": 1.0998,
+      "payout_total": 11210
+    },
+    {
+      "bucket": "[1.2,1.5)",
+      "count": 141,
+      "hit_rate": 0.1702,
+      "return_rate": 0.9241,
+      "mean_ev": 1.3544,
+      "payout_total": 13030
+    },
+    {
+      "bucket": "[1.5,inf)",
+      "count": 305,
+      "hit_rate": 0.0656,
+      "return_rate": 0.3898,
+      "mean_ev": 3.7535,
+      "payout_total": 11890
+    }
+  ],
+  "logit_buckets": [
+    {
+      "bucket": "[0.0,0.8)",
+      "count": 1141,
+      "hit_rate": 0.2559,
+      "return_rate": 0.6833,
+      "mean_ev": 0.5636,
+      "payout_total": 77970
+    },
+    {
+      "bucket": "[0.8,1.0)",
+      "count": 207,
+      "hit_rate": 0.1159,
+      "return_rate": 0.7894,
+      "mean_ev": 0.8891,
+      "payout_total": 16340
+    },
+    {
+      "bucket": "[1.0,1.2)",
+      "count": 101,
+      "hit_rate": 0.0594,
+      "return_rate": 0.5465,
+      "mean_ev": 1.0938,
+      "payout_total": 5520
+    },
+    {
+      "bucket": "[1.2,1.5)",
+      "count": 70,
+      "hit_rate": 0.0143,
+      "return_rate": 0.2514,
+      "mean_ev": 1.3332,
+      "payout_total": 1760
+    },
+    {
+      "bucket": "[1.5,inf)",
+      "count": 59,
+      "hit_rate": 0.0,
+      "return_rate": 0.0,
+      "mean_ev": 2.2498,
+      "payout_total": 0
+    }
+  ],
+  "linear_paired": {
+    "auc_ev_vs_hit": 0.3637,
+    "spearman_ev_vs_return": -0.1593
+  },
+  "linear_no_discount_paired": {
+    "auc_ev_vs_hit": 0.3595,
+    "spearman_ev_vs_return": -0.1651
+  },
+  "logit_paired": {
+    "auc_ev_vs_hit": 0.2889,
+    "spearman_ev_vs_return": -0.2463
+  },
+  "bootstrap": {
+    "runs": 1000,
+    "seed": 20260628,
+    "cluster": "race_key",
+    "n_clusters": 1578,
+    "auc_ci": {
+      "linear_ev": {
+        "n": 1000,
+        "p025": 0.3309,
+        "p50": 0.3644,
+        "p975": 0.3949
+      },
+      "linear_ev_no_discount": {
+        "n": 1000,
+        "p025": 0.3271,
+        "p50": 0.36,
+        "p975": 0.3905
+      },
+      "logit_ev": {
+        "n": 1000,
+        "p025": 0.2608,
+        "p50": 0.2898,
+        "p975": 0.3195
+      }
+    },
+    "auc_delta_ci": {
+      "logit_minus_linear": {
+        "n": 1000,
+        "p025": -0.0935,
+        "p50": -0.0742,
+        "p975": -0.0546
+      },
+      "logit_minus_linear_no_discount": {
+        "n": 1000,
+        "p025": -0.0891,
+        "p50": -0.07,
+        "p975": -0.0506
+      }
+    },
+    "bucket_return_ci": {
+      "linear_ev": {
+        "[0.0,0.8)": {
+          "n": 1000,
+          "p025": 0.5921,
+          "p50": 0.6739,
+          "p975": 0.7533
+        },
+        "[0.8,1.0)": {
+          "n": 1000,
+          "p025": 0.3722,
+          "p50": 0.5693,
+          "p975": 0.8026
+        },
+        "[1.0,1.2)": {
+          "n": 1000,
+          "p025": 0.6414,
+          "p50": 0.979,
+          "p975": 1.3912
+        },
+        "[1.2,1.5)": {
+          "n": 1000,
+          "p025": 0.5455,
+          "p50": 0.8894,
+          "p975": 1.2926
+        },
+        "[1.5,inf)": {
+          "n": 1000,
+          "p025": 0.0991,
+          "p50": 0.2562,
+          "p975": 0.471
+        }
+      },
+      "linear_ev_no_discount": {
+        "[0.0,0.8)": {
+          "n": 1000,
+          "p025": 0.5454,
+          "p50": 0.6238,
+          "p975": 0.7106
+        },
+        "[0.8,1.0)": {
+          "n": 1000,
+          "p025": 0.61,
+          "p50": 0.7911,
+          "p975": 0.9929
+        },
+        "[1.0,1.2)": {
+          "n": 1000,
+          "p025": 0.5167,
+          "p50": 0.7841,
+          "p975": 1.0925
+        },
+        "[1.2,1.5)": {
+          "n": 1000,
+          "p025": 0.5732,
+          "p50": 0.9372,
+          "p975": 1.3427
+        },
+        "[1.5,inf)": {
+          "n": 1000,
+          "p025": 0.2142,
+          "p50": 0.3818,
+          "p975": 0.5928
+        }
+      },
+      "logit_ev": {
+        "[0.0,0.8)": {
+          "n": 1000,
+          "p025": 0.6106,
+          "p50": 0.6862,
+          "p975": 0.7569
+        },
+        "[0.8,1.0)": {
+          "n": 1000,
+          "p025": 0.4981,
+          "p50": 0.7945,
+          "p975": 1.09
+        },
+        "[1.0,1.2)": {
+          "n": 1000,
+          "p025": 0.1421,
+          "p50": 0.5364,
+          "p975": 1.0394
+        },
+        "[1.2,1.5)": {
+          "n": 1000,
+          "p025": 0.0,
+          "p50": 0.2428,
+          "p975": 0.8126
+        },
+        "[1.5,inf)": {
+          "n": 1000,
+          "p025": 0.0,
+          "p50": 0.0,
+          "p975": 0.0
+        }
+      }
+    }
+  },
+  "pop13": {
+    "count": 1221,
+    "roi": 0.6853
+  },
+  "max_predicted_p_gate": 0.4,
+  "gate_flips": 103,
+  "gate_flips_pop13": 101,
+  "elapsed_sec": 2761.5
+}

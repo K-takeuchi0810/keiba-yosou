@@ -432,6 +432,7 @@ def _snapshot_meta() -> dict:
         "PRED_PROB_TEMPERATURE", "PRED_BLEND_W_RULE", "PRED_DISABLE_CALIBRATOR",
         "PRED_DISABLE_DISCOUNT", "PRED_DISABLE_LGBM", "PRED_CALIBRATOR_ALPHA",
         "PRED_CALIBRATOR_MIN_COUNT", "V2_GRADE", "V2_DIST", "BET_WHITELIST",
+        "PRED_BLEND_MODE", "PRED_DISABLE_BLEND", "PRED_DISABLE_SECOND_BLEND",
     }
     env_keys.update(k for k in _os.environ if k.startswith("PRED_W_"))
     overrides = {k: _os.environ[k] for k in env_keys if k in _os.environ}

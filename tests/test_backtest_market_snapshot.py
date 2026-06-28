@@ -308,3 +308,15 @@ def test_snapshot_meta_records_any_pred_w_env_override():
             os.environ[key] = old
 
     assert meta["env_overrides"].get(key) == "123" or meta["env_overrides"][key.upper()] == "123"
+
+
+def test_snapshot_meta_records_second_blend_env_overrides(monkeypatch):
+    monkeypatch.setenv("PRED_BLEND_MODE", "logit")
+    monkeypatch.setenv("PRED_DISABLE_BLEND", "1")
+    monkeypatch.setenv("PRED_DISABLE_SECOND_BLEND", "1")
+
+    meta = _snapshot_meta()
+
+    assert meta["env_overrides"]["PRED_BLEND_MODE"] == "logit"
+    assert meta["env_overrides"]["PRED_DISABLE_BLEND"] == "1"
+    assert meta["env_overrides"]["PRED_DISABLE_SECOND_BLEND"] == "1"
