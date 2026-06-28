@@ -62,6 +62,8 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(schema)
     _ensure_column(conn, "horse_races", "odds_fetched_at", "TEXT")
     _ensure_column(conn, "horse_races", "odds_dataspec", "TEXT")
+    _ensure_column(conn, "training_times", "data_div", "TEXT")
+    _ensure_column(conn, "training_times", "data_created", "TEXT")
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
@@ -109,7 +111,19 @@ def upsert_horse_race(conn: sqlite3.Connection, se: HorseRaceInfo) -> None:
     row = _se_to_row(se)
     cols = list(row.keys())
     placeholders = ",".join(f":{c}" for c in cols)
-    sql = f"INSERT OR REPLACE INTO horse_races ({','.join(cols)}) VALUES ({placeholders})"
+    update_exprs = []
+    for col in cols:
+        if col in {"race_year", "race_month_day", "track_code", "kaiji", "nichiji", "race_num", "horse_num"}:
+            continue
+        if col in {"mining_time", "mining_predicted_order", "win_odds", "win_popularity"}:
+            update_exprs.append(f"{col}=CASE WHEN excluded.{col} > 0 THEN excluded.{col} ELSE horse_races.{col} END")
+        else:
+            update_exprs.append(f"{col}=excluded.{col}")
+    sql = (
+        f"INSERT INTO horse_races ({','.join(cols)}) VALUES ({placeholders}) "
+        "ON CONFLICT(race_year, race_month_day, track_code, kaiji, nichiji, race_num, horse_num) "
+        f"DO UPDATE SET {','.join(update_exprs)}"
+    )
     conn.execute(sql, row)
 
 
@@ -203,6 +217,56 @@ def upsert_mining_prediction(conn: sqlite3.Connection, mp: MiningPrediction) -> 
     placeholders = ",".join(f":{c}" for c in cols)
     sql = f"INSERT OR REPLACE INTO mining_predictions ({','.join(cols)}) VALUES ({placeholders})"
     conn.execute(sql, d)
+    if mp.predicted_rank > 0:
+        if mp.record_type == "DM":
+            conn.execute(
+                """
+                UPDATE horse_races
+                   SET mining_predicted_order = ?
+                 WHERE race_year = ?
+                   AND race_month_day = ?
+                   AND track_code = ?
+                   AND kaiji = ?
+                   AND nichiji = ?
+                   AND race_num = ?
+                   AND horse_num = ?
+                """,
+                (
+                    mp.predicted_rank,
+                    mp.year,
+                    mp.month_day,
+                    mp.track_code,
+                    mp.kaiji,
+                    mp.nichiji,
+                    mp.race_num,
+                    mp.horse_num,
+                ),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE horse_races
+                   SET mining_predicted_order = ?
+                 WHERE race_year = ?
+                   AND race_month_day = ?
+                   AND track_code = ?
+                   AND kaiji = ?
+                   AND nichiji = ?
+                   AND race_num = ?
+                   AND horse_num = ?
+                   AND COALESCE(mining_predicted_order, 0) = 0
+                """,
+                (
+                    mp.predicted_rank,
+                    mp.year,
+                    mp.month_day,
+                    mp.track_code,
+                    mp.kaiji,
+                    mp.nichiji,
+                    mp.race_num,
+                    mp.horse_num,
+                ),
+            )
 
 
 def upsert_breeding_horse(conn: sqlite3.Connection, hn: BreedingHorse) -> None:
