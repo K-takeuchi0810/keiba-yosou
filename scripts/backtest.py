@@ -133,6 +133,29 @@ def _snapshot_age_min(horse: dict, race: dict) -> int | None:
     return int((race_start - fetched).total_seconds() // 60)
 
 
+def _race_odds_untrusted(
+    horses: list[dict], race: dict, max_age_min: float | None
+) -> bool:
+    """このレースの市場オッズ snapshot が信頼できない (post-start / stale) か。
+
+    - odds_fetched_at が NULL の馬しかいない (= 確定オッズ or 未 mining) →
+      確定オッズとして信頼し False。歴史的 backtest (data_div 7) はここに該当。
+    - snapshot を持つ馬が居る場合: いずれかが post-start (age<0、発走後取得)
+      なら True。全 snapshot が stale (最も新しいものでも age>max_age_min) なら True。
+
+    EV / filter / backtest に post-start・stale odds を混ぜないための race 単位ゲート。
+    """
+    ages = [_snapshot_age_min(h, race) for h in horses if h.get("odds_fetched_at")]
+    ages = [a for a in ages if a is not None]
+    if not ages:
+        return False
+    if any(a < 0 for a in ages):
+        return True
+    if max_age_min is not None and min(ages) > float(max_age_min):
+        return True
+    return False
+
+
 def _horse_bonus_candidate(horse: dict, race: dict, pop_cfg: dict) -> bool:
     """その馬が「市場人気ボーナス対象」(P25 fresh-odds 補正の発火対象) か。
 
@@ -505,10 +528,17 @@ def list_races(
     jra_only: bool = True,
     min_distance: int | None = None,
     max_distance: int | None = None,
+    require_confirmed: bool = False,
 ) -> list[dict]:
     """jra_only=True なら中央場 (track_code 01-10) のみ。
     地方場と海外は JV-Data の RACE dataspec で払戻が来ないので除外しないと
     回収率が引きずり落とされる。
+
+    require_confirmed=True なら「確定勝ち馬 (confirmed_order=1) が存在する
+    レース」のみ返す (レース完全性ゲート)。払戻だけ先に来て着順が未確定な
+    レースや、まだ走っていないレースを backtest 集合に混ぜないための防御。
+    **ライブ予想 (gui/predict/fetch_odds) では未来レースに確定着順が無い
+    ため既定 False のまま**。backtest / eval 経路でのみ True を渡すこと。
     """
     sql = """
         SELECT * FROM races
@@ -516,6 +546,18 @@ def list_races(
     """
     if jra_only:
         sql += " AND CAST(track_code AS INTEGER) BETWEEN 1 AND 10 "
+    if require_confirmed:
+        sql += """
+          AND EXISTS (
+            SELECT 1 FROM horse_races h
+             WHERE h.race_year=races.race_year
+               AND h.race_month_day=races.race_month_day
+               AND h.track_code=races.track_code
+               AND h.kaiji=races.kaiji AND h.nichiji=races.nichiji
+               AND h.race_num=races.race_num
+               AND CAST(h.confirmed_order AS INTEGER) = 1
+          )
+        """
     params: list = [from_date, to_date]
     if min_distance is not None:
         sql += " AND distance >= ? "
@@ -692,6 +734,7 @@ def run_backtest(
     max_distance: int | None = None,
     db_path: str | Path | None = None,
     progress_every: int = 200,
+    exclude_untrusted_odds: bool = True,
 ) -> dict:
     started = time.time()
     buy_filter = buy_filter_from_generator() if filter_from_config else None
@@ -714,10 +757,12 @@ def run_backtest(
             jra_only=jra_only,
             min_distance=min_distance,
             max_distance=max_distance,
+            require_confirmed=True,
         )
 
         n_total_races = len(races)
         n_no_horses = 0
+        n_odds_untrusted = 0
         n_no_pick = 0
         n_filtered = 0
         n_tentative_skipped = 0
@@ -760,6 +805,14 @@ def run_backtest(
                 n_no_horses += 1
                 continue
             _add_market_snapshot_race(market_snapshot_stats, race, horses, pop_cfg)
+
+            # post-start / stale odds snapshot のレースを EV・filter・回収率から除外。
+            # 歴史的な確定オッズ (odds_fetched_at=NULL) は信頼するので対象外。
+            if exclude_untrusted_odds and _race_odds_untrusted(
+                horses, race, pop_cfg.get("max_snapshot_age_min")
+            ):
+                n_odds_untrusted += 1
+                continue
 
             preds = predict_race(horses, conn=conn, race=race, cache=feature_cache)
             tentative = is_tentative(preds)
@@ -902,6 +955,9 @@ def run_backtest(
         "meta": meta,
         "calibration_in_sample": calibration_in_sample,
         "races_total": n_total_races,
+        "require_confirmed": True,
+        "exclude_untrusted_odds": exclude_untrusted_odds,
+        "races_odds_untrusted": n_odds_untrusted,
         "races_no_horses": n_no_horses,
         "races_no_pick": n_no_pick,
         "races_filtered": n_filtered,
@@ -1003,6 +1059,12 @@ def format_report(r: dict) -> str:
     lines.append(f"処理時間:       {r['elapsed_sec']} 秒")
     lines.append("")
     lines.append(f"対象レース:     {r['races_total']:,}")
+    lines.append(
+        f"  完全性ゲート: {'ON' if r.get('require_confirmed') else 'OFF'} / "
+        f"odds鮮度ゲート: {'ON' if r.get('exclude_untrusted_odds') else 'OFF'}"
+    )
+    if r.get("exclude_untrusted_odds"):
+        lines.append(f"  odds除外:     {r.get('races_odds_untrusted', 0):,}")
     lines.append(f"  出走馬不足:   {r['races_no_horses']:,}")
     lines.append(f"  暫定スキップ: {r['races_tentative_skipped']:,}")
     lines.append(f"  ◎付かず:      {r['races_no_pick']:,}")
@@ -1168,6 +1230,12 @@ def main() -> int:
         help="_calibration_records を data/backtest/<ts>_<rule>_records.json に保存。"
              "P17 A2 c2-b の refit_calibrator.py で Isotonic fit の入力に使う。",
     )
+    ap.add_argument(
+        "--no-odds-gate",
+        action="store_true",
+        help="post-start / stale odds snapshot のレース除外を無効化 (既定は除外)。"
+             "鮮度ゲートの寄与を ablation で測りたいときだけ使う。",
+    )
     args = ap.parse_args()
 
     result = run_backtest(
@@ -1184,6 +1252,7 @@ def main() -> int:
         min_distance=args.min_distance,
         max_distance=args.max_distance,
         db_path=args.db,
+        exclude_untrusted_odds=not args.no_odds_gate,
     )
     print(format_report(result))
 
@@ -1212,6 +1281,10 @@ def main() -> int:
                     "rule_version": args.rule_version,
                     "from_date": args.from_date,
                     "to_date": args.to_date,
+                    "require_confirmed": result.get("require_confirmed"),
+                    "exclude_untrusted_odds": result.get("exclude_untrusted_odds"),
+                    "races_total": result.get("races_total"),
+                    "races_odds_untrusted": result.get("races_odds_untrusted"),
                     "meta": result.get("meta", {}),
                     "records": result["_calibration_records"],
                 }, ensure_ascii=False),  # indent なし (records が数万-10万行のため)

@@ -160,6 +160,11 @@ def update_win_odds(
         o1.race_num,
     )
     for horse_num, odds, popularity in o1.win_odds:
+        # 古い snapshot で新しい snapshot を上書きしないためのガード
+        # (out-of-order / 再取り込み対策)。既存 odds_fetched_at が NULL
+        # (= 未設定 or 確定オッズ) の場合は更新を許可し、既存 snapshot が
+        # 取り込む fetched_at より新しい場合のみスキップする。
+        # ISO8601 文字列は辞書順比較で時刻順と一致する。
         cur = conn.execute(
             """
             UPDATE horse_races
@@ -167,8 +172,9 @@ def update_win_odds(
                    odds_fetched_at = ?, odds_dataspec = ?
              WHERE race_year=? AND race_month_day=? AND track_code=?
                AND kaiji=? AND nichiji=? AND race_num=? AND horse_num=?
+               AND (odds_fetched_at IS NULL OR odds_fetched_at <= ?)
             """,
-            (odds, popularity, fetched_at, dataspec, *params_base, horse_num),
+            (odds, popularity, fetched_at, dataspec, *params_base, horse_num, fetched_at),
         )
         updated += cur.rowcount
     return updated
