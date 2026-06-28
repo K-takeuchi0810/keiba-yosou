@@ -904,3 +904,180 @@ def parse_tk(rec: bytes) -> list[SpecialEntry]:
             )
         )
     return entries
+
+
+# ============================================================
+# マスタ系レコード (DIFN/HOSE 等。identity フィールドのみ取得)
+# 仕様書 docs/JV-Data4901.pdf §14 KS / §15 CH / §16 BR / §17 BN
+# ============================================================
+
+KS_LENGTH = 4173   # 騎手マスタ
+CH_LENGTH = 3862   # 調教師マスタ
+BR_LENGTH = 545    # 生産者マスタ
+BN_LENGTH = 477    # 馬主マスタ
+
+
+@dataclass
+class JockeyMaster:
+    record_type: str
+    data_div: str
+    data_created: str
+    jockey_code: str
+    retired: str
+    license_issued: str
+    license_revoked: str
+    birth_date: str
+    jockey_name: str
+    jockey_name_kana: str
+    jockey_name_abbr: str
+    jockey_name_eng: str
+    sex_code: str
+    riding_qual_code: str
+    apprentice_code: str
+    east_west_code: str
+    affiliation_trainer_code: str
+
+
+def parse_ks(rec: bytes) -> JockeyMaster:
+    if len(rec) < KS_LENGTH:
+        rec = rec.ljust(KS_LENGTH, b"\x00")
+    elif len(rec) > KS_LENGTH:
+        rec = rec[:KS_LENGTH]
+    return JockeyMaster(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        jockey_code=_ascii(rec, 12, 5),
+        retired=_ascii(rec, 17, 1),
+        license_issued=_ascii(rec, 18, 8),
+        license_revoked=_ascii(rec, 26, 8),
+        birth_date=_ascii(rec, 34, 8),
+        jockey_name=_str(rec, 42, 34),
+        jockey_name_kana=_str(rec, 110, 30),
+        jockey_name_abbr=_str(rec, 140, 8),
+        jockey_name_eng=_str(rec, 148, 80),
+        sex_code=_ascii(rec, 228, 1),
+        riding_qual_code=_ascii(rec, 229, 1),
+        apprentice_code=_ascii(rec, 230, 1),
+        east_west_code=_ascii(rec, 231, 1),
+        affiliation_trainer_code=_ascii(rec, 252, 5),
+    )
+
+
+def parse_ks_file(path: str | Path) -> list[JockeyMaster]:
+    data = Path(path).read_bytes()
+    return [parse_ks(rec) for rec in _split_fixed(data, KS_LENGTH)]
+
+
+@dataclass
+class TrainerMaster:
+    record_type: str
+    data_div: str
+    data_created: str
+    trainer_code: str
+    retired: str
+    license_issued: str
+    license_revoked: str
+    birth_date: str
+    trainer_name: str
+    trainer_name_kana: str
+    trainer_name_abbr: str
+    trainer_name_eng: str
+    sex_code: str
+    east_west_code: str
+
+
+def parse_ch(rec: bytes) -> TrainerMaster:
+    if len(rec) < CH_LENGTH:
+        rec = rec.ljust(CH_LENGTH, b"\x00")
+    elif len(rec) > CH_LENGTH:
+        rec = rec[:CH_LENGTH]
+    return TrainerMaster(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        trainer_code=_ascii(rec, 12, 5),
+        retired=_ascii(rec, 17, 1),
+        license_issued=_ascii(rec, 18, 8),
+        license_revoked=_ascii(rec, 26, 8),
+        birth_date=_ascii(rec, 34, 8),
+        trainer_name=_str(rec, 42, 34),
+        trainer_name_kana=_str(rec, 76, 30),
+        trainer_name_abbr=_str(rec, 106, 8),
+        trainer_name_eng=_str(rec, 114, 80),
+        sex_code=_ascii(rec, 194, 1),
+        east_west_code=_ascii(rec, 195, 1),
+    )
+
+
+def parse_ch_file(path: str | Path) -> list[TrainerMaster]:
+    data = Path(path).read_bytes()
+    return [parse_ch(rec) for rec in _split_fixed(data, CH_LENGTH)]
+
+
+@dataclass
+class ProducerMaster:
+    record_type: str
+    data_div: str
+    data_created: str
+    producer_code: str
+    producer_name: str
+    producer_name_no_corp: str
+    producer_name_kana: str
+    producer_address: str
+
+
+def parse_br(rec: bytes) -> ProducerMaster:
+    if len(rec) < BR_LENGTH:
+        rec = rec.ljust(BR_LENGTH, b"\x00")
+    elif len(rec) > BR_LENGTH:
+        rec = rec[:BR_LENGTH]
+    return ProducerMaster(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        producer_code=_ascii(rec, 12, 8),
+        producer_name=_str(rec, 20, 72),
+        producer_name_no_corp=_str(rec, 92, 72),
+        producer_name_kana=_str(rec, 164, 72),
+        producer_address=_str(rec, 404, 20),
+    )
+
+
+def parse_br_file(path: str | Path) -> list[ProducerMaster]:
+    data = Path(path).read_bytes()
+    return [parse_br(rec) for rec in _split_fixed(data, BR_LENGTH)]
+
+
+@dataclass
+class OwnerMaster:
+    record_type: str
+    data_div: str
+    data_created: str
+    owner_code: str
+    owner_name: str
+    owner_name_no_corp: str
+    owner_name_kana: str
+    silks_desc: str
+
+
+def parse_bn(rec: bytes) -> OwnerMaster:
+    if len(rec) < BN_LENGTH:
+        rec = rec.ljust(BN_LENGTH, b"\x00")
+    elif len(rec) > BN_LENGTH:
+        rec = rec[:BN_LENGTH]
+    return OwnerMaster(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        owner_code=_ascii(rec, 12, 6),
+        owner_name=_str(rec, 18, 64),
+        owner_name_no_corp=_str(rec, 82, 64),
+        owner_name_kana=_str(rec, 146, 50),
+        silks_desc=_str(rec, 296, 60),
+    )
+
+
+def parse_bn_file(path: str | Path) -> list[OwnerMaster]:
+    data = Path(path).read_bytes()
+    return [parse_bn(rec) for rec in _split_fixed(data, BN_LENGTH)]

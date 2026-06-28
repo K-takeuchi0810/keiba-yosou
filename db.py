@@ -19,12 +19,16 @@ from jvlink_client.parser import (
     BreedingHorse,
     HorseMaster,
     HorseRaceInfo,
+    JockeyMaster,
     MiningPrediction,
     O1Odds,
     OffspringMaster,
+    OwnerMaster,
     Payout,
+    ProducerMaster,
     RaceInfo,
     SpecialEntry,
+    TrainerMaster,
     TrainingTime,
 )
 
@@ -187,6 +191,34 @@ def upsert_horse_master(conn: sqlite3.Connection, um: HorseMaster) -> None:
     placeholders = ",".join(f":{c}" for c in cols)
     sql = f"INSERT OR REPLACE INTO horse_masters ({','.join(cols)}) VALUES ({placeholders})"
     conn.execute(sql, row)
+
+
+def _upsert_master(conn: sqlite3.Connection, table: str, obj) -> None:
+    """単一キーマスタ (KS/CH/BR/BN 等) の汎用 upsert。record_type は保存しない。"""
+    row = asdict(obj)
+    row.pop("record_type", None)
+    cols = list(row.keys())
+    placeholders = ",".join(f":{c}" for c in cols)
+    conn.execute(
+        f"INSERT OR REPLACE INTO {table} ({','.join(cols)}) VALUES ({placeholders})",
+        row,
+    )
+
+
+def upsert_jockey_master(conn: sqlite3.Connection, ks: JockeyMaster) -> None:
+    _upsert_master(conn, "jockey_masters", ks)
+
+
+def upsert_trainer_master(conn: sqlite3.Connection, ch: TrainerMaster) -> None:
+    _upsert_master(conn, "trainer_masters", ch)
+
+
+def upsert_producer_master(conn: sqlite3.Connection, br: ProducerMaster) -> None:
+    _upsert_master(conn, "producer_masters", br)
+
+
+def upsert_owner_master(conn: sqlite3.Connection, bn: OwnerMaster) -> None:
+    _upsert_master(conn, "owner_masters", bn)
 
 
 def is_file_ingested(conn: sqlite3.Connection, filename: str) -> bool:

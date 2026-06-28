@@ -35,6 +35,10 @@ from db import (
     upsert_payout,
     upsert_race,
     upsert_special_entry,
+    upsert_jockey_master,
+    upsert_owner_master,
+    upsert_producer_master,
+    upsert_trainer_master,
     upsert_training_time,
     update_win_odds,
 )
@@ -42,6 +46,10 @@ from jvlink_client.parser import (
     HR_LENGTH,
     RA_LENGTH,
     SE_LENGTH,
+    parse_bn,
+    parse_br,
+    parse_ch,
+    parse_ks,
     parse_dm,
     parse_hc,
     parse_hn,
@@ -150,6 +158,15 @@ def ingest_file_dispatch(conn, path: Path, dataspec: str = "") -> tuple[int, int
             elif rec_type == "TK":
                 for se_ in parse_tk(rec):
                     upsert_special_entry(conn, se_)
+            # === マスタ系 (2026-06-28 追加: DIFN/HOSE) ===
+            elif rec_type == "KS":
+                upsert_jockey_master(conn, parse_ks(rec))
+            elif rec_type == "CH":
+                upsert_trainer_master(conn, parse_ch(rec))
+            elif rec_type == "BR":
+                upsert_producer_master(conn, parse_br(rec))
+            elif rec_type == "BN":
+                upsert_owner_master(conn, parse_bn(rec))
             else:
                 # 未対応レコード種別 (BN/KS/CH/CK/RC/HY/YS/JG/WH/WE/AV/JC/CC 等)
                 skipped += 1

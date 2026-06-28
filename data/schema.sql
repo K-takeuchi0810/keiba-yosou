@@ -273,3 +273,62 @@ CREATE TABLE IF NOT EXISTS special_entries (
 );
 CREATE INDEX IF NOT EXISTS idx_special_race
     ON special_entries (race_year, race_month_day, track_code, kaiji, nichiji, race_num);
+
+-- 騎手マスタ (KS)
+CREATE TABLE IF NOT EXISTS jockey_masters (
+    jockey_code              TEXT PRIMARY KEY,
+    data_div                 TEXT,
+    data_created             TEXT,
+    retired                  TEXT,
+    license_issued           TEXT,
+    license_revoked          TEXT,
+    birth_date               TEXT,
+    jockey_name              TEXT,
+    jockey_name_kana         TEXT,
+    jockey_name_abbr         TEXT,
+    jockey_name_eng          TEXT,
+    sex_code                 TEXT,
+    riding_qual_code         TEXT,
+    apprentice_code          TEXT,
+    east_west_code           TEXT,
+    affiliation_trainer_code TEXT
+);
+
+-- 調教師マスタ (CH)
+CREATE TABLE IF NOT EXISTS trainer_masters (
+    trainer_code      TEXT PRIMARY KEY,
+    data_div          TEXT,
+    data_created      TEXT,
+    retired           TEXT,
+    license_issued    TEXT,
+    license_revoked   TEXT,
+    birth_date        TEXT,
+    trainer_name      TEXT,
+    trainer_name_kana TEXT,
+    trainer_name_abbr TEXT,
+    trainer_name_eng  TEXT,
+    sex_code          TEXT,
+    east_west_code    TEXT
+);
+
+-- 生産者マスタ (BR)
+CREATE TABLE IF NOT EXISTS producer_masters (
+    producer_code         TEXT PRIMARY KEY,
+    data_div              TEXT,
+    data_created          TEXT,
+    producer_name         TEXT,
+    producer_name_no_corp TEXT,
+    producer_name_kana    TEXT,
+    producer_address      TEXT
+);
+
+-- 馬主マスタ (BN)
+CREATE TABLE IF NOT EXISTS owner_masters (
+    owner_code         TEXT PRIMARY KEY,
+    data_div           TEXT,
+    data_created       TEXT,
+    owner_name         TEXT,
+    owner_name_no_corp TEXT,
+    owner_name_kana    TEXT,
+    silks_desc         TEXT
+);
