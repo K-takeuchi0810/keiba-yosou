@@ -89,12 +89,15 @@ def _split_records(data: bytes) -> list[bytes]:
     return out
 
 
-def ingest_file_dispatch(conn, path: Path, dataspec: str = "") -> tuple[int, int, int, int, int, int]:
+def ingest_file_dispatch(
+    conn, path: Path, dataspec: str = "", extra_counts: dict[str, int] | None = None
+) -> tuple[int, int, int, int, int, int]:
     """ファイルを開き、レコード単位に分割 → 種別別に DB へ。
 
     戻り値: (ra_count, se_count, hr_count, o1_count, um_count, skipped)。
-    Phase 1 新規 dataspec (DM/TM/HN/SK/HC/WC/TK) は本戻り値タプルに含めない
-    (互換維持)。代わりに ingest_all の summary 辞書に extra カウンタを集計。
+    戻り値タプル外の種別 (Phase1 の DM/TM/HN/SK/HC/WC/TK、マスタ KS/CH/BR/BN) は
+    `extra_counts` (渡された場合) に種別別件数を加算する。サイレント取り込みを避け、
+    byte 位置 drift を「件数 0 / parse 失敗 warning」で検出できるようにする。
     """
     data = path.read_bytes()
     records = _split_records(data)
@@ -105,6 +108,10 @@ def ingest_file_dispatch(conn, path: Path, dataspec: str = "") -> tuple[int, int
     o1_count = 0
     um_count = 0
     skipped = 0
+    extras: dict[str, int] = {}
+
+    def _bump(rt: str) -> None:
+        extras[rt] = extras.get(rt, 0) + 1
 
     for rec in records:
         if len(rec) < 2:
@@ -113,65 +120,73 @@ def ingest_file_dispatch(conn, path: Path, dataspec: str = "") -> tuple[int, int
         rec_type = rec[:2].decode("latin-1", errors="replace")
         try:
             if rec_type == "RA":
-                ra = parse_ra(rec)
-                upsert_race(conn, ra)
+                upsert_race(conn, parse_ra(rec))
                 ra_count += 1
             elif rec_type == "SE":
-                se = parse_se(rec)
-                upsert_horse_race(conn, se)
+                upsert_horse_race(conn, parse_se(rec))
                 se_count += 1
             elif rec_type == "HR":
-                hr = parse_hr(rec)
-                upsert_payout(conn, hr)
+                upsert_payout(conn, parse_hr(rec))
                 hr_count += 1
             elif rec_type == "O1":
-                o1 = parse_o1(rec)
-                update_win_odds(conn, o1, fetched_at=fetched_at, dataspec=dataspec or "0B31")
+                update_win_odds(conn, parse_o1(rec), fetched_at=fetched_at, dataspec=dataspec or "0B31")
                 o1_count += 1
             elif rec_type == "UM":
-                um = parse_um(rec)
-                upsert_horse_master(conn, um)
+                upsert_horse_master(conn, parse_um(rec))
                 um_count += 1
             elif rec_type == "HS":
-                hs = parse_hs(rec)
-                upsert_horse_master(conn, hs)
+                upsert_horse_master(conn, parse_hs(rec))
                 um_count += 1
             # === Phase 1 新規 dataspec (2026-05-13) ===
             elif rec_type == "DM":
                 for mp in parse_dm(rec):
                     upsert_mining_prediction(conn, mp)
+                _bump("DM")
             elif rec_type == "TM":
                 for mp in parse_tm(rec):
                     upsert_mining_prediction(conn, mp)
+                _bump("TM")
             elif rec_type == "HN":
-                hn = parse_hn(rec)
-                upsert_breeding_horse(conn, hn)
+                upsert_breeding_horse(conn, parse_hn(rec))
+                _bump("HN")
             elif rec_type == "SK":
-                sk = parse_sk(rec)
-                upsert_offspring_master(conn, sk)
+                upsert_offspring_master(conn, parse_sk(rec))
+                _bump("SK")
             elif rec_type == "HC":
-                hc = parse_hc(rec)
-                upsert_training_time(conn, hc)
+                upsert_training_time(conn, parse_hc(rec))
+                _bump("HC")
             elif rec_type == "WC":
-                wc = parse_wc(rec)
-                upsert_training_time(conn, wc)
+                upsert_training_time(conn, parse_wc(rec))
+                _bump("WC")
             elif rec_type == "TK":
                 for se_ in parse_tk(rec):
                     upsert_special_entry(conn, se_)
+                _bump("TK")
             # === マスタ系 (2026-06-28 追加: DIFN/HOSE) ===
             elif rec_type == "KS":
                 upsert_jockey_master(conn, parse_ks(rec))
+                _bump("KS")
             elif rec_type == "CH":
                 upsert_trainer_master(conn, parse_ch(rec))
+                _bump("CH")
             elif rec_type == "BR":
                 upsert_producer_master(conn, parse_br(rec))
+                _bump("BR")
             elif rec_type == "BN":
                 upsert_owner_master(conn, parse_bn(rec))
+                _bump("BN")
             else:
-                # 未対応レコード種別 (BN/KS/CH/CK/RC/HY/YS/JG/WH/WE/AV/JC/CC 等)
+                # 未対応レコード種別 (CK/RC/HY/YS/JG/WF/H1/H6/O2-O6/WH/WE/AV/JC/CC 等)
                 skipped += 1
-        except Exception:
+        except Exception as e:
             skipped += 1
+            logger.warning(
+                "ingest parse failed: rec_type=%s file=%s: %s", rec_type, path.name, e
+            )
+
+    if extra_counts is not None:
+        for rt, n in extras.items():
+            extra_counts[rt] = extra_counts.get(rt, 0) + n
 
     return ra_count, se_count, hr_count, o1_count, um_count, skipped
 
@@ -211,6 +226,7 @@ def ingest_all(
         "HR": 0,
         "O1": 0,
         "UM": 0,
+        "extras": {},
         "records_skipped": 0,
         "errors": [],
     }
@@ -255,15 +271,24 @@ def ingest_all(
                     summary["files_skipped"] += 1
                     continue
                 try:
-                    ra_n, se_n, hr_n, o1_n, um_n, skipped = ingest_file_dispatch(conn, f, ds_dir.name)
+                    file_extras: dict[str, int] = {}
+                    ra_n, se_n, hr_n, o1_n, um_n, skipped = ingest_file_dispatch(
+                        conn, f, ds_dir.name, extra_counts=file_extras
+                    )
+                    extra_n = sum(file_extras.values())
                     summary["RA"] += ra_n
                     summary["SE"] += se_n
                     summary["HR"] += hr_n
                     summary["O1"] += o1_n
                     summary["UM"] += um_n
+                    for rt, n in file_extras.items():
+                        summary["extras"][rt] = summary["extras"].get(rt, 0) + n
                     summary["records_skipped"] += skipped
                     summary["files_processed"] += 1
-                    record_ingested_file(conn, f.name, ds_dir.name, ra_n + se_n + hr_n + o1_n + um_n)
+                    record_ingested_file(
+                        conn, f.name, ds_dir.name,
+                        ra_n + se_n + hr_n + o1_n + um_n + extra_n,
+                    )
                 except Exception as e:
                     summary["files_errored"] += 1
                     summary["errors"].append(
