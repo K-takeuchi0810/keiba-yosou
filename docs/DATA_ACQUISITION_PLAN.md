@@ -285,17 +285,29 @@ SELECT CASE WHEN CAST(birth_year AS INT) BETWEEN 1980 AND 2026 THEN 'valid' ELSE
 - 被覆: exotic_odds/vote_counts は近年 ~18,927 レース (確定オッズ raw の取得範囲)。
   payouts 43,242 レースより狭く、長期履歴特徴には使えない (B2 は近年のみ)。
 
-### 残るギャップ = JV-Link fetch 必須 (raw に存在せず、32bit COM での DL が要る = ユーザ手動)
+### ★実測で判明: recent window (2021+) は主要フィールド既に完全 (2026-06-30)
 
-全走査の結果、raw に**一度も無い**ため再 dispatch では取得不能なもの:
+JRA 場 (track_code 01-10) のみで充足率を実測した結果、**過去の悲観的記載は誤り**だった:
 
-| 項目 | 内容 | 取得方法 (.venv32 / 32bit JV-Link) |
-|---|---|---|
-| **final_3f** | 上がり3F (2020-24 が ~1.2% のみ) | `.venv32/Scripts/python.exe -m scripts.bootstrap --fromtime 20200101000000` で RACE を再 fetch (SE 再取得)。完了後 final_3f 充足率を再確認 |
-| **WH 馬体重** | 発走前馬体重 (F6) | 速報系 (0B 系) dataspec の fetch が必要。option=4 の過去取得対象外で主に運用 fetch で前向き蓄積。要 JV-Link 調査 |
-| **JC 騎手変更** | 発走前騎手変更 | 同上 (速報系) |
-| **CC コース変更** | 発走前コース変更 | 同上 (速報系) |
+| フィールド | 2021 | 2022 | 2023 | 2024 | 2025 | 欠落 |
+|---|---|---|---|---|---|---|
+| final_3f 上がり3F | 100% | 100% | 100% | 99.9% | 99.6% | **2020 のみ 1.2% + pre-2020 未 fetch** |
+| horse_weight 馬体重 | 100% | 100% | 100% | 100% | 99.7% | なし (WH fetch 不要、SE に既収) |
+| finish_time / leg_quality | — | — | 99% | 99% | 99% | ほぼなし |
 
-注: これらは CLAUDE.md ルール 3 (32bit 経路) / 1-ter (重い fetch の pre-flight) に従って実行する。
-final_3f 再取得は数時間規模なので bg + pre-flight checklist 必須。Claude 側からは COM を起動できない
-(ユーザ手動)。
+- 以前の「final_3f 2020-24=1.2%」「63%」は **非JRA行 (地方等 ~28k/年) 混在の見かけ**で、
+  JRA 場のみなら 2021+ は完全。先の fresh-odds era の fetch が既に取得していた。
+- **結論: 現行予想・近年 backtest・F1/F2/F5/F6 特徴量に必要なデータは既に揃っている。**
+
+### 残るギャップ = JV-Link fetch (任意。recent window には不要、pre-2021 履歴の深さのみ)
+
+raw に**一度も無い**ため再 dispatch では取得不能だが、recent window には不要なもの:
+
+| 項目 | 内容 | 価値 | 取得方法 (.venv32 / 32bit JV-Link、ユーザ手動) |
+|---|---|---|---|
+| **final_3f (2020 以前)** | 学習履歴の深さ | 中 (2021+ は完全なので任意) | `.venv32/Scripts/python.exe -m scripts.bootstrap --fromtime 20200101000000` |
+| **WH 馬体重 (速報)** | 発走前更新の粒度 | 低 (最終値は SE に既収) | 速報系 0B。要 JV-Link 調査 |
+| **JC 騎手変更 / CC コース変更** | 発走前速報 | 低 | 同上 |
+
+注: いずれも recent window の作業をブロックしない。実施時は CLAUDE.md ルール 3 (32bit) /
+1-ter (重い fetch の pre-flight) に従う。Claude 側から COM 起動は不可 (ユーザ手動)。
