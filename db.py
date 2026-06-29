@@ -17,6 +17,7 @@ from pathlib import Path
 from config import DB_PATH, PROJECT_ROOT
 from jvlink_client.parser import (
     BreedingHorse,
+    ExoticOdds,
     HorseMaster,
     HorseRaceInfo,
     JockeyMaster,
@@ -30,6 +31,7 @@ from jvlink_client.parser import (
     SpecialEntry,
     TrainerMaster,
     TrainingTime,
+    VoteCounts,
 )
 
 SCHEMA_PATH = PROJECT_ROOT / "data" / "schema.sql"
@@ -347,3 +349,52 @@ def upsert_special_entry(conn: sqlite3.Connection, se: SpecialEntry) -> None:
     placeholders = ",".join(f":{c}" for c in cols)
     sql = f"INSERT OR REPLACE INTO special_entries ({','.join(cols)}) VALUES ({placeholders})"
     conn.execute(sql, d)
+
+
+def upsert_exotic_odds(conn: sqlite3.Connection, odds: ExoticOdds) -> int:
+    """O2-O6 の 1 レコード (= 1 レース 1 式別) を組合せ単位で行展開して upsert。
+
+    戻り値は書き込んだ組合せ行数 (取り込み観測性のため)。
+    """
+    rows = [
+        (
+            odds.year, odds.month_day, odds.track_code, odds.kaiji, odds.nichiji,
+            odds.race_num, odds.bet_type, combo, odds_low, odds_high, pop,
+            odds.data_div, odds.data_created, odds.announced_time,
+        )
+        for combo, odds_low, odds_high, pop in odds.entries
+    ]
+    if not rows:
+        return 0
+    conn.executemany(
+        "INSERT OR REPLACE INTO exotic_odds "
+        "(race_year, race_month_day, track_code, kaiji, nichiji, race_num, "
+        " bet_type, combo, odds_low, odds_high, popularity, data_div, data_created, announced_time) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        rows,
+    )
+    return len(rows)
+
+
+def upsert_vote_counts(conn: sqlite3.Connection, vc: VoteCounts) -> int:
+    """H1 / H6 の 1 レコードを組合せ単位で行展開して upsert。
+
+    戻り値は書き込んだ行数 (取り込み観測性のため)。
+    """
+    rows = [
+        (
+            vc.year, vc.month_day, vc.track_code, vc.kaiji, vc.nichiji,
+            vc.race_num, bet_type, combo, votes, pop, vc.data_div, vc.data_created,
+        )
+        for bet_type, combo, votes, pop in vc.entries
+    ]
+    if not rows:
+        return 0
+    conn.executemany(
+        "INSERT OR REPLACE INTO vote_counts "
+        "(race_year, race_month_day, track_code, kaiji, nichiji, race_num, "
+        " bet_type, combo, votes, popularity, data_div, data_created) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        rows,
+    )
+    return len(rows)

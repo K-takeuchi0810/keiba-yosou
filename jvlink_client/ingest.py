@@ -28,6 +28,7 @@ from db import (
     open_db,
     record_ingested_file,
     upsert_breeding_horse,
+    upsert_exotic_odds,
     upsert_horse_race,
     upsert_horse_master,
     upsert_mining_prediction,
@@ -40,6 +41,7 @@ from db import (
     upsert_producer_master,
     upsert_trainer_master,
     upsert_training_time,
+    upsert_vote_counts,
     update_win_odds,
 )
 from jvlink_client.parser import (
@@ -51,11 +53,18 @@ from jvlink_client.parser import (
     parse_ch,
     parse_ks,
     parse_dm,
+    parse_h1,
+    parse_h6,
     parse_hc,
     parse_hn,
     parse_hr,
     parse_hs,
     parse_o1,
+    parse_o2,
+    parse_o3,
+    parse_o4,
+    parse_o5,
+    parse_o6,
     parse_ra,
     parse_se,
     parse_sk,
@@ -110,8 +119,8 @@ def ingest_file_dispatch(
     skipped = 0
     extras: dict[str, int] = {}
 
-    def _bump(rt: str) -> None:
-        extras[rt] = extras.get(rt, 0) + 1
+    def _bump(rt: str, n: int = 1) -> None:
+        extras[rt] = extras.get(rt, 0) + n
 
     for rec in records:
         if len(rec) < 2:
@@ -175,8 +184,24 @@ def ingest_file_dispatch(
             elif rec_type == "BN":
                 upsert_owner_master(conn, parse_bn(rec))
                 _bump("BN")
+            # === 式別オッズ O2-O6 / 票数 H1/H6 (2026-06-30 追加: RACE) ===
+            # 配列系は組合せ単位の行数で計上 (byte drift で 0 行になれば検出可)。
+            elif rec_type == "O2":
+                _bump("O2", upsert_exotic_odds(conn, parse_o2(rec)))
+            elif rec_type == "O3":
+                _bump("O3", upsert_exotic_odds(conn, parse_o3(rec)))
+            elif rec_type == "O4":
+                _bump("O4", upsert_exotic_odds(conn, parse_o4(rec)))
+            elif rec_type == "O5":
+                _bump("O5", upsert_exotic_odds(conn, parse_o5(rec)))
+            elif rec_type == "O6":
+                _bump("O6", upsert_exotic_odds(conn, parse_o6(rec)))
+            elif rec_type == "H1":
+                _bump("H1", upsert_vote_counts(conn, parse_h1(rec)))
+            elif rec_type == "H6":
+                _bump("H6", upsert_vote_counts(conn, parse_h6(rec)))
             else:
-                # 未対応レコード種別 (CK/RC/HY/YS/JG/WF/H1/H6/O2-O6/WH/WE/AV/JC/CC 等)
+                # 未対応レコード種別 (CK/RC/HY/YS/JG/WF/WH/WE/AV/JC/CC/BT 等)
                 skipped += 1
         except Exception as e:
             skipped += 1

@@ -1081,3 +1081,199 @@ def parse_bn(rec: bytes) -> OwnerMaster:
 def parse_bn_file(path: str | Path) -> list[OwnerMaster]:
     data = Path(path).read_bytes()
     return [parse_bn(rec) for rec in _split_fixed(data, BN_LENGTH)]
+
+
+# ============================================================
+# 式別オッズ (O2 馬連 / O3 ワイド / O4 馬単 / O5 三連複 / O6 三連単)
+# 仕様書 docs/JV-Data4901.pdf §8-12。RACE dataspec。
+# O1 単複は別経路 (update_win_odds → horse_races)。ここは複系のみ。
+# オッズ値は 0.1 倍単位の整数 (例: 99999 = 9999.9 倍)。"------"発売前 /
+# "******"発売票なし / 空欄=登録なし は _int で 0 になり除外される。
+# ============================================================
+
+O2_LENGTH = 2042    # オッズ2 馬連
+O3_LENGTH = 2654    # オッズ3 ワイド
+O4_LENGTH = 4031    # オッズ4 馬単
+O5_LENGTH = 12293   # オッズ5 三連複
+O6_LENGTH = 83285   # オッズ6 三連単
+
+
+def _fit(rec: bytes, length: int) -> bytes:
+    """BSTR ラウンドトリップで ±数バイトずれるのを固定長に正規化する。"""
+    if len(rec) < length:
+        return rec.ljust(length, b"\x00")
+    if len(rec) > length:
+        return rec[:length]
+    return rec
+
+
+@dataclass
+class ExoticOdds:
+    record_type: str
+    data_div: str
+    data_created: str
+    year: str
+    month_day: str
+    track_code: str
+    kaiji: str
+    nichiji: str
+    race_num: str
+    announced_time: str
+    bet_type: str
+    # (組番, 最低オッズ, 最高オッズ, 人気)。単一オッズ式別は最高=0。
+    entries: list[tuple[str, int, int, int]]
+
+    @property
+    def race_id(self) -> str:
+        return f"{self.year}{self.month_day}_{self.track_code}_{self.kaiji}_{self.nichiji}_{self.race_num}"
+
+
+# rec_type -> (bet_type, length, count, item_len, combo_len, odds_len, pop_len, has_high)
+# 配列は全式別とも pos 41 開始。
+_EXOTIC_SPECS = {
+    "O2": ("quinella", O2_LENGTH, 153, 13, 4, 6, 3, False),
+    "O3": ("wide", O3_LENGTH, 153, 17, 4, 5, 3, True),
+    "O4": ("exacta", O4_LENGTH, 306, 13, 4, 6, 3, False),
+    "O5": ("trio", O5_LENGTH, 816, 15, 6, 6, 3, False),
+    "O6": ("trifecta", O6_LENGTH, 4896, 17, 6, 7, 4, False),
+}
+_EXOTIC_ARRAY_START = 41
+
+
+def _parse_exotic(rec: bytes, rec_type: str) -> ExoticOdds:
+    bet_type, length, count, item_len, combo_len, odds_len, pop_len, has_high = _EXOTIC_SPECS[rec_type]
+    rec = _fit(rec, length)
+    entries: list[tuple[str, int, int, int]] = []
+    for i in range(count):
+        base = _EXOTIC_ARRAY_START + i * item_len
+        combo = _ascii(rec, base, combo_len)
+        if not combo:
+            continue
+        odds_low = _int(rec, base + combo_len, odds_len)
+        if has_high:
+            odds_high = _int(rec, base + combo_len + odds_len, odds_len)
+            pop = _int(rec, base + combo_len + 2 * odds_len, pop_len)
+        else:
+            odds_high = 0
+            pop = _int(rec, base + combo_len + odds_len, pop_len)
+        if odds_low <= 0:
+            continue
+        entries.append((combo, odds_low, odds_high, pop))
+    return ExoticOdds(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        year=_ascii(rec, 12, 4),
+        month_day=_ascii(rec, 16, 4),
+        track_code=_ascii(rec, 20, 2),
+        kaiji=_ascii(rec, 22, 2),
+        nichiji=_ascii(rec, 24, 2),
+        race_num=_ascii(rec, 26, 2),
+        announced_time=_ascii(rec, 28, 8),
+        bet_type=bet_type,
+        entries=entries,
+    )
+
+
+def parse_o2(rec: bytes) -> ExoticOdds:
+    return _parse_exotic(rec, "O2")
+
+
+def parse_o3(rec: bytes) -> ExoticOdds:
+    return _parse_exotic(rec, "O3")
+
+
+def parse_o4(rec: bytes) -> ExoticOdds:
+    return _parse_exotic(rec, "O4")
+
+
+def parse_o5(rec: bytes) -> ExoticOdds:
+    return _parse_exotic(rec, "O5")
+
+
+def parse_o6(rec: bytes) -> ExoticOdds:
+    return _parse_exotic(rec, "O6")
+
+
+# ============================================================
+# 票数 (H1 単複枠/馬連/ワイド/馬単/三連複, H6 三連単)
+# 仕様書 docs/JV-Data4901.pdf §5-6。RACE dataspec。
+# votes は 100 円単位の投票数。combo 空欄=登録なし は除外。
+# ============================================================
+
+H1_LENGTH = 28955
+H6_LENGTH = 102890
+
+
+@dataclass
+class VoteCounts:
+    record_type: str
+    data_div: str
+    data_created: str
+    year: str
+    month_day: str
+    track_code: str
+    kaiji: str
+    nichiji: str
+    race_num: str
+    # (bet_type, 組番/馬番/枠番, 票数, 人気)
+    entries: list[tuple[str, str, int, int]]
+
+    @property
+    def race_id(self) -> str:
+        return f"{self.year}{self.month_day}_{self.track_code}_{self.kaiji}_{self.nichiji}_{self.race_num}"
+
+
+# (bet_type, start, count, item_len, combo_len, votes_len, pop_len)
+_H1_BLOCKS = [
+    ("win", 84, 28, 15, 2, 11, 2),
+    ("place", 504, 28, 15, 2, 11, 2),
+    ("bracket", 924, 36, 15, 2, 11, 2),
+    ("quinella", 1464, 153, 18, 4, 11, 3),
+    ("wide", 4218, 153, 18, 4, 11, 3),
+    ("exacta", 6972, 306, 18, 4, 11, 3),
+    ("trio", 12480, 816, 20, 6, 11, 3),
+]
+_H6_BLOCKS = [
+    ("trifecta", 51, 4896, 21, 6, 11, 4),
+]
+
+
+def _vote_items(rec, bet_type, start, count, item_len, combo_len, votes_len, pop_len):
+    out: list[tuple[str, str, int, int]] = []
+    for i in range(count):
+        base = start + i * item_len
+        combo = _ascii(rec, base, combo_len)
+        if not combo:
+            continue
+        votes = _int(rec, base + combo_len, votes_len)
+        pop = _int(rec, base + combo_len + votes_len, pop_len)
+        out.append((bet_type, combo, votes, pop))
+    return out
+
+
+def _parse_votes(rec: bytes, length: int, blocks) -> VoteCounts:
+    rec = _fit(rec, length)
+    entries: list[tuple[str, str, int, int]] = []
+    for bt, start, count, il, cl, vl, pl in blocks:
+        entries.extend(_vote_items(rec, bt, start, count, il, cl, vl, pl))
+    return VoteCounts(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        year=_ascii(rec, 12, 4),
+        month_day=_ascii(rec, 16, 4),
+        track_code=_ascii(rec, 20, 2),
+        kaiji=_ascii(rec, 22, 2),
+        nichiji=_ascii(rec, 24, 2),
+        race_num=_ascii(rec, 26, 2),
+        entries=entries,
+    )
+
+
+def parse_h1(rec: bytes) -> VoteCounts:
+    return _parse_votes(rec, H1_LENGTH, _H1_BLOCKS)
+
+
+def parse_h6(rec: bytes) -> VoteCounts:
+    return _parse_votes(rec, H6_LENGTH, _H6_BLOCKS)

@@ -332,3 +332,51 @@ CREATE TABLE IF NOT EXISTS owner_masters (
     owner_name_kana    TEXT,
     silks_desc         TEXT
 );
+
+-- 式別オッズ (O2 馬連 / O3 ワイド / O4 馬単 / O5 三連複 / O6 三連単)
+-- O1 単複は horse_races に別途格納。ここは複系のみ。
+-- 1 レース 1 確定スナップショット (RACE dataspec)。再 ingest は INSERT OR REPLACE で冪等。
+-- odds は 0.1 倍単位の整数 (例: 12345 = 1234.5 倍)。
+-- O3 ワイドのみ odds_low/odds_high レンジ、他式別は odds_low のみ (odds_high=0)。
+CREATE TABLE IF NOT EXISTS exotic_odds (
+    race_year       TEXT NOT NULL,
+    race_month_day  TEXT NOT NULL,
+    track_code      TEXT NOT NULL,
+    kaiji           TEXT NOT NULL,
+    nichiji         TEXT NOT NULL,
+    race_num        TEXT NOT NULL,
+    bet_type        TEXT NOT NULL,   -- quinella/wide/exacta/trio/trifecta
+    combo           TEXT NOT NULL,   -- 組番 (例: 0102 / 010203)
+    odds_low        INTEGER,
+    odds_high       INTEGER,
+    popularity      INTEGER,
+    data_div        TEXT,
+    data_created    TEXT,
+    announced_time  TEXT,
+    PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji, race_num, bet_type, combo)
+);
+
+CREATE INDEX IF NOT EXISTS idx_exotic_odds_race
+    ON exotic_odds (race_year, race_month_day, track_code, kaiji, nichiji, race_num);
+
+-- 票数 (H1 単勝/複勝/枠連/馬連/ワイド/馬単/三連複, H6 三連単)
+-- votes は 100 円単位の投票数。combo は馬番(単複)/枠番(枠連)/組番。
+-- 1 レース 1 確定スナップショット (RACE dataspec)。再 ingest は INSERT OR REPLACE で冪等。
+CREATE TABLE IF NOT EXISTS vote_counts (
+    race_year       TEXT NOT NULL,
+    race_month_day  TEXT NOT NULL,
+    track_code      TEXT NOT NULL,
+    kaiji           TEXT NOT NULL,
+    nichiji         TEXT NOT NULL,
+    race_num        TEXT NOT NULL,
+    bet_type        TEXT NOT NULL,   -- win/place/bracket/quinella/wide/exacta/trio/trifecta
+    combo           TEXT NOT NULL,
+    votes           INTEGER,
+    popularity      INTEGER,
+    data_div        TEXT,
+    data_created    TEXT,
+    PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji, race_num, bet_type, combo)
+);
+
+CREATE INDEX IF NOT EXISTS idx_vote_counts_race
+    ON vote_counts (race_year, race_month_day, track_code, kaiji, nichiji, race_num);
