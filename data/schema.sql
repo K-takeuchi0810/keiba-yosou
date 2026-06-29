@@ -338,6 +338,13 @@ CREATE TABLE IF NOT EXISTS owner_masters (
 -- 1 レース 1 確定スナップショット (RACE dataspec)。再 ingest は INSERT OR REPLACE で冪等。
 -- odds は 0.1 倍単位の整数 (例: 12345 = 1234.5 倍)。
 -- O3 ワイドのみ odds_low/odds_high レンジ、他式別は odds_low のみ (odds_high=0)。
+--
+-- ★リーク注意 (point-in-time): 現状取り込むのは data_div='5' (確定=発走後) のみ。
+--   PK に data_div を含めないため、将来 速報系 (発走前) を混ぜると確定値が発走前値を
+--   上書きする (Step1 odds 汚染と同一事故クラス)。よって本表は **発走前の特徴量入力に
+--   使用禁止**。F3 (市場マイクロストラクチャ) で残差を取るなら、発走前 速報 odds を
+--   別 data_div で取り込み、PK に data_div を加えた上で「発走前スナップショットのみ」を
+--   特徴に使う。announced_time が PIT アンカー。predictor/ からの参照は現状ゼロ。
 CREATE TABLE IF NOT EXISTS exotic_odds (
     race_year       TEXT NOT NULL,
     race_month_day  TEXT NOT NULL,
@@ -362,6 +369,12 @@ CREATE INDEX IF NOT EXISTS idx_exotic_odds_race
 -- 票数 (H1 単勝/複勝/枠連/馬連/ワイド/馬単/三連複, H6 三連単)
 -- votes は 100 円単位の投票数。combo は馬番(単複)/枠番(枠連)/組番。
 -- 1 レース 1 確定スナップショット (RACE dataspec)。再 ingest は INSERT OR REPLACE で冪等。
+--
+-- ★リーク注意 (point-in-time): exotic_odds と同様、現状は data_div='5' (確定=発走後) のみ。
+--   H1/H6 は仕様上 announced_time に相当する発表時刻フィールドを持たないため、PIT の
+--   識別子は data_div。発走前の特徴量入力に使用禁止。発走前 票数を残差に使うなら速報系
+--   data_div を別途取り込み、PK に data_div を加えて「発走前のみ」を特徴にする。
+--   predictor/ からの参照は現状ゼロ。
 CREATE TABLE IF NOT EXISTS vote_counts (
     race_year       TEXT NOT NULL,
     race_month_day  TEXT NOT NULL,

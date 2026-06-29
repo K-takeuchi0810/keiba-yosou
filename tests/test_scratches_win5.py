@@ -10,7 +10,13 @@ from pathlib import Path
 
 from db import SCHEMA_PATH, upsert_race_scratch, upsert_win5
 from jvlink_client.ingest import ingest_file_dispatch, _split_records
-from jvlink_client.parser import JG_LENGTH, WF_LENGTH, parse_jg, parse_wf
+from jvlink_client.parser import (
+    JG_LENGTH,
+    WF_LENGTH,
+    parse_jg,
+    parse_jg_file,
+    parse_wf,
+)
 
 RAW_RACE = Path(r"C:\Users\kizun\dev\keiba-yosou\data\raw\RACE")
 
@@ -70,6 +76,25 @@ def test_parse_wf_skips_empty_payout_combos():
     _put(buf, 196, "0604071206"); _put(buf, 206, "002176650"); _put(buf, 215, "0000000336")  # 有効
     wf = parse_wf(bytes(buf))
     assert wf.payouts == [("0604071206", 2176650, 336)]
+
+
+def test_parse_jg_file_handles_crlf_delimited(tmp_path):
+    """parse_*_file が実 raw (CRLF 区切り+末尾 NUL) で動く (旧 _split_fixed の罠回帰)。
+
+    以前は _split_fixed が len%length!=0 で ValueError を投げ、CRLF 区切りの実 raw に
+    対して parse_*_file が必ず死ぬトラップだった (2026-06-29 validation 監査指摘)。
+    """
+    def _rec(blood: str) -> bytes:
+        buf = bytearray(b" " * JG_LENGTH)
+        _put(buf, 1, "JG"); _put(buf, 12, "2025"); _put(buf, 16, "0503"); _put(buf, 20, "04")
+        _put(buf, 22, "01"); _put(buf, 24, "01"); _put(buf, 26, "11"); _put(buf, 28, blood)
+        return bytes(buf)
+    # 実 raw 同様、各レコード末尾に \r\n、次レコード先頭に制御 NUL がぶら下がる形
+    data = _rec("2022100304") + b"\r\n\x00" + _rec("2021100100") + b"\r\n"
+    p = tmp_path / "JGDWtest.jvd"
+    p.write_bytes(data)
+    recs = parse_jg_file(p)
+    assert [r.blood_register_num for r in recs] == ["2022100304", "2021100100"]
 
 
 def _schema_conn() -> sqlite3.Connection:

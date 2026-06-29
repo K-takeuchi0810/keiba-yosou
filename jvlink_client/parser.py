@@ -7,8 +7,11 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 RA_LENGTH = 1272
 SE_LENGTH = 555
@@ -230,9 +233,24 @@ def parse_se(rec: bytes) -> HorseRaceInfo:
 
 
 def _split_fixed(data: bytes, length: int) -> list[bytes]:
-    if len(data) % length:
-        raise ValueError(f"file size {len(data)} not multiple of {length}")
-    return [data[i : i + length] for i in range(0, len(data), length)]
+    """生 JV-Data ファイルをレコード単位に分割する。
+
+    実ファイルは各レコード末尾が ``\\r\\n``(+``\\x00``) で区切られるため、
+    まず CRLF で分割する (ingest の ``_split_records`` と同じ規律: 区切り直後の
+    NUL を 1 つ除去)。素朴に ``len(data) % length`` で固定長分割すると、CRLF 分の
+    端数で必ず ValueError になり ``parse_*_file`` が実 raw に対して死ぬトラップに
+    なっていた (2026-06-29 validation 監査指摘)。
+    CRLF を含まない純固定長連結 (テスト fixture 等) は ``length`` で割る。
+    """
+    if b"\r\n" in data:
+        out: list[bytes] = []
+        for p in data.split(b"\r\n"):
+            if p.startswith(b"\x00"):
+                p = p[1:]
+            if p:
+                out.append(p)
+        return out
+    return [data[i : i + length] for i in range(0, len(data), length) if data[i : i + length]]
 
 
 def parse_ra_file(path: str | Path) -> list[RaceInfo]:
@@ -1098,8 +1116,24 @@ O5_LENGTH = 12293   # オッズ5 三連複
 O6_LENGTH = 83285   # オッズ6 三連単
 
 
+_FIT_TOLERANCE = 16  # BSTR ラウンドトリップの正当な ±数 byte。これを超える乖離は異常
+
+
 def _fit(rec: bytes, length: int) -> bytes:
-    """BSTR ラウンドトリップで ±数バイトずれるのを固定長に正規化する。"""
+    """BSTR ラウンドトリップで ±数バイトずれるのを固定長に正規化する。
+
+    ±数 byte を超える大きな乖離は、CRLF 断片化 (巨大レコード O6/H6 のペイロードに
+    偶然 0x0D0A が出て _split_records が途中分割) や byte 位置 drift の兆候。
+    黙ってパディングすると配列後半がゼロ埋めされ「件数が静かに欠ける」ため、
+    痕跡として warning を残す (処理自体は継続=可用性優先)。
+    """
+    delta = len(rec) - length
+    if abs(delta) > _FIT_TOLERANCE:
+        logger.warning(
+            "record length %d deviates from expected %d by %+d bytes "
+            "(possible CRLF fragmentation / byte drift)",
+            len(rec), length, delta,
+        )
     if len(rec) < length:
         return rec.ljust(length, b"\x00")
     if len(rec) > length:

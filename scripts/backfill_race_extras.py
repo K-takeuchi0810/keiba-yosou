@@ -51,6 +51,7 @@ def main() -> None:
             core_total["SE"] += se
             core_total["HR"] += hr
             core_total["O1"] += o1
+            core_total["UM"] += um  # RACE 配下に UM は無いが record_count との一貫性のため集計
             extras_total.update(file_extras)
             record_ingested_file(
                 conn, f.name, "RACE",
