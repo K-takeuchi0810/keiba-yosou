@@ -261,3 +261,41 @@ SELECT CASE WHEN CAST(birth_year AS INT) BETWEEN 1980 AND 2026 THEN 'valid' ELSE
 - [ ] **「JV-Link 提供レコードを全種別カバー」を網羅監査の再走査で確認**
 - [ ] 特徴量 充足率の再可視化で市場残差特徴が使える状態を確認
 - [ ] 上記の検証 JSON / scorecard を保存
+
+---
+
+## 7. 実施状況 (2026-06-30 更新)
+
+全 raw (data/raw) を全走査し、「raw に存在するのに DB 未投入」を一掃した。
+
+### 取り込み完了 (raw から再 dispatch で投入、DL 不要)
+
+| バッチ | レコード | 投入行数 (dedup後) | 備考 |
+|---|---|---|---|
+| マスタ | KS/CH/BR/BN | 1560/1475/10746/8710 | 2026-06-29 |
+| B2 式別オッズ | O2-O6 | exotic_odds 58.7M | **全て data_div=5 (確定=発走後)** |
+| B2 票数 | H1/H6 | vote_counts 61.6M | 全 8 式別 |
+| B2 その他 | JG/WF | race_scratches 291k / win5 332 | |
+| B3/B4 | RC/CS/YS/BT/HY/WE/AV/TC | RC474/CS119/YS1732/BT92/HY176810/WE8/AV1/TC3 | |
+
+- 実 ingest = `scripts/backfill_race_extras.py` (RACE) + `ingest_all(force, dataspecs=[...])` (他)。
+- byte 位置は全種を実 raw で検証済 (BT 系統名は実データで pos50 と判明し補正)。
+- **★PIT 規律**: B2 オッズ/票数は全行 data_div=5 (確定=発走後)。**発走前の特徴量入力に使用禁止**
+  (schema.sql にコメント固定)。発走前 速報を残差に使うには下記 JV-Link fetch が必要。
+- 被覆: exotic_odds/vote_counts は近年 ~18,927 レース (確定オッズ raw の取得範囲)。
+  payouts 43,242 レースより狭く、長期履歴特徴には使えない (B2 は近年のみ)。
+
+### 残るギャップ = JV-Link fetch 必須 (raw に存在せず、32bit COM での DL が要る = ユーザ手動)
+
+全走査の結果、raw に**一度も無い**ため再 dispatch では取得不能なもの:
+
+| 項目 | 内容 | 取得方法 (.venv32 / 32bit JV-Link) |
+|---|---|---|
+| **final_3f** | 上がり3F (2020-24 が ~1.2% のみ) | `.venv32/Scripts/python.exe -m scripts.bootstrap --fromtime 20200101000000` で RACE を再 fetch (SE 再取得)。完了後 final_3f 充足率を再確認 |
+| **WH 馬体重** | 発走前馬体重 (F6) | 速報系 (0B 系) dataspec の fetch が必要。option=4 の過去取得対象外で主に運用 fetch で前向き蓄積。要 JV-Link 調査 |
+| **JC 騎手変更** | 発走前騎手変更 | 同上 (速報系) |
+| **CC コース変更** | 発走前コース変更 | 同上 (速報系) |
+
+注: これらは CLAUDE.md ルール 3 (32bit 経路) / 1-ter (重い fetch の pre-flight) に従って実行する。
+final_3f 再取得は数時間規模なので bg + pre-flight checklist 必須。Claude 側からは COM を起動できない
+(ユーザ手動)。

@@ -423,7 +423,11 @@ def upsert_race_scratch(conn: sqlite3.Connection, jg: RaceScratch) -> None:
 
 
 def _upsert_race_keyed(conn: sqlite3.Connection, table: str, obj) -> None:
-    """year/month_day を race_year/race_month_day にリネームして INSERT OR REPLACE する汎用 upsert。"""
+    """year/month_day を race_year/race_month_day にリネームして INSERT OR REPLACE する汎用 upsert。
+
+    注意: `year`/`month_day` は **レース開催日付の列限定**。馬の生年など別意味の
+    `year` を持つ dataclass をこの関数に通すと race_year 列へ誤って流れるので使わないこと。
+    """
     d = asdict(obj)
     if "year" in d:
         d["race_year"] = d.pop("year")

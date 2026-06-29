@@ -442,19 +442,24 @@ CREATE TABLE IF NOT EXISTS win5_payouts (
 );
 
 -- レコードマスタ (RC)。コース/条件別の記録タイム (速度指数 F5 の基準素材)。
+-- PK には記録区分 (record_div) と記録を出したレース日付/番号を含める。これを
+-- 含めないと「同コース/条件あたり 1 行」に潰れ、RC raw 2165 件中 1691 件が
+-- INSERT OR REPLACE で黙って消え、残る 1 行も最速でも最新でもない (ファイル順最後)
+-- になる (2026-06-30 data-pipeline 監査が実 raw で検出)。日付を含めることで記録の
+-- 履歴 (更新の度に速くなる) を全保持でき、F5 で「as-of 時点の記録」を選べる。
 CREATE TABLE IF NOT EXISTS record_master (
     record_id_kubun   TEXT NOT NULL,   -- 1:コースレコード 2:デサンレコード
     track_code        TEXT NOT NULL,   -- 場コード
     track_type_code   TEXT NOT NULL,   -- トラックコード (芝/ダート)
     distance          INTEGER NOT NULL,
     grade_code        TEXT NOT NULL DEFAULT '',
-    record_div        TEXT,
+    record_div        TEXT NOT NULL DEFAULT '',  -- 1:基準 2:レコード 3:参考 4:現役
+    race_year         TEXT NOT NULL DEFAULT '',  -- 記録を出したレース
+    race_month_day    TEXT NOT NULL DEFAULT '',
+    race_num          TEXT NOT NULL DEFAULT '',
     record_time       TEXT,            -- 9分99秒9
-    race_year         TEXT,            -- 記録を出したレース
-    race_month_day    TEXT,
     kaiji             TEXT,
     nichiji           TEXT,
-    race_num          TEXT,
     special_race_num  TEXT,
     race_name         TEXT,
     race_type_code    TEXT,
@@ -465,7 +470,8 @@ CREATE TABLE IF NOT EXISTS record_master (
     holder_horse_name TEXT,
     data_div          TEXT,
     data_created      TEXT,
-    PRIMARY KEY (record_id_kubun, track_code, track_type_code, distance, grade_code)
+    PRIMARY KEY (record_id_kubun, track_code, track_type_code, distance, grade_code,
+                 record_div, race_year, race_month_day, race_num)
 );
 
 -- コース情報 (CS)。コース形状の説明テキスト (参照)。
