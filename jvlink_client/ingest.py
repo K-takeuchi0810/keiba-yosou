@@ -35,6 +35,7 @@ from db import (
     upsert_offspring_master,
     upsert_payout,
     upsert_race,
+    upsert_race_scratch,
     upsert_special_entry,
     upsert_jockey_master,
     upsert_owner_master,
@@ -42,6 +43,7 @@ from db import (
     upsert_trainer_master,
     upsert_training_time,
     upsert_vote_counts,
+    upsert_win5,
     update_win_odds,
 )
 from jvlink_client.parser import (
@@ -65,6 +67,7 @@ from jvlink_client.parser import (
     parse_o4,
     parse_o5,
     parse_o6,
+    parse_jg,
     parse_ra,
     parse_se,
     parse_sk,
@@ -72,6 +75,7 @@ from jvlink_client.parser import (
     parse_tm,
     parse_um,
     parse_wc,
+    parse_wf,
 )
 
 RAW_DIR = DATA_DIR / "raw"
@@ -200,8 +204,15 @@ def ingest_file_dispatch(
                 _bump("H1", upsert_vote_counts(conn, parse_h1(rec)))
             elif rec_type == "H6":
                 _bump("H6", upsert_vote_counts(conn, parse_h6(rec)))
+            # === 競走馬除外 JG / WIN5 WF (2026-06-30 追加: RACE) ===
+            elif rec_type == "JG":
+                upsert_race_scratch(conn, parse_jg(rec))
+                _bump("JG")
+            elif rec_type == "WF":
+                upsert_win5(conn, parse_wf(rec))
+                _bump("WF")
             else:
-                # 未対応レコード種別 (CK/RC/HY/YS/JG/WF/WH/WE/AV/JC/CC/BT 等)
+                # 未対応レコード種別 (CK/RC/HY/YS/WH/WE/AV/JC/CC/BT 等)
                 skipped += 1
         except Exception as e:
             skipped += 1

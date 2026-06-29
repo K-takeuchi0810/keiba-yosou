@@ -1277,3 +1277,125 @@ def parse_h1(rec: bytes) -> VoteCounts:
 
 def parse_h6(rec: bytes) -> VoteCounts:
     return _parse_votes(rec, H6_LENGTH, _H6_BLOCKS)
+
+
+# ============================================================
+# 競走馬除外情報 (JG) / 重勝式 WIN5 (WF)
+# 仕様書 docs/JV-Data4901.pdf §31 (JG), §30 (WF)。RACE dataspec。
+# ============================================================
+
+JG_LENGTH = 80
+WF_LENGTH = 7215
+
+
+@dataclass
+class RaceScratch:
+    record_type: str
+    data_div: str
+    data_created: str
+    year: str
+    month_day: str
+    track_code: str
+    kaiji: str
+    nichiji: str
+    race_num: str
+    blood_register_num: str
+    horse_name: str
+    accept_order: str     # 出馬投票受付順番
+    start_div: str        # 出走区分 (1:出走 2:出走取消 ...)
+    scratch_status: str   # 除外状態区分 (1:出走可能 2:出走不可)
+
+    @property
+    def race_id(self) -> str:
+        return f"{self.year}{self.month_day}_{self.track_code}_{self.kaiji}_{self.nichiji}_{self.race_num}"
+
+
+def parse_jg(rec: bytes) -> RaceScratch:
+    rec = _fit(rec, JG_LENGTH)
+    return RaceScratch(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        year=_ascii(rec, 12, 4),
+        month_day=_ascii(rec, 16, 4),
+        track_code=_ascii(rec, 20, 2),
+        kaiji=_ascii(rec, 22, 2),
+        nichiji=_ascii(rec, 24, 2),
+        race_num=_ascii(rec, 26, 2),
+        blood_register_num=_ascii(rec, 28, 10),
+        horse_name=_str(rec, 38, 36),
+        accept_order=_ascii(rec, 74, 3),
+        start_div=_ascii(rec, 77, 1),
+        scratch_status=_ascii(rec, 78, 1),
+    )
+
+
+def parse_jg_file(path: str | Path) -> list[RaceScratch]:
+    data = Path(path).read_bytes()
+    return [parse_jg(rec) for rec in _split_fixed(data, JG_LENGTH)]
+
+
+@dataclass
+class Win5:
+    record_type: str
+    data_div: str
+    data_created: str
+    year: str
+    month_day: str
+    target_races: str       # 対象 5 レースの "track-kaiji-nichiji-racenum" をカンマ連結
+    sale_votes: int         # 重勝式発売票数
+    carryover_initial: int  # キャリーオーバー金額初期 (円)
+    carryover_remaining: int  # キャリーオーバー金額残 (円)
+    refund_flag: str        # 返還フラグ
+    void_flag: str          # 不成立フラグ
+    established_flag: str    # 成立フラグ
+    # (組番=5 レース勝馬の馬番連結 10 桁, 払戻金, 的中票数)
+    payouts: list[tuple[str, int, int]]
+
+    @property
+    def win5_id(self) -> str:
+        return f"{self.year}{self.month_day}"
+
+
+def parse_wf(rec: bytes) -> Win5:
+    rec = _fit(rec, WF_LENGTH)
+    # 対象レース情報: pos 22, 5 件 × 8 byte (track2/kaiji2/nichiji2/racenum2)
+    targets = []
+    for i in range(5):
+        base = 22 + i * 8
+        tk = _ascii(rec, base, 2)
+        ka = _ascii(rec, base + 2, 2)
+        ni = _ascii(rec, base + 4, 2)
+        rn = _ascii(rec, base + 6, 2)
+        if tk:
+            targets.append(f"{tk}-{ka}-{ni}-{rn}")
+    # 払戻情報: pos 167, 243 件 × 29 byte (組番10/払戻9/的中票10)
+    payouts: list[tuple[str, int, int]] = []
+    for i in range(243):
+        base = 167 + i * 29
+        combo = _ascii(rec, base, 10)
+        if not combo or combo == "0000000000":
+            continue
+        payout = _int(rec, base + 10, 9)
+        hit = _int(rec, base + 19, 10)
+        payouts.append((combo, payout, hit))
+    return Win5(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        year=_ascii(rec, 12, 4),
+        month_day=_ascii(rec, 16, 4),
+        target_races=",".join(targets),
+        sale_votes=_int(rec, 68, 11),
+        carryover_initial=_int(rec, 137, 15),
+        carryover_remaining=_int(rec, 152, 15),
+        refund_flag=_ascii(rec, 134, 1),
+        void_flag=_ascii(rec, 135, 1),
+        established_flag=_ascii(rec, 136, 1),
+        payouts=payouts,
+    )
+
+
+def parse_wf_file(path: str | Path) -> list[Win5]:
+    data = Path(path).read_bytes()
+    return [parse_wf(rec) for rec in _split_fixed(data, WF_LENGTH)]

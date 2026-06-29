@@ -28,10 +28,12 @@ from jvlink_client.parser import (
     Payout,
     ProducerMaster,
     RaceInfo,
+    RaceScratch,
     SpecialEntry,
     TrainerMaster,
     TrainingTime,
     VoteCounts,
+    Win5,
 )
 
 SCHEMA_PATH = PROJECT_ROOT / "data" / "schema.sql"
@@ -397,4 +399,39 @@ def upsert_vote_counts(conn: sqlite3.Connection, vc: VoteCounts) -> int:
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         rows,
     )
+    return len(rows)
+
+
+def upsert_race_scratch(conn: sqlite3.Connection, jg: RaceScratch) -> None:
+    """JG (競走馬除外情報) 1 件を upsert。"""
+    d = asdict(jg)
+    d["race_year"] = d.pop("year")
+    d["race_month_day"] = d.pop("month_day")
+    d.pop("record_type", None)
+    cols = list(d.keys())
+    placeholders = ",".join(f":{c}" for c in cols)
+    sql = f"INSERT OR REPLACE INTO race_scratches ({','.join(cols)}) VALUES ({placeholders})"
+    conn.execute(sql, d)
+
+
+def upsert_win5(conn: sqlite3.Connection, wf: Win5) -> int:
+    """WF (WIN5) のヘッダ + 払戻を upsert。戻り値は払戻行数。"""
+    conn.execute(
+        "INSERT OR REPLACE INTO win5 "
+        "(race_year, race_month_day, target_races, sale_votes, carryover_initial, "
+        " carryover_remaining, refund_flag, void_flag, established_flag, data_div, data_created) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            wf.year, wf.month_day, wf.target_races, wf.sale_votes, wf.carryover_initial,
+            wf.carryover_remaining, wf.refund_flag, wf.void_flag, wf.established_flag,
+            wf.data_div, wf.data_created,
+        ),
+    )
+    rows = [(wf.year, wf.month_day, combo, payout, hit) for combo, payout, hit in wf.payouts]
+    if rows:
+        conn.executemany(
+            "INSERT OR REPLACE INTO win5_payouts "
+            "(race_year, race_month_day, combo, payout, hit_votes) VALUES (?,?,?,?,?)",
+            rows,
+        )
     return len(rows)

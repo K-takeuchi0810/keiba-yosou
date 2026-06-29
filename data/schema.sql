@@ -380,3 +380,50 @@ CREATE TABLE IF NOT EXISTS vote_counts (
 
 CREATE INDEX IF NOT EXISTS idx_vote_counts_race
     ON vote_counts (race_year, race_month_day, track_code, kaiji, nichiji, race_num);
+
+-- 競走馬除外情報 (JG)。出走可否・除外状態 (頭数補正・取消検出)。
+CREATE TABLE IF NOT EXISTS race_scratches (
+    race_year          TEXT NOT NULL,
+    race_month_day     TEXT NOT NULL,
+    track_code         TEXT NOT NULL,
+    kaiji              TEXT NOT NULL,
+    nichiji            TEXT NOT NULL,
+    race_num           TEXT NOT NULL,
+    blood_register_num TEXT NOT NULL,
+    horse_name         TEXT,
+    accept_order       TEXT,
+    start_div          TEXT,
+    scratch_status     TEXT,
+    data_div           TEXT,
+    data_created       TEXT,
+    PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji, race_num, blood_register_num)
+);
+
+CREATE INDEX IF NOT EXISTS idx_race_scratches_race
+    ON race_scratches (race_year, race_month_day, track_code, kaiji, nichiji, race_num);
+
+-- 重勝式 WIN5 (WF) ヘッダ。1 日 1 件。
+CREATE TABLE IF NOT EXISTS win5 (
+    race_year           TEXT NOT NULL,
+    race_month_day      TEXT NOT NULL,
+    target_races        TEXT,   -- 対象 5 レースを "track-kaiji-nichiji-racenum" でカンマ連結
+    sale_votes          INTEGER,
+    carryover_initial   INTEGER,
+    carryover_remaining INTEGER,
+    refund_flag         TEXT,
+    void_flag           TEXT,
+    established_flag    TEXT,
+    data_div            TEXT,
+    data_created        TEXT,
+    PRIMARY KEY (race_year, race_month_day)
+);
+
+-- WIN5 払戻 (組番=5 レース勝馬の馬番連結)。
+CREATE TABLE IF NOT EXISTS win5_payouts (
+    race_year      TEXT NOT NULL,
+    race_month_day TEXT NOT NULL,
+    combo          TEXT NOT NULL,
+    payout         INTEGER,
+    hit_votes      INTEGER,
+    PRIMARY KEY (race_year, race_month_day, combo)
+);
