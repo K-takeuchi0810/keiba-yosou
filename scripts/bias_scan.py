@@ -7,7 +7,7 @@
 本ツールはレースを以下の軸で層別し、各セグメントで
   calibration gap = mean(予想勝率) - 実勝率  (符号付き)
 を Wilson CI とサンプル数ゲート付きで算出し、「どこに本物のバイアスが
-あるか」を bias_severity = |gap| * sqrt(n) 降順でランキング表示する。
+あるか」を bias_severity = |gap| * sqrt(effective_n) 降順でランキング表示する。
 
   - track       競馬場
   - surface     芝 / ダート / 障害
@@ -20,12 +20,30 @@
   - kaiji       開催回 生値 (春/秋の同一場を分離)
   - month       月 01..12
   - season      winter/spring/summer/autumn
-加えて厳選 2 軸クロス (track×condition / surface×condition /
-track×meet / surface×weather_wet)。
+加えて厳選 2 軸クロス (track×condition / surface×condition / track×meet /
+track×kaiji / surface×weather_wet)。
 
-重み付けの変更は行わない (診断のみ)。CLAUDE.md の過適合警告 (P12 崩壊) に
-従い、ranked セルが有意かつ複数期間で再現するのを確認してから次フェーズで
-重み付けを判断する。
+== subject (pick / all) の使い分け ==
+  - pick (既定): ◎ 1 頭 / レース。「◎ を出し続けた場合の実害」を測る。
+    1 レース 1 レコードなので Wilson CI / return bootstrap が統計的に妥当。
+  - all: 全馬全レコード。スコアリング全体の reliability を見る。ただし
+    1 レース内は「誰か 1 頭が 1 着」の制約で actual が完全相関するため、
+    有効サンプル数は馬行数ではなく **レース数 (n_races)**。Wilson CI を馬行
+    n で出すと過度に狭くなる (偽陽性増)。よって all モードでは gap の有意
+    判定は出さず (None)、bias_severity も sqrt(n_races) で計算し、return 系
+    指標は「全馬買い」が戦略でないため出さない。reliability の点推定専用。
+  pick に偏りがあり all に無ければ「◎選択ロジック固有のバイアス」、両方に
+  あれば「スコアリング自体のバイアス」と切り分けられる。
+
+== 次フェーズ (セグメント別重み付け) の前提条件 ==
+重み付けの変更は本ツールでは行わない (診断のみ)。CLAUDE.md の過適合警告
+(P12 崩壊) に従い、ranked セルを重み変更の根拠に使う前に必ず
+  (1) 多重比較を考慮しても有意 (本ツールは ~150 セルを単独検定するため
+      期待偽陽性が出力ヘッダに表示される。Bonferroni 等で再評価せよ)、
+  (2) 2024 と 2025 の独立期間で再現、
+  (3) holdout 通過、
+の 3 条件を確認すること。SIG* は単期間の統計的有意を示すだけで、重み変更
+の十分条件ではない。
 
 usage:
     python -m scripts.bias_scan                         # 既定 TEST 2024-2025
@@ -62,14 +80,14 @@ from scripts.backtest import (
     horses_for_race,
     list_races,
 )
-from web.codes import ground_name, track_name, track_type, weather_name
+from web.codes import track_name, track_type
 
 # gap がこの値以上なら "大きい" 偏りとして SIG* 表示 (有意 かつ 実用的に無視できない)
 MATERIAL_GAP = 0.03
 
-# 馬場状態コード -> ASCII 安定キー (JSON キー兼ソート用)。表示は ground_name。
+# 馬場状態コード -> ASCII 安定キー (JSON キー兼ソート用)。表示は _DISPLAY。
 _CONDITION_KEYS = {"1": "firm", "2": "good", "3": "yielding", "4": "soft"}
-# 天候コード -> ASCII 安定キー。表示は weather_name。
+# 天候コード -> ASCII 安定キー。
 _WEATHER_KEYS = {
     "1": "clear", "2": "cloudy", "3": "light_rain",
     "4": "rain", "5": "light_snow", "6": "snow",
@@ -97,7 +115,11 @@ def condition_key(race: dict, surface: str) -> str:
     elif surface == "dirt":
         code = race.get("dirt_condition")
     else:
-        code = race.get("turf_condition") or race.get("dirt_condition")
+        # 障害は芝・ダート両区間。"0"/空は未設定なので、有効な方を採用
+        # ("0" は truthy 文字列なので or 連結だと誤って "0" を拾う点に注意)。
+        turf_c = (race.get("turf_condition") or "").strip()
+        dirt_c = (race.get("dirt_condition") or "").strip()
+        code = turf_c if turf_c in _CONDITION_KEYS else dirt_c
     return _CONDITION_KEYS.get((code or "").strip(), "unknown")
 
 
@@ -115,7 +137,13 @@ def weather_wet_key(race: dict) -> str:
 
 
 def meet_progress_key(race: dict) -> str:
-    """開催進行。nichiji (開催内の日, 通常 01..12) を early/mid/late に。"""
+    """開催進行。nichiji (開催内の日) を early/mid/late に集約。
+
+    JRA の 1 開催は通常 6〜12 日 (土日 × 3〜6 週)。馬場は開催が進むほど内が
+    荒れ外差し有利に傾くので、序盤 (1-2 日目) / 中盤 (3-5 日目) / 終盤 (6 日目
+    以降) の 3 段で「進行に伴う傾向シフト」を捉える。バケット内の単調ドリフト
+    は別軸 day_of_meet (nichiji 生値) で観察する。
+    """
     try:
         nd = int((race.get("nichiji") or "0").strip())
     except ValueError:
@@ -180,10 +208,11 @@ ALL_AXES = list(AXIS_FUNCS)
 
 # 厳選 2 軸クロス (全直積はセル枯れ=ノイズなので禁止)。"|" 区切りキー。
 CROSS_SPECS = {
-    "track_x_condition": ("track", "condition"),
+    "track_x_condition": ("track", "condition"),    # 同一場で馬場が変わる仮説
     "surface_x_condition": ("surface", "condition"),
-    "track_x_meet": ("track", "meet"),
-    "surface_x_weather_wet": ("surface", "weather_wet"),
+    "track_x_meet": ("track", "meet"),              # 場ごとの開催進行ドリフト
+    "track_x_kaiji": ("track", "kaiji"),            # 春/秋・仮柵位置で変わる同一場
+    "surface_x_weather_wet": ("surface", "weather_wet"),  # 雨仮説
 }
 
 # 表示用ラベル (ASCII キー -> 人間可読)。コンソール専用、JSON は ASCII キーのまま。
@@ -206,9 +235,16 @@ def display_cell(axis: str, key: str) -> str:
 # セル集計
 # ---------------------------------------------------------------------------
 class Cell:
-    """1 セグメントの蓄積器。calibration は全レコード、return はオッズ信頼分のみ。"""
+    """1 セグメントの蓄積器。
 
-    __slots__ = ("probs", "actuals", "top3", "payouts_trusted", "stakes_trusted", "n_trusted")
+    calibration (probs/actuals) は全レコード、return はオッズ信頼分のみ。
+    n_races は「このセルに寄与したレース数」= all モードの有効サンプルサイズ。
+    全軸がレース単位属性 (track/surface/condition/…) なので、1 レースは各軸の
+    ちょうど 1 セルに丸ごと入る。よって add_race を 1 レース 1 回呼べばよい。
+    """
+
+    __slots__ = ("probs", "actuals", "top3", "payouts_trusted", "stakes_trusted",
+                 "n_trusted", "n_races", "field_sum")
 
     def __init__(self) -> None:
         self.probs: list[float] = []
@@ -217,8 +253,16 @@ class Cell:
         self.payouts_trusted: list[int] = []
         self.stakes_trusted: list[int] = []
         self.n_trusted = 0
+        self.n_races = 0
+        self.field_sum = 0
+
+    def add_race(self, field_size: int) -> None:
+        """レース単位の寄与 (1 レース 1 回)。有効 n と平均出走頭数を蓄積。"""
+        self.n_races += 1
+        self.field_sum += field_size
 
     def add(self, prob: float, actual: int, top3: bool, payout: int, odds_trusted: bool) -> None:
+        """レコード単位の寄与 (pick は 1/レース、all は 1/馬)。"""
         self.probs.append(prob)
         self.actuals.append(actual)
         self.top3 += int(top3)
@@ -228,43 +272,62 @@ class Cell:
             self.n_trusted += 1
 
 
-def summarize_cell(cell: Cell, min_n: int) -> dict:
+def summarize_cell(cell: Cell, min_n: int, subject: str) -> dict:
     n = len(cell.probs)
     wins = sum(cell.actuals)
     mean_pred = sum(cell.probs) / n if n else 0.0
     actual_rate = wins / n if n else 0.0
     gap = mean_pred - actual_rate
     lo, hi = wilson_ci(wins, n)
-    gap_significant = n > 0 and (mean_pred < lo or mean_pred > hi)
+
+    # 有効サンプルサイズ: pick は 1 レース 1 行なので n。all はレース内相関で
+    # 有効 n がレース数に縮むので n_races。ゲート/severity に effective_n を使う。
+    effective_n = cell.n_races if subject == "all" else n
+
+    # gap の有意判定は pick のみ。all は馬行 Wilson CI が過度に狭く偽陽性源に
+    # なるため出さない (None) — reliability 点推定専用。
+    if subject == "all":
+        gap_significant: bool | None = None
+    else:
+        gap_significant = n > 0 and (mean_pred < lo or mean_pred > hi)
+
     brier = calibration_report(
         [{"probability": p, "actual": a} for p, a in zip(cell.probs, cell.actuals)]
     )["brier_score"]
-    # return (オッズ信頼分のみ)
-    if cell.n_trusted:
+
+    # return は pick のみ (1 bet/レースで bootstrap が妥当)。all は「全馬買い」
+    # が戦略でなく、馬単位 bootstrap も race 内相関を無視するため出さない。
+    if subject == "pick" and cell.n_trusted:
         ret_point, ret_lo, ret_hi = bootstrap_return_rate(cell.payouts_trusted, cell.stakes_trusted)
     else:
         ret_point = ret_lo = ret_hi = None
+
+    avg_field = round(cell.field_sum / cell.n_races, 1) if cell.n_races else 0.0
+    qualifies = effective_n >= min_n
     return {
         "n": n,
+        "n_races": cell.n_races,
         "n_trusted": cell.n_trusted,
+        "effective_n": effective_n,
+        "avg_field": avg_field,
         "mean_pred": round(mean_pred, 4),
         "actual_rate": round(actual_rate, 4),
         "calibration_gap": round(gap, 4),
         "ci_lo": round(lo, 4),
         "ci_hi": round(hi, 4),
         "gap_significant": gap_significant,
-        "bias_severity": round(abs(gap) * math.sqrt(n), 4) if n >= min_n else None,
+        "bias_severity": round(abs(gap) * math.sqrt(effective_n), 4) if qualifies else None,
         "brier": brier,
         "win_pct": round(wins / n * 100, 1) if n else 0.0,
         "top3_pct": round(cell.top3 / n * 100, 1) if n else 0.0,
         "return_pct": round(ret_point * 100, 1) if ret_point is not None else None,
         "return_ci": [round(ret_lo * 100, 1), round(ret_hi * 100, 1)] if ret_point is not None else None,
-        "status": "ok" if n >= min_n else "insufficient",
+        "status": "ok" if qualifies else "insufficient",
     }
 
 
 def severity_tag(cell_stats: dict) -> str:
-    if not cell_stats["gap_significant"]:
+    if not cell_stats["gap_significant"]:  # None or False
         return ""
     return "SIG*" if abs(cell_stats["calibration_gap"]) >= MATERIAL_GAP else "sig"
 
@@ -277,14 +340,13 @@ def run_scan(conn, from_date: str, to_date: str, subject: str, axes: list[str],
              odds_gate: bool, include_tentative: bool) -> dict:
     pop_cfg = _popularity_config()
     max_age = pop_cfg.get("max_snapshot_age_min")
+    cross_specs = CROSS_SPECS if enable_cross else {}
 
     axis_cells: dict[str, dict[str, Cell]] = {a: defaultdict(Cell) for a in axes}
-    cross_cells: dict[str, dict[str, Cell]] = (
-        {c: defaultdict(Cell) for c in CROSS_SPECS} if enable_cross else {}
-    )
+    cross_cells: dict[str, dict[str, Cell]] = {c: defaultdict(Cell) for c in cross_specs}
     global_cell = Cell()
 
-    n_races = n_skip_tentative = n_no_winner = n_no_horses = 0
+    n_races = n_skip_tentative = n_no_winner = n_no_horses = n_odds_untrusted = 0
     feature_cache: dict = {}
 
     races = list_races(conn, from_date, to_date, jra_only=True, require_confirmed=True)
@@ -303,10 +365,12 @@ def run_scan(conn, from_date: str, to_date: str, subject: str, axes: list[str],
             continue
 
         odds_trusted = (not odds_gate) or (not _race_odds_untrusted(horses, race, max_age))
+        if not odds_trusted:
+            n_odds_untrusted += 1
         surface = surface_key(race)
-        n_races += 1
+        field_size = len(horses)
 
-        # レコード化: (prob, actual, top3, payout)
+        # レコード化: (prob, actual, top3, payout)。subject で対象を切替。
         records: list[tuple[float, int, bool, int]] = []
         if subject == "pick":
             if not include_tentative and is_tentative(preds):
@@ -314,55 +378,62 @@ def run_scan(conn, from_date: str, to_date: str, subject: str, axes: list[str],
                 continue
             top = preds[0]
             actual = 1 if top.horse_num == actual_win["horse_num"] else 0
-            top3 = top.horse_num in actual_top3
-            payout = get_payout(conn, race, top.horse_num, "tan")
-            records.append((top.raw_blended_probability, actual, top3, payout))
+            records.append((top.raw_blended_probability, actual,
+                            top.horse_num in actual_top3,
+                            get_payout(conn, race, top.horse_num, "tan")))
         else:  # all
             for p in preds:
                 actual = 1 if p.horse_num == actual_win["horse_num"] else 0
-                top3 = p.horse_num in actual_top3
-                payout = get_payout(conn, race, p.horse_num, "tan")
-                records.append((p.raw_blended_probability, actual, top3, payout))
+                records.append((p.raw_blended_probability, actual,
+                                p.horse_num in actual_top3,
+                                get_payout(conn, race, p.horse_num, "tan")))
+        if not records:
+            continue
+        n_races += 1
 
+        # 全軸がレース単位属性なのでキーは 1 レース 1 回計算 (高速)。
+        axis_keys = {a: AXIS_FUNCS[a](race, surface) for a in axes}
+        cross_keys = {c: f"{AXIS_FUNCS[a1](race, surface)}|{AXIS_FUNCS[a2](race, surface)}"
+                      for c, (a1, a2) in cross_specs.items()}
+
+        # レース単位の寄与 (有効 n / 平均頭数) を 1 回ずつ。
+        global_cell.add_race(field_size)
+        for a in axes:
+            axis_cells[a][axis_keys[a]].add_race(field_size)
+        for c in cross_specs:
+            cross_cells[c][cross_keys[c]].add_race(field_size)
+
+        # レコード単位の寄与。
         for prob, actual, top3, payout in records:
             global_cell.add(prob, actual, top3, payout, odds_trusted)
-            for axis in axes:
-                key = AXIS_FUNCS[axis](race, surface)
-                axis_cells[axis][key].add(prob, actual, top3, payout, odds_trusted)
-            for cname, (a1, a2) in (CROSS_SPECS.items() if enable_cross else []):
-                k1 = AXIS_FUNCS[a1](race, surface)
-                k2 = AXIS_FUNCS[a2](race, surface)
-                cross_cells[cname][f"{k1}|{k2}"].add(prob, actual, top3, payout, odds_trusted)
+            for a in axes:
+                axis_cells[a][axis_keys[a]].add(prob, actual, top3, payout, odds_trusted)
+            for c in cross_specs:
+                cross_cells[c][cross_keys[c]].add(prob, actual, top3, payout, odds_trusted)
 
     # 集計
-    global_stats = summarize_cell(global_cell, min_n=0)
-    axes_out: dict[str, dict[str, dict]] = {}
-    for axis, cells in axis_cells.items():
-        axes_out[axis] = {key: summarize_cell(c, min_n) for key, c in cells.items()}
-    cross_out: dict[str, dict[str, dict]] = {}
-    for cname, cells in cross_cells.items():
-        cross_out[cname] = {key: summarize_cell(c, min_n_cross) for key, c in cells.items()}
+    global_stats = summarize_cell(global_cell, min_n=0, subject=subject)
+    axes_out = {a: {k: summarize_cell(c, min_n, subject) for k, c in cells.items()}
+                for a, cells in axis_cells.items()}
+    cross_out = {c: {k: summarize_cell(cell, min_n_cross, subject) for k, cell in cells.items()}
+                 for c, cells in cross_cells.items()}
 
-    # 全軸ランキング (qualifying セルのみ, bias_severity 降順)
+    # 全軸ランキング (status=ok のみ、bias_severity 降順)。pick は有意セルのみ、
+    # all は有意判定不可なので effective_n ゲートを通った全セル。
     ranked: list[dict] = []
-    for axis, cells in axes_out.items():
+    for group_name, cells in list(axes_out.items()) + list(cross_out.items()):
         for key, st in cells.items():
-            if st["status"] == "ok" and st["gap_significant"]:
-                ranked.append({
-                    "axis": axis, "cell": key, "n": st["n"],
-                    "calibration_gap": st["calibration_gap"],
-                    "bias_severity": st["bias_severity"],
-                    "gap_significant": True,
-                })
-    for cname, cells in cross_out.items():
-        for key, st in cells.items():
-            if st["status"] == "ok" and st["gap_significant"]:
-                ranked.append({
-                    "axis": cname, "cell": key, "n": st["n"],
-                    "calibration_gap": st["calibration_gap"],
-                    "bias_severity": st["bias_severity"],
-                    "gap_significant": True,
-                })
+            if st["status"] != "ok":
+                continue
+            if subject == "pick" and not st["gap_significant"]:
+                continue
+            ranked.append({
+                "axis": group_name, "cell": key, "n": st["n"],
+                "effective_n": st["effective_n"],
+                "calibration_gap": st["calibration_gap"],
+                "bias_severity": st["bias_severity"],
+                "gap_significant": st["gap_significant"],
+            })
     ranked.sort(key=lambda r: r["bias_severity"] or 0, reverse=True)
 
     return {
@@ -375,6 +446,8 @@ def run_scan(conn, from_date: str, to_date: str, subject: str, axes: list[str],
         "n_races_scanned": n_races,
         "n_skip_tentative": n_skip_tentative,
         "n_no_winner": n_no_winner,
+        "n_odds_untrusted": n_odds_untrusted,
+        "n_cells_tested": sum(len(v) for v in axes_out.values()) + sum(len(v) for v in cross_out.values()),
         "global": global_stats,
         "axes": axes_out,
         "cross": cross_out,
@@ -388,7 +461,8 @@ def run_scan(conn, from_date: str, to_date: str, subject: str, axes: list[str],
 def _fmt_cell_line(axis: str, key: str, st: dict) -> str:
     ret = f"ret={st['return_pct']}%" if st["return_pct"] is not None else "ret=n/a"
     return (
-        f"  {display_cell(axis, key):<10} n={st['n']:>5} pred={st['mean_pred']:.3f} "
+        f"  {display_cell(axis, key):<10} n={st['n']:>5}(nr={st['n_races']:>5} tr={st['n_trusted']:>5}) "
+        f"fld={st['avg_field']:>4} pred={st['mean_pred']:.3f} "
         f"actual={st['actual_rate']:.3f} gap={st['calibration_gap']:+.3f} "
         f"CI[{st['ci_lo']:.3f}-{st['ci_hi']:.3f}] {severity_tag(st):<4} "
         f"brier={st['brier']} win={st['win_pct']}% {ret}"
@@ -397,22 +471,34 @@ def _fmt_cell_line(axis: str, key: str, st: dict) -> str:
 
 def print_report(result: dict, top: int) -> None:
     g = result["global"]
+    subject = result["subject"]
     print("=" * 78)
-    print(f"BIAS SCAN  {result['from_date']}-{result['to_date']}  subject={result['subject']}")
+    print(f"BIAS SCAN  {result['from_date']}-{result['to_date']}  subject={subject}")
     print(f"  races={result['n_races_scanned']} skip_tentative={result['n_skip_tentative']} "
-          f"min_n={result['min_n']} min_n_cross={result['min_n_cross']}")
+          f"odds_untrusted={result['n_odds_untrusted']} min_n={result['min_n']} "
+          f"min_n_cross={result['min_n_cross']}")
     print("  ⚠ TEST=2年。細セルはノイズ。信用するのは gap_significant(SIG*/sig) かつ n>=min_n のみ。")
+    if result.get("calibration_in_sample"):
+        print("  ⚠ calibration_in_sample=True — 評価期間が calibrator fit 期間と重複。Brier/gap は in-sample。")
+    if subject == "all":
+        print("  ⚠ subject=all: n は馬行数。レース内相関で有効 n はレース数(nr)。Wilson CI は")
+        print("     過度に狭く有意判定は出さない。bias_severity は sqrt(nr) 基準。reliability 点推定専用。")
     print(f"  GLOBAL REF: pred={g['mean_pred']:.3f} actual={g['actual_rate']:.3f} "
-          f"gap={g['calibration_gap']:+.3f} CI[{g['ci_lo']:.3f}-{g['ci_hi']:.3f}] n={g['n']}")
+          f"gap={g['calibration_gap']:+.3f} CI[{g['ci_lo']:.3f}-{g['ci_hi']:.3f}] "
+          f"n={g['n']} nr={g['n_races']} fld={g['avg_field']}")
     print("=" * 78)
 
     # 全軸ランキング
+    n_cells = result.get("n_cells_tested", 0)
     print("\n### MOST BIASED CELLS (全軸, bias_severity 降順, qualifying のみ)")
+    print(f"  ⚠ 多重比較未補正: 約{n_cells}セル×α=0.05 → 期待偽陽性 ~{n_cells * 0.05:.0f} セル。")
+    print("     SIG*/sig の単期間判断は禁止。重み変更は 2024/2025 独立再現 + holdout 通過後のみ。")
     if not result["ranked"]:
         print("  (有意な偏りセルなし)")
     for r in result["ranked"][:top]:
         print(f"  [{r['axis']}] {display_cell(r['axis'], r['cell'])}: "
-              f"gap={r['calibration_gap']:+.3f} n={r['n']} severity={r['bias_severity']}")
+              f"gap={r['calibration_gap']:+.3f} n={r['n']} eff_n={r['effective_n']} "
+              f"severity={r['bias_severity']}")
 
     # 軸ごと
     for axis, cells in result["axes"].items():
@@ -422,19 +508,20 @@ def print_report(result: dict, top: int) -> None:
         for key, st in sorted(ok.items(), key=lambda kv: kv[1]["bias_severity"] or 0, reverse=True)[:top]:
             print(_fmt_cell_line(axis, key, st))
         if insuf:
-            tags = ", ".join(f"{display_cell(axis, k)}(n={v['n']})" for k, v in sorted(insuf.items()))
+            tags = ", ".join(f"{display_cell(axis, k)}(n={v['n']},eff={v['effective_n']})"
+                             for k, v in sorted(insuf.items()))
             print(f"  INSUFFICIENT: {tags}")
 
     # クロス
     for cname, cells in result.get("cross", {}).items():
         ok = {k: v for k, v in cells.items() if v["status"] == "ok"}
         print(f"\nCROSS: {cname} (ok={len(ok)} / {len(cells)} cells, min_n_cross={result['min_n_cross']})")
+        a1, a2 = CROSS_SPECS[cname]
         for key, st in sorted(ok.items(), key=lambda kv: kv[1]["bias_severity"] or 0, reverse=True)[:top]:
             k1, k2 = key.split("|", 1)
-            a1, a2 = CROSS_SPECS[cname]
             label = f"{display_cell(a1, k1)}×{display_cell(a2, k2)}"
-            print(f"  {label:<14} n={st['n']:>5} gap={st['calibration_gap']:+.3f} "
-                  f"CI[{st['ci_lo']:.3f}-{st['ci_hi']:.3f}] {severity_tag(st)}")
+            print(f"  {label:<14} n={st['n']:>5} eff={st['effective_n']:>5} "
+                  f"gap={st['calibration_gap']:+.3f} CI[{st['ci_lo']:.3f}-{st['ci_hi']:.3f}] {severity_tag(st)}")
 
 
 def main() -> int:
@@ -468,6 +555,8 @@ def main() -> int:
         logger.warning(
             "評価期間 %s-%s は TRAIN 期間 %s-%s と重複しています。calibration gap が "
             "in-sample になり証拠力が落ちます。", args.from_date, args.to_date, tf, tt)
+    if not args.save:
+        logger.warning("--save なし: meta(git_sha/calibrator版)/結果が揮発し後から再現できません。")
 
     with (open_db(args.db) if args.db else open_db()) as conn:
         result = run_scan(
@@ -493,7 +582,10 @@ def main() -> int:
         out_dir.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         out_path = out_dir / f"{stamp}_{args.rule_version}.json"
-        out_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        # 原子書き込み: 中断による corrupt JSON を防ぐため tmp に書いて rename。
+        tmp_path = out_path.with_suffix(".json.tmp")
+        tmp_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp_path.rename(out_path)
         print(f"\nsaved: {out_path}")
 
     return 0
