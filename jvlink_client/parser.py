@@ -1433,3 +1433,291 @@ def parse_wf(rec: bytes) -> Win5:
 def parse_wf_file(path: str | Path) -> list[Win5]:
     data = Path(path).read_bytes()
     return [parse_wf(rec) for rec in _split_fixed(data, WF_LENGTH)]
+
+
+# ============================================================
+# 参照系・速報系
+#   RC レコードマスタ / CS コース情報 / YS 開催スケジュール / BT 系統情報 /
+#   HY 馬名意味由来 / WE 天候馬場状態 / AV 出走取消・競走除外 / TC 発走時刻変更
+# 仕様書 §21(RC) §27(CS) §25(YS) §26(BT) §24(HY) §102(WE) §103(AV) §105(TC)
+# parse_*_file は付けない (ingest は _split_records 経由。dead helper を増やさない)。
+# ============================================================
+
+RC_LENGTH = 501
+CS_LENGTH = 6829
+YS_LENGTH = 382
+BT_LENGTH = 6889
+HY_LENGTH = 123
+WE_LENGTH = 42
+AV_LENGTH = 78
+TC_LENGTH = 45
+
+
+@dataclass
+class RecordMaster:
+    record_type: str
+    data_div: str
+    data_created: str
+    record_id_kubun: str   # 1:コースレコード 2:デサンレコード
+    year: str
+    month_day: str
+    track_code: str        # 場コード
+    kaiji: str
+    nichiji: str
+    race_num: str
+    special_race_num: str
+    race_name: str
+    grade_code: str
+    race_type_code: str
+    distance: int
+    track_type_code: str   # トラックコード (芝/ダート)
+    record_div: str
+    record_time: str       # 9分99秒9
+    weather_code: str
+    going_turf: str
+    going_dirt: str
+    holder_blood_num: str  # レコード保持馬 (先頭1頭)
+    holder_horse_name: str
+
+
+def parse_rc(rec: bytes) -> RecordMaster:
+    rec = _fit(rec, RC_LENGTH)
+    return RecordMaster(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        record_id_kubun=_ascii(rec, 12, 1),
+        year=_ascii(rec, 13, 4),
+        month_day=_ascii(rec, 17, 4),
+        track_code=_ascii(rec, 21, 2),
+        kaiji=_ascii(rec, 23, 2),
+        nichiji=_ascii(rec, 25, 2),
+        race_num=_ascii(rec, 27, 2),
+        special_race_num=_ascii(rec, 29, 4),
+        race_name=_str(rec, 33, 60),
+        grade_code=_ascii(rec, 93, 1),
+        race_type_code=_ascii(rec, 94, 2),
+        distance=_int(rec, 96, 4),
+        track_type_code=_ascii(rec, 100, 2),
+        record_div=_ascii(rec, 102, 1),
+        record_time=_ascii(rec, 103, 4),
+        weather_code=_ascii(rec, 107, 1),
+        going_turf=_ascii(rec, 108, 1),
+        going_dirt=_ascii(rec, 109, 1),
+        holder_blood_num=_ascii(rec, 110, 10),
+        holder_horse_name=_str(rec, 120, 36),
+    )
+
+
+@dataclass
+class CourseInfo:
+    record_type: str
+    data_div: str
+    data_created: str
+    track_code: str
+    distance: int
+    track_type_code: str
+    revision_date: str   # コース改修年月日
+    description: str      # コース説明 (テキスト)
+
+
+def parse_cs(rec: bytes) -> CourseInfo:
+    rec = _fit(rec, CS_LENGTH)
+    return CourseInfo(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        track_code=_ascii(rec, 12, 2),
+        distance=_int(rec, 14, 4),
+        track_type_code=_ascii(rec, 18, 2),
+        revision_date=_ascii(rec, 20, 8),
+        description=_str(rec, 28, 6800),
+    )
+
+
+@dataclass
+class Schedule:
+    record_type: str
+    data_div: str
+    data_created: str
+    year: str
+    month_day: str
+    track_code: str
+    kaiji: str
+    nichiji: str
+    weekday_code: str
+
+
+def parse_ys(rec: bytes) -> Schedule:
+    rec = _fit(rec, YS_LENGTH)
+    return Schedule(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        year=_ascii(rec, 12, 4),
+        month_day=_ascii(rec, 16, 4),
+        track_code=_ascii(rec, 20, 2),
+        kaiji=_ascii(rec, 22, 2),
+        nichiji=_ascii(rec, 24, 2),
+        weekday_code=_ascii(rec, 26, 1),
+    )
+
+
+@dataclass
+class Lineage:
+    record_type: str
+    data_div: str
+    data_created: str
+    breeding_reg_num: str
+    keito_id: str
+    keito_name: str
+    description: str
+
+
+def parse_bt(rec: bytes) -> Lineage:
+    rec = _fit(rec, BT_LENGTH)
+    return Lineage(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        breeding_reg_num=_ascii(rec, 12, 10),
+        # 実 BLOD データで系統名が pos 50 開始のため keito_id は len 28
+        # (仕様書 §26 の "len30/name@52" と 2 byte 相違。実データを正とする)。
+        keito_id=_ascii(rec, 22, 28),
+        keito_name=_str(rec, 50, 36),
+        description=_str(rec, 88, 6800),
+    )
+
+
+@dataclass
+class HorseNameOrigin:
+    record_type: str
+    data_div: str
+    data_created: str
+    blood_register_num: str
+    horse_name: str
+    name_origin: str
+
+
+def parse_hy(rec: bytes) -> HorseNameOrigin:
+    rec = _fit(rec, HY_LENGTH)
+    return HorseNameOrigin(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        blood_register_num=_ascii(rec, 12, 10),
+        horse_name=_str(rec, 22, 36),
+        name_origin=_str(rec, 58, 64),
+    )
+
+
+@dataclass
+class WeatherGoing:
+    record_type: str
+    data_div: str
+    data_created: str
+    year: str
+    month_day: str
+    track_code: str
+    kaiji: str
+    nichiji: str
+    announced_time: str
+    change_id: str          # 1:初期 2:天候変更 3:馬場状態変更
+    weather_code: str       # 現在
+    going_turf: str
+    going_dirt: str
+    prev_weather_code: str  # 変更前
+    prev_going_turf: str
+    prev_going_dirt: str
+
+
+def parse_we(rec: bytes) -> WeatherGoing:
+    rec = _fit(rec, WE_LENGTH)
+    return WeatherGoing(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        year=_ascii(rec, 12, 4),
+        month_day=_ascii(rec, 16, 4),
+        track_code=_ascii(rec, 20, 2),
+        kaiji=_ascii(rec, 22, 2),
+        nichiji=_ascii(rec, 24, 2),
+        announced_time=_ascii(rec, 26, 8),
+        change_id=_ascii(rec, 34, 1),
+        weather_code=_ascii(rec, 35, 1),
+        going_turf=_ascii(rec, 36, 1),
+        going_dirt=_ascii(rec, 37, 1),
+        prev_weather_code=_ascii(rec, 38, 1),
+        prev_going_turf=_ascii(rec, 39, 1),
+        prev_going_dirt=_ascii(rec, 40, 1),
+    )
+
+
+@dataclass
+class Scratch:
+    record_type: str
+    data_div: str           # 1:出走取消 2:発走除外
+    data_created: str
+    year: str
+    month_day: str
+    track_code: str
+    kaiji: str
+    nichiji: str
+    race_num: str
+    announced_time: str
+    horse_num: str
+    horse_name: str
+    reason_code: str        # 000:平常 001:病気 002:事故 003:その他
+
+
+def parse_av(rec: bytes) -> Scratch:
+    rec = _fit(rec, AV_LENGTH)
+    return Scratch(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        year=_ascii(rec, 12, 4),
+        month_day=_ascii(rec, 16, 4),
+        track_code=_ascii(rec, 20, 2),
+        kaiji=_ascii(rec, 22, 2),
+        nichiji=_ascii(rec, 24, 2),
+        race_num=_ascii(rec, 26, 2),
+        announced_time=_ascii(rec, 28, 8),
+        horse_num=_ascii(rec, 36, 2),
+        horse_name=_str(rec, 38, 36),
+        reason_code=_ascii(rec, 74, 3),
+    )
+
+
+@dataclass
+class StartTimeChange:
+    record_type: str
+    data_div: str
+    data_created: str
+    year: str
+    month_day: str
+    track_code: str
+    kaiji: str
+    nichiji: str
+    race_num: str
+    announced_time: str
+    new_start_time: str
+    old_start_time: str
+
+
+def parse_tc(rec: bytes) -> StartTimeChange:
+    rec = _fit(rec, TC_LENGTH)
+    return StartTimeChange(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        year=_ascii(rec, 12, 4),
+        month_day=_ascii(rec, 16, 4),
+        track_code=_ascii(rec, 20, 2),
+        kaiji=_ascii(rec, 22, 2),
+        nichiji=_ascii(rec, 24, 2),
+        race_num=_ascii(rec, 26, 2),
+        announced_time=_ascii(rec, 28, 8),
+        new_start_time=_ascii(rec, 36, 4),
+        old_start_time=_ascii(rec, 40, 4),
+    )

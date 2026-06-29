@@ -440,3 +440,129 @@ CREATE TABLE IF NOT EXISTS win5_payouts (
     hit_votes      INTEGER,
     PRIMARY KEY (race_year, race_month_day, combo)
 );
+
+-- レコードマスタ (RC)。コース/条件別の記録タイム (速度指数 F5 の基準素材)。
+CREATE TABLE IF NOT EXISTS record_master (
+    record_id_kubun   TEXT NOT NULL,   -- 1:コースレコード 2:デサンレコード
+    track_code        TEXT NOT NULL,   -- 場コード
+    track_type_code   TEXT NOT NULL,   -- トラックコード (芝/ダート)
+    distance          INTEGER NOT NULL,
+    grade_code        TEXT NOT NULL DEFAULT '',
+    record_div        TEXT,
+    record_time       TEXT,            -- 9分99秒9
+    race_year         TEXT,            -- 記録を出したレース
+    race_month_day    TEXT,
+    kaiji             TEXT,
+    nichiji           TEXT,
+    race_num          TEXT,
+    special_race_num  TEXT,
+    race_name         TEXT,
+    race_type_code    TEXT,
+    weather_code      TEXT,
+    going_turf        TEXT,
+    going_dirt        TEXT,
+    holder_blood_num  TEXT,
+    holder_horse_name TEXT,
+    data_div          TEXT,
+    data_created      TEXT,
+    PRIMARY KEY (record_id_kubun, track_code, track_type_code, distance, grade_code)
+);
+
+-- コース情報 (CS)。コース形状の説明テキスト (参照)。
+CREATE TABLE IF NOT EXISTS course_infos (
+    track_code      TEXT NOT NULL,
+    distance        INTEGER NOT NULL,
+    track_type_code TEXT NOT NULL,
+    revision_date   TEXT NOT NULL,   -- コース改修年月日
+    description     TEXT,
+    data_div        TEXT,
+    data_created    TEXT,
+    PRIMARY KEY (track_code, distance, track_type_code, revision_date)
+);
+
+-- 開催スケジュール (YS)。開催日の識別 (参照)。
+CREATE TABLE IF NOT EXISTS schedules (
+    race_year      TEXT NOT NULL,
+    race_month_day TEXT NOT NULL,
+    track_code     TEXT NOT NULL,
+    kaiji          TEXT NOT NULL,
+    nichiji        TEXT NOT NULL,
+    weekday_code   TEXT,
+    data_div       TEXT,
+    data_created   TEXT,
+    PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji)
+);
+
+-- 系統情報 (BT)。繁殖馬 → 系統 (lineage) の対応 (F9 血統系統の素材)。
+CREATE TABLE IF NOT EXISTS horse_lineages (
+    breeding_reg_num TEXT PRIMARY KEY,
+    keito_id         TEXT,   -- 2 桁ごとに系統階層を表す ID
+    keito_name       TEXT,
+    description      TEXT,
+    data_div         TEXT,
+    data_created     TEXT
+);
+
+-- 馬名意味由来 (HY)。参照 (低優先)。
+CREATE TABLE IF NOT EXISTS horse_name_origins (
+    blood_register_num TEXT PRIMARY KEY,
+    horse_name         TEXT,
+    name_origin        TEXT,
+    data_div           TEXT,
+    data_created       TEXT
+);
+
+-- 天候馬場状態 (WE)。開催日・時刻単位の馬場/天候 (発走前速報を含む)。
+-- ★リーク注意: announced_time が PIT アンカー。発走後更新も混在するため、
+--   特徴量に使うときは対象レースの発走時刻より前の最新 announced_time に限定すること。
+CREATE TABLE IF NOT EXISTS weather_going (
+    race_year         TEXT NOT NULL,
+    race_month_day    TEXT NOT NULL,
+    track_code        TEXT NOT NULL,
+    kaiji             TEXT NOT NULL,
+    nichiji           TEXT NOT NULL,
+    announced_time    TEXT NOT NULL,
+    change_id         TEXT,   -- 1:初期 2:天候変更 3:馬場状態変更
+    weather_code      TEXT,
+    going_turf        TEXT,
+    going_dirt        TEXT,
+    prev_weather_code TEXT,
+    prev_going_turf   TEXT,
+    prev_going_dirt   TEXT,
+    data_div          TEXT,
+    data_created      TEXT,
+    PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji, announced_time)
+);
+
+-- 出走取消・競走除外 (AV、速報)。data_div 1:出走取消 2:発走除外。
+CREATE TABLE IF NOT EXISTS race_cancellations (
+    race_year      TEXT NOT NULL,
+    race_month_day TEXT NOT NULL,
+    track_code     TEXT NOT NULL,
+    kaiji          TEXT NOT NULL,
+    nichiji        TEXT NOT NULL,
+    race_num       TEXT NOT NULL,
+    horse_num      TEXT NOT NULL,
+    data_div       TEXT,   -- 1:出走取消 2:発走除外
+    announced_time TEXT,
+    horse_name     TEXT,
+    reason_code    TEXT,   -- 000:平常 001:病気 002:事故 003:その他
+    data_created   TEXT,
+    PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji, race_num, horse_num)
+);
+
+-- 発走時刻変更 (TC、速報)。
+CREATE TABLE IF NOT EXISTS start_time_changes (
+    race_year      TEXT NOT NULL,
+    race_month_day TEXT NOT NULL,
+    track_code     TEXT NOT NULL,
+    kaiji          TEXT NOT NULL,
+    nichiji        TEXT NOT NULL,
+    race_num       TEXT NOT NULL,
+    announced_time TEXT NOT NULL,
+    new_start_time TEXT,
+    old_start_time TEXT,
+    data_div       TEXT,
+    data_created   TEXT,
+    PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji, race_num, announced_time)
+);

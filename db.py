@@ -17,10 +17,13 @@ from pathlib import Path
 from config import DB_PATH, PROJECT_ROOT
 from jvlink_client.parser import (
     BreedingHorse,
+    CourseInfo,
     ExoticOdds,
     HorseMaster,
+    HorseNameOrigin,
     HorseRaceInfo,
     JockeyMaster,
+    Lineage,
     MiningPrediction,
     O1Odds,
     OffspringMaster,
@@ -29,10 +32,15 @@ from jvlink_client.parser import (
     ProducerMaster,
     RaceInfo,
     RaceScratch,
+    RecordMaster,
+    Schedule,
+    Scratch,
     SpecialEntry,
+    StartTimeChange,
     TrainerMaster,
     TrainingTime,
     VoteCounts,
+    WeatherGoing,
     Win5,
 )
 
@@ -412,6 +420,53 @@ def upsert_race_scratch(conn: sqlite3.Connection, jg: RaceScratch) -> None:
     placeholders = ",".join(f":{c}" for c in cols)
     sql = f"INSERT OR REPLACE INTO race_scratches ({','.join(cols)}) VALUES ({placeholders})"
     conn.execute(sql, d)
+
+
+def _upsert_race_keyed(conn: sqlite3.Connection, table: str, obj) -> None:
+    """year/month_day を race_year/race_month_day にリネームして INSERT OR REPLACE する汎用 upsert。"""
+    d = asdict(obj)
+    if "year" in d:
+        d["race_year"] = d.pop("year")
+    if "month_day" in d:
+        d["race_month_day"] = d.pop("month_day")
+    d.pop("record_type", None)
+    cols = list(d.keys())
+    placeholders = ",".join(f":{c}" for c in cols)
+    conn.execute(
+        f"INSERT OR REPLACE INTO {table} ({','.join(cols)}) VALUES ({placeholders})", d
+    )
+
+
+def upsert_record_master(conn: sqlite3.Connection, rc: RecordMaster) -> None:
+    _upsert_race_keyed(conn, "record_master", rc)
+
+
+def upsert_course_info(conn: sqlite3.Connection, cs: CourseInfo) -> None:
+    _upsert_master(conn, "course_infos", cs)
+
+
+def upsert_schedule(conn: sqlite3.Connection, ys: Schedule) -> None:
+    _upsert_race_keyed(conn, "schedules", ys)
+
+
+def upsert_lineage(conn: sqlite3.Connection, bt: Lineage) -> None:
+    _upsert_master(conn, "horse_lineages", bt)
+
+
+def upsert_horse_name_origin(conn: sqlite3.Connection, hy: HorseNameOrigin) -> None:
+    _upsert_master(conn, "horse_name_origins", hy)
+
+
+def upsert_weather_going(conn: sqlite3.Connection, we: WeatherGoing) -> None:
+    _upsert_race_keyed(conn, "weather_going", we)
+
+
+def upsert_race_cancellation(conn: sqlite3.Connection, av: Scratch) -> None:
+    _upsert_race_keyed(conn, "race_cancellations", av)
+
+
+def upsert_start_time_change(conn: sqlite3.Connection, tc: StartTimeChange) -> None:
+    _upsert_race_keyed(conn, "start_time_changes", tc)
 
 
 def upsert_win5(conn: sqlite3.Connection, wf: Win5) -> int:

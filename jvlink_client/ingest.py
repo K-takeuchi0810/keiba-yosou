@@ -35,14 +35,22 @@ from db import (
     upsert_offspring_master,
     upsert_payout,
     upsert_race,
+    upsert_course_info,
+    upsert_horse_name_origin,
+    upsert_lineage,
+    upsert_race_cancellation,
     upsert_race_scratch,
+    upsert_record_master,
+    upsert_schedule,
     upsert_special_entry,
+    upsert_start_time_change,
     upsert_jockey_master,
     upsert_owner_master,
     upsert_producer_master,
     upsert_trainer_master,
     upsert_training_time,
     upsert_vote_counts,
+    upsert_weather_going,
     upsert_win5,
     update_win_odds,
 )
@@ -67,15 +75,23 @@ from jvlink_client.parser import (
     parse_o4,
     parse_o5,
     parse_o6,
+    parse_av,
+    parse_bt,
+    parse_cs,
+    parse_hy,
     parse_jg,
     parse_ra,
+    parse_rc,
     parse_se,
     parse_sk,
+    parse_tc,
     parse_tk,
     parse_tm,
     parse_um,
     parse_wc,
+    parse_we,
     parse_wf,
+    parse_ys,
 )
 
 RAW_DIR = DATA_DIR / "raw"
@@ -211,8 +227,33 @@ def ingest_file_dispatch(
             elif rec_type == "WF":
                 upsert_win5(conn, parse_wf(rec))
                 _bump("WF")
+            # === 参照系・速報系 (2026-06-30 追加: DIFN/COMM/YSCH/BLOD/HOYU/0B14) ===
+            elif rec_type == "RC":
+                upsert_record_master(conn, parse_rc(rec))
+                _bump("RC")
+            elif rec_type == "CS":
+                upsert_course_info(conn, parse_cs(rec))
+                _bump("CS")
+            elif rec_type == "YS":
+                upsert_schedule(conn, parse_ys(rec))
+                _bump("YS")
+            elif rec_type == "BT":
+                upsert_lineage(conn, parse_bt(rec))
+                _bump("BT")
+            elif rec_type == "HY":
+                upsert_horse_name_origin(conn, parse_hy(rec))
+                _bump("HY")
+            elif rec_type == "WE":
+                upsert_weather_going(conn, parse_we(rec))
+                _bump("WE")
+            elif rec_type == "AV":
+                upsert_race_cancellation(conn, parse_av(rec))
+                _bump("AV")
+            elif rec_type == "TC":
+                upsert_start_time_change(conn, parse_tc(rec))
+                _bump("TC")
             else:
-                # 未対応レコード種別 (CK/RC/HY/YS/WH/WE/AV/JC/CC/BT 等)
+                # 未対応レコード種別 (CK/JC/CC/WH 等。WH/JC/CC は raw 未取得=JV-Link fetch 要)
                 skipped += 1
         except Exception as e:
             skipped += 1
