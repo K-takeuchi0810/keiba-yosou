@@ -31,7 +31,7 @@ import numpy as np
 
 from config import PROJECT_ROOT
 from db import open_db
-from predictor.features import compute_features
+from predictor.features import add_race_relative_inplace, compute_features
 from scripts.backtest import horses_for_race, list_races
 
 logger = logging.getLogger(__name__)
@@ -79,11 +79,23 @@ NUMERIC_FEATURES: list[str] = [
     "jockey_recent_90d_top3_rate", "jockey_recent_90d_samples",
     "trainer_recent_30d_top3_rate", "trainer_recent_30d_samples",
     "horse_recent_90d_top3_rate", "horse_recent_90d_samples",
+    # F1 レース内相対化 (2026-06-30 v6): base 特徴の rank_in_race / z。
+    # 単一絶対特徴 (jockey_win_rate 等) への gain 一極集中の緩和が狙い。
+    # 名前は predictor.features.RACE_RELATIVE_BASES と add_race_relative_inplace に対応。
+    "jockey_win_rate_rank_in_race", "jockey_win_rate_z",
+    "recent_avg_finish_rate_rank_in_race", "recent_avg_finish_rate_z",
+    "best_time_per_100m_rank_in_race", "best_time_per_100m_z",
+    "sire_distance_top3_rate_rank_in_race", "sire_distance_top3_rate_z",
+    "horse_track_top3_rate_rank_in_race", "horse_track_top3_rate_z",
+    "mining_dm_time_rank_in_race", "mining_dm_time_z",
+    # F2 枠順 (2026-06-30 v6): 正規化枠位置 (track×draw 交互作用は LGBM が学習)
+    "draw_position",
 ]
 
 BOOLEAN_FEATURES: list[str] = [
     "leg_quality_available", "same_day_bias_available", "had_grade_run",
     "bloodline_data_available",
+    "is_wide_draw",  # F2: 外枠 (外側 1/3)
 ]
 
 # Categorical (LightGBM native categorical = int code)
@@ -95,6 +107,7 @@ CATEGORICAL_MAPS: dict[str, dict[str, int]] = {
     "current_going": {"1": 0, "2": 1, "3": 2, "4": 3, "0": 4},
     "leg_code": {"1": 0, "2": 1, "3": 2, "4": 3, "0": 4},
     "estimated_leg_code": {"1": 0, "2": 1, "3": 2, "4": 3, "": 4, "0": 4},
+    "gate_zone": {"inner": 0, "middle": 1, "outer": 2},  # F2 (未知/"" は len=3)
 }
 CATEGORICAL_FEATURES: list[str] = list(CATEGORICAL_MAPS.keys())
 
@@ -164,16 +177,20 @@ def build_dataset(
         if n_winners == 0:
             skipped_no_winner += 1
             continue
-        row_features: list[list[float]] = []
-        row_labels: list[int] = []
+        race_feats: list[dict] = []
+        race_labels: list[int] = []
         for h in horses:
             try:
                 feat = compute_features(conn, h, race, cache=feature_cache)
             except Exception as e:
                 logger.warning("compute_features failed: %s", e)
                 continue
-            row_features.append(_feature_vector(feat))
-            row_labels.append(1 if (h.get("confirmed_order") or 0) == 1 else 0)
+            race_feats.append(feat)
+            race_labels.append(1 if (h.get("confirmed_order") or 0) == 1 else 0)
+        # F1: 全頭の絶対特徴を集めてからレース内相対化 (train/serve 同一適用)
+        add_race_relative_inplace(race_feats)
+        row_features = [_feature_vector(f) for f in race_feats]
+        row_labels = race_labels
         if not row_features or sum(row_labels) == 0:
             skipped_no_winner += 1
             continue

@@ -102,6 +102,18 @@ def _gate_zone(horse_num: str | int | None, starter_count: int | None) -> str:
     return "outer"
 
 
+def _draw_position(horse_num: str | int | None, starter_count: int | None) -> float | None:
+    """馬番 / 頭数 を 0-1 に正規化した枠位置 (F2)。小さいほど内枠。発走前に既知=leak-free。"""
+    try:
+        num = int(str(horse_num or "").strip())
+        starters = int(starter_count or 0)
+    except ValueError:
+        return None
+    if num <= 0 or starters <= 0:
+        return None
+    return num / starters
+
+
 def grade_class_close_loss(
     conn: sqlite3.Connection,
     blood_register_num: str,
@@ -875,90 +887,54 @@ def _sire_track_stats(
     return result
 
 
-def compute_race_relative_features(
-    conn: sqlite3.Connection,
-    horses: list[dict],
-    race: dict,
-    cache: dict | None = None,
-) -> dict[str, dict]:
-    """Phase 6 Tier 2.4 (2026-05-16): race-internal な相対 features を一括算出。
+# F1 レース内相対化: 相対化する base 特徴 (compute_features が既に算出する絶対値)。
+# jockey_win_rate 等の単一絶対特徴への一極集中 (LGBM v5 で gain 66%) を緩和する狙い。
+RACE_RELATIVE_BASES = [
+    "jockey_win_rate",
+    "recent_avg_finish_rate",
+    "best_time_per_100m",
+    "sire_distance_top3_rate",
+    "horse_track_top3_rate",
+    "mining_dm_time",
+]
 
-    各 horse の (個別 value - race 内平均) を計算し、horse_num → {feature: value}
-    の dict を返す。compute_features の呼び出しの中で個別に集計するよりも、
-    レース全体を見渡してから差分を計算するほうが SQL 1 回で済むので効率的。
 
-    呼び出し側 (predict_race or build_dataset) が:
-      rel_map = compute_race_relative_features(conn, horses, race, cache)
-      feat = compute_features(...)
-      feat.update(rel_map.get(horse_num, {}))
+def add_race_relative_inplace(feats: list[dict]) -> None:
+    """レース内の各馬 feat に base 特徴の rank_in_race と z を追記する (F1)。
 
-    狙い: SHAP v4 で判明した「馬個体シグナルが弱い」問題に対し、
-    既存の absolute 値 (recent_avg_finish_rate 等) と独立な「同レース内
-    偏差」を提供。jockey_win_rate との相関が低い純粋な horse signal。
+    新規 SQL を出さず、compute_features が既に算出した絶対特徴をレース内で相対化する
+    (Phase 6 Tier2.4 の compute_race_relative_features は dead だったため置換)。
+    呼び出し側 (build_dataset / predict_lgbm_probs) は per-horse compute_features を
+    **全頭分集めた後に 1 回** 呼ぶ。train と serve で必ず同一適用すること (skew 防止)。
+
+    - rank_in_race: 値の昇順に 1..k。欠損は最下位 n。方向 (高い/低いが良い) は
+      LGBM が base ごとに学習するので符号は付けない。
+    - z: (v - mean) / std。std=0 や欠損は 0.0。
     """
-    before = _date_key(race.get("race_year"), race.get("race_month_day"))
-
-    # 各 horse の絶対値を取得 → race 内平均を計算 → 偏差を返す
-    horse_recent_top3: list[tuple[str, float | None]] = []
-    horse_recent_avg_finish: list[tuple[str, float | None]] = []
-    jockey_recent_top3: list[tuple[str, float | None]] = []
-    for h in horses:
-        hn = h.get("horse_num") or ""
-        # 馬の直近 90 日 top3 率
-        ht_rate, _ = _entity_recent_stats(
-            conn, "blood_register_num",
-            h.get("blood_register_num", "") or "",
-            before, 90, cache=cache,
-        )
-        horse_recent_top3.append((hn, ht_rate))
-        # 馬の通算 recent_avg_finish_rate 風 (5 走平均)
-        blood = h.get("blood_register_num", "") or ""
-        if blood:
-            past_rows = conn.execute(
-                """
-                SELECT confirmed_order FROM horse_races
-                 WHERE blood_register_num = ?
-                   AND (race_year || race_month_day) < ?
-                   AND confirmed_order > 0
-                 ORDER BY (race_year || race_month_day) DESC LIMIT 5
-                """,
-                (blood, before),
-            ).fetchall()
-            if past_rows:
-                avg_fin = sum(r[0] for r in past_rows) / len(past_rows)
-            else:
-                avg_fin = None
+    n = len(feats)
+    if n == 0:
+        return
+    for base in RACE_RELATIVE_BASES:
+        present = [
+            (i, f[base]) for i, f in enumerate(feats)
+            if isinstance(f.get(base), (int, float)) and not isinstance(f.get(base), bool)
+        ]
+        order = sorted(present, key=lambda t: t[1])
+        rank_of = {i: r for r, (i, _v) in enumerate(order, start=1)}
+        if len(present) >= 2:
+            mean = sum(v for _i, v in present) / len(present)
+            var = sum((v - mean) ** 2 for _i, v in present) / len(present)
+            sd = var ** 0.5
         else:
-            avg_fin = None
-        horse_recent_avg_finish.append((hn, avg_fin))
-        # 騎手の直近 90 日 top3 率
-        jr_rate, _ = _entity_recent_stats(
-            conn, "jockey_code",
-            h.get("jockey_code", "") or "",
-            before, 90, cache=cache,
-        )
-        jockey_recent_top3.append((hn, jr_rate))
-
-    def _race_mean(items: list[tuple[str, float | None]]) -> float | None:
-        vals = [v for _, v in items if v is not None]
-        return (sum(vals) / len(vals)) if vals else None
-
-    h_rt_mean = _race_mean(horse_recent_top3)
-    h_af_mean = _race_mean(horse_recent_avg_finish)
-    j_rt_mean = _race_mean(jockey_recent_top3)
-
-    result: dict[str, dict] = {}
-    for hn, v in horse_recent_top3:
-        diff = (v - h_rt_mean) if (v is not None and h_rt_mean is not None) else None
-        result.setdefault(hn, {})["horse_recent_top3_rel"] = diff
-    for hn, v in horse_recent_avg_finish:
-        diff = (v - h_af_mean) if (v is not None and h_af_mean is not None) else None
-        result.setdefault(hn, {})["horse_recent_avg_finish_rel"] = diff
-    for hn, v in jockey_recent_top3:
-        diff = (v - j_rt_mean) if (v is not None and j_rt_mean is not None) else None
-        result.setdefault(hn, {})["jockey_recent_top3_rel"] = diff
-
-    return result
+            mean = sd = 0.0
+        for i, f in enumerate(feats):
+            v = f.get(base)
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                f[base + "_rank_in_race"] = rank_of.get(i, n)
+                f[base + "_z"] = ((v - mean) / sd) if sd > 0 else 0.0
+            else:
+                f[base + "_rank_in_race"] = n
+                f[base + "_z"] = 0.0
 
 
 def compute_features(
@@ -976,8 +952,14 @@ def compute_features(
         lambda: horse_past_runs(conn, blood, before),
     )
 
+    _gz = _gate_zone(horse.get("horse_num"), race.get("starter_count"))
+
     feat: dict = {
         "past_count": len(past),
+        # F2 枠順バイアス (発走前に既知=leak-free。track×draw 交互作用は LGBM が学習)
+        "gate_zone": _gz,
+        "draw_position": _draw_position(horse.get("horse_num"), race.get("starter_count")),
+        "is_wide_draw": _gz == "outer",
         "recent_avg_finish": None,
         "recent_avg_finish_rate": None,
         "recent_best_finish": None,
