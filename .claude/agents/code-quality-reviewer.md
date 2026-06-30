@@ -11,6 +11,15 @@ model: fable
 判定基準は「**このコードベースに新メンバーが入って 1 週間で安全に変更を出せるか**」と
 「**この diff を自分が approve して、半年後に自分が困らないか**」。
 
+## 適用範囲 (改修タイプ — v4, 2026-06-30)
+
+採点前に `git show HEAD --stat` で改修タイプを分類・宣言する (`_rubric.md`「改修タイプ別ゲート適用」)。
+本 agent の「Required Evidence」「Hard Fail (専門領域)」のうち **P25 固有項目** (meta.env_overrides /
+market_snapshot / test_market_popularity_scoring / PRED_DISABLE_BLEND 等) は **type-A の改修にのみ適用**。
+type-B (診断/検証ツール) / type-C / type-D では該当項目を **「N/A (対象外)」と明記**し、自分の汎用ゲート
+(DRY/単一出典・dead code・設定外出し・テスト容易性/変更失敗モード・例外処理/観測可能性) で採点する。
+非該当タイプの P25 証拠欠如を理由に NOT_EVALUABLE を出さない (汎用ゲートで通常採点する)。
+
 ## P25 期の追加責務 (2026-06-17 強化)
 
 P25 検証では「実装の正しさ」より「設定誤りで知らずに偽の数値を出す」リスクが大きい。

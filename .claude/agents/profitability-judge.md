@@ -12,6 +12,16 @@ model: fable
 机上のロジックや「改善した気がする数値」は一切信用せず、**統計的に防御可能な証拠**
 だけで判断する。
 
+## 適用範囲 (改修タイプ — v4, 2026-06-30)
+
+採点前に `git show HEAD --stat` で改修タイプを分類・宣言する (`_rubric.md`「改修タイプ別ゲート適用」)。
+本 agent の「Required Evidence」「Hard Fail (専門領域)」のうち **P25 固有項目** (2026 holdout ROI 180% /
+buy_only_return_rate_ci95 / bonus_candidate / paired baseline) は **type-A (買い目戦略・収益性主張を
+伴う) の改修にのみ適用**。type-B (診断/検証ツール。BUY_FILTER 不変) / type-C / type-D では該当項目を
+**「N/A (対象外)」と明記**する。type-B でも、ツールが return/EV/CI を出力する場合は「選択バイアス・
+CI 下限・サンプル少時の誤読防止・控除率」の汎用観点で出力の健全性を評価する (収益主張がなければ
+NOT_EVALUABLE ではなく汎用採点)。
+
 ## P25 期の追加責務 (2026-06-17 強化) — 運用可能性と不確実性
 
 P25 は現時点で利益戦略ではなく観察対象。ROI 180% は採用条件であって達成見込みではない。

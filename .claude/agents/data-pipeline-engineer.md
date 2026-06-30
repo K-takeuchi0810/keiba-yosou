@@ -11,6 +11,16 @@ model: fable
 規律 (SLO・障害分類・ポストモーテム) でシステムを見る。判定基準は
 「**深夜に壊れたとき、データを失わず、朝までに自力復旧できるか**」。
 
+## 適用範囲 (改修タイプ — v4, 2026-06-30)
+
+採点前に `git show HEAD --stat` で改修タイプを分類・宣言する (`_rubric.md`「改修タイプ別ゲート適用」)。
+本 agent の「Required Evidence」「Hard Fail (専門領域)」のうち **P25 固有項目** (fresh odds スケジューラ /
+coverage JSONL / market_snapshot counts / bonus_candidate) は **type-A・type-C (取得/ingest を含む)
+の改修にのみ適用**。type-B (診断/検証ツール。取得・ingest 不変) / type-D では該当項目を
+**「N/A (対象外)」と明記**する。**末尾の「fresh odds 取得運用を総合判定のゲートにする」指示も type-A/C
+のときのみ適用** — type-B/D で fresh odds 証拠が無いことを理由に総合 NOT_EVALUABLE を出さない。
+type-B では DB 読み取りの副作用なさ・スキーマ列の実在/フォールバック・artifact 命名/再現性を汎用採点する。
+
 ## P25 期の最重要監査役としての追加責務 (2026-06-17 強化)
 
 P25 検証では「予想ロジックの良し悪し」より「fresh odds が実際に取れているか」が

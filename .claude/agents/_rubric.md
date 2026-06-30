@@ -9,6 +9,38 @@
 **停止条件を 1 つでも満たしたら高スコアでも FAIL or NOT_EVALUABLE** とする。
 スコアは「実装品質を表すレポーティング指標」、判定は「採用判断の出力」と役割分離する。
 
+## 改修タイプ別ゲート適用 (v4, 2026-06-30 追加) — 最重要
+
+**背景**: v3 までの Hard Fail / Required Evidence は P25 (市場人気補正の backtest A/B 採用判断)
+を前提に固定されていた。そのため診断ツール追加・データ層修正・GUI 修正など **P25 採用判断
+ではない改修** に対しても market_snapshot / factorial C1-C5 / fresh odds / popularity_bonus_candidate
+等の証拠を要求してしまい、本来 N/A であるべき項目を欠落として NOT_EVALUABLE 乱発する誤発火が
+起きていた (2026-06-29 bias_scan 採点で表面化)。
+
+**ルール**: 各 agent は採点に着手する前に、`git show HEAD --stat` 等で **改修タイプを分類・宣言**
+し、そのタイプに該当するゲートのみ適用する。
+
+| タイプ | 定義 | 適用するゲート |
+|---|---|---|
+| **type-A** | backtest A/B 採用判断。`predictor/weights.json` `calibrator.json` `filter.py` `BUY_FILTER_DEFAULT` `scripts/backtest.py` 等を変更し、確率品質・収益性の **改善や採用を主張** する | P25 固有の全 Hard Fail / Required Evidence (market_snapshot / factorial C1-C5 / paired baseline / fresh odds / bonus_candidate / calibrator refit) を **適用** |
+| **type-B** | 検証/診断ツール・分析スクリプト。予測を変えず計測/診断のみ (例: `scripts/bias_scan.py` `analyze_*.py`) | P25 backtest 採用ゲートは **N/A (対象外)**。適用するのは汎用ゲート: 再現性メタ (artifact 出力時の git_sha/rule_version)、リーク規律 (raw vs calibrated prob・期間既定・in-sample 警告)、統計的正しさ (クラスタ相関を無視した CI 過小・多重比較未補正)、コード品質 (DRY/dead code/テスト/変更失敗モード)、誤精度・誤読を招く出力がないか |
+| **type-C** | データ層/取得。`jvlink_client/` `ingest` `schema.sql` `db.py` | クラッシュ一貫性・冪等性・スキーマ進化・鮮度・復旧。P25 収益性/確率ゲートは N/A |
+| **type-D** | GUI/HTML 表示。`gui/app.py` `web/templates/` `web/generator.py` | Nielsen/HIG/WCAG/誤読防止・JS パース。backtest 採用ゲートは N/A |
+| **type-E** | ドキュメントのみ (`*.md`) | expert-review skip (CLAUDE.md 既定) |
+
+**N/A と NOT_EVALUABLE の峻別 (誤用禁止)**:
+- 改修タイプに **該当しない** P25 固有 Required Evidence の欠如は **「N/A (対象外)」**。
+  これを理由に NOT_EVALUABLE を出してはならない。
+- NOT_EVALUABLE は「**そのタイプで本来必要な証拠**が決定的に欠ける」場合のみ
+  (例: type-A なのに baseline backtest が無い / type-B の診断ツールが artifact を出すのに
+  git_sha を記録しない / type-C で ingest 結果が確認できない)。
+
+**環境非依存の自己検証 (v4)**: 各 agent 定義の「採点時の必須確認」bash は
+`.venv32/.venv64/Scripts/python.exe` 固定や `schtasks`/`cygpath` 前提を**そのまま実行しない**。
+利用可能な `python` (または `python3`) を使い、Windows 専用ツール (schtasks 等) が無い環境では
+当該確認を read-only な代替 (ファイル/コードの直接確認) に切替え、**「実環境で未実行・read-only
+確認に切替」と所見に明記**する。環境差で「数値を自分で実測する」証拠規律を静かに失わないこと。
+
 ## v2 改訂の趣旨 (履歴)
 
 v1 の「5 = 同種アプリの中でも上位」は基準が内輪比較で甘かった。v2 は **外部の絶対基準**
