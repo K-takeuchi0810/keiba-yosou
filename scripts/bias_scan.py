@@ -45,6 +45,14 @@ track×kaiji / surface×weather_wet)。
 の 3 条件を確認すること。SIG* は単期間の統計的有意を示すだけで、重み変更
 の十分条件ではない。
 
+== 解釈上の注意 ==
+- mean_pred は race 内 Σ=1 正規化済の確率の平均なので、平均出走頭数 (avg_field)
+  に依存する (小頭数セルほど機械的に高い)。avg_field が大きく異なるセル間で
+  生 gap を直接比較すると頭数効果をバイアスと誤認しうる。次フェーズで
+  segment 間比較する際は field 層別 (近い avg_field 同士) で見ること。
+- return 系指標は単勝 (tan) のみ。複勝 (fuku) のセグメント別 calibration を
+  診断したい場合は get_payout(..., "fuku") 経路の追加が必要 (将来拡張)。
+
 usage:
     python -m scripts.bias_scan                         # 既定 TEST 2024-2025
     python -m scripts.bias_scan --from 20250101 --to 20250131
@@ -446,6 +454,7 @@ def run_scan(conn, from_date: str, to_date: str, subject: str, axes: list[str],
         "n_races_scanned": n_races,
         "n_skip_tentative": n_skip_tentative,
         "n_no_winner": n_no_winner,
+        "n_no_horses": n_no_horses,
         "n_odds_untrusted": n_odds_untrusted,
         "n_cells_tested": sum(len(v) for v in axes_out.values()) + sum(len(v) for v in cross_out.values()),
         "global": global_stats,
