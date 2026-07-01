@@ -105,7 +105,10 @@ CATEGORICAL_MAPS: dict[str, dict[str, int]] = {
     "current_track_code": {f"{i:02d}": i for i in range(1, 11)},
     "current_surface_family": {"turf": 0, "dirt": 1, "other": 2, "obstacle": 3},
     "current_going": {"1": 0, "2": 1, "3": 2, "4": 3, "0": 4},
-    "leg_code": {"1": 0, "2": 1, "3": 2, "4": 3, "0": 4},
+    # NOTE: raw "leg_code" (脚質) は post-race リーク (未走0%/確定100% で埋まる=レース後付与)
+    # のためモデル特徴から除外した (2026-07-02)。データ完全化で leg_code が 100% 埋まり、
+    # v6 が gain 32.6% 依存 → val_brier が偽改善する事故が発覚。発走前に安全な
+    # estimated_leg_code (過去走からの推定) のみ使う。
     "estimated_leg_code": {"1": 0, "2": 1, "3": 2, "4": 3, "": 4, "0": 4},
     "gate_zone": {"inner": 0, "middle": 1, "outer": 2},  # F2 (未知/"" は len=3)
 }
