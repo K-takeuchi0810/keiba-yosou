@@ -544,7 +544,11 @@ def bloodline_stats(
     family = _surface_family(race.get("track_type_code"))
     bucket = _distance_bucket(race.get("distance"))
     exact_type = race.get("track_type_code") if family == "other" else ""
-    stat_key = ("bloodline_stats", ancestor_column, ancestor_id, before_date, scope, family, bucket, exact_type)
+    # scope="going" は現レースの馬場状態で絞るため、キーにも going を含める。
+    # 無いと同日同 family/bucket の別馬場レースで衝突し先勝ちの値を使い回す
+    # (2026-07-02 忠実性監査で発見した cache 汚染バグ)。
+    going = _race_condition_code(race) if scope == "going" else ""
+    stat_key = ("bloodline_stats", ancestor_column, ancestor_id, before_date, scope, family, bucket, exact_type, going)
 
     def load_stat() -> tuple[float | None, int]:
         return _bloodline_stats_uncached(
@@ -1154,9 +1158,13 @@ def compute_features(
                     final3f_values.append(int(p["final_3f"]))
                 if p.get("finish_time") and pdist:
                     time_per_100_values.append(float(p["finish_time"]) / float(pdist) * 100.0)
+                # キーには馬識別 (horse_num) が必須。relative_race_metrics は「その馬の」
+                # レース内相対値を返すため、過去に対戦した 2 頭が同じ過去レースを共有すると
+                # 馬識別なしでは先勝ちの値を使い回す (2026-07-02 忠実性監査で発見した
+                # cache 汚染バグ。走査順で dataset の値が変わっていた)。
                 rel_diff, rel_rank = _cached(
                     cache,
-                    ("relative_race_metrics", p.get("race_year"), p.get("race_month_day"), p.get("track_code"), p.get("kaiji"), p.get("nichiji"), p.get("race_num")),
+                    ("relative_race_metrics", p.get("race_year"), p.get("race_month_day"), p.get("track_code"), p.get("kaiji"), p.get("nichiji"), p.get("race_num"), p.get("horse_num")),
                     lambda p=p: relative_race_metrics(conn, p),
                 )
                 if rel_diff is not None:
