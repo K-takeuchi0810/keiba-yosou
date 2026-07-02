@@ -37,7 +37,10 @@ MARKS = ["◎", "○", "▲", "△", "☆"]
 # 「別物の分布に旧 mapping を適用」する静かな劣化が起きる (2026-06-13 v2 監査で
 # p17 fit の calibrator を p20-2 ルールに適用していた実例を検出)。
 # _load_calibrator が expected_rules_version と照合して warning を出す。
-RULES_VERSION = "p25-market-pop-score-2026-06-14"
+# p26 (2026-07-03): LGBM を v5-tier23 → v6-rel-draw-clean-tuned-fixed に全差替。
+# leg_code リーク除去 + 完全化データ (29k→142k 行) + F1 相対化/F2 枠順 + cache 修正。
+# raw_blended_probability の分布は根本から変わるため互換登録不可、calibrator 要再fit。
+RULES_VERSION = "p26-lgbm-v6-2026-07-03"
 
 # 現行 RULES_VERSION に対して「raw_blended_probability の分布が実質変わらないため、
 # その calibrator をそのまま使ってよい」と判断できる過去 rules-version のテーブル。

@@ -46,13 +46,23 @@ def _write_calibrator(tmp_path: Path, expected_version: str) -> Path:
 
 
 def test_compat_known_version_logs_info(monkeypatch, tmp_path, caplog, _reset_calibrator_cache):
+    """互換テーブルに登録された旧版なら info に落ちる (機構のテスト)。
+
+    実運用テーブルへの依存は撤廃し合成エントリで検証する。p26 (LGBM v6 全差替、
+    2026-07-03) のように「互換登録が正しくゼロ」の RULES_VERSION が存在するため、
+    現行版に実エントリがあることをテストの前提にしない。
+    """
     from predictor import rules
-    compat_table = rules.CALIBRATOR_COMPATIBLE_RULES_VERSIONS.get(rules.RULES_VERSION) or {}
-    assert compat_table, (
-        f"RULES_VERSION={rules.RULES_VERSION} の互換テーブルが空。"
-        "テスト前提が壊れているのでテーブル設計を見直してください。"
+    legacy_version = "legacy-synthetic-2026"
+    monkeypatch.setattr(
+        rules, "CALIBRATOR_COMPATIBLE_RULES_VERSIONS",
+        {rules.RULES_VERSION: {legacy_version: {
+            "rationale": "テスト用合成エントリ: 機構検証のみが目的で計量根拠を要さないことを明記する 60 文字以上の説明文。",
+            "max_fresh_rate": 0.05,
+            "max_bonus_candidate_rate": 0.01,
+            "expires_on": "2099-12-31",
+        }}},
     )
-    legacy_version = next(iter(compat_table.keys()))
 
     calib_path = _write_calibrator(tmp_path, legacy_version)
     monkeypatch.setattr(rules, "CALIBRATOR_PATH", calib_path)
