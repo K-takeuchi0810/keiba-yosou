@@ -164,9 +164,18 @@ def update_win_odds(
     o1: O1Odds,
     fetched_at: str | None = None,
     dataspec: str = "0B31",
+    historical: bool = False,
 ) -> int:
+    """O1 単勝オッズを horse_races に反映する。
+
+    historical=True は RACE dataspec 等の **確定オッズ (data_div=5)** 用。
+    odds_fetched_at を NULL (= 歴史的確定・信頼) のまま書き、既存の
+    リアルタイム snapshot (odds_fetched_at 非 NULL) は上書きしない。
+    2026-06-30 の RACE バックフィルが確定オッズ行にファイル mtime (発走後) を
+    刻印し、Step1 odds ゲートが全レースを post-start 扱いにする事故が起きた
+    (2026-07-03 検出)。確定オッズの取り込みは必ず historical=True で行うこと。
+    """
     updated = 0
-    fetched_at = fetched_at or datetime.now().isoformat(timespec="seconds")
     params_base = (
         o1.year,
         o1.month_day,
@@ -175,6 +184,23 @@ def update_win_odds(
         o1.nichiji,
         o1.race_num,
     )
+    if historical:
+        for horse_num, odds, popularity in o1.win_odds:
+            cur = conn.execute(
+                """
+                UPDATE horse_races
+                   SET win_odds = ?, win_popularity = ?,
+                       odds_fetched_at = NULL, odds_dataspec = ?
+                 WHERE race_year=? AND race_month_day=? AND track_code=?
+                   AND kaiji=? AND nichiji=? AND race_num=? AND horse_num=?
+                   AND odds_fetched_at IS NULL
+                """,
+                (odds, popularity, dataspec, *params_base, horse_num),
+            )
+            updated += cur.rowcount
+        return updated
+
+    fetched_at = fetched_at or datetime.now().isoformat(timespec="seconds")
     for horse_num, odds, popularity in o1.win_odds:
         # 古い snapshot で新しい snapshot を上書きしないためのガード
         # (out-of-order / 再取り込み対策)。既存 odds_fetched_at が NULL

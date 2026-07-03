@@ -57,6 +57,11 @@ DATA_PERIODS: dict[str, dict[str, str]] = {
 #         / scripts/backtest.py (デフォルト引数) / GUI dashboard JS の input value
 # この値が変わったら data/backtest/ で新たに rule_version 付きで保存し直すこと
 # (過去 backtest と直接比較できなくなるため)。
+#
+# ★位置づけ (2026-07-03 profitability 監査): 現行フィルタは「採用戦略」ではなく
+#   **観察マーカー**。v5/v6 どちらのモデルでも buy_only < all (価値破壊) が
+#   OOS で継続しており (v6: 56.3% < 63.5% / v5: 54.1% < 68.9%、20260101-0614)、
+#   実弾フィルタ候補から降格。実弾昇格条件 = OOS で buy_only 回収率 CI 下限 > 100%。
 BUY_FILTER_DEFAULT: dict = {
     # --- P15 採用 (2026-05-16): wl_kelly_ge_05 ---
     # LGBM v5 (Tier 2.3 込 98 features) で recent-3fold sweep し直し、

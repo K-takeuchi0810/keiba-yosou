@@ -135,7 +135,7 @@ def predict_lgbm_probs(
     except ModuleNotFoundError:
         return {}
     cache = feature_cache if feature_cache is not None else {}
-    rows: list[list[float]] = []
+    feats: list[dict] = []
     horse_nums: list[str] = []
     for h in horses:
         try:
@@ -143,10 +143,17 @@ def predict_lgbm_probs(
         except Exception as e:
             logger.warning("compute_features failed: %s", e)
             continue
-        rows.append(_feature_vector(feat, features_def))
+        feats.append(feat)
         horse_nums.append(h.get("horse_num", ""))
-    if not rows:
+    if not feats:
         return {}
+    # F1: 全頭の絶対特徴を集めてからレース内相対化 (build_dataset と同一適用=skew 防止)
+    try:
+        from predictor.features import add_race_relative_inplace
+        add_race_relative_inplace(feats)
+    except ImportError:
+        pass
+    rows = [_feature_vector(f, features_def) for f in feats]
     X = np.array(rows, dtype=np.float32)
     try:
         raw = booster.predict(X)

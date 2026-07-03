@@ -87,21 +87,35 @@
     "trainer_recent_30d_top3_rate",
     "trainer_recent_30d_samples",
     "horse_recent_90d_top3_rate",
-    "horse_recent_90d_samples"
+    "horse_recent_90d_samples",
+    "jockey_win_rate_rank_in_race",
+    "jockey_win_rate_z",
+    "recent_avg_finish_rate_rank_in_race",
+    "recent_avg_finish_rate_z",
+    "best_time_per_100m_rank_in_race",
+    "best_time_per_100m_z",
+    "sire_distance_top3_rate_rank_in_race",
+    "sire_distance_top3_rate_z",
+    "horse_track_top3_rate_rank_in_race",
+    "horse_track_top3_rate_z",
+    "mining_dm_time_rank_in_race",
+    "mining_dm_time_z",
+    "draw_position"
   ],
   "boolean": [
     "leg_quality_available",
     "same_day_bias_available",
     "had_grade_run",
-    "bloodline_data_available"
+    "bloodline_data_available",
+    "is_wide_draw"
   ],
   "categorical": [
     "current_bucket",
     "current_track_code",
     "current_surface_family",
     "current_going",
-    "leg_code",
-    "estimated_leg_code"
+    "estimated_leg_code",
+    "gate_zone"
   ],
   "categorical_maps": {
     "current_bucket": {
@@ -135,13 +149,6 @@
       "4": 3,
       "0": 4
     },
-    "leg_code": {
-      "1": 0,
-      "2": 1,
-      "3": 2,
-      "4": 3,
-      "0": 4
-    },
     "estimated_leg_code": {
       "1": 0,
       "2": 1,
@@ -149,6 +156,11 @@
       "4": 3,
       "": 4,
       "0": 4
+    },
+    "gate_zone": {
+      "inner": 0,
+      "middle": 1,
+      "outer": 2
     }
   },
   "all_features": [
@@ -240,15 +252,29 @@
     "trainer_recent_30d_samples",
     "horse_recent_90d_top3_rate",
     "horse_recent_90d_samples",
+    "jockey_win_rate_rank_in_race",
+    "jockey_win_rate_z",
+    "recent_avg_finish_rate_rank_in_race",
+    "recent_avg_finish_rate_z",
+    "best_time_per_100m_rank_in_race",
+    "best_time_per_100m_z",
+    "sire_distance_top3_rate_rank_in_race",
+    "sire_distance_top3_rate_z",
+    "horse_track_top3_rate_rank_in_race",
+    "horse_track_top3_rate_z",
+    "mining_dm_time_rank_in_race",
+    "mining_dm_time_z",
+    "draw_position",
     "leg_quality_available",
     "same_day_bias_available",
     "had_grade_run",
     "bloodline_data_available",
+    "is_wide_draw",
     "current_bucket",
     "current_track_code",
     "current_surface_family",
     "current_going",
-    "leg_code",
-    "estimated_leg_code"
+    "estimated_leg_code",
+    "gate_zone"
   ]
 }
