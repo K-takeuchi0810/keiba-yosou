@@ -499,6 +499,34 @@ def upsert_start_time_change(conn: sqlite3.Connection, tc: StartTimeChange) -> N
     _upsert_race_keyed(conn, "start_time_changes", tc)
 
 
+def insert_odds_snapshot(
+    conn: sqlite3.Connection,
+    o1: O1Odds,
+    fetched_at: str,
+    source: str,
+) -> int:
+    """O1 スナップショットを odds_snapshots (F3 時系列) に追記する。
+
+    horse_races.win_odds (最新 1 枚) の update_win_odds とは独立の経路。
+    同一 (レース, 馬, fetched_at) は INSERT OR REPLACE で冪等。戻り値は行数。
+    """
+    rows = [
+        (o1.year, o1.month_day, o1.track_code, o1.kaiji, o1.nichiji, o1.race_num,
+         horse_num, fetched_at, odds, popularity, source)
+        for horse_num, odds, popularity in o1.win_odds
+    ]
+    if not rows:
+        return 0
+    conn.executemany(
+        "INSERT OR REPLACE INTO odds_snapshots "
+        "(race_year, race_month_day, track_code, kaiji, nichiji, race_num, "
+        " horse_num, fetched_at, win_odds, win_popularity, source) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        rows,
+    )
+    return len(rows)
+
+
 def upsert_win5(conn: sqlite3.Connection, wf: Win5) -> int:
     """WF (WIN5) のヘッダ + 払戻を upsert。戻り値は払戻行数。"""
     conn.execute(

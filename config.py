@@ -52,6 +52,12 @@ DATA_PERIODS: dict[str, dict[str, str]] = {
 }
 
 
+# F3 PIT ゲート (2026-07-03 ユーザ確定, docs/F3_MARKET_RESIDUAL_DESIGN.md D1)。
+# 市場スナップショット特徴に使ってよいのは fetched_at ≤ 発走時刻 − この分数 のみ。
+# 実運用で購入判断できる時刻から導出した値であり、backtest と live で必ず同一値を使う
+# (これより後のオッズで backtest すると見かけのエッジを製造する)。変更はユーザ承認必須。
+PIT_GATE_MINUTES = 10
+
 # 買い目フィルタの既定値。アプリ全体で **必ずここを唯一の出典** とする。
 # 利用箇所: web/generator.py (公開 HTML 用) / gui/app.py:_is_buy_candidate
 #         / scripts/backtest.py (デフォルト引数) / GUI dashboard JS の input value
