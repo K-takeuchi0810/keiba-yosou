@@ -71,3 +71,51 @@ def test_add_race_relative_empty_and_single():
     add_race_relative_inplace(single)
     assert single[0]["jockey_win_rate_rank_in_race"] == 1
     assert single[0]["jockey_win_rate_z"] == 0.0  # sd=0
+
+
+def test_leg_code_never_reenters_feature_set():
+    """leg_code (post-race リーク) の再流入ガード。
+
+    2026-07-02 に leg_code が gain 32.6% を占め val_brier が偽改善する事故が発覚
+    (未走馬0%/確定馬100%=レース後付与)。CATEGORICAL_MAPS に誰かが再追加すると
+    _feature_vector → save_artifacts → serve まで自動伝播して静かに再発するため、
+    ここで機械的に遮断する (code-quality 監査 2026-07-03 指摘の変更失敗モード)。
+    """
+    from scripts.train_lgbm import ALL_FEATURES
+    assert "leg_code" not in ALL_FEATURES, \
+        "leg_code は post-race リーク。使うなら発走前に取得可能なことを実証してから"
+
+
+def test_train_serve_feature_vector_parity():
+    """train (train_lgbm._feature_vector) と serve (ml_model._feature_vector) が
+    同一 feat dict から同一ベクトルを生成する (train-serve skew の構造ガード)。
+    """
+    import json
+    import math
+    from pathlib import Path
+    from predictor.ml_model import _feature_vector as serve_vec
+    from scripts.train_lgbm import (
+        ALL_FEATURES, BOOLEAN_FEATURES, CATEGORICAL_FEATURES, CATEGORICAL_MAPS,
+        NUMERIC_FEATURES, _feature_vector as train_vec,
+    )
+    # 成果物 features.json とモジュール定数が一致 (単一出典の実体化)
+    fdef = json.loads(Path("predictor/lgbm_features.json").read_text(encoding="utf-8"))
+    assert fdef["all_features"] == ALL_FEATURES
+    assert fdef["numeric"] == NUMERIC_FEATURES
+    assert fdef["boolean"] == BOOLEAN_FEATURES
+    assert fdef["categorical"] == CATEGORICAL_FEATURES
+
+    # 混在 feat dict (数値/None/bool/カテゴリ/未知キー) で両経路のベクトルが一致
+    feat = {k: None for k in NUMERIC_FEATURES}
+    feat.update({
+        "jockey_win_rate": 0.15, "draw_position": 0.25, "past_count": 3,
+        "is_wide_draw": True, "leg_quality_available": False,
+        "gate_zone": "inner", "current_bucket": "mile", "estimated_leg_code": "2",
+        "unknown_extra_key": 999,  # 余剰キーは両経路とも無視される
+    })
+    tv = train_vec(feat)
+    sv = serve_vec(feat, fdef)
+    assert len(tv) == len(sv) == len(ALL_FEATURES)
+    for i, (a, b) in enumerate(zip(tv, sv)):
+        both_nan = isinstance(a, float) and isinstance(b, float) and math.isnan(a) and math.isnan(b)
+        assert both_nan or a == b, f"列 {ALL_FEATURES[i]} で train={a} serve={b}"

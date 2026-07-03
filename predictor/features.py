@@ -986,6 +986,9 @@ def compute_features(
         "same_bucket_top3": 0,
         "same_bucket_wins": 0,
         "leg_code": (horse.get("leg_quality_code") or "").strip(),
+        # raw_leg_code はモデル特徴では**ない** (leg_quality_code は post-race 値で
+        # v6 から除外済)。GUI/HTML の表示・過去走解析用に生値を保持するだけ。
+        # モデルに入れるなら発走前取得可能なことの実証が先 (2026-07-03 監査注記)。
         "raw_leg_code": (horse.get("leg_quality_code") or "").strip(),
         "estimated_leg_code": "",
         "estimated_leg_samples": 0,
