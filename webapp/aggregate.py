@@ -55,19 +55,6 @@ def surface_of(track_type_code: str | None) -> str:
     return "other"
 
 
-def distance_bucket_of(distance: int | None) -> str:
-    d = distance or 0
-    if d <= 0:
-        return "unknown"
-    if d <= 1400:
-        return "sprint"
-    if d <= 1800:
-        return "mile"
-    if d <= 2200:
-        return "middle"
-    return "long"
-
-
 def popularity_bucket_of(pop: int | None) -> str:
     p = pop or 0
     if p <= 0:
@@ -240,6 +227,9 @@ def aggregate_course(conn, track_code: str, surface: str, distance: int, factor:
         "to_date": to_date,
         "min_n": min_n,
         "total": total_n,
+        # 多重比較の開示: この 1 集計で同時に見ている値 (セル) の数。
+        # コース数 × ファクター数 × この値のぶん「最良セルが偶然良く見える」試行が走る。
+        "n_values": len(cells) + len(insufficient),
         "cells": cells,
         "insufficient": insufficient,
     }

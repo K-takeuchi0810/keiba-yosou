@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from db import open_db
 from predictor.rules import predict_race
-from scripts.backtest import get_payout, horses_for_race, list_races
+from scripts.backtest import distance_bucket_label, get_payout, horses_for_race, list_races
 from web.codes import track_name
 
 
@@ -31,15 +31,12 @@ def surface_name(code: str | None) -> str:
     return "障害/その他"
 
 
+# 距離バケットは backtest.distance_bucket_label に一元化 (2026-07-04)。
+# 境界値 (1400/1800/2200) が本ファイル・backtest・predictor の 3 箇所に平行記述され
+# 乖離リスクがあった (code-quality 監査指摘)。ラベルは "<=1400" 等から
+# sprint/mile/middle/long に変わる (bias_scan / backtest by_bucket と同一語彙)。
 def bucket(distance: int | None) -> str:
-    d = distance or 0
-    if d <= 1400:
-        return "<=1400"
-    if d <= 1800:
-        return "1401-1800"
-    if d <= 2200:
-        return "1801-2200"
-    return "2201+"
+    return distance_bucket_label(distance)
 
 
 def popularity_bucket(popularity: int | None) -> str:

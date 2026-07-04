@@ -29,7 +29,8 @@
 {% if result %}
 <div class="card">
   <strong>{{ result.track_name }} {{ result.surface_label }}{{ result.distance }}m ／ {{ result.factor_label }}</strong>
-  <div class="muted">{{ result.from_date }}〜{{ result.to_date }} ・ 対象 {{ result.total }} 走 ・ min_n={{ result.min_n }}</div>
+  <div class="muted">{{ result.from_date }}〜{{ result.to_date }} ・ 対象 {{ result.total }} 走 ・ min_n={{ result.min_n }}
+   ・ 同時比較 {{ result.n_values }} 値（多いほど最良セルの偶然上振れが起きやすい）</div>
 </div>
 <div class="tablewrap">
 <table>

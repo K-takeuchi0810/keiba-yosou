@@ -44,6 +44,9 @@ track×kaiji / surface×weather_wet)。
   (3) holdout 通過、
 の 3 条件を確認すること。SIG* は単期間の統計的有意を示すだけで、重み変更
 の十分条件ではない。
+TODO (type-A 移行時): pick の gap 有意判定は mean_pred を定数扱いし実勝率の
+Wilson CI と比較する近似。重み変更の足切りに使う際は mean_pred の標準誤差も
+合成した two-proportion 的検定へ格上げすること (2026-06-30 検証監査指摘)。
 
 == 解釈上の注意 ==
 - mean_pred は race 内 Σ=1 正規化済の確率の平均なので、平均出走頭数 (avg_field)
@@ -76,13 +79,12 @@ logger = logging.getLogger(__name__)
 
 from config import DATA_PERIODS
 from db import open_db
-from predictor.calibration import calibration_report
 from predictor.rules import is_tentative, predict_race
 from predictor.stats import bootstrap_return_rate, wilson_ci
 from scripts.backtest import (
-    _popularity_config,
-    _race_odds_untrusted,
-    _snapshot_meta,
+    popularity_config,
+    race_odds_untrusted,
+    snapshot_meta,
     distance_bucket_label,
     get_payout,
     horses_for_race,
@@ -245,19 +247,26 @@ def display_cell(axis: str, key: str) -> str:
 class Cell:
     """1 セグメントの蓄積器。
 
-    calibration (probs/actuals) は全レコード、return はオッズ信頼分のみ。
+    calibration 統計は **streaming 集計** (件数/Σp/勝数/Σ二乗誤差) で持ち、
+    subject=all の 2 年全馬行 (数十万レコード) でも list を溜めずメモリ一定にする
+    (2026-06-30 data-pipeline 監査指摘)。return 用の払戻系列は pick subject のみ
+    (1 レース 1 件) なので list のままで軽量。
+
     n_races は「このセルに寄与したレース数」= all モードの有効サンプルサイズ。
     全軸がレース単位属性 (track/surface/condition/…) なので、1 レースは各軸の
     ちょうど 1 セルに丸ごと入る。よって add_race を 1 レース 1 回呼べばよい。
     """
 
-    __slots__ = ("probs", "actuals", "top3", "payouts_trusted", "stakes_trusted",
-                 "n_trusted", "n_races", "field_sum")
+    __slots__ = ("n", "sum_prob", "wins", "sum_sq_err", "top3", "warn_n",
+                 "payouts_trusted", "stakes_trusted", "n_trusted", "n_races", "field_sum")
 
     def __init__(self) -> None:
-        self.probs: list[float] = []
-        self.actuals: list[int] = []
+        self.n = 0
+        self.sum_prob = 0.0
+        self.wins = 0
+        self.sum_sq_err = 0.0   # Σ(p - y)^2 → Brier
         self.top3 = 0
+        self.warn_n = 0         # feature_warnings 付きレコード数 (品質セグメント診断)
         self.payouts_trusted: list[int] = []
         self.stakes_trusted: list[int] = []
         self.n_trusted = 0
@@ -269,11 +278,18 @@ class Cell:
         self.n_races += 1
         self.field_sum += field_size
 
-    def add(self, prob: float, actual: int, top3: bool, payout: int, odds_trusted: bool) -> None:
+    def add(self, prob: float, actual: int, top3: bool, payout: int, odds_trusted: bool,
+            has_warning: bool = False) -> None:
         """レコード単位の寄与 (pick は 1/レース、all は 1/馬)。"""
-        self.probs.append(prob)
-        self.actuals.append(actual)
+        p = max(0.0, min(1.0, float(prob)))  # calibration_report と同じクランプ
+        y = 1 if actual else 0
+        self.n += 1
+        self.sum_prob += p
+        self.wins += y
+        self.sum_sq_err += (p - y) ** 2
         self.top3 += int(top3)
+        if has_warning:
+            self.warn_n += 1
         if odds_trusted:
             self.payouts_trusted.append(payout)
             self.stakes_trusted.append(100)
@@ -281,9 +297,9 @@ class Cell:
 
 
 def summarize_cell(cell: Cell, min_n: int, subject: str) -> dict:
-    n = len(cell.probs)
-    wins = sum(cell.actuals)
-    mean_pred = sum(cell.probs) / n if n else 0.0
+    n = cell.n
+    wins = cell.wins
+    mean_pred = cell.sum_prob / n if n else 0.0
     actual_rate = wins / n if n else 0.0
     gap = mean_pred - actual_rate
     lo, hi = wilson_ci(wins, n)
@@ -299,9 +315,8 @@ def summarize_cell(cell: Cell, min_n: int, subject: str) -> dict:
     else:
         gap_significant = n > 0 and (mean_pred < lo or mean_pred > hi)
 
-    brier = calibration_report(
-        [{"probability": p, "actual": a} for p, a in zip(cell.probs, cell.actuals)]
-    )["brier_score"]
+    # Brier は streaming の Σ(p-y)^2 / n。calibration_report と同一定義 (clamp 済 p)。
+    brier = round(cell.sum_sq_err / n, 6) if n else None
 
     # return は pick のみ (1 bet/レースで bootstrap が妥当)。all は「全馬買い」
     # が戦略でなく、馬単位 bootstrap も race 内相関を無視するため出さない。
@@ -328,6 +343,10 @@ def summarize_cell(cell: Cell, min_n: int, subject: str) -> dict:
         "brier": brier,
         "win_pct": round(wins / n * 100, 1) if n else 0.0,
         "top3_pct": round(cell.top3 / n * 100, 1) if n else 0.0,
+        # feature_warnings 付きレコードの数と率。gap が大きいセルの説明仮説
+        # 「そのセグメントは特徴量欠損 (leg_quality 等) が多いだけでは」を即検証できる。
+        "warn_n": cell.warn_n,
+        "warn_pct": round(cell.warn_n / n * 100, 1) if n else 0.0,
         "return_pct": round(ret_point * 100, 1) if ret_point is not None else None,
         "return_ci": [round(ret_lo * 100, 1), round(ret_hi * 100, 1)] if ret_point is not None else None,
         "status": "ok" if qualifies else "insufficient",
@@ -346,7 +365,7 @@ def severity_tag(cell_stats: dict) -> str:
 def run_scan(conn, from_date: str, to_date: str, subject: str, axes: list[str],
              enable_cross: bool, min_n: int, min_n_cross: int,
              odds_gate: bool, include_tentative: bool) -> dict:
-    pop_cfg = _popularity_config()
+    pop_cfg = popularity_config()
     max_age = pop_cfg.get("max_snapshot_age_min")
     cross_specs = CROSS_SPECS if enable_cross else {}
 
@@ -372,14 +391,14 @@ def run_scan(conn, from_date: str, to_date: str, subject: str, axes: list[str],
         if not preds:
             continue
 
-        odds_trusted = (not odds_gate) or (not _race_odds_untrusted(horses, race, max_age))
+        odds_trusted = (not odds_gate) or (not race_odds_untrusted(horses, race, max_age))
         if not odds_trusted:
             n_odds_untrusted += 1
         surface = surface_key(race)
         field_size = len(horses)
 
-        # レコード化: (prob, actual, top3, payout)。subject で対象を切替。
-        records: list[tuple[float, int, bool, int]] = []
+        # レコード化: (prob, actual, top3, payout, has_warning)。subject で対象を切替。
+        records: list[tuple[float, int, bool, int, bool]] = []
         if subject == "pick":
             if not include_tentative and is_tentative(preds):
                 n_skip_tentative += 1
@@ -388,13 +407,15 @@ def run_scan(conn, from_date: str, to_date: str, subject: str, axes: list[str],
             actual = 1 if top.horse_num == actual_win["horse_num"] else 0
             records.append((top.raw_blended_probability, actual,
                             top.horse_num in actual_top3,
-                            get_payout(conn, race, top.horse_num, "tan")))
+                            get_payout(conn, race, top.horse_num, "tan"),
+                            bool(getattr(top, "feature_warnings", None))))
         else:  # all
             for p in preds:
                 actual = 1 if p.horse_num == actual_win["horse_num"] else 0
                 records.append((p.raw_blended_probability, actual,
                                 p.horse_num in actual_top3,
-                                get_payout(conn, race, p.horse_num, "tan")))
+                                get_payout(conn, race, p.horse_num, "tan"),
+                                bool(getattr(p, "feature_warnings", None))))
         if not records:
             continue
         n_races += 1
@@ -412,12 +433,12 @@ def run_scan(conn, from_date: str, to_date: str, subject: str, axes: list[str],
             cross_cells[c][cross_keys[c]].add_race(field_size)
 
         # レコード単位の寄与。
-        for prob, actual, top3, payout in records:
-            global_cell.add(prob, actual, top3, payout, odds_trusted)
+        for prob, actual, top3, payout, has_warn in records:
+            global_cell.add(prob, actual, top3, payout, odds_trusted, has_warn)
             for a in axes:
-                axis_cells[a][axis_keys[a]].add(prob, actual, top3, payout, odds_trusted)
+                axis_cells[a][axis_keys[a]].add(prob, actual, top3, payout, odds_trusted, has_warn)
             for c in cross_specs:
-                cross_cells[c][cross_keys[c]].add(prob, actual, top3, payout, odds_trusted)
+                cross_cells[c][cross_keys[c]].add(prob, actual, top3, payout, odds_trusted, has_warn)
 
     # 集計
     global_stats = summarize_cell(global_cell, min_n=0, subject=subject)
@@ -575,7 +596,7 @@ def main() -> int:
         )
 
     # in-sample 判定 (calibrator fit 窓との重複)
-    meta = _snapshot_meta()
+    meta = snapshot_meta()
     ctf, ctt = meta.get("calibrator_trained_from"), meta.get("calibrator_trained_to")
     calibration_in_sample = bool(ctf and ctt and args.from_date <= str(ctt) and str(ctf) <= args.to_date)
     if calibration_in_sample:

@@ -51,11 +51,29 @@ winner's curse を誘発。対処:
 - **corner byte offset (394-401) は best-known + probe 必須ゲート**: PDF/実データが本環境に無く offset を決定的検証できないため、dataclass/commit/probe の三重明示 + 「緑まで backfill 禁止」で「誤 offset の静かな破壊」を運用ゲート化。data-pipeline が三重封じを確認。**RA ラップ配列は offset 検証不能として見送り** (次段で PDF p.11 突合 + probe 後に追加)。
 - **先行力指標は dormant (scoring 未配線)**: weights/calibrator 分布を一切動かさず train-serve skew を回避。投入は probe 緑化 + 単独 ablation でエッジ実証後 (prediction-logic の持ち越し)。
 
-## 次フェーズ持ち越し (今回スコープ外)
-- probe を heuristic → spec byte-diff / golden fixture 化 (data-pipeline/validation)。
-- 先行力指標の scoring 配線前の単独 ablation backtest (prediction-logic)。
-- RA ラップ ingest (PDF offset 確定後)。
-- 傾向集計の多重比較 FDR 補正 (現状は文言警告 + min_n ゲート)。
+## 次フェーズ持ち越し → 追補 (2026-07-04 同日、対応可能分を全消化)
+
+以下は当初持ち越しとしたが、同日中に環境内で対応可能な全項目を実装した (コミット別):
+- ✅ **probe golden fixture 化** — `--expect race_id:馬番:corner4` で JRA 公式成績の既知値と
+  突合し、範囲 heuristic の false-green を排除 (不一致は exit 1)。
+- ✅ **傾向集計の多重比較開示** — `n_values` (同時比較セル数) を集計結果と trends UI に表示。
+- ✅ **bias_scan streaming 化** — Cell の probs/actuals リストを streaming 集計 (n/Σp/wins/Σ二乗誤差)
+  に置換し subject=all のメモリを一定化 (出力は旧実装と同一値を e2e 確認)。
+- ✅ **bias_scan feature_warnings セグメント別カウンタ** — warn_n/warn_pct をセルに追加
+  (「gap が大きいセルは特徴量欠損が多いだけでは」仮説の即検証)。
+- ✅ **two-proportion TODO 明記** — bias_scan docstring に type-A 移行時の格上げ条件を追記。
+- ✅ **backtest private → public 昇格** — popularity_config / race_odds_untrusted / snapshot_meta
+  を public 化 (旧名は後方互換 alias、次の API 整理で削除予定)。bias_scan は public 名へ移行。
+- ✅ **analyze_predictions 距離バケット統一** — ローカル bucket() を distance_bucket_label 委譲に
+  (境界 3 重記述の解消、ラベルは sprint/mile/middle/long に統一)。
+- ✅ **webapp 小改善** — aggregate の未使用 distance_bucket_of 削除 / race ページ戻りリンク /
+  today フォームに JS 非依存の表示ボタン (trends と操作一貫)。
+
+引き続き対応不能 (環境制約) で持ち越し:
+- 先行力指標の scoring 配線前の単独 ablation backtest (実 288MB DB 必須)。
+- RA ラップ ingest (docs/JV-Data4901.pdf がこの環境に無く offset 検証不能)。
+- probe の実 SE .jvd での緑化 (ユーザ Windows 実機で実行)。
+- コミットの GitHub Verified 化 (署名鍵がこの環境に無い。author/committer email は正しい)。
 
 検証: 全体テスト 219 passed / 3 skipped、webapp 新規テスト 29、実サーバ (stdlib http) で 4 ページの実描画・
 更新後テンプレート (回収率 CI 列・観察用文言・44pt・opt-col 畳み) を live 確認。

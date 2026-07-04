@@ -53,7 +53,7 @@ def _safe_float(value, default: float | None, errors: list[str], key: str) -> fl
         return default
 
 
-def _popularity_config() -> dict:
+def popularity_config() -> dict:
     """Return the market-popularity scoring knobs recorded in weights.json."""
     root = Path(__file__).resolve().parent.parent
     errors: list[str] = []
@@ -133,7 +133,7 @@ def _snapshot_age_min(horse: dict, race: dict) -> int | None:
     return int((race_start - fetched).total_seconds() // 60)
 
 
-def _race_odds_untrusted(
+def race_odds_untrusted(
     horses: list[dict], race: dict, max_age_min: float | None
 ) -> bool:
     """このレースの市場オッズ snapshot が信頼できない (post-start / stale) か。
@@ -396,7 +396,7 @@ def _subset_metrics_payload(subset: list[dict]) -> dict:
     return base
 
 
-def _snapshot_meta() -> dict:
+def snapshot_meta() -> dict:
     """backtest 実行時の calibrator / LGBM / git の version snapshot を返す。
 
     P17 A2 Step 0 (2026-05-17): backtest JSON top-level に `meta` フィールドを
@@ -738,7 +738,7 @@ def run_backtest(
 ) -> dict:
     started = time.time()
     buy_filter = buy_filter_from_generator() if filter_from_config else None
-    pop_cfg = _popularity_config()
+    pop_cfg = popularity_config()
     market_snapshot_stats = _empty_market_snapshot_stats(pop_cfg)
     if buy_filter is not None:
         if min_odds is not None:
@@ -808,7 +808,7 @@ def run_backtest(
 
             # post-start / stale odds snapshot のレースを EV・filter・回収率から除外。
             # 歴史的な確定オッズ (odds_fetched_at=NULL) は信頼するので対象外。
-            if exclude_untrusted_odds and _race_odds_untrusted(
+            if exclude_untrusted_odds and race_odds_untrusted(
                 horses, race, pop_cfg.get("max_snapshot_age_min")
             ):
                 n_odds_untrusted += 1
@@ -932,7 +932,7 @@ def run_backtest(
             stats["bets"] / all_bets_for_confidence
             if all_bets_for_confidence else 0
         )
-    meta = _snapshot_meta()
+    meta = snapshot_meta()
     # 評価期間が calibrator の fit 期間と重なる場合は in-sample 評価として
     # 明示フラグを立てる (2026-06-13 v2 監査: 2025val 評価が calibrator fit
     # 期間 (2025 通年) 内で行われ「独立 dataset」と誤認されていた)。
@@ -1317,6 +1317,15 @@ def main() -> int:
         )
 
     return 0
+
+
+# --- 後方互換 alias (2026-07-04 public 昇格) ---------------------------------
+# 旧 private 名で import している既存コード/テストを壊さないための alias。
+# 新規コードは public 名 (popularity_config / race_odds_untrusted / snapshot_meta)
+# を使うこと。alias は次の backtest API 整理で削除予定。
+_popularity_config = popularity_config
+_race_odds_untrusted = race_odds_untrusted
+_snapshot_meta = snapshot_meta
 
 
 if __name__ == "__main__":

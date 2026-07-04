@@ -9,6 +9,12 @@ jvdata-record スキルの鉄則「新パーサは実データで一周させる
 
     .venv32/Scripts/python.exe -m scripts.probe_corner_offsets data/raw/RACE/<SEを含む>.jvd
 
+    # golden fixture 突合 (推奨): JRA 公式成績等で既知のコーナー順位を指定して
+    # 「範囲としては順位らしいが実は別フィールド」の false-green を排除する。
+    # 形式: --expect <race_id>:<馬番2桁>:<corner4期待値> (複数指定可)
+    .venv32/Scripts/python.exe -m scripts.probe_corner_offsets <file>.jvd \
+        --expect 20250518_05_01_01_11:07:3 --expect 20250518_05_01_01_11:01:1
+
 検証ロジック:
   1. SE レコードを parse し、confirmed_order が確定しているレースを 1 つ選ぶ。
   2. そのレースの全馬の corner_order_4 と confirmed_order を並べる。
@@ -35,6 +41,38 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from jvlink_client.parser import parse_se_file
+
+
+def _check_expectations(records, expects: list[str]) -> int:
+    """golden fixture 突合。--expect race_id:馬番:corner4 を実 parse 値と照合する。
+
+    範囲 heuristic は「1..頭数に収まる別の 2 桁フィールド」を誤読しても緑になり得る。
+    既知の実測値 (JRA 公式成績のコーナー通過順位) と突合すれば offset の同一性を
+    決定的に検証できる。1 件でも不一致なら offset ズレ確定で exit 1。
+    """
+    by_key = {}
+    for r in records:
+        by_key[(r.race_id, r.horse_num)] = r
+    failures = 0
+    for spec in expects:
+        try:
+            race_id, horse_num, want_s = spec.rsplit(":", 2)
+            want = int(want_s)
+        except ValueError:
+            print(f"⚠ --expect の形式が不正: {spec} (race_id:馬番:corner4)")
+            failures += 1
+            continue
+        rec = by_key.get((race_id, horse_num))
+        if rec is None:
+            print(f"⚠ 該当レコードなし: {race_id} 馬番{horse_num}")
+            failures += 1
+            continue
+        got = rec.corner_order_4
+        mark = "✓" if got == want else "❌"
+        print(f"{mark} {race_id} 馬番{horse_num}: corner4 期待={want} 実測={got}")
+        if got != want:
+            failures += 1
+    return failures
 
 
 def _verdict(records) -> int:
@@ -92,13 +130,26 @@ def _verdict(records) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description="SE コーナー順位 offset 検証プローブ")
     ap.add_argument("jvd", help="SE レコードを含む .jvd ファイル (data/raw/RACE/...)")
+    ap.add_argument("--expect", action="append", default=[],
+                    help="golden fixture: race_id:馬番2桁:corner4期待値 (複数可)。"
+                         "JRA 公式成績の既知値と突合し false-green を排除する")
     args = ap.parse_args()
     records = [r for r in parse_se_file(args.jvd) if r.record_type == "SE"]
     print(f"parsed {len(records)} SE records from {args.jvd}")
     if not records:
         print("SE レコードが見つかりません。ファイル種別を確認してください。")
         return 2
-    return _verdict(records)
+    rc = _verdict(records)
+    if args.expect:
+        print("\n=== golden fixture 突合 ===")
+        failures = _check_expectations(records, args.expect)
+        if failures:
+            print(f"❌ golden 突合 {failures} 件不一致。offset ズレ確定 — parser.py を修正せよ。")
+            return 1
+        print("✅ golden 突合すべて一致。")
+    else:
+        print("(参考) --expect で公式成績の既知値を与えると決定的検証になります。")
+    return rc
 
 
 if __name__ == "__main__":
