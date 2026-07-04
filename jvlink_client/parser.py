@@ -175,6 +175,15 @@ class HorseRaceInfo:
     mining_time: int
     mining_predicted_order: int
     leg_quality_code: str  # 1=逃 2=先 3=差 4=追
+    # コーナー通過順位 (隊列/先行力の素データ)。0 = 不明/未通過。
+    # ★バイト位置 (394/396/398/400) は SE 仕様 (後3F=391-393 の直後に 1-4 角) の
+    #   既知レイアウトに基づく best-known 値。**本番 backfill 前に
+    #   scripts/probe_corner_offsets.py で実 SE .jvd に対し必ず検証すること**
+    #   (jvdata-record スキル: 誤 offset は静かにデータを壊す)。
+    corner_order_1: int = 0
+    corner_order_2: int = 0
+    corner_order_3: int = 0
+    corner_order_4: int = 0
 
     @property
     def race_id(self) -> str:
@@ -229,6 +238,11 @@ def parse_se(rec: bytes) -> HorseRaceInfo:
         mining_time=_int(rec, 538, 5),
         mining_predicted_order=_int(rec, 551, 2),
         leg_quality_code=_ascii(rec, 553, 1),
+        # 後3F(391-393) の直後の 1-4 角通過順位 (各2桁)。要 probe 検証 (上記 dataclass 注記)。
+        corner_order_1=_int(rec, 394, 2),
+        corner_order_2=_int(rec, 396, 2),
+        corner_order_3=_int(rec, 398, 2),
+        corner_order_4=_int(rec, 400, 2),
     )
 
 

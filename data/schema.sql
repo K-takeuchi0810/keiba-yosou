@@ -82,6 +82,10 @@ CREATE TABLE IF NOT EXISTS horse_races (
     mining_time              INTEGER,
     mining_predicted_order   INTEGER,
     leg_quality_code         TEXT,
+    corner_order_1           INTEGER,   -- 1角通過順位 (0=不明)。要 probe 検証
+    corner_order_2           INTEGER,   -- 2角通過順位
+    corner_order_3           INTEGER,   -- 3角通過順位
+    corner_order_4           INTEGER,   -- 4角通過順位 (差し脚力の素データ)
     PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji, race_num, horse_num)
 );
 

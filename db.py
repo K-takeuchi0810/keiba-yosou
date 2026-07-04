@@ -80,6 +80,9 @@ def init_db(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "horse_races", "odds_dataspec", "TEXT")
     _ensure_column(conn, "training_times", "data_div", "TEXT")
     _ensure_column(conn, "training_times", "data_created", "TEXT")
+    # コーナー通過順位 (Phase 4)。既存 DB への後方互換 migration。
+    for _c in ("corner_order_1", "corner_order_2", "corner_order_3", "corner_order_4"):
+        _ensure_column(conn, "horse_races", _c, "INTEGER")
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:

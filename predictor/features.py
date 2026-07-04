@@ -102,6 +102,49 @@ def _gate_zone(horse_num: str | int | None, starter_count: int | None) -> str:
     return "outer"
 
 
+def recent_corner_stats(
+    conn: sqlite3.Connection,
+    blood_register_num: str,
+    before_date: str,
+    limit: int = 6,
+) -> tuple[float | None, float | None, int]:
+    """直近レースのコーナー通過順位から先行力/差し脚力の代理指標を出す (Phase 4)。
+
+    テンP (SmartRC の先行力指標) に相当する自前シグナル。リーク防止のため
+    ``before_date`` 未満の確定レースのみ参照する。
+
+    返値: (avg_4corner_position, avg_position_change, samples)
+      - avg_4corner_position : 直近の 4 角通過順位の平均。小さいほど前で運ぶ (先行力)。
+      - avg_position_change  : (4角順位 − 確定着順) の平均。正なら 4 角から順位を上げる
+                               = 差し脚 (末脚) が効くタイプ。
+      - samples              : 有効サンプル数 (corner_order_4 > 0 の過去走数)。
+
+    corner_order_4 が未 ingest (全て 0/NULL) の環境では samples=0, 指標 None を返し、
+    呼び出し側は「データ無し」として扱えるので後方互換。
+    """
+    if not blood_register_num or blood_register_num == "0" * 10:
+        return None, None, 0
+    rows = conn.execute(
+        """
+        SELECT corner_order_4, confirmed_order
+        FROM horse_races
+        WHERE blood_register_num = ?
+          AND (race_year || race_month_day) < ?
+          AND corner_order_4 IS NOT NULL AND corner_order_4 > 0
+          AND confirmed_order IS NOT NULL AND confirmed_order > 0
+        ORDER BY (race_year || race_month_day) DESC
+        LIMIT ?
+        """,
+        (blood_register_num, before_date, limit),
+    ).fetchall()
+    if not rows:
+        return None, None, 0
+    positions = [r["corner_order_4"] for r in rows]
+    changes = [r["corner_order_4"] - r["confirmed_order"] for r in rows]
+    n = len(positions)
+    return (round(sum(positions) / n, 2), round(sum(changes) / n, 2), n)
+
+
 def grade_class_close_loss(
     conn: sqlite3.Connection,
     blood_register_num: str,
@@ -1015,6 +1058,9 @@ def compute_features(
         "high_grade_close_loss": 0,
         "high_grade_midfield_close": 0,
         "recent_trend_delta": None,
+        "recent_4corner_avg_position": None,   # Phase 4: 先行力 (小=前)
+        "recent_4corner_position_change": None,  # Phase 4: 4角→着で上げた順位 (正=差し脚)
+        "recent_4corner_samples": 0,
         "same_track_type_runs": 0,
         "same_track_type_wins": 0,
         "same_track_type_top3": 0,
@@ -1217,6 +1263,17 @@ def compute_features(
         )
         feat["high_grade_close_loss"] = cl
         feat["high_grade_midfield_close"] = mc
+
+    # Phase 4: コーナー通過順位ベースの先行力/差し脚指標。
+    # corner_order_4 未 ingest の環境では samples=0/指標 None で後方互換。
+    c_avg, c_chg, c_n = _cached(
+        cache,
+        ("corner_stats", blood, before),
+        lambda: recent_corner_stats(conn, blood, before),
+    )
+    feat["recent_4corner_avg_position"] = c_avg
+    feat["recent_4corner_position_change"] = c_chg
+    feat["recent_4corner_samples"] = c_n
 
     jockey_code = horse.get("jockey_code", "")
     rate, n = _cached(

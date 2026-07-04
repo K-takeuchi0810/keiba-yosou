@@ -1,0 +1,19 @@
+{% extends "base.html.j2" %}
+{% block body %}
+<h1>開催日一覧</h1>
+<p class="muted">DB に取り込まれた JRA 開催日。日付を選ぶとその日のレース一覧へ。</p>
+{% for d in dates %}
+<div class="card">
+  <strong>{{ d.label }}</strong>
+  <span class="muted">（{{ d.n_races }} レース / {{ d.tracks }}）</span>
+  <div class="grid" style="margin-top:8px;">
+    {% for r in d.races %}
+      <a class="chip" href="/race?date={{ d.date }}&amp;track={{ r.track_code }}&amp;kaiji={{ r.kaiji }}&amp;nichiji={{ r.nichiji }}&amp;num={{ r.race_num }}">{{ r.track_name }}{{ r.race_num_int }}R</a>
+    {% endfor %}
+  </div>
+  <div style="margin-top:8px;"><a href="/today?date={{ d.date }}">▶ {{ d.label }} の当日傾向速報</a></div>
+</div>
+{% else %}
+<div class="card muted">開催データがありません（DB 未取込）。</div>
+{% endfor %}
+{% endblock %}

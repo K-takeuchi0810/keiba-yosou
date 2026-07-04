@@ -1,0 +1,197 @@
+"""ページのコンテキスト構築 + Jinja2 レンダリング (HTTP 層から分離、単体テスト可能)。
+
+server.py はこのモジュールの render_* を呼ぶだけ。DB 接続を引数で受けるので、
+in-memory DB を渡してテストできる。
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from pathlib import Path
+
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+from predictor.sire_lines import classify_sire, line_color, line_label
+from web.codes import ground_name, track_name, track_type, weather_name
+from webapp import aggregate as agg
+
+_TEMPLATES = Path(__file__).resolve().parent / "templates"
+_env = Environment(
+    loader=FileSystemLoader(str(_TEMPLATES)),
+    autoescape=select_autoescape(["html", "j2"]),
+)
+
+_SURFACE_LABEL = {"turf": "芝", "dirt": "ダート", "jump": "障害", "other": "他"}
+
+
+def _surface_label(s: str) -> str:
+    return _SURFACE_LABEL.get(s, s)
+
+
+# ---------------------------------------------------------------------------
+# / (開催日一覧)
+# ---------------------------------------------------------------------------
+def build_index(conn, limit_days: int = 40) -> dict:
+    rows = conn.execute(
+        """
+        SELECT race_year, race_month_day, track_code, kaiji, nichiji, race_num
+        FROM races
+        WHERE CAST(track_code AS INTEGER) BETWEEN 1 AND 10
+        ORDER BY race_year DESC, race_month_day DESC, track_code, CAST(race_num AS INTEGER)
+        """
+    ).fetchall()
+    days: dict[str, dict] = {}
+    for r in rows:
+        date = f"{r['race_year']}{r['race_month_day']}"
+        d = days.setdefault(date, {"date": date, "races": [], "track_set": set()})
+        d["track_set"].add(r["track_code"])
+        d["races"].append({
+            "track_code": r["track_code"], "track_name": track_name(r["track_code"]),
+            "kaiji": r["kaiji"], "nichiji": r["nichiji"], "race_num": r["race_num"],
+            "race_num_int": int(r["race_num"]) if str(r["race_num"]).isdigit() else r["race_num"],
+        })
+    out = []
+    for date in list(days)[:limit_days]:
+        d = days[date]
+        out.append({
+            "date": date,
+            "label": f"{date[:4]}/{date[4:6]}/{date[6:8]}",
+            "n_races": len(d["races"]),
+            "tracks": "・".join(track_name(t) for t in sorted(d["track_set"])),
+            "races": d["races"],
+        })
+    return {"dates": out}
+
+
+def render_index(conn) -> str:
+    ctx = build_index(conn)
+    return _env.get_template("index.html.j2").render(title="開催", **ctx)
+
+
+# ---------------------------------------------------------------------------
+# /race (出馬表 + 系統色分け + 予想)
+# ---------------------------------------------------------------------------
+def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) -> dict | None:
+    race = conn.execute(
+        """SELECT * FROM races WHERE race_year=? AND race_month_day=? AND track_code=?
+           AND kaiji=? AND nichiji=? AND race_num=?""",
+        (date[:4], date[4:], track, kaiji, nichiji, num),
+    ).fetchone()
+    if race is None:
+        return None
+    race = dict(race)
+    from scripts.backtest import horses_for_race
+    horses = horses_for_race(conn, race)
+
+    # 予想 (診断用)。落ちても出馬表は出す。
+    marks: dict[str, str] = {}
+    try:
+        from predictor.rules import predict_race
+        preds = predict_race(horses, conn=conn, race=race, cache={})
+        for p in preds:
+            marks[p.horse_num] = getattr(p, "mark", "") or ""
+    except Exception:  # noqa: BLE001 — 予想失敗時も出馬表は表示する
+        marks = {}
+
+    # 血統マスタ (系統色分け用)
+    brns = [h.get("blood_register_num") for h in horses if h.get("blood_register_num")]
+    masters: dict[str, sqlite3.Row] = {}
+    if brns:
+        q = ",".join("?" * len(brns))
+        for m in conn.execute(
+            f"SELECT blood_register_num, sire_name, sire_breeding_num, dam_sire_name "
+            f"FROM horse_masters WHERE blood_register_num IN ({q})", brns
+        ).fetchall():
+            masters[m["blood_register_num"]] = m
+
+    rows = []
+    for h in horses:
+        m = masters.get(h.get("blood_register_num"))
+        sire = m["sire_name"] if m else ""
+        sire_bn = m["sire_breeding_num"] if m else None
+        dam_sire = m["dam_sire_name"] if m else ""
+        lk = classify_sire(sire, conn=conn, sire_breeding_num=sire_bn)
+        odds = h.get("win_odds")
+        rows.append({
+            "waku": h.get("waku_num"), "horse_num": h.get("horse_num"),
+            "horse_name": h.get("horse_name") or "",
+            "line_label": line_label(lk), "line_color": line_color(lk),
+            "sire": sire, "dam_sire": dam_sire,
+            "jockey": h.get("jockey_short_name") or h.get("jockey_code") or "",
+            "popularity": h.get("win_popularity"),
+            "odds": (round(odds / 10, 1) if odds else None),
+            "mark": marks.get(h.get("horse_num"), ""),
+        })
+
+    surf = agg.surface_of(race.get("track_type_code"))
+    return {
+        "race": {
+            "track_name": track_name(track),
+            "race_num_int": int(num) if str(num).isdigit() else num,
+            "date_label": f"{date[:4]}/{date[4:6]}/{date[6:8]}",
+            "name": race.get("race_name") or "",
+            "surface_label": _surface_label(surf),
+            "distance": race.get("distance") or "",
+            "weather": weather_name(race.get("weather_code") or ""),
+            "going": ground_name(race.get("turf_condition") if surf == "turf"
+                                 else race.get("dirt_condition") or ""),
+            "starter_count": race.get("starter_count") or len(horses),
+        },
+        "horses": rows,
+    }
+
+
+def render_race(conn, date, track, kaiji, nichiji, num) -> str | None:
+    ctx = build_race(conn, date, track, kaiji, nichiji, num)
+    if ctx is None:
+        return None
+    return _env.get_template("race.html.j2").render(title="出馬表", **ctx)
+
+
+# ---------------------------------------------------------------------------
+# /trends (傾向集計)
+# ---------------------------------------------------------------------------
+def build_trends(conn, from_date: str, to_date: str, course: str | None,
+                 factor: str, min_n: int = 30) -> dict:
+    courses_raw = agg.list_courses(conn, from_date, to_date)
+    # course = "track|surface|distance"
+    sel = course or (f"{courses_raw[0]['track_code']}|{courses_raw[0]['surface']}|{courses_raw[0]['distance']}"
+                     if courses_raw else None)
+    courses = [{
+        "track_code": c["track_code"], "track_name": c["track_name"],
+        "surface": c["surface"], "surface_label": _surface_label(c["surface"]),
+        "distance": c["distance"], "n_races": c["n_races"],
+        "selected": (f"{c['track_code']}|{c['surface']}|{c['distance']}" == sel),
+    } for c in courses_raw]
+    factors = [{"key": k, "label": v, "selected": (k == factor)} for k, v in agg.FACTORS.items()]
+
+    result = None
+    if sel:
+        tc, surf, dist = sel.split("|")
+        r = agg.aggregate_course(conn, tc, surf, int(dist), factor, from_date, to_date, min_n=min_n)
+        r["surface_label"] = _surface_label(r["surface"])
+        result = r
+    return {"courses": courses, "factors": factors, "result": result}
+
+
+def render_trends(conn, from_date, to_date, course, factor, min_n=30) -> str:
+    ctx = build_trends(conn, from_date, to_date, course, factor, min_n)
+    return _env.get_template("trends.html.j2").render(title="傾向集計", **ctx)
+
+
+# ---------------------------------------------------------------------------
+# /today (当日傾向速報)
+# ---------------------------------------------------------------------------
+def build_today(conn, date: str, factor: str = "waku") -> dict:
+    result = agg.today_trends(conn, date, factor)
+    factors = [{"key": k, "label": v, "selected": (k == factor)}
+               for k, v in (("waku", "枠番"), ("sire_line", "父系統"), ("leg", "脚質"))]
+    return {
+        "date": date, "date_label": f"{date[:4]}/{date[4:6]}/{date[6:8]}",
+        "factors": factors, "result": result,
+    }
+
+
+def render_today(conn, date, factor="waku") -> str:
+    ctx = build_today(conn, date, factor)
+    return _env.get_template("today.html.j2").render(title="当日速報", **ctx)

@@ -1,0 +1,38 @@
+{% extends "base.html.j2" %}
+{% block body %}
+<h1>{{ race.track_name }} {{ race.race_num_int }}R <span class="muted">{{ race.date_label }}</span></h1>
+<div class="card">
+  <div>{{ race.name }}</div>
+  <div class="muted">{{ race.surface_label }}{{ race.distance }}m ・ {{ race.weather }} ・ 馬場 {{ race.going }} ・ {{ race.starter_count }}頭</div>
+</div>
+
+<div class="banner warn">◎印・予想は診断支援であり買い推奨ではありません。calibration 検証済みの確率ではない画面表示です。</div>
+
+<h2>出馬表（血統系統・予想）</h2>
+<div class="tablewrap">
+<table>
+  <thead><tr>
+    <th class="num">枠</th><th class="num">馬番</th><th>馬名</th><th>系統</th>
+    <th>父</th><th>母父</th><th>騎手</th>
+    <th class="num">人気</th><th class="num">単オッズ</th><th>印</th>
+  </tr></thead>
+  <tbody>
+  {% for h in horses %}
+    <tr>
+      <td class="num">{{ h.waku }}</td>
+      <td class="num">{{ h.horse_num }}</td>
+      <td>{{ h.horse_name }}</td>
+      <td><span class="line-dot" style="background:{{ h.line_color }}"></span>{{ h.line_label }}</td>
+      <td class="muted">{{ h.sire }}</td>
+      <td class="muted">{{ h.dam_sire }}</td>
+      <td>{{ h.jockey }}</td>
+      <td class="num">{{ h.popularity or '-' }}</td>
+      <td class="num">{{ h.odds or '-' }}</td>
+      <td class="mark {{ 'mark-honmei' if h.mark == '◎' else '' }}">{{ h.mark }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted">系統色分けは父系の大系統。予想印・確率は predictor/rules.py（診断用）。</p>
+{% endblock %}
