@@ -3,10 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15181c" media="(prefers-color-scheme: dark)">
 <title>{{ title }} | 独自出馬表</title>
 <style>
   :root {
-    --bg:#f7f8fa; --fg:#1a1d21; --muted:#67727d; --card:#ffffff; --border:#e3e6ea;
+    --bg:#f7f8fa; --fg:#1a1d21; --muted:#5b6670; --card:#ffffff; --border:#e3e6ea;
     --accent:#1565c0; --good:#2e7d32; --warn:#c62828; --chip:#eef1f5;
   }
   @media (prefers-color-scheme: dark) {
@@ -19,8 +21,9 @@
     font-size:15px; line-height:1.5; -webkit-text-size-adjust:100%; }
   header { position:sticky; top:0; background:var(--card); border-bottom:1px solid var(--border);
     padding:10px 14px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; z-index:10; }
-  header a { color:var(--accent); text-decoration:none; font-weight:600; font-size:14px; }
-  header .brand { font-weight:700; color:var(--fg); margin-right:auto; }
+  header a { color:var(--accent); text-decoration:none; font-weight:600; font-size:14px;
+    display:inline-flex; align-items:center; min-height:44px; padding:0 6px; }
+  header .brand { font-weight:700; color:var(--fg); margin-right:auto; min-height:auto; padding:0; }
   main { padding:14px; max-width:900px; margin:0 auto; }
   h1 { font-size:19px; margin:0 0 12px; }
   h2 { font-size:16px; margin:20px 0 8px; }
@@ -34,19 +37,24 @@
   .tablewrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
   .chip { display:inline-block; padding:2px 8px; border-radius:999px; background:var(--chip);
     font-size:12px; margin:2px 4px 2px 0; }
-  .line-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px;
-    vertical-align:middle; }
+  /* レース遷移チップは主要導線なので HIG 44pt を満たす */
+  .grid a.chip { min-height:44px; display:inline-flex; align-items:center; padding:0 14px; font-size:14px; }
+  .line-dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:5px;
+    vertical-align:middle; outline:1px solid var(--border); }
   .bar { height:8px; border-radius:4px; background:var(--accent); }
   .mark { font-weight:700; }
   .mark-honmei { color:var(--warn); }
   .grid { display:flex; flex-wrap:wrap; gap:8px; }
   .grid a { flex:1 1 auto; }
-  select,button { font-size:14px; padding:6px 8px; border-radius:8px; border:1px solid var(--border);
-    background:var(--card); color:var(--fg); }
+  select,button { font-size:16px; min-height:44px; padding:8px 10px; border-radius:8px;
+    border:1px solid var(--border); background:var(--card); color:var(--fg); }
   .banner { border-radius:8px; padding:8px 10px; margin-bottom:12px; font-size:13px; }
   .banner.warn { background:rgba(198,40,40,.12); color:var(--warn); border:1px solid var(--warn); }
   .insuf { color:var(--muted); font-size:12px; margin-top:6px; }
   .footer { color:var(--muted); font-size:12px; margin-top:24px; text-align:center; }
+  /* 狭い画面では補助列 (父/母父) を畳み、核心 (馬名/系統/人気/オッズ/印) を横スクロール
+     なしで同時視認できるようにする。系統は色+ラベルで父系を要約するため父/母父は省略可。 */
+  @media (max-width:480px) { .opt-col { display:none; } }
 </style>
 </head>
 <body>
@@ -58,7 +66,8 @@
 </header>
 <main>
 {% block body %}{% endblock %}
-<div class="footer">JV-Data 由来。ローカル自己利用向け。傾向・診断であり買い推奨ではない。</div>
+<div class="footer">JV-Data 由来・ローカル自己利用向け。本アプリは<strong>観察用の記述統計/診断</strong>であり、
+紙運用・実弾投入の判断材料でも買い推奨でもない。</div>
 </main>
 </body>
 </html>

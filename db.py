@@ -134,7 +134,9 @@ def upsert_horse_race(conn: sqlite3.Connection, se: HorseRaceInfo) -> None:
     for col in cols:
         if col in {"race_year", "race_month_day", "track_code", "kaiji", "nichiji", "race_num", "horse_num"}:
             continue
-        if col in {"mining_time", "mining_predicted_order", "win_odds", "win_popularity"}:
+        if col in {"mining_time", "mining_predicted_order", "win_odds", "win_popularity",
+                   "corner_order_1", "corner_order_2", "corner_order_3", "corner_order_4"}:
+            # 確定後の corner 順位を、後から来る発走前 SE (corner=0) で潰さない。
             update_exprs.append(f"{col}=CASE WHEN excluded.{col} > 0 THEN excluded.{col} ELSE horse_races.{col} END")
         else:
             update_exprs.append(f"{col}=excluded.{col}")

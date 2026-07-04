@@ -13,7 +13,7 @@
 <table>
   <thead><tr>
     <th class="num">枠</th><th class="num">馬番</th><th>馬名</th><th>系統</th>
-    <th>父</th><th>母父</th><th>騎手</th>
+    <th class="opt-col">父</th><th class="opt-col">母父</th><th>騎手</th>
     <th class="num">人気</th><th class="num">単オッズ</th><th>印</th>
   </tr></thead>
   <tbody>
@@ -23,8 +23,8 @@
       <td class="num">{{ h.horse_num }}</td>
       <td>{{ h.horse_name }}</td>
       <td><span class="line-dot" style="background:{{ h.line_color }}"></span>{{ h.line_label }}</td>
-      <td class="muted">{{ h.sire }}</td>
-      <td class="muted">{{ h.dam_sire }}</td>
+      <td class="muted opt-col">{{ h.sire }}</td>
+      <td class="muted opt-col">{{ h.dam_sire }}</td>
       <td>{{ h.jockey }}</td>
       <td class="num">{{ h.popularity or '-' }}</td>
       <td class="num">{{ h.odds or '-' }}</td>

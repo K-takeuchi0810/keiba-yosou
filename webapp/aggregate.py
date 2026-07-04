@@ -17,8 +17,16 @@ from __future__ import annotations
 import sqlite3
 
 from predictor.sire_lines import classify_sire, line_color, line_label
-from predictor.stats import wilson_ci
+from predictor.stats import bootstrap_return_rate, wilson_ci
 from web.codes import track_name
+
+# JRA 中央場 (track_code 01-10) 判定の単一出典。NAR 追加や範囲変更はここだけ直す。
+JRA_TRACK_MIN, JRA_TRACK_MAX = 1, 10
+
+
+def jra_track_clause(col: str = "track_code") -> str:
+    """JRA 中央場フィルタの SQL 断片。col でテーブル別名付きカラムも指定可。"""
+    return f"CAST({col} AS INTEGER) BETWEEN {JRA_TRACK_MIN} AND {JRA_TRACK_MAX}"
 
 # ファクター定義: key -> (表示名, 集計単位の説明)
 FACTORS = {
@@ -81,11 +89,11 @@ def _pop_sort_key(v: str) -> tuple:
 def list_courses(conn, from_date: str, to_date: str, min_races: int = 20) -> list[dict]:
     """集計対象になり得るコース一覧 (competition が min_races 以上あるもの)。"""
     rows = conn.execute(
-        """
+        f"""
         SELECT track_code, track_type_code, distance, COUNT(*) AS n
         FROM races
         WHERE (race_year || race_month_day) BETWEEN ? AND ?
-          AND CAST(track_code AS INTEGER) BETWEEN 1 AND 10
+          AND {jra_track_clause()}
           AND distance > 0
         GROUP BY track_code, track_type_code, distance
         """,
@@ -170,12 +178,18 @@ def aggregate_course(conn, track_code: str, surface: str, distance: int, factor:
             value = classify_sire(fval, conn=conn, sire_breeding_num=r["sire_bn"])
         else:
             value = (str(fval).replace("　", "").strip() if fval not in (None, "") else "不明")
-        b = buckets.setdefault(value, {"n": 0, "wins": 0, "top3": 0, "ret": 0})
+        b = buckets.setdefault(value, {"n": 0, "wins": 0, "top3": 0,
+                                       "payouts": [], "payout_missing": 0})
         b["n"] += 1
+        # 単勝を 100 円均等買いした場合の払戻系列 (bootstrap CI 用)。外れは 0。
+        payout = r["tan_payout"] or 0
+        b["payouts"].append(payout)
         ordr = r["ord"] or 0
         if ordr == 1:
             b["wins"] += 1
-            b["ret"] += r["tan_payout"] or 0
+            # 勝ち馬なのに払戻 join が無い (payouts 未 ingest) → 回収率を下方に歪める
+            if payout == 0:
+                b["payout_missing"] += 1
         if 1 <= ordr <= 3:
             b["top3"] += 1
         total_n += 1
@@ -185,6 +199,8 @@ def aggregate_course(conn, track_code: str, surface: str, distance: int, factor:
         n = b["n"]
         top3_rate = b["top3"] / n if n else 0.0
         lo, hi = wilson_ci(b["top3"], n)
+        stakes = [100] * n
+        ret_point, ret_lo, ret_hi = bootstrap_return_rate(b["payouts"], stakes) if n else (0.0, 0.0, 0.0)
         cell = {
             "value": value,
             "label": line_label(value) if factor == "sire_line" else value,
@@ -196,7 +212,11 @@ def aggregate_course(conn, track_code: str, surface: str, distance: int, factor:
             "top3_pct": round(top3_rate * 100, 1),
             "ci_lo": round(lo * 100, 1),
             "ci_hi": round(hi * 100, 1),
-            "return_pct": round(b["ret"] / (n * 100) * 100, 1) if n else 0.0,
+            "return_pct": round(ret_point * 100, 1),
+            # 単勝回収率の bootstrap 95% CI。CI 下限 > 100 でなければ「妙味」と断定しない。
+            "return_ci_lo": round(ret_lo * 100, 1),
+            "return_ci_hi": round(ret_hi * 100, 1),
+            "payout_missing": b["payout_missing"],
             "status": "ok" if n >= min_n else "insufficient",
         }
         (cells if n >= min_n else insufficient).append(cell)
@@ -235,7 +255,7 @@ def today_trends(conn, date: str, factor: str = "waku") -> dict:
         raise ValueError(f"today factor must be waku/sire_line/leg: {factor}")
     year, md = date[:4], date[4:]
     rows = conn.execute(
-        """
+        f"""
         SELECT h.waku_num AS waku, h.confirmed_order AS ord,
                h.leg_quality_code AS leg,
                hm.sire_name AS sire, hm.sire_breeding_num AS sire_bn,
@@ -247,7 +267,7 @@ def today_trends(conn, date: str, factor: str = "waku") -> dict:
          AND h.nichiji=r.nichiji AND h.race_num=r.race_num
         LEFT JOIN horse_masters hm ON hm.blood_register_num = h.blood_register_num
         WHERE r.race_year=? AND r.race_month_day=?
-          AND CAST(r.track_code AS INTEGER) BETWEEN 1 AND 10
+          AND {jra_track_clause("r.track_code")}
           AND h.confirmed_order IS NOT NULL AND h.confirmed_order > 0
         """,
         (year, md),

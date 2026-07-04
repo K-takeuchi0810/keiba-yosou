@@ -35,17 +35,19 @@
 <table>
   <thead><tr>
     <th>{{ result.factor_label }}</th><th class="num">出走</th><th class="num">勝率</th>
-    <th class="num">複勝率</th><th>複勝率95%CI</th><th class="num">単回収</th>
+    <th class="num">複勝率</th><th>複勝率95%CI</th><th class="num">単回収</th><th>単回収95%CI</th>
   </tr></thead>
   <tbody>
   {% for c in result.cells %}
     <tr>
-      <td>{% if c.color %}<span class="line-dot" style="background:{{ c.color }}"></span>{% endif %}{{ c.label }}</td>
+      <td>{% if c.color %}<span class="line-dot" style="background:{{ c.color }}"></span>{% endif %}{{ c.label }}
+        {% if c.payout_missing %}<span class="chip" title="勝ち馬の払戻データ欠損。回収率は下方に歪む">払戻欠{{ c.payout_missing }}</span>{% endif %}</td>
       <td class="num">{{ c.n }}</td>
       <td class="num">{{ c.win_pct }}%</td>
       <td class="num">{{ c.top3_pct }}%</td>
       <td class="muted">{{ c.ci_lo }}–{{ c.ci_hi }}%</td>
-      <td class="num" style="color:{{ 'var(--good)' if c.return_pct >= 100 else 'var(--muted)' }}">{{ c.return_pct }}%</td>
+      <td class="num" style="color:{{ 'var(--good)' if c.return_ci_lo > 100 else 'var(--fg)' }}">{{ c.return_pct }}%</td>
+      <td class="muted">{{ c.return_ci_lo }}–{{ c.return_ci_hi }}%</td>
     </tr>
   {% endfor %}
   </tbody>
@@ -56,6 +58,7 @@
   {% for c in result.insufficient %}{{ c.label }}(n={{ c.n }}){% if not loop.last %}, {% endif %}{% endfor %}
 </div>
 {% endif %}
-<p class="muted" style="margin-top:10px;">複勝率は CI 幅を見て判断。回収率は控除率（約80%）超が妙味の目安。単期間の高回収は winner's curse に注意。</p>
+<p class="muted" style="margin-top:10px;">これは<strong>観察用の記述統計</strong>で、将来の期待値保証でも買い推奨でもない。複勝率・単回収とも CI 幅で判断し、
+緑（単回収）は<strong>回収率 CI 下限が 100% 超</strong>＝収支プラスが統計的に下限を上回るセルのみ。多数コース×ファクターから良績を拾う winner's curse に注意。</p>
 {% endif %}
 {% endblock %}

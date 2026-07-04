@@ -17,7 +17,6 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-import traceback
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -28,6 +27,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import DATA_PERIODS
 from db import open_db
 from webapp import views
+from webapp.aggregate import jra_track_clause
+
+_NAV = '<p><a href="/">開催へ戻る</a></p>'
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +48,7 @@ def _default_trend_window() -> tuple[str, str]:
 
 def _latest_race_date(conn) -> str | None:
     row = conn.execute(
-        "SELECT race_year, race_month_day FROM races "
-        "WHERE CAST(track_code AS INTEGER) BETWEEN 1 AND 10 "
+        f"SELECT race_year, race_month_day FROM races WHERE {jra_track_clause()} "
         "ORDER BY race_year DESC, race_month_day DESC LIMIT 1"
     ).fetchone()
     return f"{row[0]}{row[1]}" if row else None
@@ -75,14 +76,15 @@ class Handler(BaseHTTPRequestHandler):
             with (open_db(self.db_path) if self.db_path else open_db()) as conn:
                 html = self._route(conn, path, q)
             if html is None:
-                self._send("<h1>404</h1><p>該当データがありません。</p>", 404)
+                self._send(f"<h1>404</h1><p>該当データがありません。</p>{_NAV}", 404)
             else:
                 self._send(html)
         except BrokenPipeError:
             pass
         except Exception:  # noqa: BLE001 — サーバは落とさずエラーページを返す
+            # traceback はログのみ。画面には人間向けメッセージ + 復帰導線 (LAN 端末への情報露出も防ぐ)。
             logger.exception("request failed: %s", self.path)
-            self._send(f"<h1>500</h1><pre>{traceback.format_exc()}</pre>", 500)
+            self._send(f"<h1>表示に失敗しました</h1><p>時刻や条件を変えて再試行してください。</p>{_NAV}", 500)
 
     def _route(self, conn, path: str, q: dict) -> str | None:
         if path == "/" or path == "":

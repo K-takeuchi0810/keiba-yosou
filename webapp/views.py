@@ -6,6 +6,7 @@ in-memory DB を渡してテストできる。
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from pathlib import Path
 
@@ -14,6 +15,9 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from predictor.sire_lines import classify_sire, line_color, line_label
 from web.codes import ground_name, track_name, track_type, weather_name
 from webapp import aggregate as agg
+from webapp.aggregate import jra_track_clause
+
+logger = logging.getLogger(__name__)
 
 _TEMPLATES = Path(__file__).resolve().parent / "templates"
 _env = Environment(
@@ -33,10 +37,10 @@ def _surface_label(s: str) -> str:
 # ---------------------------------------------------------------------------
 def build_index(conn, limit_days: int = 40) -> dict:
     rows = conn.execute(
-        """
+        f"""
         SELECT race_year, race_month_day, track_code, kaiji, nichiji, race_num
         FROM races
-        WHERE CAST(track_code AS INTEGER) BETWEEN 1 AND 10
+        WHERE {jra_track_clause()}
         ORDER BY race_year DESC, race_month_day DESC, track_code, CAST(race_num AS INTEGER)
         """
     ).fetchall()
@@ -90,7 +94,8 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
         preds = predict_race(horses, conn=conn, race=race, cache={})
         for p in preds:
             marks[p.horse_num] = getattr(p, "mark", "") or ""
-    except Exception:  # noqa: BLE001 — 予想失敗時も出馬表は表示する
+    except Exception as e:  # noqa: BLE001 — 予想失敗時も出馬表は表示する
+        logger.warning("predict_race failed for %s%s R%s: %s", date, track, num, e)
         marks = {}
 
     # 血統マスタ (系統色分け用)

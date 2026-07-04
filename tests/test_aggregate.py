@@ -85,11 +85,14 @@ def test_aggregate_sire_and_return():
     deep = by_value["ディープインパクト"]
     assert deep["n"] == 40 and deep["wins"] == 40
     assert deep["win_pct"] == 100.0 and deep["top3_pct"] == 100.0
-    # 単勝配当300円 × 40勝 / (40*100) = 300%
+    # 単勝配当300円 × 40勝 / (40*100) = 300% (全馬1着なので分散ゼロ→CIも300)
     assert deep["return_pct"] == 300.0
-    # キンカメ産駒(B2)は2-4着 → 勝率0
+    assert deep["return_ci_lo"] == 300.0 and deep["return_ci_hi"] == 300.0
+    assert deep["payout_missing"] == 0
+    # キンカメ産駒(B2)は2-4着 → 勝率0・回収0
     king = by_value["キングカメハメハ"]
     assert king["wins"] == 0 and king["return_pct"] == 0.0
+    assert king["return_ci_lo"] == 0.0
 
 
 def test_aggregate_sire_line_classifies_and_colors():
