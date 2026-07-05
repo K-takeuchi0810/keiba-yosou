@@ -117,6 +117,46 @@ def test_upsert_race_lap_overwrite_guard():
     assert row["front3f_time"] == 345
 
 
+def _se_record_with_identity(c1, c2, c3, c4) -> bytes:
+    """識別キー (年/月日/場/回/日/R/馬番) 付き SE レコード。upsert の衝突テスト用。"""
+    buf = bytearray(_se_record_with_corners(c1, c2, c3, c4))
+    buf[11:15] = b"2025"  # year (pos12,4)
+    buf[15:19] = b"0601"  # month_day (pos16,4)
+    buf[19:21] = b"06"    # track_code (pos20,2)
+    buf[21:23] = b"03"    # kaiji (pos22,2)
+    buf[23:25] = b"08"    # nichiji (pos24,2)
+    buf[25:27] = b"11"    # race_num (pos26,2)
+    buf[28:30] = b"07"    # horse_num (pos29,2)
+    return bytes(buf)
+
+
+def test_upsert_horse_race_corner_overwrite_guard():
+    """発走前 SE (corner=0) が確定後の corner 順位を潰さない (upsert_race lap ガードと同型)。"""
+    import sys
+    sys.path.insert(0, ".")
+    from db import init_db, upsert_horse_race
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    init_db(conn)
+    result_se = parse_se(_se_record_with_identity(3, 4, 5, 7))
+    zero_se = parse_se(_se_record_with_identity(0, 0, 0, 0))
+    # 結果 → 発走前 (corner=0) の順で upsert しても corner が残る
+    upsert_horse_race(conn, result_se)
+    upsert_horse_race(conn, zero_se)
+    rows = conn.execute(
+        "SELECT corner_order_1, corner_order_2, corner_order_3, corner_order_4 FROM horse_races"
+    ).fetchall()
+    assert len(rows) == 1  # 同一キーで upsert (行が増えない)
+    assert tuple(rows[0]) == (3, 4, 5, 7)
+    # 逆順 (発走前 → 結果) なら確定値で更新される
+    conn.execute("DELETE FROM horse_races")
+    upsert_horse_race(conn, zero_se)
+    upsert_horse_race(conn, result_se)
+    row = conn.execute("SELECT corner_order_1, corner_order_4 FROM horse_races").fetchone()
+    assert (row["corner_order_1"], row["corner_order_4"]) == (3, 7)
+
+
 def test_probe_expect_all_corners_format():
     """--expect の全 4 角形式 (race_id:馬番:c1:c2:c3:c4) と 4 角のみ形式の照合。"""
     from types import SimpleNamespace

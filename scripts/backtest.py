@@ -1319,14 +1319,5 @@ def main() -> int:
     return 0
 
 
-# --- 後方互換 alias (2026-07-04 public 昇格) ---------------------------------
-# 旧 private 名で import している既存コード/テストを壊さないための alias。
-# 新規コードは public 名 (popularity_config / race_odds_untrusted / snapshot_meta)
-# を使うこと。alias は次の backtest API 整理で削除予定。
-_popularity_config = popularity_config
-_race_odds_untrusted = race_odds_untrusted
-_snapshot_meta = snapshot_meta
-
-
 if __name__ == "__main__":
     sys.exit(main())

@@ -101,7 +101,8 @@ def _recent_form(conn, blood_register_num: str | None, before_date: str) -> list
     return [{"ord": r["ord"], "dist": r["dist"]} for r in rows]
 
 
-def _horse_detail_line(h: dict, feat: dict, recent: list[dict], cur_distance: int | None) -> dict:
+def _horse_detail_line(h: dict, feat: dict, recent: list[dict], cur_distance: int | None,
+                       corner_env: bool = False) -> dict:
     """出馬表サブ行 (SmartRC 的な補助指標)。features 計算済みの値を表示に流用する。"""
     # 脚質 (公式が空なら推定値に ※)
     leg = _LEG_NAMES.get((h.get("leg_quality_code") or "").strip(), "")
@@ -124,21 +125,26 @@ def _horse_detail_line(h: dict, feat: dict, recent: list[dict], cur_distance: in
     # 出走間隔
     days = feat.get("days_since_last")
     rest = (f"休み明け({days}日)" if days and days >= 90 else f"間隔{days}日" if days else "-")
-    # 距離変更 (前走比)
+    # 距離変更 (前走比)。符号重複 ("短縮-200m") を避け絶対値表記にする
     dist_change = "-"
     if recent and cur_distance and recent[0]["dist"]:
         delta = cur_distance - recent[0]["dist"]
-        dist_change = "同距離" if delta == 0 else (f"延長+{delta}m" if delta > 0 else f"短縮{delta}m")
+        dist_change = "同距離" if delta == 0 else (f"延長+{delta}m" if delta > 0 else f"短縮{abs(delta)}m")
     # 父×馬場適性 (Share 相当)。n<10 非表示、10<=n<30 は括弧書き=標本少の参考値
     # (2026-07-05 収益性監査: 低 n 帯の過信抑止)。
+    # "-" (データ無) と「n<10 につき抑制」を区別する (凡例の -=データ無 と意味衝突しない)
     apt = "-"
     rate, n = feat.get("sire_surface_top3_rate"), feat.get("sire_surface_samples") or 0
     if rate is not None and n >= 30:
         apt = f"{rate * 100:.0f}%(n={n})"
     elif rate is not None and n >= 10:
         apt = f"({rate * 100:.0f}%,n={n})"
+    elif rate is not None and n > 0:
+        apt = "(n<10)"
     # 先行力 (テンP 相当)。corner データは probe 緑化 + backfill 後にのみ存在するため、
     # samples>0 のときだけ表示 = hard gate クリア後に自動で有効化される安全設計。
+    # corner_env=True (DB に corner データあり) で当該馬だけ履歴が無い場合は
+    # 「4角-」を出し、未整備との区別をつける (凡例 -=データ無 と一貫)。
     pace = None
     c_n = feat.get("recent_4corner_samples") or 0
     c_avg = feat.get("recent_4corner_avg_position")
@@ -146,6 +152,8 @@ def _horse_detail_line(h: dict, feat: dict, recent: list[dict], cur_distance: in
     if c_n > 0 and c_avg is not None:
         chg = f"/上げ{c_chg:+.1f}" if c_chg is not None else ""
         pace = f"4角avg{c_avg:.1f}{chg}(n={c_n})"
+    elif corner_env:
+        pace = "4角-"
     detail = {
         "burden": burden_weight_kg(h.get("burden_weight") or 0) or "-",
         "weight": weight, "leg": leg, "recent3": recent3, "agari_t": agari,
@@ -206,6 +214,20 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
             masters[m["blood_register_num"]] = m
 
     before_date = date  # YYYYMMDD (features の _date_key と同じ連結規約)
+    # DB に corner データが存在するか (run 単位フラグ、features の _cached キーを参照)
+    corner_env = bool(feature_cache.get(("_corner_data_present",), False))
+    # 同日同場の前後 R (1 日巡回タスクの導線。fable gui-ux 指摘)
+    sibling_nums = [r["race_num"] for r in conn.execute(
+        """SELECT race_num FROM races WHERE race_year=? AND race_month_day=?
+           AND track_code=? AND kaiji=? AND nichiji=?
+           ORDER BY CAST(race_num AS INTEGER)""",
+        (date[:4], date[4:], track, kaiji, nichiji)).fetchall()]
+    idx = sibling_nums.index(num) if num in sibling_nums else -1
+    nav = {
+        "prev": sibling_nums[idx - 1] if idx > 0 else None,
+        "next": sibling_nums[idx + 1] if 0 <= idx < len(sibling_nums) - 1 else None,
+        "date": date, "track": track, "kaiji": kaiji, "nichiji": nichiji,
+    }
     rows = []
     for h in horses:
         m = masters.get(h.get("blood_register_num"))
@@ -225,7 +247,7 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
             "popularity": h.get("win_popularity"),
             "odds": (round(odds / 10, 1) if odds else None),
             "mark": marks.get(h.get("horse_num"), ""),
-            "detail": _horse_detail_line(h, feat, recent, race.get("distance")),
+            "detail": _horse_detail_line(h, feat, recent, race.get("distance"), corner_env),
         })
 
     surf = agg.surface_of(race.get("track_type_code"))
@@ -242,6 +264,7 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
                                  else race.get("dirt_condition") or ""),
             "starter_count": race.get("starter_count") or len(horses),
         },
+        "nav": nav,
         "horses": rows,
     }
 
@@ -250,7 +273,19 @@ def render_race(conn, date, track, kaiji, nichiji, num) -> str | None:
     ctx = build_race(conn, date, track, kaiji, nichiji, num)
     if ctx is None:
         return None
-    return _env.get_template("race.html.j2").render(title="出馬表", **ctx)
+    # タブ識別できるよう場名+R をタイトルに (2026-07-05 fable gui-ux 指摘)
+    title = f"{ctx['race']['track_name']}{ctx['race']['race_num_int']}R"
+    return _env.get_template("race.html.j2").render(title=title, **ctx)
+
+
+def render_error(title: str, message: str, status_note: str = "") -> str:
+    """エラーページも base テンプレート経由で描画 (viewport/44pt/dark を適用)。
+
+    生 HTML だと iPhone で 980px 仮想幅になり戻り導線が極小タップになる
+    (2026-07-05 fable gui-ux 指摘)。
+    """
+    return _env.get_template("error.html.j2").render(
+        title=title, heading=title, message=message, status_note=status_note)
 
 
 # ---------------------------------------------------------------------------

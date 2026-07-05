@@ -1,7 +1,8 @@
 """SE レコードのコーナー通過順位バイト位置の検証プローブ (Phase 4)。
 
-**目的**: `parser.parse_se` に best-known 値で入れた corner_order_1..4 の
-バイト位置 (394/396/398/400) が、実際の SE .jvd で正しいかを検証する。
+**目的**: `parser.parse_se` の corner_order_1..4 のバイト位置 (352/354/356/358。
+旧 394/396/398/400 は 1着馬血統番号を誤読する既知バグ) が、実際の SE .jvd で
+正しいかを検証する。
 jvdata-record スキルの鉄則「新パーサは実データで一周させる」を満たすための
 必須ゲート。**これが緑になるまで本番 backfill / 先行力指標を信用しないこと。**
 
@@ -32,8 +33,9 @@ jvdata-record スキルの鉄則「新パーサは実データで一周させる
    これは自動判定には含めない。)
 
 出力の順位列が「1,2,3,...」と自然な順位分布になっていれば offset は正しい。
-全部 0 や、頭数を超える値ばかりなら parser.py の 394/396/398/400 を仕様書
-(docs/JV-Data4901.pdf p.12「馬毎レース情報」) と突き合わせて修正する。
+全部 0 や、頭数を超える値ばかりなら parser.py の 352/354/356/358 を仕様書
+(docs/JV-Data4901.pdf p.12「馬毎レース情報」) と突き合わせて修正する
+(旧 394 系へ戻すのは既知バグの再導入なので不可)。
 """
 
 from __future__ import annotations
@@ -105,11 +107,19 @@ def _verdict_ra(path: str) -> int:
     print(f"parsed {len(races)} RA records from {path}")
     checked = 0
     problems = 0
+    skipped_frac = 0
     for ra in races:
         laps = [int(x) for x in (ra.lap_times or "").split(",") if x.strip().isdigit()]
         nonzero = [v for v in laps if v > 0]
         if ra.front3f_time <= 0 or len(nonzero) < 4:
             continue  # 未確定 or 短距離すぎ
+        # 非 200m 倍数距離 (2500m/1150m 等) は先頭ラップが端数区間をカバーするため
+        # 「前3F = 先頭3ハロン和」の恒等が成立しない (2026-07-05 fable 検証監査指摘)。
+        # false-red で緑化ゲートを空転させないよう検定対象から除外する (後3F 側は
+        # 末尾が常に 200m 区切りなので影響しないが、対称性のためレースごと除外)。
+        if ra.distance and ra.distance % 200 != 0:
+            skipped_frac += 1
+            continue
         checked += 1
         front_sum = sum(nonzero[:3])
         last_sum = sum(nonzero[-3:])
@@ -124,8 +134,10 @@ def _verdict_ra(path: str) -> int:
         if checked >= 10:
             break
     print("\n" + "=" * 60)
+    if skipped_frac:
+        print(f"(参考) 非 200m 倍数距離のため検定対象外: {skipped_frac} 件 (先頭ラップが端数区間)")
     if checked == 0:
-        print("ラップ入りの確定 RA が見つからず検証不能。結果 RA を含むファイルを指定してください。")
+        print("ラップ入りの確定 RA (200m 倍数距離) が見つからず検証不能。結果 RA を含むファイルを指定してください。")
         return 2
     if problems:
         print(f"❌ {checked} 件中 {problems} 件で前後 3F とラップ和が不整合。S3/S4/L3/L4 の並び順")

@@ -1,6 +1,10 @@
 {% extends "base.html.j2" %}
 {% block body %}
-<p class="muted"><a class="backlink" href="/">← 開催一覧</a></p>
+<p class="muted">
+  <a class="backlink" href="/">← 開催一覧</a>
+  {% if nav.prev %}<a class="backlink" href="/race?date={{ nav.date }}&amp;track={{ nav.track }}&amp;kaiji={{ nav.kaiji }}&amp;nichiji={{ nav.nichiji }}&amp;num={{ nav.prev }}">‹ 前R</a>{% endif %}
+  {% if nav.next %}<a class="backlink" href="/race?date={{ nav.date }}&amp;track={{ nav.track }}&amp;kaiji={{ nav.kaiji }}&amp;nichiji={{ nav.nichiji }}&amp;num={{ nav.next }}">次R ›</a>{% endif %}
+</p>
 <h1>{{ race.track_name }} {{ race.race_num_int }}R <span class="muted">{{ race.date_label }}</span></h1>
 <div class="card">
   <div>{{ race.name }}</div>

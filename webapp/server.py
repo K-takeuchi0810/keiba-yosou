@@ -36,8 +36,6 @@ from db import open_db_readonly
 from webapp import views
 from webapp.aggregate import jra_track_clause
 
-_NAV = '<p><a href="/">開催へ戻る</a></p>'
-
 logger = logging.getLogger(__name__)
 
 
@@ -84,18 +82,22 @@ class Handler(BaseHTTPRequestHandler):
             with (open_db_readonly(self.db_path) if self.db_path else open_db_readonly()) as conn:
                 html = self._route(conn, path, q)
             if html is None:
-                self._send(f"<h1>404</h1><p>該当データがありません。</p>{_NAV}", 404)
+                self._send(views.render_error("404", "該当データがありません。"), 404)
             else:
                 self._send(html)
         except BrokenPipeError:
             pass
-        except FileNotFoundError as e:
-            self._send(f"<h1>DB が見つかりません</h1><p>{e}</p>"
-                       f"<p>JV-Link で取得・取込後に再度開いてください。</p>{_NAV}", 500)
+        except FileNotFoundError:
+            # パスは露出しない (LAN 端末への情報露出防止。--db 指定値の確認を促すのみ)
+            self._send(views.render_error(
+                "DB が見つかりません",
+                "JV-Link で取得・取込後に再度開いてください。",
+                "起動時の --db 指定値 (未指定なら data/keiba.db) を確認してください。"), 500)
         except Exception:  # noqa: BLE001 — サーバは落とさずエラーページを返す
-            # traceback はログのみ。画面には人間向けメッセージ + 復帰導線 (LAN 端末への情報露出も防ぐ)。
+            # traceback はログのみ。画面には人間向けメッセージ + 復帰導線。
             logger.exception("request failed: %s", self.path)
-            self._send(f"<h1>表示に失敗しました</h1><p>時刻や条件を変えて再試行してください。</p>{_NAV}", 500)
+            self._send(views.render_error(
+                "表示に失敗しました", "時刻や条件を変えて再試行してください。"), 500)
 
     def _route(self, conn, path: str, q: dict) -> str | None:
         if path == "/" or path == "":

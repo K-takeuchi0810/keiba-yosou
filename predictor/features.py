@@ -1268,14 +1268,15 @@ def compute_features(
     # corner 未 ingest の DB では全馬 samples=0 なので、ホットループで無償 SQL を
     # 毎頭発行しないよう「corner データが 1 件でも存在するか」を run 単位で 1 回だけ判定し、
     # 不在なら以降スキップする (backfill 前の backtest 実行時間を無駄にしない)。
-    corner_present = cache.get("_corner_data_present")
-    if corner_present is None:
-        row = conn.execute(
+    # cache=None の公開契約を破らない (_cached は None 安全。2026-07-05 監査指摘)
+    corner_present = _cached(
+        cache,
+        ("_corner_data_present",),
+        lambda: conn.execute(
             "SELECT 1 FROM horse_races WHERE corner_order_4 IS NOT NULL "
             "AND corner_order_4 > 0 LIMIT 1"
-        ).fetchone()
-        corner_present = row is not None
-        cache["_corner_data_present"] = corner_present
+        ).fetchone() is not None,
+    )
     if corner_present:
         c_avg, c_chg, c_n = _cached(
             cache,

@@ -15,6 +15,27 @@ def test_direct_lookup():
     assert sl.classify_sire("モーリス") == "roberto"
 
 
+def test_line_facts_regression():
+    """2026-07-05 fable 監査で是正した誤分類 12 件の regression。父系事実に固定する。"""
+    facts = {
+        "ドゥラメンテ": "kingmambo",       # 父キングカメハメハ
+        "リオンディーズ": "kingmambo",     # 父キングカメハメハ
+        "ワークフォース": "kingmambo",     # 父キングズベスト
+        "エピファネイア": "roberto",       # 父シンボリクリスエス
+        "ヘニーヒューズ": "storm",         # 父ヘネシー
+        "アジアエクスプレス": "storm",     # 父ヘニーヒューズ
+        "パイロ": "nasrullah",            # A.P. Indy 系
+        "シニスターミニスター": "nasrullah",
+        "クロフネ": "northern",           # デピュティミニスター系
+        "フレンチデピュティ": "northern",
+        "マインドユアビスケッツ": "northern",
+    }
+    for name, expect in facts.items():
+        assert sl.classify_sire(name) == expect, name
+    # 10 大系統外は誤答せず unknown に落とす
+    assert sl.classify_sire("ダノンレジェンド") == "unknown"
+
+
 def test_normalize_fullwidth_space():
     # 末尾全角空白パディングを除去して照合できる
     assert sl.classify_sire("ディープインパクト　　") == "sunday"

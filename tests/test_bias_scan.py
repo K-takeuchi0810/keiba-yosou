@@ -149,6 +149,21 @@ def test_warn_counter_with_types():
     assert st["warn_types"] == {"leg_quality_unavailable": 2, "same_day_bias_unavailable": 1}
 
 
+def test_payout_row_missing_counter():
+    """的中したのに払戻行欠損 (payout_present=False) の件数開示。
+
+    ret= が低い理由が「欠損か実力か」を切り分ける (webapp payout_missing と対称)。
+    """
+    c = b.Cell()
+    c.add_race(10)
+    c.add(0.3, 1, True, 300, True, payout_present=True)    # 的中・行あり → 数えない
+    c.add(0.3, 1, True, 0, True, payout_present=False)     # 的中・行なし → 数える
+    c.add(0.3, 0, False, 0, True, payout_present=False)    # 外れ → 数えない (0 は正当)
+    c.add(0.3, 1, True, 0, False, payout_present=False)    # untrusted → return 系列外なので数えない
+    st = b.summarize_cell(c, min_n=0, subject="pick")
+    assert st["payout_row_missing"] == 1
+
+
 def test_severity_tag_levels():
     base = {"gap_significant": True, "calibration_gap": 0.05}
     assert b.severity_tag(base) == "SIG*"

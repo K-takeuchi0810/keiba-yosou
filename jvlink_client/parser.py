@@ -211,6 +211,12 @@ class HorseRaceInfo:
     #   ★必須ゲート: 本番 backfill 前に scripts/probe_corner_offsets.py --expect
     #   (JRA 公式成績の既知値突合) を実 SE .jvd で**緑化するまで corner の
     #   backfill・先行力指標の利用を禁止** (2026-07-05 検証監査で hard gate 再確認)。
+    #   ★backfill 前処理: バグ窓 (旧 394 offset の 2026-07-04 版) で results ingest を
+    #   実行していた場合、非ゼロのゴミ corner が upsert の >0 ガードにより正しい 0 で
+    #   上書きできず残留する。再 ingest 前に
+    #     UPDATE horse_races SET corner_order_1=0, corner_order_2=0,
+    #                            corner_order_3=0, corner_order_4=0;
+    #   でゼロ化してから ingest_all(force=True) を実行すること。
     corner_order_1: int = 0
     corner_order_2: int = 0
     corner_order_3: int = 0

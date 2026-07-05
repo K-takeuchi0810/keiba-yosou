@@ -86,7 +86,7 @@ from scripts.backtest import (
     race_odds_untrusted,
     snapshot_meta,
     distance_bucket_label,
-    get_payout,
+    get_payout_with_presence,
     horses_for_race,
     list_races,
 )
@@ -258,7 +258,8 @@ class Cell:
     """
 
     __slots__ = ("n", "sum_prob", "wins", "sum_sq_err", "top3", "warn_n", "warn_types",
-                 "payouts_trusted", "stakes_trusted", "n_trusted", "n_races", "field_sum")
+                 "payouts_trusted", "stakes_trusted", "n_trusted", "payout_row_missing",
+                 "n_races", "field_sum")
 
     def __init__(self) -> None:
         self.n = 0
@@ -273,6 +274,9 @@ class Cell:
         self.payouts_trusted: list[int] = []
         self.stakes_trusted: list[int] = []
         self.n_trusted = 0
+        # 的中したのに払戻行が未 ingest で payout=0 が return 系列に入った件数。
+        # ret= が低いのは「欠損か実力か」を切り分ける開示 (webapp payout_missing と対称)。
+        self.payout_row_missing = 0
         self.n_races = 0
         self.field_sum = 0
 
@@ -282,7 +286,7 @@ class Cell:
         self.field_sum += field_size
 
     def add(self, prob: float, actual: int, top3: bool, payout: int, odds_trusted: bool,
-            warnings: list[str] | None = None) -> None:
+            warnings: list[str] | None = None, payout_present: bool = True) -> None:
         """レコード単位の寄与 (pick は 1/レース、all は 1/馬)。"""
         p = max(0.0, min(1.0, float(prob)))  # calibration_report と同じクランプ
         y = 1 if actual else 0
@@ -299,6 +303,9 @@ class Cell:
             self.payouts_trusted.append(payout)
             self.stakes_trusted.append(100)
             self.n_trusted += 1
+            # 的中なのに払戻行なし → return 系列に 0 が混入 (下方バイアス) を計数。
+            if y and not payout_present:
+                self.payout_row_missing += 1
 
 
 def summarize_cell(cell: Cell, min_n: int, subject: str) -> dict:
@@ -356,6 +363,8 @@ def summarize_cell(cell: Cell, min_n: int, subject: str) -> dict:
         "warn_types": dict(sorted(cell.warn_types.items(), key=lambda kv: -kv[1])[:5]),
         "return_pct": round(ret_point * 100, 1) if ret_point is not None else None,
         "return_ci": [round(ret_lo * 100, 1), round(ret_hi * 100, 1)] if ret_point is not None else None,
+        # 的中したのに払戻行欠損で return 系列に 0 が入った件数 (>0 なら ret= は下方に歪む)。
+        "payout_row_missing": cell.payout_row_missing,
         "status": "ok" if qualifies else "insufficient",
     }
 
@@ -404,24 +413,24 @@ def run_scan(conn, from_date: str, to_date: str, subject: str, axes: list[str],
         surface = surface_key(race)
         field_size = len(horses)
 
-        # レコード化: (prob, actual, top3, payout, warnings)。subject で対象を切替。
-        records: list[tuple[float, int, bool, int, list]] = []
+        # レコード化: (prob, actual, top3, payout, payout_present, warnings)。subject で対象を切替。
+        records: list[tuple[float, int, bool, int, bool, list]] = []
         if subject == "pick":
             if not include_tentative and is_tentative(preds):
                 n_skip_tentative += 1
                 continue
             top = preds[0]
             actual = 1 if top.horse_num == actual_win["horse_num"] else 0
+            payout, payout_present = get_payout_with_presence(conn, race, top.horse_num, "tan")
             records.append((top.raw_blended_probability, actual,
-                            top.horse_num in actual_top3,
-                            get_payout(conn, race, top.horse_num, "tan"),
+                            top.horse_num in actual_top3, payout, payout_present,
                             list(getattr(top, "feature_warnings", None) or [])))
         else:  # all
             for p in preds:
                 actual = 1 if p.horse_num == actual_win["horse_num"] else 0
+                payout, payout_present = get_payout_with_presence(conn, race, p.horse_num, "tan")
                 records.append((p.raw_blended_probability, actual,
-                                p.horse_num in actual_top3,
-                                get_payout(conn, race, p.horse_num, "tan"),
+                                p.horse_num in actual_top3, payout, payout_present,
                                 list(getattr(p, "feature_warnings", None) or [])))
         if not records:
             continue
@@ -440,12 +449,12 @@ def run_scan(conn, from_date: str, to_date: str, subject: str, axes: list[str],
             cross_cells[c][cross_keys[c]].add_race(field_size)
 
         # レコード単位の寄与。
-        for prob, actual, top3, payout, warns in records:
-            global_cell.add(prob, actual, top3, payout, odds_trusted, warns)
+        for prob, actual, top3, payout, present, warns in records:
+            global_cell.add(prob, actual, top3, payout, odds_trusted, warns, present)
             for a in axes:
-                axis_cells[a][axis_keys[a]].add(prob, actual, top3, payout, odds_trusted, warns)
+                axis_cells[a][axis_keys[a]].add(prob, actual, top3, payout, odds_trusted, warns, present)
             for c in cross_specs:
-                cross_cells[c][cross_keys[c]].add(prob, actual, top3, payout, odds_trusted, warns)
+                cross_cells[c][cross_keys[c]].add(prob, actual, top3, payout, odds_trusted, warns, present)
 
     # 集計
     global_stats = summarize_cell(global_cell, min_n=0, subject=subject)
@@ -497,6 +506,8 @@ def run_scan(conn, from_date: str, to_date: str, subject: str, axes: list[str],
 # ---------------------------------------------------------------------------
 def _fmt_cell_line(axis: str, key: str, st: dict) -> str:
     ret = f"ret={st['return_pct']}%" if st["return_pct"] is not None else "ret=n/a"
+    if st.get("payout_row_missing"):
+        ret += f"(払戻欠{st['payout_row_missing']}:下方歪)"
     return (
         f"  {display_cell(axis, key):<10} n={st['n']:>5}(nr={st['n_races']:>5} tr={st['n_trusted']:>5}) "
         f"fld={st['avg_field']:>4} pred={st['mean_pred']:.3f} "
@@ -516,7 +527,8 @@ def print_report(result: dict, top: int) -> None:
           f"min_n_cross={result['min_n_cross']}")
     print("  ⚠ TEST=2年。細セルはノイズ。信用するのは gap_significant(SIG*/sig) かつ n>=min_n のみ。")
     if result.get("calibration_in_sample"):
-        print("  ⚠ calibration_in_sample=True — 評価期間が calibrator fit 期間と重複。Brier/gap は in-sample。")
+        print("  ⚠ calibration_in_sample=True — 測定量は calibrator 前 raw のため、in-sample 性は")
+        print("     LGBM TRAIN 窓との重複に由来 (calibrator fit 窓を TRAIN 窓の代理として判定)。")
     if subject == "all":
         print("  ⚠ subject=all: n は馬行数。レース内相関で有効 n はレース数(nr)。Wilson CI は")
         print("     過度に狭く有意判定は出さない。bias_severity は sqrt(nr) 基準。reliability 点推定専用。")
@@ -607,7 +619,10 @@ def main() -> int:
     ctf, ctt = meta.get("calibrator_trained_from"), meta.get("calibrator_trained_to")
     calibration_in_sample = bool(ctf and ctt and args.from_date <= str(ctt) and str(ctf) <= args.to_date)
     if calibration_in_sample:
-        logger.warning("評価期間が calibrator fit 期間 %s-%s と重複。Brier 等は in-sample。", ctf, ctt)
+        logger.warning(
+            "評価期間が学習窓 %s-%s と重複。測定量は calibrator 前 raw のため、"
+            "in-sample 性は LGBM TRAIN 窓重複に由来します (calibrator fit 窓を代理判定に使用)。",
+            ctf, ctt)
     result["meta"] = meta
     result["calibration_in_sample"] = calibration_in_sample
     result["rule_version"] = args.rule_version

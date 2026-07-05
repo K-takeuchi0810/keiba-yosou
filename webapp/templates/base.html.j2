@@ -9,7 +9,9 @@
 <style>
   :root {
     --bg:#f7f8fa; --fg:#1a1d21; --muted:#5b6670; --card:#ffffff; --border:#e3e6ea;
-    --accent:#1565c0; --good:#2e7d32; --warn:#c62828; --chip:#eef1f5;
+    --accent:#1565c0; --good:#2e7d32; --warn:#b71c1c; --chip:#eef1f5;
+    /* --warn は warn バナー (淡赤地) 上で 13px 通常文字 AA 4.5:1 を満たす濃赤
+       (#c62828 は実測 4.39:1 で未達 — 2026-07-05 fable モバイル監査) */
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#15181c; --fg:#e8eaed; --muted:#9aa4af; --card:#1e2228; --border:#2c313a;

@@ -96,8 +96,11 @@ def open_db_readonly(path: Path | str = DB_PATH):
     try:
         conn = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
     except sqlite3.OperationalError:
-        # read-only WAL の -shm 制約等で開けない場合のフォールバック (rw ハンドル)。
-        conn = sqlite3.connect(p)
+        # read-only WAL の -shm 制約等で開けない場合のフォールバック。
+        # mode=rw (no-create) にすることで、exists() チェックと connect の間に
+        # DB が消えた場合 (TOCTOU) でも空ファイルを新規作成しない
+        # (2026-07-05 fable data-pipeline 監査指摘)。
+        conn = sqlite3.connect(f"file:{p.as_posix()}?mode=rw", uri=True)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA query_only=ON")
     conn.execute("PRAGMA busy_timeout=5000")

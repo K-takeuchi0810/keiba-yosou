@@ -11,7 +11,7 @@
       <a class="chip" href="/race?date={{ d.date }}&amp;track={{ r.track_code }}&amp;kaiji={{ r.kaiji }}&amp;nichiji={{ r.nichiji }}&amp;num={{ r.race_num }}">{{ r.track_name }}{{ r.race_num_int }}R</a>
     {% endfor %}
   </div>
-  <div style="margin-top:8px;"><a href="/today?date={{ d.date }}">▶ {{ d.label }} の当日傾向速報</a></div>
+  <div style="margin-top:8px;"><a class="backlink" href="/today?date={{ d.date }}">▶ {{ d.label }} の当日傾向速報</a></div>
 </div>
 {% else %}
 <div class="card muted">開催データがありません（DB 未取込）。</div>

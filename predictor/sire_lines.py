@@ -28,7 +28,6 @@ LINE_LABEL: dict[str, str] = {
     "nasrullah": "ナスルーラ系",
     "nearctic": "ネアルコ／ニアークティック系",
     "native": "ネイティヴダンサー系",
-    "other_haromon": "その他ハクチカラ／内国産系",
     "unknown": "その他",
 }
 
@@ -43,91 +42,95 @@ LINE_COLOR: dict[str, str] = {
     "nasrullah": "#ffd54f",    # 黄
     "nearctic": "#4db6ac",     # 青緑
     "native": "#f06292",       # 桃
-    "other_haromon": "#90a4ae",# 青灰
     "unknown": "#bdbdbd",      # グレー
 }
 
-# 主要種牡馬 → line_key。サンデー系は日本の現役の中心なので厚めに。
+# 主要種牡馬 → line_key。分類は**父の系統** (父系遡上)。
 # キー照合は _normalize で全角空白除去 + 前後 trim して行う。
+# 2026-07-05 fable 監査で約 12 件の事実誤りを是正 (ドゥラメンテ=父キンカメ等)。
 LINE_BY_SIRE: dict[str, str] = {
-    # --- サンデーサイレンス系 ---
+    # --- サンデーサイレンス系 (父が SS 直仔 or SS 系) ---
     "サンデーサイレンス": "sunday",
     "ディープインパクト": "sunday",
     "ハーツクライ": "sunday",
     "ステイゴールド": "sunday",
-    "オルフェーヴル": "sunday",
-    "ゴールドシップ": "sunday",
+    "オルフェーヴル": "sunday",       # 父ステイゴールド
+    "ゴールドシップ": "sunday",       # 父ステイゴールド
     "ダイワメジャー": "sunday",
     "アグネスタキオン": "sunday",
     "マンハッタンカフェ": "sunday",
     "ゴールドアリュール": "sunday",
-    "キズナ": "sunday",
-    "ドゥラメンテ": "sunday",
-    "キタサンブラック": "sunday",
-    "エピファネイア": "sunday",
-    "リオンディーズ": "sunday",
-    "サトノダイヤモンド": "sunday",
+    "キズナ": "sunday",              # 父ディープ
+    "キタサンブラック": "sunday",     # 父ブラックタイド
+    "サトノダイヤモンド": "sunday",   # 父ディープ
     "ワールドエース": "sunday",
     "ミッキーアイル": "sunday",
     "リアルインパクト": "sunday",
     "ネオユニヴァース": "sunday",
-    "ヴィクトワールピサ": "sunday",
-    "モーリス": "roberto",
-    "スクリーンヒーロー": "roberto",
+    "ヴィクトワールピサ": "sunday",   # 父ネオユニヴァース
     "ブラックタイド": "sunday",
     "フジキセキ": "sunday",
-    "シルバーステート": "sunday",
-    "サートゥルナーリア": "kingmambo",
-    "スワーヴリチャード": "sunday",
-    "レイデオロ": "kingmambo",
-    "イスラボニータ": "sunday",
-    "ジャスタウェイ": "sunday",
-    "グレーターロンドン": "sunday",
-    # --- キングマンボ系 (Mr. Prospector → Kingmambo) ---
-    "キングカメハメハ": "kingmambo",
+    "シルバーステート": "sunday",     # 父ディープ
+    "スワーヴリチャード": "sunday",   # 父ハーツクライ
+    "イスラボニータ": "sunday",      # 父フジキセキ
+    "ジャスタウェイ": "sunday",      # 父ハーツクライ
+    "グレーターロンドン": "sunday",   # 父ディープ
+    "ディーマジェスティ": "sunday",   # 父ディープ
+    # --- キングマンボ系 (Mr. Prospector → Kingmambo → キンカメ等) ---
     "キングマンボ": "kingmambo",
-    "ホッコータルマエ": "kingmambo",
-    "ルーラーシップ": "kingmambo",
-    "ロードカナロア": "kingmambo",
+    "キングカメハメハ": "kingmambo",
+    "ドゥラメンテ": "kingmambo",      # 父キングカメハメハ
+    "リオンディーズ": "kingmambo",    # 父キングカメハメハ
+    "ルーラーシップ": "kingmambo",    # 父キングカメハメハ
+    "ロードカナロア": "kingmambo",    # 父キングカメハメハ
+    "レイデオロ": "kingmambo",       # 父キングカメハメハ
+    "ホッコータルマエ": "kingmambo",  # 父キングカメハメハ
+    "サートゥルナーリア": "kingmambo",# 父ロードカナロア
+    "ワークフォース": "kingmambo",    # 父キングズベスト (Kingmambo 直仔)
     # --- ミスタープロスペクター系 (Kingmambo 以外) ---
-    "ヘニーヒューズ": "mrprospector",
-    "アジアエクスプレス": "mrprospector",
-    "マインドユアビスケッツ": "mrprospector",
-    "パイロ": "mrprospector",
-    "シニスターミニスター": "mrprospector",
-    "クロフネ": "mrprospector",
+    "ミスタープロスペクター": "mrprospector",
     "フサイチペガサス": "mrprospector",
-    # --- ストームキャット系 (Storm Cat → Giant's Causeway 等, ND 傘下だが慣習上独立表示) ---
-    "ヨハネスブルグ": "storm",
+    # --- ストームキャット系 (ND 傘下だが慣習上独立表示) ---
+    "ストームキャット": "storm",
+    "ヨハネスブルグ": "storm",        # Hennessy 系
     "ジャイアンツコーズウェイ": "storm",
     "ヘネシー": "storm",
-    "ドレフォン": "storm",
-    "ダノンレジェンド": "storm",
-    "ハービンジャー": "northern",
-    # --- ノーザンダンサー系 ---
+    "ヘニーヒューズ": "storm",        # 父ヘネシー
+    "アジアエクスプレス": "storm",    # 父ヘニーヒューズ
+    "ドレフォン": "storm",           # Gio Ponti 系 (Storm Cat 系)
+    # --- ノーザンダンサー系 (Storm Cat 系を除く) ---
     "ノーザンダンサー": "northern",
     "ノーザンテースト": "northern",
     "サドラーズウェルズ": "northern",
     "ダンチヒ": "northern",
     "ヌレイエフ": "northern",
-    "ブライアンズタイム": "roberto",
-    "シンボリクリスエス": "roberto",
-    "タニノギムレット": "roberto",
-    "フレンチデピュティ": "mrprospector",
-    "ワークフォース": "northern",
-    "ディーマジェスティ": "sunday",
+    "ハービンジャー": "northern",     # Dansili (Danzig 系)
+    "フレンチデピュティ": "northern",  # 父デピュティミニスター (Vice Regent → ND)
+    "クロフネ": "northern",          # 父フレンチデピュティ
+    "マインドユアビスケッツ": "northern",  # Posse → Silver Deputy → Deputy Minister
     # --- ロベルト系 (Hail to Reason → Roberto) ---
     "ロベルト": "roberto",
-    "グラスワンダー": "roberto",
-    # --- ナスルーラ系 / ボールドルーラー ---
+    "ブライアンズタイム": "roberto",
+    "シンボリクリスエス": "roberto",  # Kris S. 系
+    "タニノギムレット": "roberto",    # 父ブライアンズタイム
+    "グラスワンダー": "roberto",      # Silver Hawk 系
+    "スクリーンヒーロー": "roberto",  # 父グラスワンダー
+    "モーリス": "roberto",           # 父スクリーンヒーロー
+    "エピファネイア": "roberto",      # 父シンボリクリスエス
+    # --- ナスルーラ系 (Bold Ruler → Seattle Slew → A.P. Indy 含む) ---
     "ナスルーラ": "nasrullah",
     "ボールドルーラー": "nasrullah",
     "シアトルスルー": "nasrullah",
+    "エーピーインディ": "nasrullah",
+    "パイロ": "nasrullah",           # Pulpit → A.P. Indy
+    "シニスターミニスター": "nasrullah",  # Old Trieste → A.P. Indy
     # --- ネイティヴダンサー系 ---
     "ネイティヴダンサー": "native",
     # --- ネアルコ / ニアークティック ---
     "ニアークティック": "nearctic",
     "ネアルコ": "nearctic",
+    # 注: ダノンレジェンド (父 Macho Uno = In Reality 系) のような 10 大系統外は
+    # 辞書に載せず unknown (グレー) に落とす。誤答よりも「その他」が誠実。
 }
 
 # 父系遡上の始祖 (breeding_horses を遡って当たったらこの系統)。

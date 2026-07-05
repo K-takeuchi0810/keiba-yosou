@@ -9,6 +9,11 @@ bias_scan.py の規律を継承:
 - Wilson CI (複勝率の区間) で「たまたま」を区別
 - 全数 SQL 1 パス + Python 集計 (predict_race は不要なので高速)
 
+統計注記 (クラスタ相関): 回収率の bootstrap は馬行単位でリサンプルするが、
+セル内の同一レース馬 (同枠・同父等で高々数頭) の単勝結果は「勝者は 1 頭」の
+制約により**負相関**であり、CI は過小でなく保守側に働く (2026-07-05 検証監査確認)。
+bias_scan の subject=all (正相関クラスタ) とは相関の向きが異なる点に注意。
+
 回収率は payouts テーブルがあれば単勝配当から算出 (無ければ None)。
 """
 
@@ -18,9 +23,11 @@ import sqlite3
 
 from predictor.sire_lines import classify_sire, line_color, line_label
 from predictor.stats import bootstrap_return_rate, wilson_ci
-from web.codes import track_name
+from web.codes import track_name, track_type
 
-# JRA 中央場 (track_code 01-10) 判定の単一出典。NAR 追加や範囲変更はここだけ直す。
+# JRA 中央場 (track_code 01-10) 判定の webapp 内単一出典。
+# 注意: scripts/gui 側には同判定の直書きが残存しており (backtest/filter_sweep 等 8 箇所)、
+# 範囲変更時はそれらも要修正。全体一元化は backtest API 整理時の別課題 (2026-07-05 監査)。
 JRA_TRACK_MIN, JRA_TRACK_MAX = 1, 10
 
 
@@ -41,18 +48,13 @@ FACTORS = {
 
 
 def surface_of(track_type_code: str | None) -> str:
-    """トラックコード -> turf/dirt/jump/other。"""
-    try:
-        n = int((track_type_code or "").strip())
-    except ValueError:
-        return "other"
-    if 10 <= n <= 22:
-        return "turf"
-    if 23 <= n <= 29:
-        return "dirt"
-    if 51 <= n <= 59:
-        return "jump"
-    return "other"
+    """トラックコード -> turf/dirt/jump/other。
+
+    コード範囲 (10-22/23-29/51-59) の単一出典は web.codes.track_type。
+    ここで範囲を再記述しない (bias_scan.surface_key と同方式。2026-07-05 監査)。
+    """
+    jp = track_type(track_type_code or "")
+    return {"芝": "turf", "ダート": "dirt", "障害": "jump"}.get(jp, "other")
 
 
 def popularity_bucket_of(pop: int | None) -> str:
