@@ -26,7 +26,7 @@ def _db():
           trainer_short_name TEXT, trainer_code TEXT, confirmed_order INTEGER,
           win_popularity INTEGER, win_odds INTEGER, leg_quality_code TEXT);
         CREATE TABLE horse_masters (blood_register_num TEXT PRIMARY KEY, sire_name TEXT,
-          sire_breeding_num TEXT, dam_sire_name TEXT);
+          sire_breeding_num TEXT, dam_sire_name TEXT, dam_sire_breeding_num TEXT);
         CREATE TABLE payouts (race_year TEXT, race_month_day TEXT, track_code TEXT,
           kaiji TEXT, nichiji TEXT, race_num TEXT,
           tan_horse_num1 TEXT, tan_payout1 INTEGER, tan_horse_num2 TEXT, tan_payout2 INTEGER,
@@ -35,8 +35,8 @@ def _db():
           sire_name TEXT, sire_breeding_num TEXT);
         """
     )
-    conn.execute("INSERT INTO horse_masters VALUES ('B1','ディープインパクト','S1','母父X')")
-    conn.execute("INSERT INTO horse_masters VALUES ('B2','キングカメハメハ','S2','母父Y')")
+    conn.execute("INSERT INTO horse_masters VALUES ('B1','ディープインパクト','S1','キングカメハメハ','D1')")
+    conn.execute("INSERT INTO horse_masters VALUES ('B2','キングカメハメハ','S2','母父Y','D2')")
     for i in range(30):
         key = ("2025", "0518", "05", "01", "01", f"{i + 1:02d}")
         conn.execute("INSERT INTO races VALUES (?,?,?,?,?,?,1600,'11','テストS','1','1','0',4)", key)
@@ -69,8 +69,11 @@ def test_render_race_has_line_color_and_masters():
     assert html is not None
     assert "出馬表" in html
     assert "ディープインパクト" in html      # 父名表示
-    assert "サンデーサイレンス系" in html     # 系統分類
+    assert "サンデー系" in html              # 父系統 (短縮ラベル)
     assert "#8bc34a" in html                 # sunday の色
+    assert "キングマンボ系" in html           # 母父系統 (B1 の母父=キングカメハメハ)
+    assert "#e57373" in html                 # kingmambo の色 (母父段の dot)
+    assert "系統(父/母父)" in html            # 2 段表示ヘッダ
     assert "買い推奨ではありません" in html    # 誤読防止バナー
     assert "近3走" in html                    # SmartRC 相当のサブ行 (補助指標)
     assert "父×馬場" in html

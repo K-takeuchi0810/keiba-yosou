@@ -17,23 +17,27 @@
 <div class="tablewrap">
 <table>
   <thead><tr>
-    <th class="num">枠</th><th class="num">馬番</th><th>馬名</th><th>系統</th>
+    <th class="num">枠</th><th class="num">馬番</th><th>印</th><th>馬名</th>
+    <th>系統(父/母父)</th>
     <th class="opt-col">父</th><th class="opt-col">母父</th><th>騎手</th>
-    <th class="num">人気</th><th class="num">単オッズ</th><th>印</th>
+    <th class="num">人気</th><th class="num">単オッズ</th>
   </tr></thead>
-  <tbody>
+  <tbody class="pairs">
   {% for h in horses %}
     <tr class="mainrow">
       <td class="num">{{ h.waku }}</td>
       <td class="num">{{ h.horse_num }}</td>
+      <td class="mark {{ 'mark-honmei' if h.mark == '◎' else '' }}">{{ h.mark }}</td>
       <td>{{ h.horse_name }}</td>
-      <td><span class="line-dot" style="background:{{ h.line_color }}"></span>{{ h.line_label }}</td>
+      <td class="lines">
+        <div><span class="line-dot" style="background:{{ h.line_color }}"></span>{{ h.line_short }}</div>
+        <div class="damline"><span class="line-dot" style="background:{{ h.dam_line_color }}"></span>{{ h.dam_line_short }}</div>
+      </td>
       <td class="muted opt-col">{{ h.sire }}</td>
       <td class="muted opt-col">{{ h.dam_sire }}</td>
       <td>{{ h.jockey }}</td>
       <td class="num">{{ h.popularity or '-' }}</td>
       <td class="num">{{ h.odds or '-' }}</td>
-      <td class="mark {{ 'mark-honmei' if h.mark == '◎' else '' }}">{{ h.mark }}</td>
     </tr>
     <tr class="subrow">
       <td colspan="10">
@@ -48,7 +52,7 @@
   </tbody>
 </table>
 </div>
-<p class="muted">系統色分けは父系の大系統。予想印・確率は predictor/rules.py（診断用）。
+<p class="muted">系統=上段が父の大系統・下段(小)が母父の大系統。予想印・確率は predictor/rules.py（診断用）。
 サブ行: 近3走=着順(新しい順) / 上T=同馬場・同距離帯の近走での最速上がり3F / 脚質※=推定 /
 父×馬場=父産駒の同馬場複勝率(n=標本数、丸括弧=標本少の参考値) /
 4角avg=直近の4角通過順位平均(小=前で運ぶ)・上げ=4角→着順の平均上昇(正=差し脚) / -=データ無。</p>

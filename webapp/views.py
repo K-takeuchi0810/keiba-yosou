@@ -12,7 +12,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from predictor.sire_lines import classify_sire, line_color, line_label
+from predictor.sire_lines import classify_sire, line_color, line_label, line_label_short
 from web.codes import burden_weight_kg, ground_name, track_name, track_type, weather_name
 from webapp import aggregate as agg
 from webapp.aggregate import jra_track_clause
@@ -207,10 +207,21 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
     masters: dict[str, sqlite3.Row] = {}
     if brns:
         q = ",".join("?" * len(brns))
-        for m in conn.execute(
-            f"SELECT blood_register_num, sire_name, sire_breeding_num, dam_sire_name "
-            f"FROM horse_masters WHERE blood_register_num IN ({q})", brns
-        ).fetchall():
+        try:
+            rows_m = conn.execute(
+                f"SELECT blood_register_num, sire_name, sire_breeding_num, "
+                f"dam_sire_name, dam_sire_breeding_num "
+                f"FROM horse_masters WHERE blood_register_num IN ({q})", brns
+            ).fetchall()
+        except sqlite3.OperationalError:
+            # dam_sire_breeding_num 列が無い古い DB (readonly 接続は migration を
+            # 走らせない)。母父の遡上なしで劣化継続 (名前照合のみ)。
+            rows_m = conn.execute(
+                f"SELECT blood_register_num, sire_name, sire_breeding_num, "
+                f"dam_sire_name, NULL AS dam_sire_breeding_num "
+                f"FROM horse_masters WHERE blood_register_num IN ({q})", brns
+            ).fetchall()
+        for m in rows_m:
             masters[m["blood_register_num"]] = m
 
     before_date = date  # YYYYMMDD (features の _date_key と同じ連結規約)
@@ -234,7 +245,11 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
         sire = m["sire_name"] if m else ""
         sire_bn = m["sire_breeding_num"] if m else None
         dam_sire = m["dam_sire_name"] if m else ""
+        dam_sire_bn = m["dam_sire_breeding_num"] if m else None
         lk = classify_sire(sire, conn=conn, sire_breeding_num=sire_bn)
+        # 母父系統 (SmartRC 同様の 2 段表示用)。dam_sire_breeding_num は母父自身の
+        # 繁殖番号なので、そこから父系遡上すれば母父の大系統が引ける。
+        dlk = classify_sire(dam_sire, conn=conn, sire_breeding_num=dam_sire_bn)
         odds = h.get("win_odds")
         feat = feats.get(h.get("horse_num") or "", {})
         recent = _recent_form(conn, h.get("blood_register_num"), before_date)
@@ -242,6 +257,9 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
             "waku": h.get("waku_num"), "horse_num": h.get("horse_num"),
             "horse_name": h.get("horse_name") or "",
             "line_label": line_label(lk), "line_color": line_color(lk),
+            "line_short": line_label_short(lk),
+            "dam_line_color": line_color(dlk),
+            "dam_line_short": line_label_short(dlk),
             "sire": sire, "dam_sire": dam_sire,
             "jockey": h.get("jockey_short_name") or h.get("jockey_code") or "",
             "popularity": h.get("win_popularity"),

@@ -9,15 +9,19 @@
 <style>
   :root {
     --bg:#f7f8fa; --fg:#1a1d21; --muted:#5b6670; --card:#ffffff; --border:#e3e6ea;
-    --accent:#1565c0; --good:#2e7d32; --warn:#b71c1c; --chip:#eef1f5;
+    --accent:#1565c0; --good:#2e7d32; --warn:#b71c1c; --chip:#eef1f5; --rowalt:#f2f4f7;
     /* --warn は warn バナー (淡赤地) 上で 13px 通常文字 AA 4.5:1 を満たす濃赤
        (#c62828 は実測 4.39:1 で未達 — 2026-07-05 fable モバイル監査) */
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#15181c; --fg:#e8eaed; --muted:#9aa4af; --card:#1e2228; --border:#2c313a;
-            --accent:#64b5f6; --good:#81c784; --warn:#ef9a9a; --chip:#252a31; }
+            --accent:#64b5f6; --good:#81c784; --warn:#ef9a9a; --chip:#252a31; --rowalt:#191d23; }
   }
   * { box-sizing:border-box; }
+  /* ブラウザ既定の青下線リンクを全面的に上書き (実機 iPhone で「青文字で見づらい」
+     指摘 — 2026-07-05)。リンク色はテーマの accent に統一し下線は外す。 */
+  a { color:var(--accent); text-decoration:none; }
+  a:active { opacity:.7; }
   body { margin:0; background:var(--bg); color:var(--fg);
     font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
     font-size:15px; line-height:1.5; -webkit-text-size-adjust:100%; }
@@ -38,9 +42,11 @@
   td.num,th.num { text-align:right; font-variant-numeric:tabular-nums; }
   .tablewrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
   .chip { display:inline-block; padding:2px 8px; border-radius:999px; background:var(--chip);
-    font-size:12px; margin:2px 4px 2px 0; }
-  /* レース遷移チップは主要導線なので HIG 44pt を満たす */
-  .grid a.chip { min-height:44px; display:inline-flex; align-items:center; padding:0 14px; font-size:14px; }
+    font-size:12px; margin:2px 4px 2px 0; color:var(--fg); border:1px solid var(--border); }
+  /* レース遷移チップは主要導線なので HIG 44pt を満たす。リンクだが「ボタン」として
+     見せる (本文色 + 枠) — 青文字の羅列は可読性が落ちる (実機指摘)。 */
+  .grid a.chip { min-height:44px; display:inline-flex; align-items:center; padding:0 14px;
+    font-size:14px; font-weight:600; }
   .line-dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:5px;
     vertical-align:middle; box-shadow:0 0 0 1px var(--border); }  /* 円形に沿う縁取り */
   a.backlink { display:inline-flex; align-items:center; min-height:44px; }  /* HIG 44pt */
@@ -50,6 +56,14 @@
   /* 出馬表の 2 段構成: main 行の下線を消し、sub 行 (補助指標) と視覚的にペアにする */
   tr.mainrow td { border-bottom:0; }
   tr.subrow td { color:var(--muted); font-size:12.5px; padding:0 6px 8px 18px; }  /* 左インデントで main と視覚ペア */
+  /* 1 頭 = mainrow + subrow の 2 行ペアを交互に地色分けし、行の帰属を明確にする
+     (実機で「どの補助行がどの馬か追いにくい」UI 指摘への対処)。出馬表専用
+     (tbody.pairs) — 傾向集計の 1 行テーブルには適用しない。 */
+  tbody.pairs tr:nth-child(4n+3), tbody.pairs tr:nth-child(4n+4) { background:var(--rowalt); }
+  /* 系統セルの 2 段 (上=父系 / 下=母父系)。母父は小さく muted で従属表示 */
+  td.lines { white-space:nowrap; }
+  td.lines .damline { font-size:11px; color:var(--muted); }
+  td.lines .damline .line-dot { width:8px; height:8px; }
   .grid { display:flex; flex-wrap:wrap; gap:8px; }
   .grid a { flex:1 1 auto; }
   select,button { font-size:16px; min-height:44px; padding:8px 10px; border-radius:8px;

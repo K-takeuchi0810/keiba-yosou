@@ -36,6 +36,39 @@ def test_line_facts_regression():
     assert sl.classify_sire("ダノンレジェンド") == "unknown"
 
 
+def test_line_facts_expansion_2026_07_05():
+    """辞書拡充 (実機で非サンデー系が「その他」だらけになった対処) の父系事実固定。"""
+    facts = {
+        "コントレイル": "sunday",            # 父ディープインパクト
+        "キンシャサノキセキ": "sunday",       # 父フジキセキ
+        "ゴールドドリーム": "sunday",         # 父ゴールドアリュール
+        "エイシンフラッシュ": "kingmambo",    # 父キングズベスト
+        "キセキ": "kingmambo",               # 父ルーラーシップ
+        "レッドファルクス": "mrprospector",   # 父スウェプトオーヴァーボード (Forty Niner 系)
+        "アメリカンファラオ": "mrprospector", # Empire Maker → Unbridled → Fappiano
+        "タワーオブロンドン": "mrprospector", # 父レイヴンズパス (Gone West 系)
+        "ブリックスアンドモルタル": "storm",  # 父ジャイアンツコーズウェイ
+        "ミスターメロディ": "storm",         # 父スキャットダディ (Johannesburg 系)
+        "モズアスコット": "northern",        # 父フランケル (Galileo → Sadler's Wells)
+        "サトノクラウン": "northern",        # 父マージュ (Last Tycoon 系)
+        "サンダースノー": "northern",        # Exceed And Excel → Danehill → Danzig
+        "ルヴァンスレーヴ": "roberto",       # 父シンボリクリスエス
+        "ナダル": "roberto",                # 父ブレイム (Arch → Kris S.)
+        "ビッグアーサー": "nasrullah",       # 父サクラバクシンオー (プリンスリーギフト系)
+        "バゴ": "nasrullah",                # 父ナシュワン (Blushing Groom → Red God)
+        "ジャングルポケット": "nasrullah",    # 父トニービン (Grey Sovereign 系)
+        "マジェスティックウォリアー": "nasrullah",  # 父エーピーインディ
+    }
+    for name, expect in facts.items():
+        assert sl.classify_sire(name) == expect, name
+
+
+def test_short_labels_complete():
+    assert set(sl.LINE_LABEL_SHORT) == set(sl.LINE_LABEL)
+    assert sl.line_label_short("sunday") == "サンデー系"
+    assert sl.line_label_short("架空") == "その他"
+
+
 def test_normalize_fullwidth_space():
     # 末尾全角空白パディングを除去して照合できる
     assert sl.classify_sire("ディープインパクト　　") == "sunday"
@@ -101,4 +134,12 @@ def test_traversal_cycle_guard():
 def test_traversal_missing_row():
     conn = _mem_db()
     # breeding_horses に該当なし → unknown (落ちない)
+    assert sl.classify_sire("不明", conn=conn, sire_breeding_num="ZZ") == "unknown"
+
+
+def test_traversal_table_absent_graceful():
+    # breeding_horses テーブル自体が無い古い DB (BLOD 未取込 + readonly で
+    # migration も走らない) でも例外を出さず unknown に劣化する
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
     assert sl.classify_sire("不明", conn=conn, sire_breeding_num="ZZ") == "unknown"
