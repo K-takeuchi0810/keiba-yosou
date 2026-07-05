@@ -72,6 +72,8 @@ def test_render_race_has_line_color_and_masters():
     assert "サンデーサイレンス系" in html     # 系統分類
     assert "#8bc34a" in html                 # sunday の色
     assert "買い推奨ではありません" in html    # 誤読防止バナー
+    assert "近3走" in html                    # SmartRC 相当のサブ行 (補助指標)
+    assert "父×馬場" in html
 
 
 def test_render_race_missing_returns_none():

@@ -44,6 +44,9 @@
   .bar { height:8px; border-radius:4px; background:var(--accent); }
   .mark { font-weight:700; }
   .mark-honmei { color:var(--warn); }
+  /* 出馬表の 2 段構成: main 行の下線を消し、sub 行 (補助指標) と視覚的にペアにする */
+  tr.mainrow td { border-bottom:0; }
+  tr.subrow td { color:var(--muted); font-size:12.5px; padding:0 6px 8px; }
   .grid { display:flex; flex-wrap:wrap; gap:8px; }
   .grid a { flex:1 1 auto; }
   select,button { font-size:16px; min-height:44px; padding:8px 10px; border-radius:8px;

@@ -13,7 +13,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from predictor.sire_lines import classify_sire, line_color, line_label
-from web.codes import ground_name, track_name, track_type, weather_name
+from web.codes import burden_weight_kg, ground_name, track_name, track_type, weather_name
 from webapp import aggregate as agg
 from webapp.aggregate import jra_track_clause
 
@@ -75,6 +75,72 @@ def render_index(conn) -> str:
 # ---------------------------------------------------------------------------
 # /race (出馬表 + 系統色分け + 予想)
 # ---------------------------------------------------------------------------
+_LEG_NAMES = {"1": "逃", "2": "先", "3": "差", "4": "追"}
+
+
+def _recent_form(conn, blood_register_num: str | None, before_date: str) -> list[dict]:
+    """直近 3 走の (着順, 距離)。before_date 未満のみ (リーク防止、features と同規律)。"""
+    if not blood_register_num:
+        return []
+    rows = conn.execute(
+        """
+        SELECT hr.confirmed_order AS ord, r.distance AS dist
+        FROM horse_races hr
+        JOIN races r
+          ON r.race_year=hr.race_year AND r.race_month_day=hr.race_month_day
+         AND r.track_code=hr.track_code AND r.kaiji=hr.kaiji
+         AND r.nichiji=hr.nichiji AND r.race_num=hr.race_num
+        WHERE hr.blood_register_num = ?
+          AND (hr.race_year || hr.race_month_day) < ?
+          AND hr.confirmed_order IS NOT NULL AND hr.confirmed_order > 0
+        ORDER BY (hr.race_year || hr.race_month_day) DESC
+        LIMIT 3
+        """,
+        (blood_register_num, before_date),
+    ).fetchall()
+    return [{"ord": r["ord"], "dist": r["dist"]} for r in rows]
+
+
+def _horse_detail_line(h: dict, feat: dict, recent: list[dict], cur_distance: int | None) -> dict:
+    """出馬表サブ行 (SmartRC 的な補助指標)。features 計算済みの値を表示に流用する。"""
+    # 脚質 (公式が空なら推定値に ※)
+    leg = _LEG_NAMES.get((h.get("leg_quality_code") or "").strip(), "")
+    if not leg:
+        est = _LEG_NAMES.get((feat.get("estimated_leg_code") or "").strip(), "")
+        leg = f"{est}※" if est else "-"
+    # 馬体重 (999=計量不能, 000=取消)
+    hw = (h.get("horse_weight") or "").strip()
+    if hw and hw not in ("999", "000"):
+        sign = (h.get("weight_change_sign") or "").strip()
+        diff = (h.get("weight_change_diff") or "").strip().lstrip("0") or "0"
+        weight = f"{int(hw)}" + (f"({sign}{diff})" if sign in ("+", "-") and diff != "0" else "")
+    else:
+        weight = "-"
+    # 近3走着順 (新しい順)
+    recent3 = "-".join(str(r["ord"]) for r in recent) if recent else "-"
+    # 上がりT (直近の補正なし最速上がり3F, 0.1 秒単位)
+    b3f = feat.get("best_final_3f")
+    agari = f"{b3f / 10:.1f}" if b3f else "-"
+    # 出走間隔
+    days = feat.get("days_since_last")
+    rest = (f"休み明け({days}日)" if days and days >= 90 else f"間隔{days}日" if days else "-")
+    # 距離変更 (前走比)
+    dist_change = "-"
+    if recent and cur_distance and recent[0]["dist"]:
+        delta = cur_distance - recent[0]["dist"]
+        dist_change = "同距離" if delta == 0 else (f"延長+{delta}m" if delta > 0 else f"短縮{delta}m")
+    # 父×馬場適性 (Share 相当。サンプル 10 未満は出さない)
+    apt = "-"
+    rate, n = feat.get("sire_surface_top3_rate"), feat.get("sire_surface_samples") or 0
+    if rate is not None and n >= 10:
+        apt = f"{rate * 100:.0f}%(n={n})"
+    return {
+        "burden": burden_weight_kg(h.get("burden_weight") or 0) or "-",
+        "weight": weight, "leg": leg, "recent3": recent3, "agari_t": agari,
+        "rest": rest, "dist_change": dist_change, "sire_apt": apt,
+    }
+
+
 def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) -> dict | None:
     race = conn.execute(
         """SELECT * FROM races WHERE race_year=? AND race_month_day=? AND track_code=?
@@ -87,11 +153,24 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
     from scripts.backtest import horses_for_race
     horses = horses_for_race(conn, race)
 
+    # 特徴量 (表示用: 上がりT/脚質/間隔/父適性)。cache は予想と共有し再計算を防ぐ。
+    # 落ちても出馬表は出す (最小スキーマの DB や欠損データへの耐性)。
+    feature_cache: dict = {}
+    feats: dict[str, dict] = {}
+    for h in horses:
+        try:
+            from predictor.features import compute_features
+            feats[h.get("horse_num") or ""] = compute_features(conn, h, race, cache=feature_cache)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("compute_features failed for %s%s R%s 馬%s: %s",
+                           date, track, num, h.get("horse_num"), e)
+            feats[h.get("horse_num") or ""] = {}
+
     # 予想 (診断用)。落ちても出馬表は出す。
     marks: dict[str, str] = {}
     try:
         from predictor.rules import predict_race
-        preds = predict_race(horses, conn=conn, race=race, cache={})
+        preds = predict_race(horses, conn=conn, race=race, cache=feature_cache)
         for p in preds:
             marks[p.horse_num] = getattr(p, "mark", "") or ""
     except Exception as e:  # noqa: BLE001 — 予想失敗時も出馬表は表示する
@@ -109,6 +188,7 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
         ).fetchall():
             masters[m["blood_register_num"]] = m
 
+    before_date = f"{date[:4]}{date[4:]}"
     rows = []
     for h in horses:
         m = masters.get(h.get("blood_register_num"))
@@ -117,6 +197,8 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
         dam_sire = m["dam_sire_name"] if m else ""
         lk = classify_sire(sire, conn=conn, sire_breeding_num=sire_bn)
         odds = h.get("win_odds")
+        feat = feats.get(h.get("horse_num") or "", {})
+        recent = _recent_form(conn, h.get("blood_register_num"), before_date)
         rows.append({
             "waku": h.get("waku_num"), "horse_num": h.get("horse_num"),
             "horse_name": h.get("horse_name") or "",
@@ -126,6 +208,7 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
             "popularity": h.get("win_popularity"),
             "odds": (round(odds / 10, 1) if odds else None),
             "mark": marks.get(h.get("horse_num"), ""),
+            "detail": _horse_detail_line(h, feat, recent, race.get("distance")),
         })
 
     surf = agg.surface_of(race.get("track_type_code"))
