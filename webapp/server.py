@@ -1,8 +1,15 @@
 """独自出馬表 webapp のローカルサーバ (標準ライブラリ http.server + jinja2)。
 
 FastAPI 等の重い依存を足さず、既存依存 (jinja2) だけで動く自己利用向けサーバ。
-ルーティング/描画は webapp/views.py に分離済 (単体テスト可能)。各リクエストで
-open_db して読み取り専用に使う (SQLite は複数コネクション読み取り安全)。
+ルーティング/描画は webapp/views.py に分離済 (単体テスト可能)。
+
+== 予想生成への非干渉保証 (2026-07-05) ==
+本サーバは GUI/generator/ingest の予想生成ワークフローと完全に分離する:
+  - プロセス分離: 予想生成側は webapp を import しない (逆も read-only 利用のみ)。
+  - DB は open_db_readonly (URI mode=ro + PRAGMA query_only) で開く。
+    init_db の migration 書込みを発行せず、書込みロック競合を起こさない
+    (WAL リーダは writer をブロックしない)。書込みは構造的に不可能。
+  - predictor/rules・weights・calibrator には一切書き込まない (読み取り描画のみ)。
 
 起動:
     python -m webapp.server            # 既定 127.0.0.1:8760
@@ -25,7 +32,7 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import DATA_PERIODS
-from db import open_db
+from db import open_db_readonly
 from webapp import views
 from webapp.aggregate import jra_track_clause
 
@@ -73,7 +80,8 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path
         q = {k: v[0] for k, v in parse_qs(parsed.query).items()}
         try:
-            with (open_db(self.db_path) if self.db_path else open_db()) as conn:
+            # 読み取り専用接続 (query_only)。予想生成側の DB 書込みと競合しない。
+            with (open_db_readonly(self.db_path) if self.db_path else open_db_readonly()) as conn:
                 html = self._route(conn, path, q)
             if html is None:
                 self._send(f"<h1>404</h1><p>該当データがありません。</p>{_NAV}", 404)
@@ -81,6 +89,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(html)
         except BrokenPipeError:
             pass
+        except FileNotFoundError as e:
+            self._send(f"<h1>DB が見つかりません</h1><p>{e}</p><p>JV-Link で取得・取込後に再度開いてください。</p>", 500)
         except Exception:  # noqa: BLE001 — サーバは落とさずエラーページを返す
             # traceback はログのみ。画面には人間向けメッセージ + 復帰導線 (LAN 端末への情報露出も防ぐ)。
             logger.exception("request failed: %s", self.path)

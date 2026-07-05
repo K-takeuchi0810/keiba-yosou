@@ -73,6 +73,40 @@ def open_db(path: Path | str = DB_PATH):
         conn.close()
 
 
+@contextmanager
+def open_db_readonly(path: Path | str = DB_PATH):
+    """読み取り専用接続 (webapp 等の観察系ツール用。2026-07-05)。
+
+    open_db は接続のたびに init_db (schema 実行 + ALTER migration = 書込み
+    トランザクション) を発行するため、観察系ツールが使うと GUI/ingest の
+    予想生成ワークフローと書込みロックで競合し得る。本関数は:
+      - init_db を実行しない (migration は予想生成側の open_db だけが担う)
+      - URI mode=ro で開き、さらに PRAGMA query_only=ON で SQL 層でも書込みを封じる
+      - WAL リーダなので writer (GUI/ingest) をブロックしない
+    DB ファイルが無ければ FileNotFoundError (mode=ro は新規作成しない)。
+    WAL の -shm が read-only で開けない環境では rw ハンドル + query_only に
+    フォールバックする (それでも書込みは不可能)。
+    """
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"DB がありません: {p}")
+    try:
+        conn = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA query_only=ON")
+    except sqlite3.OperationalError:
+        # read-only WAL の -shm 制約等で開けない場合のフォールバック。
+        # query_only=ON により UPDATE/INSERT/DELETE/DDL は全て失敗する。
+        conn = sqlite3.connect(p)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA query_only=ON")
+    conn.execute("PRAGMA busy_timeout=5000")
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
 def init_db(conn: sqlite3.Connection) -> None:
     schema = SCHEMA_PATH.read_text(encoding="utf-8")
     conn.executescript(schema)

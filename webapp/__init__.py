@@ -5,4 +5,8 @@
 
 JV-Data 由来のデータを一般公開する場合は JRA-VAN のサービス提供契約が必要。
 本 webapp はローカル自己利用を前提とする。
+
+予想生成 (gui/generator/ingest) への非干渉: プロセス分離 + DB は
+db.open_db_readonly (mode=ro + query_only) のみ使用し、migration も書込みも
+発行しない。予想結果・weights・calibrator を変更する経路は存在しない。
 """
