@@ -62,6 +62,44 @@ def test_readonly_missing_db_raises_without_creating(tmp_path):
     assert not p.exists()  # mode=ro は空ファイルを作らない
 
 
+def test_fallback_path_still_blocks_writes(tmp_path, monkeypatch):
+    """F1 (2026-07-05 検証監査): mode=ro が使えない環境 (WAL -shm 制約) の
+    フォールバック経路 (rw ハンドル + query_only) でも書込みが拒否されること。"""
+    import db as db_mod
+
+    p = _make_db(tmp_path)
+    real_connect = sqlite3.connect
+
+    def fake_connect(target, *args, **kwargs):
+        # URI mode=ro を強制的に失敗させ、フォールバック分岐へ落とす
+        if isinstance(target, str) and target.startswith("file:") and "mode=ro" in target:
+            raise sqlite3.OperationalError("simulated -shm readonly failure")
+        return real_connect(target, *args, **kwargs)
+
+    monkeypatch.setattr(db_mod.sqlite3, "connect", fake_connect)
+    with db_mod.open_db_readonly(p) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM races").fetchone()[0] == 1
+        with pytest.raises(sqlite3.OperationalError):
+            conn.execute("DELETE FROM races")
+
+
+def test_no_query_only_off_in_observer_code():
+    """F2: 観察系コード (webapp/db) に query_only=OFF が混入していないことの不変条件。
+    フォールバック経路の保証は SQL 層ガードのみなので、解除文の混入は保証を壊す。"""
+    root = Path(__file__).resolve().parent.parent
+    targets = list((root / "webapp").rglob("*.py")) + [root / "db.py"]
+    for f in targets:
+        # 実行文のみ検知 (docstring/コメント内の注意書きは許容)
+        src = f.read_text(encoding="utf-8").replace(" ", "").lower()
+        for quote in ('"', "'"):
+            assert f'execute({quote}pragmaquery_only=off' not in src, \
+                f"{f} に query_only=OFF の実行文が混入"
+    # server は readonly 経路のみ使用 (migration 付き open_db を import しない)
+    server_src = (root / "webapp" / "server.py").read_text(encoding="utf-8")
+    assert "open_db_readonly" in server_src
+    assert "from db import open_db\n" not in server_src
+
+
 def test_server_routes_work_on_readonly(tmp_path):
     """server の全ルートが readonly 接続で描画できる (書込み不要の証明)。"""
     import types

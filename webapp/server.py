@@ -90,7 +90,8 @@ class Handler(BaseHTTPRequestHandler):
         except BrokenPipeError:
             pass
         except FileNotFoundError as e:
-            self._send(f"<h1>DB が見つかりません</h1><p>{e}</p><p>JV-Link で取得・取込後に再度開いてください。</p>", 500)
+            self._send(f"<h1>DB が見つかりません</h1><p>{e}</p>"
+                       f"<p>JV-Link で取得・取込後に再度開いてください。</p>{_NAV}", 500)
         except Exception:  # noqa: BLE001 — サーバは落とさずエラーページを返す
             # traceback はログのみ。画面には人間向けメッセージ + 復帰導線 (LAN 端末への情報露出も防ぐ)。
             logger.exception("request failed: %s", self.path)

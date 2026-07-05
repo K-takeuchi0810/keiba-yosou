@@ -85,21 +85,21 @@ def open_db_readonly(path: Path | str = DB_PATH):
       - WAL リーダなので writer (GUI/ingest) をブロックしない
     DB ファイルが無ければ FileNotFoundError (mode=ro は新規作成しない)。
     WAL の -shm が read-only で開けない環境では rw ハンドル + query_only に
-    フォールバックする (それでも書込みは不可能)。
+    フォールバックする。保証強度の差に注意: 主経路 mode=ro は OS レベルで
+    不可逆、フォールバックは SQL 層ガード (query_only) のみ — 同一接続で
+    PRAGMA query_only=OFF を発行すれば解除できるため、観察系コードに
+    query_only=OFF を書かないこと (tests の不変条件テストが混入を検知する)。
     """
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"DB がありません: {p}")
     try:
         conn = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA query_only=ON")
     except sqlite3.OperationalError:
-        # read-only WAL の -shm 制約等で開けない場合のフォールバック。
-        # query_only=ON により UPDATE/INSERT/DELETE/DDL は全て失敗する。
+        # read-only WAL の -shm 制約等で開けない場合のフォールバック (rw ハンドル)。
         conn = sqlite3.connect(p)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA query_only=ON")
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only=ON")
     conn.execute("PRAGMA busy_timeout=5000")
     try:
         yield conn

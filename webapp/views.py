@@ -108,9 +108,9 @@ def _horse_detail_line(h: dict, feat: dict, recent: list[dict], cur_distance: in
     if not leg:
         est = _LEG_NAMES.get((feat.get("estimated_leg_code") or "").strip(), "")
         leg = f"{est}※" if est else "-"
-    # 馬体重 (999=計量不能, 000=取消)
+    # 馬体重 (999=計量不能, 000=取消)。非数字混入でもページを 500 にしない。
     hw = (h.get("horse_weight") or "").strip()
-    if hw and hw not in ("999", "000"):
+    if hw.isdigit() and hw not in ("999", "000"):
         sign = (h.get("weight_change_sign") or "").strip()
         diff = (h.get("weight_change_diff") or "").strip().lstrip("0") or "0"
         weight = f"{int(hw)}" + (f"({sign}{diff})" if sign in ("+", "-") and diff != "0" else "")
@@ -188,7 +188,7 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
         ).fetchall():
             masters[m["blood_register_num"]] = m
 
-    before_date = f"{date[:4]}{date[4:]}"
+    before_date = date  # YYYYMMDD (features の _date_key と同じ連結規約)
     rows = []
     for h in horses:
         m = masters.get(h.get("blood_register_num"))

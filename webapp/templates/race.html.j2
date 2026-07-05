@@ -33,7 +33,7 @@
     </tr>
     <tr class="subrow">
       <td colspan="10">
-        近3走 {{ h.detail.recent3 }} ・ 上T{{ h.detail.agari_t }} ・ {{ h.detail.leg }} ・
+        近3走 {{ h.detail.recent3 }} ・ 上T {{ h.detail.agari_t }} ・ {{ h.detail.leg }} ・
         斤{{ h.detail.burden }} ・ 馬体{{ h.detail.weight }} ・ {{ h.detail.rest }} ・
         {{ h.detail.dist_change }} ・ 父×馬場 {{ h.detail.sire_apt }}
       </td>
@@ -43,5 +43,6 @@
 </table>
 </div>
 <p class="muted">系統色分けは父系の大系統。予想印・確率は predictor/rules.py（診断用）。
-サブ行: 近3走=着順(新しい順) / 上T=近走最速の上がり3F / 脚質※=推定 / 父×馬場=父産駒の同馬場複勝率(n=標本数)。</p>
+サブ行: 近3走=着順(新しい順) / 上T=同馬場・同距離帯の近走での最速上がり3F / 脚質※=推定 /
+父×馬場=父産駒の同馬場複勝率(n=標本数) / -=データ無。</p>
 {% endblock %}
