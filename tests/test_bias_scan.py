@@ -124,6 +124,28 @@ def test_avg_field():
     assert st["avg_field"] == 13.0
 
 
+def test_streaming_brier_golden():
+    """streaming 集計の brier/mean_pred が手計算と一致する golden (無音回帰防止)。"""
+    probs = [0.35, 0.10, 0.62, 0.05]
+    actuals = [1, 0, 0, 1]
+    c = _cell(probs, actuals)
+    st = b.summarize_cell(c, min_n=0, subject="pick")
+    expect_brier = round(sum((p - y) ** 2 for p, y in zip(probs, actuals)) / len(probs), 6)
+    assert st["brier"] == expect_brier
+    assert st["mean_pred"] == round(sum(probs) / len(probs), 4)
+    assert st["actual_rate"] == round(sum(actuals) / len(actuals), 4)
+
+
+def test_warn_counter():
+    c = b.Cell()
+    c.add_race(10)
+    c.add(0.2, 0, False, 0, True, has_warning=True)
+    c.add(0.2, 1, True, 300, True)  # 既定 False
+    st = b.summarize_cell(c, min_n=0, subject="pick")
+    assert st["warn_n"] == 1
+    assert st["warn_pct"] == 50.0
+
+
 def test_severity_tag_levels():
     base = {"gap_significant": True, "calibration_gap": 0.05}
     assert b.severity_tag(base) == "SIG*"

@@ -9,11 +9,16 @@ jvdata-record スキルの鉄則「新パーサは実データで一周させる
 
     .venv32/Scripts/python.exe -m scripts.probe_corner_offsets data/raw/RACE/<SEを含む>.jvd
 
-    # golden fixture 突合 (推奨): JRA 公式成績等で既知のコーナー順位を指定して
-    # 「範囲としては順位らしいが実は別フィールド」の false-green を排除する。
-    # 形式: --expect <race_id>:<馬番2桁>:<corner4期待値> (複数指定可)
+    # golden fixture 突合 (★backfill 前の必須ゲート): JRA 公式成績等で既知の
+    # コーナー順位を指定して「範囲としては順位らしいが実は別フィールド」の
+    # false-green を排除する。全 4 角形式で 352/354/356 も固定できる。
     .venv32/Scripts/python.exe -m scripts.probe_corner_offsets <file>.jvd \
-        --expect 20250518_05_01_01_11:07:3 --expect 20250518_05_01_01_11:01:1
+        --expect 20250518_05_01_01_11:07:3 \
+        --expect 20250518_05_01_01_11:01:2:2:1:1   # race_id:馬番:c1:c2:c3:c4
+
+    # RA モード (★ラップ利用前の必須ゲート): 前3F≒先頭3ハロン和 / 後3F≒末尾3ハロン和
+    # のサニティで S3/S4/L3/L4 の並び順と lap offset を実データ確定する。
+    .venv32/Scripts/python.exe -m scripts.probe_corner_offsets data/raw/RACE/<RA>.jvd --ra
 
 検証ロジック:
   1. SE レコードを parse し、confirmed_order が確定しているレースを 1 つ選ぶ。
@@ -44,7 +49,11 @@ from jvlink_client.parser import parse_se_file
 
 
 def _check_expectations(records, expects: list[str]) -> int:
-    """golden fixture 突合。--expect race_id:馬番:corner4 を実 parse 値と照合する。
+    """golden fixture 突合。--expect を実 parse 値と照合する。
+
+    形式 (2 種):
+      race_id:馬番:corner4                  … 4 角のみ照合
+      race_id:馬番:c1:c2:c3:c4              … 全 4 角照合 (352/354/356 も固定できる)
 
     範囲 heuristic は「1..頭数に収まる別の 2 桁フィールド」を誤読しても緑になり得る。
     既知の実測値 (JRA 公式成績のコーナー通過順位) と突合すれば offset の同一性を
@@ -55,11 +64,18 @@ def _check_expectations(records, expects: list[str]) -> int:
         by_key[(r.race_id, r.horse_num)] = r
     failures = 0
     for spec in expects:
+        parts = spec.split(":")
         try:
-            race_id, horse_num, want_s = spec.rsplit(":", 2)
-            want = int(want_s)
+            if len(parts) == 3:
+                race_id, horse_num = parts[0], parts[1]
+                wants = {4: int(parts[2])}
+            elif len(parts) == 6:
+                race_id, horse_num = parts[0], parts[1]
+                wants = {i + 1: int(v) for i, v in enumerate(parts[2:6])}
+            else:
+                raise ValueError
         except ValueError:
-            print(f"⚠ --expect の形式が不正: {spec} (race_id:馬番:corner4)")
+            print(f"⚠ --expect の形式が不正: {spec} (race_id:馬番:c4 または race_id:馬番:c1:c2:c3:c4)")
             failures += 1
             continue
         rec = by_key.get((race_id, horse_num))
@@ -67,12 +83,56 @@ def _check_expectations(records, expects: list[str]) -> int:
             print(f"⚠ 該当レコードなし: {race_id} 馬番{horse_num}")
             failures += 1
             continue
-        got = rec.corner_order_4
-        mark = "✓" if got == want else "❌"
-        print(f"{mark} {race_id} 馬番{horse_num}: corner4 期待={want} 実測={got}")
-        if got != want:
-            failures += 1
+        for corner, want in wants.items():
+            got = getattr(rec, f"corner_order_{corner}")
+            mark = "✓" if got == want else "❌"
+            print(f"{mark} {race_id} 馬番{horse_num}: corner{corner} 期待={want} 実測={got}")
+            if got != want:
+                failures += 1
     return failures
+
+
+def _verdict_ra(path: str) -> int:
+    """RA ラップ/ハロンの offset・並び順サニティ (--ra モード)。
+
+    端点整合では S3/S4/L3/L4 の内部並び順を一意化できないため、実 RA .jvd で
+      前3F ≒ 先頭 3 ハロンの和 / 後3F ≒ 末尾 (非ゼロ) 3 ハロンの和
+    を突合して並び順を実データ確定する。丸めで ±3 (0.3 秒) まで許容。
+    """
+    from jvlink_client.parser import parse_ra_file
+
+    races = [r for r in parse_ra_file(path) if r.record_type == "RA"]
+    print(f"parsed {len(races)} RA records from {path}")
+    checked = 0
+    problems = 0
+    for ra in races:
+        laps = [int(x) for x in (ra.lap_times or "").split(",") if x.strip().isdigit()]
+        nonzero = [v for v in laps if v > 0]
+        if ra.front3f_time <= 0 or len(nonzero) < 4:
+            continue  # 未確定 or 短距離すぎ
+        checked += 1
+        front_sum = sum(nonzero[:3])
+        last_sum = sum(nonzero[-3:])
+        d_front = abs(ra.front3f_time - front_sum)
+        d_last = abs(ra.last3f_time - last_sum)
+        ok = d_front <= 3 and d_last <= 3
+        mark = "✓" if ok else "❌"
+        print(f"{mark} {ra.race_id}: 前3F={ra.front3f_time} vs Σ先頭3F={front_sum} (Δ{d_front}) / "
+              f"後3F={ra.last3f_time} vs Σ末尾3F={last_sum} (Δ{d_last})")
+        if not ok:
+            problems += 1
+        if checked >= 10:
+            break
+    print("\n" + "=" * 60)
+    if checked == 0:
+        print("ラップ入りの確定 RA が見つからず検証不能。結果 RA を含むファイルを指定してください。")
+        return 2
+    if problems:
+        print(f"❌ {checked} 件中 {problems} 件で前後 3F とラップ和が不整合。S3/S4/L3/L4 の並び順")
+        print("   または lap offset がズレている可能性。parser.py を修正し再実行せよ。")
+        return 1
+    print(f"✅ {checked} 件全てで 前3F/後3F がラップ和と整合。RA ラップ offset・並び順は正しいと判断。")
+    return 0
 
 
 def _verdict(records) -> int:
@@ -132,12 +192,16 @@ def _verdict(records) -> int:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="SE コーナー順位 offset 検証プローブ")
-    ap.add_argument("jvd", help="SE レコードを含む .jvd ファイル (data/raw/RACE/...)")
+    ap = argparse.ArgumentParser(description="SE コーナー順位 / RA ラップ offset 検証プローブ")
+    ap.add_argument("jvd", help="SE (または --ra 時は RA) レコードを含む .jvd ファイル")
     ap.add_argument("--expect", action="append", default=[],
-                    help="golden fixture: race_id:馬番2桁:corner4期待値 (複数可)。"
+                    help="golden fixture: race_id:馬番:c4 または race_id:馬番:c1:c2:c3:c4 (複数可)。"
                          "JRA 公式成績の既知値と突合し false-green を排除する")
+    ap.add_argument("--ra", action="store_true",
+                    help="RA モード: ラップ/前後3F の offset・並び順サニティ (前3F≒先頭3ハロン和)")
     args = ap.parse_args()
+    if args.ra:
+        return _verdict_ra(args.jvd)
     records = [r for r in parse_se_file(args.jvd) if r.record_type == "SE"]
     print(f"parsed {len(records)} SE records from {args.jvd}")
     if not records:

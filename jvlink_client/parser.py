@@ -85,13 +85,16 @@ class RaceInfo:
     weather_code: str
     turf_condition: str
     dirt_condition: str
-    # レースラップ / ハロンタイム (2026-07-05 追加。テン3F = 先行力分析の素データ)。
+    # レースラップ / ハロンタイム (2026-07-05 追加・**暫定確定**。テン3F = 先行力分析の素データ)。
     # バイト位置の根拠: JV_RA_RACE は dirt_condition(890, 実データ検証済アンカー) の後
     #   LapTime×25(各3)=891-965 → 障害マイル(4)=966 → 前3F(3)=970 → 前4F(3)=973 →
     #   後3F(3)=976 → 後4F(3)=979 → コーナー情報(72×4)=982-1269 → 更新区分=1270
-    # で RA_LENGTH=1272 (+CRLF) に完全一致する (端点整合)。前後 3F/4F の並び順
-    # (S3→S4→L3→L4) は JVData_Struct の公知フィールド順。probe 検証を推奨
-    # (前3F+中間+後3F ≒ 走破タイムのサニティが取れる)。値は 1/10 秒、0=未収録。
+    # で RA_LENGTH=1272 (+CRLF) に端点一致する。
+    # 注意: 端点整合は幅の総和しか拘束せず、S3/S4/L3/L4 の内部並び順は端点だけでは
+    # 一意化できない (公知構造体順への依拠)。
+    # ★必須ゲート: 本番 backfill 前に scripts/probe_corner_offsets.py --ra を実 RA
+    # .jvd で**緑化するまでラップの利用を禁止** (前3F ≒ 先頭3ハロン和 / 後3F ≒ 末尾
+    # 3ハロン和のサニティで並び順を実データ確定できる)。値は 1/10 秒、0=未収録。
     front3f_time: int = 0
     front4f_time: int = 0
     last3f_time: int = 0
@@ -196,16 +199,18 @@ class HorseRaceInfo:
     leg_quality_code: str  # 1=逃 2=先 3=差 4=追
     # コーナー通過順位 (隊列/先行力の素データ)。0 = 不明/未通過 (小回り 1000m 等は
     # 1-2 角が無いので 0 が正常)。
-    # バイト位置 352/354/356/358 の根拠 (2026-07-05 再検証で確定):
-    #   JV_SE_RACE_UMA のフィールド順は Time → ChakusaCD×3 → Jyuni1c..4c → Odds →
-    #   Ninki → 賞金 → 後4F/後3F → 相手馬情報 (公開実装 specially198/
-    #   jra-van-race-horse-table RaceUmaService.cs で順序確認)。
-    #   本 parser の実データ検証済みアンカー Time=339(4), Odds=360(4), Ninki=364(2),
-    #   final_3f=391(3), mining=538(5), 脚質=553(1) と突き合わせると
-    #   343-351=着差コード×3, 352-359=1〜4角 (各2), 394-403=1着馬血統番号 で全整合。
-    #   ※旧値 394-401 は 1 着馬の血統登録番号を誤読するバグだった。
-    #   最終確認として本番 backfill 前に scripts/probe_corner_offsets.py --expect
-    #   (公式成績の既知値突合) を実 SE .jvd で通すこと。
+    # バイト位置 352/354/356/358 の根拠 (2026-07-05 **暫定確定** — 実データ突合まで):
+    #   実データ検証済みアンカー Time=339(4), Odds=360(4), Ninki=364(2),
+    #   final_3f=391(3), mining=538(5), 脚質=553(1) との突合で、343-359 の 17B が
+    #   着差コード×3(9B)+1〜4角(8B) に過不足なく埋まり、後方連鎖 (394-403=1着馬
+    #   血統番号 → mining=538) も一致する。※旧値 394-401 は 1 着馬血統登録番号を
+    #   誤読するバグだった。
+    #   注意: 端点整合は必要条件であって十分条件ではない。17B 内の「着差→角」の
+    #   順序は公開実装 (specially198/jra-van-race-horse-table RaceUmaService.cs) の
+    #   フィールド順に依拠しており、独立な裏取りではなく相補的な補完である。
+    #   ★必須ゲート: 本番 backfill 前に scripts/probe_corner_offsets.py --expect
+    #   (JRA 公式成績の既知値突合) を実 SE .jvd で**緑化するまで corner の
+    #   backfill・先行力指標の利用を禁止** (2026-07-05 検証監査で hard gate 再確認)。
     corner_order_1: int = 0
     corner_order_2: int = 0
     corner_order_3: int = 0

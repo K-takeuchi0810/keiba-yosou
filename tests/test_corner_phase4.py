@@ -91,6 +91,47 @@ def test_parse_ra_laps_backward_compat_zero():
     assert ra.front3f_time == 0 and ra.lap_times.count("0") >= 25
 
 
+def test_upsert_race_lap_overwrite_guard():
+    """発走前 RA (全 0 ラップ) が結果 RA のラップを潰さない (2026-07-05 監査指摘)。"""
+    import sys
+    sys.path.insert(0, ".")
+    from db import init_db, upsert_race
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    init_db(conn)
+    result_ra = parse_ra(_ra_record_with_laps(345, 462, 348, 466, [122, 108, 115]))
+    zero_ra = parse_ra(_ra_record_with_laps(0, 0, 0, 0, []))
+    # 結果 → 発走前 (全0) の順で upsert してもラップが残る
+    upsert_race(conn, result_ra)
+    upsert_race(conn, zero_ra)
+    row = conn.execute("SELECT front3f_time, last3f_time, lap_times FROM races").fetchone()
+    assert row["front3f_time"] == 345
+    assert row["last3f_time"] == 348
+    assert row["lap_times"].startswith("122,108,115")
+    # 逆順 (発走前 → 結果) なら更新される
+    conn.execute("DELETE FROM races")
+    upsert_race(conn, zero_ra)
+    upsert_race(conn, result_ra)
+    row = conn.execute("SELECT front3f_time FROM races").fetchone()
+    assert row["front3f_time"] == 345
+
+
+def test_probe_expect_all_corners_format():
+    """--expect の全 4 角形式 (race_id:馬番:c1:c2:c3:c4) と 4 角のみ形式の照合。"""
+    from types import SimpleNamespace
+
+    from scripts.probe_corner_offsets import _check_expectations
+
+    rec = SimpleNamespace(race_id="R1", horse_num="07",
+                          corner_order_1=2, corner_order_2=2,
+                          corner_order_3=1, corner_order_4=1)
+    assert _check_expectations([rec], ["R1:07:1"]) == 0            # c4 のみ一致
+    assert _check_expectations([rec], ["R1:07:2:2:1:1"]) == 0      # 全角一致
+    assert _check_expectations([rec], ["R1:07:2:2:1:9"]) == 1      # c4 不一致
+    assert _check_expectations([rec], ["bogus"]) == 1              # 形式不正
+
+
 def _db():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row

@@ -126,7 +126,26 @@ def upsert_race(conn: sqlite3.Connection, ra: RaceInfo) -> None:
     row = _ra_to_row(ra)
     cols = list(row.keys())
     placeholders = ",".join(f":{c}" for c in cols)
-    sql = f"INSERT OR REPLACE INTO races ({','.join(cols)}) VALUES ({placeholders})"
+    update_exprs = []
+    for col in cols:
+        if col in _RACE_PK:
+            continue
+        if col in ("front3f_time", "front4f_time", "last3f_time", "last4f_time"):
+            # 結果確定後のラップを、後から来る発走前 RA (全 0) で潰さない
+            # (horse_races.corner_order と同型ガード。2026-07-05 data-pipeline 監査指摘)。
+            update_exprs.append(
+                f"{col}=CASE WHEN excluded.{col} > 0 THEN excluded.{col} ELSE races.{col} END")
+        elif col == "lap_times":
+            # 非ゼロラップを 1 つでも含む場合のみ上書き (GLOB の文字クラスで判定)。
+            update_exprs.append(
+                "lap_times=CASE WHEN excluded.lap_times GLOB '*[1-9]*' "
+                "THEN excluded.lap_times ELSE races.lap_times END")
+        else:
+            update_exprs.append(f"{col}=excluded.{col}")
+    sql = (
+        f"INSERT INTO races ({','.join(cols)}) VALUES ({placeholders}) "
+        f"ON CONFLICT({','.join(_RACE_PK)}) DO UPDATE SET {','.join(update_exprs)}"
+    )
     conn.execute(sql, row)
 
 
