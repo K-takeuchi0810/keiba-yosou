@@ -202,3 +202,56 @@ Copy-Item data\fetch_state.json data\backup\fetch_state_$(Get-Date -Format yyyyM
 - 年間 +80% = 月平均 +6.7% (= 100 円ベースで月 6.7 円利益 / 100 円賭金)
 - 月次は -20% 〜 +50% の variance を許容
 - 連続 3 ヶ月 -10% 未満 → 自動サスペンド + 戦略再選定
+
+## 9. 3代血統 (父母父/母母父)・産地の反映と検証 (2026-07-05 追加)
+
+webapp 出馬表の 父母父・母母父・産地表示は、UM (競走馬マスタ) の 3 代血統と
+HN (繁殖馬マスタ) の産地名を使う。**列の追加は writer 起動時に自動** だが、
+**中身は再取込しないと全馬 NULL のまま** (ingested_files に記録済みのため)。
+
+### 9-1. データ反映手順 (実機・32bit venv)
+
+```
+.venv32/Scripts/python.exe -c "from jvlink_client.ingest import ingest_all; \
+    print(ingest_all(force=True, dataspecs=['DIFN', 'BLOD']))"
+```
+
+- **必ず dataspecs を DIFN (UM) と BLOD (HN) に限定する**。
+- 補足: HS (HOSE) の horse_masters 書込みは 2026-07-05 に INSERT OR IGNORE 化
+  したため、dataspec 無指定の force でも UM 行が空文字で潰れることは無くなったが、
+  無指定 force は全 dataspec を再取込して数時間かかるので時間の無駄。
+
+### 9-2. バイト位置の実機検証 (暫定確定 → 確定に昇格させる手順)
+
+UM idx8/idx12 と HN 205-229 は「検証済みアンカーからの導出 + 構造体知識」による
+**暫定確定** (詳細は jvlink_client/parser.py の docstring)。以下を 1 回実行して
+確定に昇格させる。**gen3 の順列取り違えと HN 数字フィールドの入替は無音で誤る**
+ため、この確認を省略しないこと。
+
+1. **UM gen3 の血統表突合** (順列ミスはこれでしか検出できない):
+   ```sql
+   SELECT horse_name, sire_name, sire_dam_sire_name, dam_dam_sire_name
+   FROM horse_masters WHERE sire_name = 'ディープインパクト' LIMIT 5;
+   ```
+   → sire_dam_sire_name (父母父) が **Alzao** (ディープの母ウインドインハーヘアの父)
+   になっているか。キズナ産駒でも同様に父母父 = **ストームキャット**
+   (キズナの母父) を確認。netkeiba/JBIS の血統表と 2-3 頭突合。
+2. **HN 産地名の目視**:
+   ```sql
+   SELECT birthplace, COUNT(*) FROM breeding_horses
+   GROUP BY birthplace ORDER BY 2 DESC LIMIT 30;
+   ```
+   → 上位が 安平町/新冠町/日高町/米/愛/英 等の地名・国名か。
+   **数字が混入していたら 205-229 の順序疑い** → 表示を止めて再調査。
+3. **数字フィールドの入替検出** (無音故障対策):
+   - `SELECT DISTINCT mochikomi_kubun FROM breeding_horses` → {0,1,2} 程度の小集合か
+   - `SELECT DISTINCT import_year ...` → '0000' または 19xx/20xx の 4 桁のみか
+   - クロス整合: import_year が実年の馬は birthplace が国名系、内国産は '0000'。
+     既知例: ノーザンテースト = 加 (1971 生・輸入)。
+4. **充填率**: `SELECT COUNT(*) FILTER (WHERE sire_dam_sire_name != '') * 1.0 / COUNT(*)
+   FROM horse_masters` → force 再取込後に 9 割超が期待値。
+5. 異常時: webapp の表示は自動縮退しないので、該当フィールドの表示を止めてから
+   parser のオフセットを再調査 (docs/JV-Data4901.pdf §13 UM / §18 HN と照合)。
+
+あわせて `python -m scripts.audit_sire_lines` (系統辞書の独立突合、scorecard
+20260705_0500 の残作業) も同じセッションで流すと効率が良い。

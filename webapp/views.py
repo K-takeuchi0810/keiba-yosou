@@ -27,6 +27,19 @@ _env = Environment(
 
 _SURFACE_LABEL = {"turf": "芝", "dirt": "ダート", "jump": "障害", "other": "他"}
 
+# build_race が horse_masters から引く血統列 (probe で欠如列は NULL 縮退)。
+_MASTER_COLS = ("sire_name", "sire_breeding_num", "dam_sire_name", "dam_sire_breeding_num",
+                "sire_dam_sire_name", "sire_dam_sire_breeding_num",
+                "dam_dam_sire_name", "dam_dam_sire_breeding_num")
+# 旧スキーマ警告はプロセス内で列セットごとに 1 回だけ (リクエスト毎のログスパム防止)
+_warned_missing_cols: set[tuple] = set()
+
+
+def _warn_once_missing_cols(missing: tuple) -> None:
+    if missing not in _warned_missing_cols:
+        _warned_missing_cols.add(missing)
+        logger.warning("horse_masters に旧スキーマ列欠如 %s: 該当血統項目は縮退表示", list(missing))
+
 
 def _surface_label(s: str) -> str:
     return _SURFACE_LABEL.get(s, s)
@@ -205,16 +218,13 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
     # 血統マスタ (系統色分け用)。列は PRAGMA で probe し、無い列は NULL を選ぶ
     # (旧 DB 縮退。readonly 接続は migration を走らせないため。try/except の
     # 二重 SQL 記述を廃し単一出典化 — 2026-07-05 code-quality 監査提案)。
-    _MASTER_COLS = ("sire_name", "sire_breeding_num", "dam_sire_name", "dam_sire_breeding_num",
-                    "sire_dam_sire_name", "sire_dam_sire_breeding_num",
-                    "dam_dam_sire_name", "dam_dam_sire_breeding_num")
     brns = [h.get("blood_register_num") for h in horses if h.get("blood_register_num")]
     masters: dict[str, sqlite3.Row] = {}
     if brns:
         have = {r["name"] for r in conn.execute("PRAGMA table_info(horse_masters)").fetchall()}
         missing = [c for c in _MASTER_COLS if c not in have]
         if missing:
-            logger.warning("horse_masters に旧スキーマ列欠如 %s: 該当血統項目は縮退表示", missing)
+            _warn_once_missing_cols(tuple(missing))
         sel = ", ".join(c if c in have else f"NULL AS {c}" for c in _MASTER_COLS)
         q = ",".join("?" * len(brns))
         for m in conn.execute(
@@ -237,8 +247,13 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
                            f"SELECT breeding_num, birthplace FROM breeding_horses "
                            f"WHERE breeding_num IN ({qb})", sorted(anc_bns)).fetchall()
                        if (r["birthplace"] or "").strip()}
-        except sqlite3.OperationalError:
-            origins = {}  # breeding_horses 不在 or birthplace 列なし → 産地非表示で継続
+        except sqlite3.OperationalError as e:
+            # 縮退はテーブル/列欠如 (BLOD 未取込・旧スキーマ) のみ。ロック/破損を
+            # 「産地なし」と誤分類しない (masters probe と同規律 — 2026-07-05 監査)。
+            if "no such table" not in str(e) and "no such column" not in str(e):
+                raise
+            logger.warning("祖先産地を非表示に縮退: %s", e)
+            origins = {}
 
     before_date = date  # YYYYMMDD (features の _date_key と同じ連結規約)
     # DB に corner データが存在するか (run 単位フラグ、features の _cached キーを参照)
@@ -300,7 +315,7 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
             "sire": sire, "dam_sire": dam_sire,
             "sire_origin": origins.get(sire_bn or ""),
             "dam_sire_origin": origins.get(dam_sire_bn or ""),
-            "ped_extra": " ・ ".join(ped_parts) if ped_parts else None,
+            "ped_parts": ped_parts,
             "jockey": h.get("jockey_short_name") or h.get("jockey_code") or "",
             "popularity": h.get("win_popularity"),
             "odds": (round(odds / 10, 1) if odds else None),

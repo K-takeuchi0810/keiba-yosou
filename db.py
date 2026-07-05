@@ -291,6 +291,24 @@ def upsert_horse_master(conn: sqlite3.Connection, um: HorseMaster) -> None:
     conn.execute(sql, row)
 
 
+def insert_horse_master_if_absent(conn: sqlite3.Connection, um: HorseMaster) -> None:
+    """行が無い場合のみ INSERT (HS レコード用)。
+
+    HS (市場取引) は血統登録番号と父母の繁殖番号程度しか持たない骨組み行で、
+    INSERT OR REPLACE に流すと UM 由来のフル行 (馬名/父名/3代血統/産地参照…) を
+    空文字で丸ごと潰す (2026-07-05 data-pipeline 監査 R2 で実証されたクロバー)。
+    raw 全量再構築の取込順は DIFN(UM) < HOSE(HS) なので、REPLACE のままだと
+    再構築が正しい状態に収束しない。IF ABSENT 化で順序非依存になる
+    (HS 先行 → 骨組み、後から UM がフル REPLACE / UM 先行 → HS は no-op)。
+    """
+    row = asdict(um)
+    row.pop("record_type", None)
+    cols = list(row.keys())
+    placeholders = ",".join(f":{c}" for c in cols)
+    sql = f"INSERT OR IGNORE INTO horse_masters ({','.join(cols)}) VALUES ({placeholders})"
+    conn.execute(sql, row)
+
+
 def _upsert_master(conn: sqlite3.Connection, table: str, obj) -> None:
     """単一キーマスタ (KS/CH/BR/BN 等) の汎用 upsert。record_type は保存しない。"""
     row = asdict(obj)

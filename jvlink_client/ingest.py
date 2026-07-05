@@ -27,6 +27,7 @@ from db import (
     is_file_ingested,
     open_db,
     record_ingested_file,
+    insert_horse_master_if_absent,
     upsert_breeding_horse,
     upsert_exotic_odds,
     upsert_horse_race,
@@ -164,7 +165,11 @@ def ingest_file_dispatch(
                 upsert_horse_master(conn, parse_um(rec))
                 um_count += 1
             elif rec_type == "HS":
-                upsert_horse_master(conn, parse_hs(rec))
+                # HS は骨組み行のみ。REPLACE だと UM フル行を空文字で潰すため
+                # 「無い場合のみ INSERT」(db.insert_horse_master_if_absent 参照)。
+                # 注: parse_hs の (22,8)/(30,8) は母父でなく父/母の可能性が仕様書
+                # 未照合 (実機残作業)。IF ABSENT 化で誤読でも既存行は汚さない。
+                insert_horse_master_if_absent(conn, parse_hs(rec))
                 um_count += 1
             # === Phase 1 新規 dataspec (2026-05-13) ===
             elif rec_type == "DM":

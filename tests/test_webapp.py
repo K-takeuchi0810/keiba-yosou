@@ -96,13 +96,34 @@ def test_render_race_gen3_pedigree_and_origin():
     assert "母母父 トニービン(ナスルーラ系)" in html          # 産地未取込 → 系統のみ
     # 父列の産地サフィックス (S1=安平)
     assert "(安平)" in html
+    # 凡例は実表示と一致させる (「凡例と実表示の不一致」の 2 連続再発防止 —
+    # gui-ux 監査。文言を変えたらこの assert も実表示と突合して更新する)
+    assert "父/母父の丸括弧=産地" in html
+    assert "丸括弧は 系統/産地（産地未取込時は系統のみ）" in html
+
+
+def test_render_race_breeding_horses_without_birthplace():
+    """breeding_horses に birthplace 列が無い旧スキーマでも 500 にならず産地なしで縮退。"""
+    conn = _db()
+    conn.executescript(
+        """
+        CREATE TABLE bh_old AS SELECT breeding_num, horse_name, sire_name,
+          sire_breeding_num FROM breeding_horses;
+        DROP TABLE breeding_horses;
+        ALTER TABLE bh_old RENAME TO breeding_horses;
+        """
+    )
+    html = views.render_race(conn, "20250518", "05", "01", "01", "01")
+    assert html is not None
+    assert "(安平)" not in html                              # 産地サフィックス消滅
+    assert "父母父 ノーザンテースト(ノーザンD系)" in html      # 系統のみで継続
 
 
 def test_render_race_old_schema_without_dam_sire_bn():
     """dam_sire_breeding_num 列が無い古い DB でも 500 にならず縮退表示できる。
 
-    views.build_race の except 分岐 (縮退 SELECT) を実際に通す regression
-    (2026-07-05 code-quality/data-pipeline/validation 監査の共通指摘)。
+    views.build_race の PRAGMA probe が欠如列を NULL に差し替える縮退経路を
+    実際に通す regression (2026-07-05 監査の共通指摘)。
     """
     conn = _db()
     conn.executescript(

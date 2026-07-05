@@ -6,6 +6,11 @@
   idx8=父母父 / idx12=母母父 は同一配列の算術導出。
 - HN: 205 持込区分 / 206-209 輸入年 / 210-229 産地名は、検証済みアンカー
   203-204 (毛色) と 230 (父繁殖番号) の間隙 25 byte にちょうど適合。
+
+重要: 本テストは synthetic 往復 = 「書いた位置から読める」というパーサ内部の
+自己整合の回帰であり、**実レコードでのバイト位置の正しさの証拠ではない**
+(位置仮定が全体でずれていても green になる)。実データ証拠は実機での血統表
+突合・産地目視 (docs/OPERATION.md「3代血統・産地の検証」) で取る。
 """
 
 from __future__ import annotations
@@ -52,7 +57,7 @@ def test_parse_um_gen3_roundtrip():
 
 
 def test_parse_um_gen3_empty_slots_backward_compat():
-    # 3 代血統が未収録 (b"0" 埋めのみ) でも落ちず、名前は空にならない範囲で劣化
+    # 3 代血統が未収録 (NUL 埋め) でも落ちず、名前は空文字に劣化する
     buf = bytearray(b"\x00" * UM_LENGTH)
     buf[0:2] = b"UM"
     um = parse_um(bytes(buf))

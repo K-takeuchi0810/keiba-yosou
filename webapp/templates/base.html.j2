@@ -79,9 +79,13 @@
   td.lines .damline .line-dot { width:8px; height:8px; }
   /* 非リンクの情報チップ (払戻欠 等) はタップ可能に見せない (破線枠・太字なし) */
   span.chip { border-style:dashed; }
-  /* 父/母父セルの産地サフィックスと、補助行の 3 代血統 (父母父/母母父) 行 */
+  /* 父/母父セルの産地サフィックスと、補助行の 3 代血統 (父母父/母母父) 行。
+     11px は本プロダクトの最小フォント — これ未満のサイズを新設しないこと
+     (AA を満たしても iPhone 実機での判読限界 — 2026-07-05 mobile 監査)。
+     .peditem は inline-block で項目境界折返し (名前の途中で折らない)。 */
   .origin { font-size:11px; margin-left:2px; }
   .pedline { margin-top:2px; }
+  .pedline .peditem { display:inline-block; margin-right:12px; }
   .grid { display:flex; flex-wrap:wrap; gap:8px; }
   .grid a { flex:1 1 auto; }
   select,button { font-size:16px; min-height:44px; padding:8px 10px; border-radius:8px;
