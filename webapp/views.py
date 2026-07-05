@@ -129,16 +129,33 @@ def _horse_detail_line(h: dict, feat: dict, recent: list[dict], cur_distance: in
     if recent and cur_distance and recent[0]["dist"]:
         delta = cur_distance - recent[0]["dist"]
         dist_change = "同距離" if delta == 0 else (f"延長+{delta}m" if delta > 0 else f"短縮{delta}m")
-    # 父×馬場適性 (Share 相当。サンプル 10 未満は出さない)
+    # 父×馬場適性 (Share 相当)。n<10 非表示、10<=n<30 は括弧書き=標本少の参考値
+    # (2026-07-05 収益性監査: 低 n 帯の過信抑止)。
     apt = "-"
     rate, n = feat.get("sire_surface_top3_rate"), feat.get("sire_surface_samples") or 0
-    if rate is not None and n >= 10:
+    if rate is not None and n >= 30:
         apt = f"{rate * 100:.0f}%(n={n})"
-    return {
+    elif rate is not None and n >= 10:
+        apt = f"({rate * 100:.0f}%,n={n})"
+    # 先行力 (テンP 相当)。corner データは probe 緑化 + backfill 後にのみ存在するため、
+    # samples>0 のときだけ表示 = hard gate クリア後に自動で有効化される安全設計。
+    pace = None
+    c_n = feat.get("recent_4corner_samples") or 0
+    c_avg = feat.get("recent_4corner_avg_position")
+    c_chg = feat.get("recent_4corner_position_change")
+    if c_n > 0 and c_avg is not None:
+        chg = f"/上げ{c_chg:+.1f}" if c_chg is not None else ""
+        pace = f"4角avg{c_avg:.1f}{chg}(n={c_n})"
+    detail = {
         "burden": burden_weight_kg(h.get("burden_weight") or 0) or "-",
         "weight": weight, "leg": leg, "recent3": recent3, "agari_t": agari,
-        "rest": rest, "dist_change": dist_change, "sire_apt": apt,
+        "rest": rest, "dist_change": dist_change, "sire_apt": apt, "pace": pace,
     }
+    # 全項目データ無しなら 1 語に畳む ("-" の羅列は壊れて見える — gui-ux 監査指摘)
+    detail["empty"] = all(
+        v in ("-", None) for k, v in detail.items() if k != "pace"
+    ) and pace is None
+    return detail
 
 
 def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) -> dict | None:

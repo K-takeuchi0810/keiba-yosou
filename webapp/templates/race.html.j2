@@ -1,6 +1,6 @@
 {% extends "base.html.j2" %}
 {% block body %}
-<p class="muted"><a href="/">← 開催一覧</a></p>
+<p class="muted"><a class="backlink" href="/">← 開催一覧</a></p>
 <h1>{{ race.track_name }} {{ race.race_num_int }}R <span class="muted">{{ race.date_label }}</span></h1>
 <div class="card">
   <div>{{ race.name }}</div>
@@ -33,9 +33,11 @@
     </tr>
     <tr class="subrow">
       <td colspan="10">
+        {% if h.detail.empty %}補助データ無し{% else %}
         近3走 {{ h.detail.recent3 }} ・ 上T {{ h.detail.agari_t }} ・ {{ h.detail.leg }} ・
         斤{{ h.detail.burden }} ・ 馬体{{ h.detail.weight }} ・ {{ h.detail.rest }} ・
-        {{ h.detail.dist_change }} ・ 父×馬場 {{ h.detail.sire_apt }}
+        {{ h.detail.dist_change }} ・ 父×馬場 {{ h.detail.sire_apt }}{% if h.detail.pace %} ・ {{ h.detail.pace }}{% endif %}
+        {% endif %}
       </td>
     </tr>
   {% endfor %}
@@ -44,5 +46,6 @@
 </div>
 <p class="muted">系統色分けは父系の大系統。予想印・確率は predictor/rules.py（診断用）。
 サブ行: 近3走=着順(新しい順) / 上T=同馬場・同距離帯の近走での最速上がり3F / 脚質※=推定 /
-父×馬場=父産駒の同馬場複勝率(n=標本数) / -=データ無。</p>
+父×馬場=父産駒の同馬場複勝率(n=標本数、丸括弧=標本少の参考値) /
+4角avg=直近の4角通過順位平均(小=前で運ぶ)・上げ=4角→着順の平均上昇(正=差し脚) / -=データ無。</p>
 {% endblock %}
