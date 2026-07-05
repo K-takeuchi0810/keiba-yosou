@@ -85,6 +85,19 @@ class RaceInfo:
     weather_code: str
     turf_condition: str
     dirt_condition: str
+    # レースラップ / ハロンタイム (2026-07-05 追加。テン3F = 先行力分析の素データ)。
+    # バイト位置の根拠: JV_RA_RACE は dirt_condition(890, 実データ検証済アンカー) の後
+    #   LapTime×25(各3)=891-965 → 障害マイル(4)=966 → 前3F(3)=970 → 前4F(3)=973 →
+    #   後3F(3)=976 → 後4F(3)=979 → コーナー情報(72×4)=982-1269 → 更新区分=1270
+    # で RA_LENGTH=1272 (+CRLF) に完全一致する (端点整合)。前後 3F/4F の並び順
+    # (S3→S4→L3→L4) は JVData_Struct の公知フィールド順。probe 検証を推奨
+    # (前3F+中間+後3F ≒ 走破タイムのサニティが取れる)。値は 1/10 秒、0=未収録。
+    front3f_time: int = 0
+    front4f_time: int = 0
+    last3f_time: int = 0
+    last4f_time: int = 0
+    # 25 ハロンぶんのラップ (1/10 秒) をカンマ区切り文字列で保持 (未使用ハロンは 0)。
+    lap_times: str = ""
 
     @property
     def race_id(self) -> str:
@@ -128,6 +141,12 @@ def parse_ra(rec: bytes) -> RaceInfo:
         weather_code=_ascii(rec, 888, 1),
         turf_condition=_ascii(rec, 889, 1),
         dirt_condition=_ascii(rec, 890, 1),
+        # ラップ 25×3 (891-965) とハロンタイム。位置根拠は dataclass 注記。
+        lap_times=",".join(str(_int(rec, 891 + i * 3, 3)) for i in range(25)),
+        front3f_time=_int(rec, 970, 3),
+        front4f_time=_int(rec, 973, 3),
+        last3f_time=_int(rec, 976, 3),
+        last4f_time=_int(rec, 979, 3),
     )
 
 
@@ -175,11 +194,18 @@ class HorseRaceInfo:
     mining_time: int
     mining_predicted_order: int
     leg_quality_code: str  # 1=逃 2=先 3=差 4=追
-    # コーナー通過順位 (隊列/先行力の素データ)。0 = 不明/未通過。
-    # ★バイト位置 (394/396/398/400) は SE 仕様 (後3F=391-393 の直後に 1-4 角) の
-    #   既知レイアウトに基づく best-known 値。**本番 backfill 前に
-    #   scripts/probe_corner_offsets.py で実 SE .jvd に対し必ず検証すること**
-    #   (jvdata-record スキル: 誤 offset は静かにデータを壊す)。
+    # コーナー通過順位 (隊列/先行力の素データ)。0 = 不明/未通過 (小回り 1000m 等は
+    # 1-2 角が無いので 0 が正常)。
+    # バイト位置 352/354/356/358 の根拠 (2026-07-05 再検証で確定):
+    #   JV_SE_RACE_UMA のフィールド順は Time → ChakusaCD×3 → Jyuni1c..4c → Odds →
+    #   Ninki → 賞金 → 後4F/後3F → 相手馬情報 (公開実装 specially198/
+    #   jra-van-race-horse-table RaceUmaService.cs で順序確認)。
+    #   本 parser の実データ検証済みアンカー Time=339(4), Odds=360(4), Ninki=364(2),
+    #   final_3f=391(3), mining=538(5), 脚質=553(1) と突き合わせると
+    #   343-351=着差コード×3, 352-359=1〜4角 (各2), 394-403=1着馬血統番号 で全整合。
+    #   ※旧値 394-401 は 1 着馬の血統登録番号を誤読するバグだった。
+    #   最終確認として本番 backfill 前に scripts/probe_corner_offsets.py --expect
+    #   (公式成績の既知値突合) を実 SE .jvd で通すこと。
     corner_order_1: int = 0
     corner_order_2: int = 0
     corner_order_3: int = 0
@@ -238,11 +264,12 @@ def parse_se(rec: bytes) -> HorseRaceInfo:
         mining_time=_int(rec, 538, 5),
         mining_predicted_order=_int(rec, 551, 2),
         leg_quality_code=_ascii(rec, 553, 1),
-        # 後3F(391-393) の直後の 1-4 角通過順位 (各2桁)。要 probe 検証 (上記 dataclass 注記)。
-        corner_order_1=_int(rec, 394, 2),
-        corner_order_2=_int(rec, 396, 2),
-        corner_order_3=_int(rec, 398, 2),
-        corner_order_4=_int(rec, 400, 2),
+        # 1-4 角通過順位 (各2桁)。着差コード×3 (343-351) の直後、単勝オッズ (360) の
+        # 直前。位置根拠は dataclass 注記参照 (アンカー逆算 + 公開実装で順序確認)。
+        corner_order_1=_int(rec, 352, 2),
+        corner_order_2=_int(rec, 354, 2),
+        corner_order_3=_int(rec, 356, 2),
+        corner_order_4=_int(rec, 358, 2),
     )
 
 

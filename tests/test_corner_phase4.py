@@ -1,35 +1,35 @@
-"""Phase 4: SE コーナー順位 parse のオフセット算術 + 先行力指標のテスト。
+"""Phase 4: SE コーナー順位 / RA ラップ parse のオフセット算術 + 先行力指標のテスト。
 
-注意: parse_se のバイト位置 (394-401) 自体の**仕様適合**は実 .jvd での
-scripts/probe_corner_offsets.py 検証が必須 (本テストは offset 算術と
-正規化・後方互換・特徴量ロジックを固定するもので、仕様正しさの保証ではない)。
+バイト位置の仕様根拠は parser.py の dataclass 注記参照 (実データ検証済アンカーからの
+逆算 + 公開実装のフィールド順確認)。最終確認は実 .jvd での
+scripts/probe_corner_offsets.py --expect (公式成績の既知値突合)。
 """
 
 from __future__ import annotations
 
 import sqlite3
 
-from jvlink_client.parser import SE_LENGTH, parse_se
+from jvlink_client.parser import RA_LENGTH, SE_LENGTH, parse_ra, parse_se
 from predictor.features import recent_corner_stats
+
+
+def _put(buf: bytearray, pos1: int, width: int, val: int) -> None:
+    s = str(val).rjust(width, "0").encode("ascii")
+    buf[pos1 - 1: pos1 - 1 + width] = s
 
 
 def _se_record_with_corners(c1, c2, c3, c4) -> bytes:
     """SE_LENGTH の生レコードを組み、コーナー順位を指定位置に書く。
 
-    _int は 1-indexed。corner_order_1=pos394,2 / _2=396 / _3=398 / _4=400。
-    レコード種別 "SE" を先頭に置き、必須の数値位置以外は '0' 埋め。
+    _int は 1-indexed。corner_order_1=pos352,2 / _2=354 / _3=356 / _4=358
+    (着差コード×3 の直後、単勝オッズ 360 の直前)。
     """
     buf = bytearray(b"0" * SE_LENGTH)
     buf[0:2] = b"SE"
-
-    def put(pos1: int, width: int, val: int):
-        s = str(val).rjust(width, "0").encode("ascii")
-        buf[pos1 - 1: pos1 - 1 + width] = s
-
-    put(394, 2, c1)
-    put(396, 2, c2)
-    put(398, 2, c3)
-    put(400, 2, c4)
+    _put(buf, 352, 2, c1)
+    _put(buf, 354, 2, c2)
+    _put(buf, 356, 2, c3)
+    _put(buf, 358, 2, c4)
     return bytes(buf)
 
 
@@ -46,6 +46,49 @@ def test_parse_se_corner_length_normalization():
     se = parse_se(short)
     # 切られた位置次第だが例外を出さないことが主眼
     assert isinstance(se.corner_order_4, int)
+
+
+def test_parse_se_corner_not_in_winner_blood_num():
+    # 回帰: 旧バグは 394-401 (1着馬血統登録番号の先頭) を誤読していた。
+    # 394-403 に血統番号らしき 10 桁を置いても corner には混入しないこと。
+    buf = bytearray(_se_record_with_corners(1, 2, 3, 4))
+    _put(buf, 394, 10, 2019104123)  # KettoNum1
+    se = parse_se(bytes(buf))
+    assert (se.corner_order_1, se.corner_order_2, se.corner_order_3, se.corner_order_4) == (1, 2, 3, 4)
+
+
+def _ra_record_with_laps(front3f, front4f, last3f, last4f, laps) -> bytes:
+    """RA_LENGTH の生レコード。ラップ (891 + 3i) とハロン (970/973/976/979)。"""
+    buf = bytearray(b"0" * RA_LENGTH)
+    buf[0:2] = b"RA"
+    for i, lap in enumerate(laps):
+        _put(buf, 891 + i * 3, 3, lap)
+    _put(buf, 970, 3, front3f)
+    _put(buf, 973, 3, front4f)
+    _put(buf, 976, 3, last3f)
+    _put(buf, 979, 3, last4f)
+    return bytes(buf)
+
+
+def test_parse_ra_laps_and_harons():
+    # 1600m 想定: 8 ハロン、テン3F=34.5 前4F=46.2 後3F=352? → 現実的な値で往復確認
+    laps = [122, 108, 115, 118, 119, 120, 113, 118]
+    ra = parse_ra(_ra_record_with_laps(345, 462, 348, 466, laps))
+    assert ra.record_type == "RA"
+    assert ra.front3f_time == 345
+    assert ra.front4f_time == 462
+    assert ra.last3f_time == 348
+    assert ra.last4f_time == 466
+    parsed = [int(x) for x in ra.lap_times.split(",")]
+    assert len(parsed) == 25
+    assert parsed[:8] == laps
+    assert all(v == 0 for v in parsed[8:])  # 未使用ハロンは 0
+
+
+def test_parse_ra_laps_backward_compat_zero():
+    # ラップ未収録 (全て 0) でも落ちず 0 で埋まる
+    ra = parse_ra(_ra_record_with_laps(0, 0, 0, 0, []))
+    assert ra.front3f_time == 0 and ra.lap_times.count("0") >= 25
 
 
 def _db():

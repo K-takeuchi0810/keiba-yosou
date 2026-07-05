@@ -31,6 +31,11 @@ CREATE TABLE IF NOT EXISTS races (
     weather_code      TEXT,
     turf_condition    TEXT,
     dirt_condition    TEXT,
+    front3f_time      INTEGER,   -- レース前半3F (テン3F, 1/10秒, 0=未収録)
+    front4f_time      INTEGER,   -- レース前半4F
+    last3f_time       INTEGER,   -- レース後半3F
+    last4f_time       INTEGER,   -- レース後半4F
+    lap_times         TEXT,      -- 25ハロンぶんのラップ (1/10秒) カンマ区切り
     PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji, race_num)
 );
 

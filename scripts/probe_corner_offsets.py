@@ -84,27 +84,31 @@ def _verdict(records) -> int:
     checked = 0
     problems = 0
     for race_id, horses in by_race.items():
-        c4 = [h.corner_order_4 for h in horses]
         orders = [h.confirmed_order for h in horses]
         if not any(orders):  # 未確定レース (出馬表のみ) はスキップ
             continue
         field = len([o for o in orders if o and o > 0])
         checked += 1
-        nonzero = [v for v in c4 if v and v > 0]
+        corners = {i: [getattr(h, f"corner_order_{i}") for h in horses] for i in (1, 2, 3, 4)}
         print(f"\nrace {race_id}  出走 {field} 頭")
-        print("  corner4 :", c4)
+        for i in (1, 2, 3, 4):
+            print(f"  corner{i} :", corners[i])
         print("  finish  :", orders)
-        # サニティ判定
+        # サニティ判定。1-2 角は小回り短距離で存在しない (全 0 が正常) ので、
+        # 全 0 警告は 4 角のみ。範囲/重複チェックは非ゼロ値に対し全 4 角で行う。
         bad = []
-        if not nonzero:
+        if not any(v for v in corners[4]):
             bad.append("corner_order_4 が全て 0 (offset ズレ or 未収録の可能性)")
-        else:
+        for i in (1, 2, 3, 4):
+            nonzero = [v for v in corners[i] if v and v > 0]
+            if not nonzero:
+                continue
             over = [v for v in nonzero if v > field + 2]
             if over:
-                bad.append(f"頭数({field})を超える順位 {over} (offset ズレの可能性大)")
+                bad.append(f"corner{i}: 頭数({field})を超える順位 {over} (offset ズレの可能性大)")
             dup = [v for v, c in Counter(nonzero).items() if c >= 3]
             if dup:
-                bad.append(f"同順位が3頭以上重複 {dup} (順位でない値を読んでいる可能性)")
+                bad.append(f"corner{i}: 同順位が3頭以上重複 {dup} (順位でない値の可能性)")
         if bad:
             problems += 1
             for b in bad:

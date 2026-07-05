@@ -83,6 +83,10 @@ def init_db(conn: sqlite3.Connection) -> None:
     # コーナー通過順位 (Phase 4)。既存 DB への後方互換 migration。
     for _c in ("corner_order_1", "corner_order_2", "corner_order_3", "corner_order_4"):
         _ensure_column(conn, "horse_races", _c, "INTEGER")
+    # レースラップ / ハロンタイム (2026-07-05)。既存 DB への後方互換 migration。
+    for _c in ("front3f_time", "front4f_time", "last3f_time", "last4f_time"):
+        _ensure_column(conn, "races", _c, "INTEGER")
+    _ensure_column(conn, "races", "lap_times", "TEXT")
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
