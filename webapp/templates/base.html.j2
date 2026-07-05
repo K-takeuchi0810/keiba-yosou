@@ -9,19 +9,27 @@
 <style>
   :root {
     --bg:#f7f8fa; --fg:#1a1d21; --muted:#5b6670; --card:#ffffff; --border:#e3e6ea;
-    --accent:#1565c0; --good:#2e7d32; --warn:#b71c1c; --chip:#eef1f5; --rowalt:#f2f4f7;
+    --accent:#1565c0; --good:#2e7d32; --warn:#b71c1c; --chip:#eef1f5; --rowalt:#eceff3;
+    /* --rowalt は帯差 1.085:1 (旧 #f2f4f7 は 1.04:1 で屋外 iPhone では知覚不能 —
+       2026-07-05 mobile 監査実測)。muted 5.09:1 / accent 4.98:1 / warn 5.70:1 で AA 維持 */
     /* --warn は warn バナー (淡赤地) 上で 13px 通常文字 AA 4.5:1 を満たす濃赤
        (#c62828 は実測 4.39:1 で未達 — 2026-07-05 fable モバイル監査) */
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#15181c; --fg:#e8eaed; --muted:#9aa4af; --card:#1e2228; --border:#2c313a;
-            --accent:#64b5f6; --good:#81c784; --warn:#ef9a9a; --chip:#252a31; --rowalt:#191d23; }
+            --accent:#64b5f6; --good:#81c784; --warn:#ef9a9a; --chip:#252a31; --rowalt:#1d222a; }
   }
   * { box-sizing:border-box; }
   /* ブラウザ既定の青下線リンクを全面的に上書き (実機 iPhone で「青文字で見づらい」
-     指摘 — 2026-07-05)。リンク色はテーマの accent に統一し下線は外す。 */
+     指摘 — 2026-07-05)。リンク色はテーマの accent に統一し下線は外す。
+     注意: accent と本文 fg の識別コントラストは 2.9:1 (<3:1) のため、本文段落内の
+     インラインリンクは「色のみの識別」で WCAG 1.4.1 違反になる。下の限定則で
+     本文中リンクには下線を維持する (nav/backlink/chip はレイアウトで識別可)。 */
   a { color:var(--accent); text-decoration:none; }
   a:active { opacity:.7; }
+  a:focus-visible, button:focus-visible, select:focus-visible {
+    outline:2px solid var(--accent); outline-offset:2px; }
+  main p a:not(.backlink):not(.chip) { text-decoration:underline; }
   body { margin:0; background:var(--bg); color:var(--fg);
     font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
     font-size:15px; line-height:1.5; -webkit-text-size-adjust:100%; }
@@ -58,12 +66,16 @@
   tr.subrow td { color:var(--muted); font-size:12.5px; padding:0 6px 8px 18px; }  /* 左インデントで main と視覚ペア */
   /* 1 頭 = mainrow + subrow の 2 行ペアを交互に地色分けし、行の帰属を明確にする
      (実機で「どの補助行がどの馬か追いにくい」UI 指摘への対処)。出馬表専用
-     (tbody.pairs) — 傾向集計の 1 行テーブルには適用しない。 */
-  tbody.pairs tr:nth-child(4n+3), tbody.pairs tr:nth-child(4n+4) { background:var(--rowalt); }
+     (tbody.pairs)。alt クラスはテンプレートの loop.cycle で両 tr に付与 —
+     nth-child 方式は行を条件レンダにした瞬間に縞がズレて隣の馬へ誤帰属する
+     (2026-07-05 mobile/gui-ux 監査指摘)。 */
+  tbody.pairs tr.alt { background:var(--rowalt); }
   /* 系統セルの 2 段 (上=父系 / 下=母父系)。母父は小さく muted で従属表示 */
   td.lines { white-space:nowrap; }
-  td.lines .damline { font-size:11px; color:var(--muted); }
+  td.lines .damline { font-size:12px; color:var(--muted); }
   td.lines .damline .line-dot { width:8px; height:8px; }
+  /* 非リンクの情報チップ (払戻欠 等) はタップ可能に見せない (破線枠・太字なし) */
+  span.chip { border-style:dashed; }
   .grid { display:flex; flex-wrap:wrap; gap:8px; }
   .grid a { flex:1 1 auto; }
   select,button { font-size:16px; min-height:44px; padding:8px 10px; border-radius:8px;
@@ -74,7 +86,7 @@
   .footer { color:var(--muted); font-size:12px; margin-top:24px; text-align:center; }
   /* 狭い画面では補助列 (父/母父) を畳み、核心 (馬名/系統/人気/オッズ/印) を横スクロール
      なしで同時視認できるようにする。系統は色+ラベルで父系を要約するため父/母父は省略可。 */
-  @media (max-width:480px) { .opt-col { display:none; } }
+  @media (max-width:480px) { .opt-col { display:none; } th,td { padding:7px 4px; } }
 </style>
 </head>
 <body>

@@ -12,7 +12,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from predictor.sire_lines import classify_sire, line_color, line_label, line_label_short
+from predictor.sire_lines import classify_sire, line_color, line_label_short
 from web.codes import burden_weight_kg, ground_name, track_name, track_type, weather_name
 from webapp import aggregate as agg
 from webapp.aggregate import jra_track_clause
@@ -213,9 +213,13 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
                 f"dam_sire_name, dam_sire_breeding_num "
                 f"FROM horse_masters WHERE blood_register_num IN ({q})", brns
             ).fetchall()
-        except sqlite3.OperationalError:
+        except sqlite3.OperationalError as e:
             # dam_sire_breeding_num 列が無い古い DB (readonly 接続は migration を
-            # 走らせない)。母父の遡上なしで劣化継続 (名前照合のみ)。
+            # 走らせない)。母父の遡上なしで劣化継続 (名前照合のみ)。列欠如以外の
+            # OperationalError (ロック/破損等) を縮退と誤分類しないよう素通しする。
+            if "no such column" not in str(e):
+                raise
+            logger.warning("horse_masters.dam_sire_breeding_num 無し: 母父系統は名前照合のみに縮退 (%s)", e)
             rows_m = conn.execute(
                 f"SELECT blood_register_num, sire_name, sire_breeding_num, "
                 f"dam_sire_name, NULL AS dam_sire_breeding_num "
@@ -256,7 +260,7 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
         rows.append({
             "waku": h.get("waku_num"), "horse_num": h.get("horse_num"),
             "horse_name": h.get("horse_name") or "",
-            "line_label": line_label(lk), "line_color": line_color(lk),
+            "line_color": line_color(lk),
             "line_short": line_label_short(lk),
             "dam_line_color": line_color(dlk),
             "dam_line_short": line_label_short(dlk),

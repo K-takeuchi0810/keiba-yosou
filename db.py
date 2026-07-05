@@ -124,6 +124,9 @@ def init_db(conn: sqlite3.Connection) -> None:
     for _c in ("front3f_time", "front4f_time", "last3f_time", "last4f_time"):
         _ensure_column(conn, "races", _c, "INTEGER")
     _ensure_column(conn, "races", "lap_times", "TEXT")
+    # webapp の母父系統遡上用。readonly 側は列欠如で縮退するが、writer 側は
+    # ここで自己修復し方針を対称にする (2026-07-05 data-pipeline 監査指摘)。
+    _ensure_column(conn, "horse_masters", "dam_sire_breeding_num", "TEXT")
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:

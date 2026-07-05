@@ -137,6 +137,23 @@ def test_traversal_missing_row():
     assert sl.classify_sire("不明", conn=conn, sire_breeding_num="ZZ") == "unknown"
 
 
+def test_audit_traversal_only_uses_founders_not_dict():
+    """audit_sire_lines の独立遡上は LINE_BY_SIRE を使わず FOUNDERS のみで判定する
+    (辞書との循環検証を避ける設計の regression)。"""
+    from scripts.audit_sire_lines import traversal_only_classify
+
+    conn = _mem_db()
+    # N1(新A) → 父 ディープインパクト(N2) → 父 サンデーサイレンス (FOUNDERS)
+    conn.execute("INSERT INTO breeding_horses VALUES ('N1','新A','ディープインパクト','N2')")
+    conn.execute("INSERT INTO breeding_horses VALUES ('N2','ディープインパクト','サンデーサイレンス','N3')")
+    conn.commit()
+    # ディープインパクトは LINE_BY_SIRE に居るが、独立遡上は辞書を見ないため
+    # FOUNDERS (サンデーサイレンス) まで遡って初めて sunday になる
+    assert traversal_only_classify(conn, "N1") == "sunday"
+    assert traversal_only_classify(conn, "ZZ") == "unknown"   # HN 欠損
+    assert traversal_only_classify(conn, None) == "unknown"
+
+
 def test_traversal_table_absent_graceful():
     # breeding_horses テーブル自体が無い古い DB (BLOD 未取込 + readonly で
     # migration も走らない) でも例外を出さず unknown に劣化する

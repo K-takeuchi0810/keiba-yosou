@@ -79,6 +79,37 @@ def test_render_race_has_line_color_and_masters():
     assert "父×馬場" in html
 
 
+def test_render_race_old_schema_without_dam_sire_bn():
+    """dam_sire_breeding_num 列が無い古い DB でも 500 にならず縮退表示できる。
+
+    views.build_race の except 分岐 (縮退 SELECT) を実際に通す regression
+    (2026-07-05 code-quality/data-pipeline/validation 監査の共通指摘)。
+    """
+    conn = _db()
+    conn.executescript(
+        """
+        CREATE TABLE hm_old AS SELECT blood_register_num, sire_name,
+          sire_breeding_num, dam_sire_name FROM horse_masters;
+        DROP TABLE horse_masters;
+        ALTER TABLE hm_old RENAME TO horse_masters;
+        """
+    )
+    html = views.render_race(conn, "20250518", "05", "01", "01", "01")
+    assert html is not None
+    assert "サンデー系" in html       # 父系統は維持
+    assert "キングマンボ系" in html    # 母父系統も名前照合のみで分類継続 (遡上なし縮退)
+
+
+def test_race_rows_pair_and_alt_integrity():
+    """mainrow と subrow は常に 1:1 ペアで、alt 縞も両行同数 (縞ズレ誤帰属の防止)。"""
+    conn = _db()
+    html = views.render_race(conn, "20250518", "05", "01", "01", "01")
+    n_main = html.count('class="mainrow')
+    n_sub = html.count('class="subrow')
+    assert n_main == n_sub == 4                    # 4 頭 = 2 行 × 4 ペア
+    assert html.count('"mainrow alt"') == html.count('"subrow alt"') == 2
+
+
 def test_render_race_missing_returns_none():
     conn = _db()
     assert views.render_race(conn, "20250518", "05", "01", "01", "99") is None
