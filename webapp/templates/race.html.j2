@@ -40,8 +40,8 @@
         <div class="damline"><span class="line-dot" style="background:{{ h.dam_line_color }}"></span>{{ h.dam_line_short }}</div>
         {% else %}<div class="damline">-</div>{% endif %}
       </td>
-      <td class="muted opt-col">{{ h.sire }}</td>
-      <td class="muted opt-col">{{ h.dam_sire }}</td>
+      <td class="muted opt-col">{{ h.sire }}{% if h.sire_origin %}<span class="origin">({{ h.sire_origin }})</span>{% endif %}</td>
+      <td class="muted opt-col">{{ h.dam_sire }}{% if h.dam_sire_origin %}<span class="origin">({{ h.dam_sire_origin }})</span>{% endif %}</td>
       <td>{{ h.jockey }}</td>
       <td class="num">{{ h.popularity or '-' }}</td>
       <td class="num">{{ h.odds or '-' }}</td>
@@ -53,6 +53,7 @@
         斤{{ h.detail.burden }} ・ 馬体{{ h.detail.weight }} ・ {{ h.detail.rest }} ・
         {{ h.detail.dist_change }} ・ 父×馬場 {{ h.detail.sire_apt }}{% if h.detail.pace %} ・ {{ h.detail.pace }}{% endif %}
         {% endif %}
+        {% if h.ped_extra %}<div class="pedline">{{ h.ped_extra }}</div>{% endif %}
       </td>
     </tr>
   {% endfor %}
@@ -61,7 +62,9 @@
 </div>
 <p class="muted">系統=上段が父の大系統・下段(小)が母父の大系統。系統は血統の分類表示であり、
 成績・期待値の指標ではない（傾向集計は父系統・母父系統の両軸に対応）。
-「その他」=11大系統外（パーソロン系等）または系統判別不能。予想印・確率は predictor/rules.py（診断用）。
+「その他」=11大系統外（パーソロン系等）または系統判別不能。
+父/母父の丸括弧と補助行の 父母父・母母父=3代血統（系統/産地。産地は繁殖馬マスタ取込後に表示）。
+予想印・確率は predictor/rules.py（診断用）。
 サブ行: 近3走=着順(新しい順) / 上T=同馬場・同距離帯の近走での最速上がり3F / 脚質※=推定 /
 父×馬場=父産駒の同馬場複勝率(n=標本数、丸括弧=標本少の参考値) /
 4角avg=直近の4角通過順位平均(小=前で運ぶ)・上げ=4角→着順の平均上昇(正=差し脚) / -=データ無。</p>

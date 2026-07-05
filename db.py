@@ -131,6 +131,13 @@ def init_db(conn: sqlite3.Connection) -> None:
     for _c in ("front3f_time", "front4f_time", "last3f_time", "last4f_time"):
         _ensure_column(conn, "races", _c, "INTEGER")
     _ensure_column(conn, "races", "lap_times", "TEXT")
+    # 3 代血統 (父母父/母母父) + HN 産地情報 (2026-07-05)。schema.sql に index が
+    # 無いので後置で安全 (index を足す場合は dam_sire_breeding_num と同様に前置へ)。
+    for _c in ("sire_dam_sire_breeding_num", "sire_dam_sire_name",
+               "dam_dam_sire_breeding_num", "dam_dam_sire_name"):
+        _ensure_column(conn, "horse_masters", _c, "TEXT")
+    for _c in ("mochikomi_kubun", "import_year", "birthplace"):
+        _ensure_column(conn, "breeding_horses", _c, "TEXT")
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:

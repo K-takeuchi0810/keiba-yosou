@@ -202,31 +202,43 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
         logger.warning("predict_race failed for %s%s R%s: %s", date, track, num, e)
         marks = {}
 
-    # 血統マスタ (系統色分け用)
+    # 血統マスタ (系統色分け用)。列は PRAGMA で probe し、無い列は NULL を選ぶ
+    # (旧 DB 縮退。readonly 接続は migration を走らせないため。try/except の
+    # 二重 SQL 記述を廃し単一出典化 — 2026-07-05 code-quality 監査提案)。
+    _MASTER_COLS = ("sire_name", "sire_breeding_num", "dam_sire_name", "dam_sire_breeding_num",
+                    "sire_dam_sire_name", "sire_dam_sire_breeding_num",
+                    "dam_dam_sire_name", "dam_dam_sire_breeding_num")
     brns = [h.get("blood_register_num") for h in horses if h.get("blood_register_num")]
     masters: dict[str, sqlite3.Row] = {}
     if brns:
+        have = {r["name"] for r in conn.execute("PRAGMA table_info(horse_masters)").fetchall()}
+        missing = [c for c in _MASTER_COLS if c not in have]
+        if missing:
+            logger.warning("horse_masters に旧スキーマ列欠如 %s: 該当血統項目は縮退表示", missing)
+        sel = ", ".join(c if c in have else f"NULL AS {c}" for c in _MASTER_COLS)
         q = ",".join("?" * len(brns))
-        try:
-            rows_m = conn.execute(
-                f"SELECT blood_register_num, sire_name, sire_breeding_num, "
-                f"dam_sire_name, dam_sire_breeding_num "
-                f"FROM horse_masters WHERE blood_register_num IN ({q})", brns
-            ).fetchall()
-        except sqlite3.OperationalError as e:
-            # dam_sire_breeding_num 列が無い古い DB (readonly 接続は migration を
-            # 走らせない)。母父の遡上なしで劣化継続 (名前照合のみ)。列欠如以外の
-            # OperationalError (ロック/破損等) を縮退と誤分類しないよう素通しする。
-            if "no such column" not in str(e):
-                raise
-            logger.warning("horse_masters.dam_sire_breeding_num 無し: 母父系統は名前照合のみに縮退 (%s)", e)
-            rows_m = conn.execute(
-                f"SELECT blood_register_num, sire_name, sire_breeding_num, "
-                f"dam_sire_name, NULL AS dam_sire_breeding_num "
-                f"FROM horse_masters WHERE blood_register_num IN ({q})", brns
-            ).fetchall()
-        for m in rows_m:
+        for m in conn.execute(
+            f"SELECT blood_register_num, {sel} FROM horse_masters "
+            f"WHERE blood_register_num IN ({q})", brns
+        ).fetchall():
             masters[m["blood_register_num"]] = m
+
+    # 祖先の産地 (HN 繁殖馬マスタの産地名)。BLOD 未取込 / 旧スキーマなら空 dict に縮退。
+    origins: dict[str, str] = {}
+    anc_bns = {bn for m in masters.values()
+               for bn in (m["sire_breeding_num"], m["dam_sire_breeding_num"],
+                          m["sire_dam_sire_breeding_num"], m["dam_dam_sire_breeding_num"])
+               if bn}
+    if anc_bns:
+        try:
+            qb = ",".join("?" * len(anc_bns))
+            origins = {r["breeding_num"]: (r["birthplace"] or "").strip()
+                       for r in conn.execute(
+                           f"SELECT breeding_num, birthplace FROM breeding_horses "
+                           f"WHERE breeding_num IN ({qb})", sorted(anc_bns)).fetchall()
+                       if (r["birthplace"] or "").strip()}
+        except sqlite3.OperationalError:
+            origins = {}  # breeding_horses 不在 or birthplace 列なし → 産地非表示で継続
 
     before_date = date  # YYYYMMDD (features の _date_key と同じ連結規約)
     # DB に corner データが存在するか (run 単位フラグ、features の _cached キーを参照)
@@ -243,6 +255,17 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
         "next": sibling_nums[idx + 1] if 0 <= idx < len(sibling_nums) - 1 else None,
         "date": date, "track": track, "kaiji": kaiji, "nichiji": nichiji,
     }
+    def _ped_extra(name: str, bn: str | None) -> str | None:
+        """父母父/母母父の補助表示「名前(系統短/産地)」。名前が無ければ None。"""
+        if not name:
+            return None
+        k = classify_sire(name, conn=conn, sire_breeding_num=bn)
+        parts = line_label_short(k)
+        org = origins.get(bn or "")
+        if org:
+            parts += f"/{org}"
+        return f"{name}({parts})"
+
     rows = []
     for h in horses:
         m = masters.get(h.get("blood_register_num"))
@@ -250,10 +273,20 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
         sire_bn = m["sire_breeding_num"] if m else None
         dam_sire = m["dam_sire_name"] if m else ""
         dam_sire_bn = m["dam_sire_breeding_num"] if m else None
+        sds = m["sire_dam_sire_name"] if m else ""          # 父母父
+        sds_bn = m["sire_dam_sire_breeding_num"] if m else None
+        dds = m["dam_dam_sire_name"] if m else ""           # 母母父
+        dds_bn = m["dam_dam_sire_breeding_num"] if m else None
         lk = classify_sire(sire, conn=conn, sire_breeding_num=sire_bn)
         # 母父系統 (SmartRC 同様の 2 段表示用)。dam_sire_breeding_num は母父自身の
         # 繁殖番号なので、そこから父系遡上すれば母父の大系統が引ける。
         dlk = classify_sire(dam_sire, conn=conn, sire_breeding_num=dam_sire_bn)
+        # 父母父・母母父 (3 代血統) は補助行に「名前(系統/産地)」で出す
+        sds_disp, dds_disp = _ped_extra(sds, sds_bn), _ped_extra(dds, dds_bn)
+        ped_parts = [p for p in (
+            f"父母父 {sds_disp}" if sds_disp else None,
+            f"母母父 {dds_disp}" if dds_disp else None,
+        ) if p]
         odds = h.get("win_odds")
         feat = feats.get(h.get("horse_num") or "", {})
         recent = _recent_form(conn, h.get("blood_register_num"), before_date)
@@ -265,6 +298,9 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
             "dam_line_color": line_color(dlk),
             "dam_line_short": line_label_short(dlk),
             "sire": sire, "dam_sire": dam_sire,
+            "sire_origin": origins.get(sire_bn or ""),
+            "dam_sire_origin": origins.get(dam_sire_bn or ""),
+            "ped_extra": " ・ ".join(ped_parts) if ped_parts else None,
             "jockey": h.get("jockey_short_name") or h.get("jockey_code") or "",
             "popularity": h.get("win_popularity"),
             "odds": (round(odds / 10, 1) if odds else None),

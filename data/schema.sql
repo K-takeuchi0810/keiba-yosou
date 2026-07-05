@@ -160,7 +160,14 @@ CREATE TABLE IF NOT EXISTS horse_masters (
     sire_name              TEXT,
     dam_sire_breeding_num  TEXT,
     dam_sire_name          TEXT,
-    leg_tendency_code      TEXT
+    leg_tendency_code      TEXT,
+    -- 3 代血統の追加 2 頭 (2026-07-05)。既存 DB は db.init_db の _ensure_column で補修。
+    -- 注意: これらを参照する INDEX を本ファイルへ足さないこと (旧 DB では
+    -- executescript が列補修より先に走ると落ちる。idx_horse_masters_dam_sire の教訓)。
+    sire_dam_sire_breeding_num TEXT,   -- 父母父
+    sire_dam_sire_name         TEXT,
+    dam_dam_sire_breeding_num  TEXT,   -- 母母父
+    dam_dam_sire_name          TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_horse_masters_sire
@@ -220,7 +227,11 @@ CREATE TABLE IF NOT EXISTS breeding_horses (
     dam_breeding_num     TEXT,
     dam_name             TEXT,
     dam_sire_breeding_num TEXT,
-    dam_sire_name        TEXT
+    dam_sire_name        TEXT,
+    -- 産地情報 (2026-07-05)。既存 DB は db.init_db の _ensure_column で補修。
+    mochikomi_kubun      TEXT,   -- 繁殖馬持込区分
+    import_year          TEXT,   -- 輸入年 (輸入馬のみ)
+    birthplace           TEXT    -- 産地名 (国内=市町村、外国産=国名系)
 );
 
 -- 産駒マスタ (SK レコード)

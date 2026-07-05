@@ -517,9 +517,25 @@ class HorseMaster:
     dam_sire_breeding_num: str
     dam_sire_name: str
     leg_tendency_code: str
+    # 3 代血統の追加 2 頭 (2026-07-05、SmartRC パリティ: 父母父・母母父の系統表示用)。
+    # HS レコード経由 (parse_hs) では取得できないため既定は空。
+    sire_dam_sire_breeding_num: str = ""   # 父母父 (3 代血統 idx 8)
+    sire_dam_sire_name: str = ""
+    dam_dam_sire_breeding_num: str = ""    # 母母父 (3 代血統 idx 12)
+    dam_dam_sire_name: str = ""
 
 
 def _pedigree_item(rec: bytes, idx: int) -> tuple[str, str]:
+    """UM 3 代血統情報 (pos 205 起点、1 頭 = 繁殖番号 10 + 馬名 36 = 46 byte × 14 頭)。
+
+    配列順は JV-Data 標準の幅優先:
+      0 父 / 1 母 / 2 父父 / 3 父母 / 4 母父 / 5 母母 /
+      6 父父父 / 7 父父母 / 8 父母父 / 9 父母母 / 10 母父父 / 11 母父母 /
+      12 母母父 / 13 母母母
+    idx 0 (父) と idx 4 (母父) は実運用 DB の表示で検証済みのアンカー。同一配列の
+    等間隔要素なので idx 8 / 12 は配列算術で導出できる (誤配置なら馬名フィールドが
+    数字/文字化けとして即時に可視化される)。
+    """
     pos = 205 + idx * 46
     return _ascii(rec, pos, 10), _str(rec, pos + 10, 36)
 
@@ -531,6 +547,8 @@ def parse_um(rec: bytes) -> HorseMaster:
         rec = rec[:UM_LENGTH]
     sire_num, sire_name = _pedigree_item(rec, 0)
     dam_sire_num, dam_sire_name = _pedigree_item(rec, 4)
+    sds_num, sds_name = _pedigree_item(rec, 8)    # 父母父
+    dds_num, dds_name = _pedigree_item(rec, 12)   # 母母父
     return HorseMaster(
         record_type=_ascii(rec, 1, 2),
         data_div=_ascii(rec, 3, 1),
@@ -544,6 +562,10 @@ def parse_um(rec: bytes) -> HorseMaster:
         dam_sire_breeding_num=dam_sire_num,
         dam_sire_name=dam_sire_name,
         leg_tendency_code=_ascii(rec, 1593, 4),
+        sire_dam_sire_breeding_num=sds_num,
+        sire_dam_sire_name=sds_name,
+        dam_dam_sire_breeding_num=dds_num,
+        dam_dam_sire_name=dds_name,
     )
 
 
@@ -756,6 +778,10 @@ class BreedingHorse:
     birth_year: str
     sire_breeding_num: str
     dam_breeding_num: str
+    # 産地情報 (2026-07-05、祖先の産国/産地表示用)。
+    mochikomi_kubun: str = ""   # 繁殖馬持込区分 (1 byte)
+    import_year: str = ""       # 輸入年 (4 byte、輸入馬のみ)
+    birthplace: str = ""        # 産地名 (20 byte。国内=市町村名、外国産=国名系)
 
 
 def parse_hn(rec: bytes) -> BreedingHorse:
@@ -764,7 +790,10 @@ def parse_hn(rec: bytes) -> BreedingHorse:
     1-2: rec_type / 3: data_div / 4-11: data_created
     12-21: breeding_num / 30-39: blood_register_num / 41-76: horse_name
     197-200: birth_year / 201: sex_code / 202: breed_code / 203-204: coat
+    205: 持込区分 / 206-209: 輸入年 / 210-229: 産地名 (20)
     230-239: sire_breeding_num / 240-249: dam_breeding_num
+    205-229 の 3 項目 (1+4+20=25 byte) は、検証済みアンカー 203-204 (毛色) と
+    230 (父繁殖番号) の間隙 25 byte にちょうど適合する (JV-Data 標準レイアウト)。
     """
     if len(rec) < HN_LENGTH:
         rec = rec.ljust(HN_LENGTH, b"\x00")
@@ -783,6 +812,9 @@ def parse_hn(rec: bytes) -> BreedingHorse:
         birth_year=_ascii(rec, 197, 4),
         sire_breeding_num=_ascii(rec, 230, 10),
         dam_breeding_num=_ascii(rec, 240, 10),
+        mochikomi_kubun=_ascii(rec, 205, 1),
+        import_year=_ascii(rec, 206, 4),
+        birthplace=_str(rec, 210, 20),
     )
 
 

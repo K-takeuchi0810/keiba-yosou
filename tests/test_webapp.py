@@ -26,17 +26,24 @@ def _db():
           trainer_short_name TEXT, trainer_code TEXT, confirmed_order INTEGER,
           win_popularity INTEGER, win_odds INTEGER, leg_quality_code TEXT);
         CREATE TABLE horse_masters (blood_register_num TEXT PRIMARY KEY, sire_name TEXT,
-          sire_breeding_num TEXT, dam_sire_name TEXT, dam_sire_breeding_num TEXT);
+          sire_breeding_num TEXT, dam_sire_name TEXT, dam_sire_breeding_num TEXT,
+          sire_dam_sire_name TEXT, sire_dam_sire_breeding_num TEXT,
+          dam_dam_sire_name TEXT, dam_dam_sire_breeding_num TEXT);
         CREATE TABLE payouts (race_year TEXT, race_month_day TEXT, track_code TEXT,
           kaiji TEXT, nichiji TEXT, race_num TEXT,
           tan_horse_num1 TEXT, tan_payout1 INTEGER, tan_horse_num2 TEXT, tan_payout2 INTEGER,
           tan_horse_num3 TEXT, tan_payout3 INTEGER);
         CREATE TABLE breeding_horses (breeding_num TEXT PRIMARY KEY, horse_name TEXT,
-          sire_name TEXT, sire_breeding_num TEXT);
+          sire_name TEXT, sire_breeding_num TEXT, birthplace TEXT);
         """
     )
-    conn.execute("INSERT INTO horse_masters VALUES ('B1','ディープインパクト','S1','キングカメハメハ','D1')")
-    conn.execute("INSERT INTO horse_masters VALUES ('B2','キングカメハメハ','S2','母父Y','D2')")
+    # B1: 父ディープ(産地=安平)、母父キンカメ、父母父ノーザンテースト(産地=米)、母母父トニービン
+    conn.execute("INSERT INTO horse_masters VALUES ('B1','ディープインパクト','S1','キングカメハメハ','D1',"
+                 "'ノーザンテースト','SD1','トニービン','DD1')")
+    conn.execute("INSERT INTO horse_masters VALUES ('B2','キングカメハメハ','S2','母父Y','D2',"
+                 "'','','','')")
+    conn.execute("INSERT INTO breeding_horses VALUES ('S1','ディープインパクト','サンデーサイレンス','S9','安平')")
+    conn.execute("INSERT INTO breeding_horses VALUES ('SD1','ノーザンテースト','ノーザンダンサー','S8','米')")
     for i in range(30):
         key = ("2025", "0518", "05", "01", "01", f"{i + 1:02d}")
         conn.execute("INSERT INTO races VALUES (?,?,?,?,?,?,1600,'11','テストS','1','1','0',4)", key)
@@ -77,6 +84,18 @@ def test_render_race_has_line_color_and_masters():
     assert "買い推奨ではありません" in html    # 誤読防止バナー
     assert "近3走" in html                    # SmartRC 相当のサブ行 (補助指標)
     assert "父×馬場" in html
+
+
+def test_render_race_gen3_pedigree_and_origin():
+    """父母父/母母父の系統表示と、繁殖馬マスタ由来の産地表示 (SmartRC パリティ)。"""
+    conn = _db()
+    html = views.render_race(conn, "20250518", "05", "01", "01", "01")
+    assert html is not None
+    # 補助行の 3 代血統: 名前(系統短/産地)
+    assert "父母父 ノーザンテースト(ノーザンD系/米)" in html
+    assert "母母父 トニービン(ナスルーラ系)" in html          # 産地未取込 → 系統のみ
+    # 父列の産地サフィックス (S1=安平)
+    assert "(安平)" in html
 
 
 def test_render_race_old_schema_without_dam_sire_bn():
