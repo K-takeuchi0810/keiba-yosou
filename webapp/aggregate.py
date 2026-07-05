@@ -1,7 +1,7 @@
 """傾向集計 — コース × ファクター別の成績集計 (SmartRC「傾向集計」踏襲)。
 
 指定コース (競馬場 × 芝ダ × 距離帯) の過去 N 年のレース結果を、各ファクター
-(枠番 / 騎手 / 調教師 / 種牡馬 / 父系統 / 母父 / 人気帯) で層別し、
+(枠番 / 騎手 / 調教師 / 種牡馬 / 父系統 / 母父 / 母父系統 / 人気帯) で層別し、
 出走数・勝率・複勝率・単勝回収率を Wilson CI 付きで集計する。
 
 bias_scan.py の規律を継承:
@@ -23,10 +23,10 @@ import logging
 import sqlite3
 
 from predictor.sire_lines import classify_sire, line_color, line_label
-
-logger = logging.getLogger(__name__)
 from predictor.stats import bootstrap_return_rate, wilson_ci
 from web.codes import track_name, track_type
+
+logger = logging.getLogger(__name__)
 
 # JRA 中央場 (track_code 01-10) 判定の webapp 内単一出典。
 # 注意: scripts/gui 側には同判定の直書きが残存しており (backtest/filter_sweep 等 8 箇所)、
@@ -157,21 +157,29 @@ def aggregate_course(conn, track_code: str, surface: str, distance: int, factor:
         (r["race_year"], r["race_month_day"], r["track_code"], r["kaiji"], r["nichiji"], r["race_num"])
         for r in surf_races if surface_of(r["track_type_code"]) == surface
     }
-    rows = _rows_with_key(conn, sel, join, from_date, to_date, track_code, distance)
+    rows, dam_bn_degraded = _rows_with_key(
+        conn, sel, join, from_date, to_date, track_code, distance,
+        need_dam_bn=(factor == "dam_sire_line"))
     rows = [r for r in rows if (r["ry"], r["rmd"], r["tc"], r["kj"], r["nj"], r["rn"]) in ok_surface]
 
-    # 集計
+    # 集計。系統分類はユニーク種牡馬あたり 1 回で足りるので request 内でメモ化する
+    # (人気種牡馬は数百行重複し、辞書 miss の遡上が最も高くつくため。2026-07-05 監査 R3)。
     buckets: dict[str, dict] = {}
     total_n = 0
+    line_memo: dict[tuple, str] = {}
     for r in rows:
         fval = r["fval"]
         if factor == "popularity":
             value = popularity_bucket_of(fval)
         elif factor == "sire_line":
-            value = classify_sire(fval, conn=conn, sire_breeding_num=r["sire_bn"])
+            memo_key = (fval, r["sire_bn"])
+            value = line_memo.get(memo_key) or line_memo.setdefault(
+                memo_key, classify_sire(fval, conn=conn, sire_breeding_num=r["sire_bn"]))
         elif factor == "dam_sire_line":
             # dam_sire_bn は母父自身の繁殖番号 → そこから父系遡上で母父の大系統
-            value = classify_sire(fval, conn=conn, sire_breeding_num=r["dam_sire_bn"])
+            memo_key = (fval, r["dam_sire_bn"])
+            value = line_memo.get(memo_key) or line_memo.setdefault(
+                memo_key, classify_sire(fval, conn=conn, sire_breeding_num=r["dam_sire_bn"]))
         else:
             value = (str(fval).replace("　", "").strip() if fval not in (None, "") else "不明")
         b = buckets.setdefault(value, {"n": 0, "wins": 0, "top3": 0,
@@ -239,6 +247,9 @@ def aggregate_course(conn, track_code: str, surface: str, distance: int, factor:
         # 多重比較の開示: この 1 集計で同時に見ている値 (セル) の数。
         # コース数 × ファクター数 × この値のぶん「最良セルが偶然良く見える」試行が走る。
         "n_values": len(cells) + len(insufficient),
+        # 旧スキーマ縮退中 (母父の血統遡上なし、名前照合のみ)。True なら unknown が
+        # 多めに出る旨をテンプレートで開示する (2026-07-05 profitability 監査推奨)。
+        "dam_bn_degraded": dam_bn_degraded,
         "cells": cells,
         "insufficient": insufficient,
     }
@@ -249,6 +260,8 @@ def today_trends(conn, date: str, factor: str = "waku") -> dict:
     枠番 / 父系統 / 脚質 で層別し「今どの枠・系統・脚質が来ているか」を集計する。
 
     date は YYYYMMDD。予想 (predict_race) は使わず確定結果のみを見る軽量集計。
+    当日集計は母数が 1 日分 (数十〜100 レース強) しかないため、軸は意図的に
+    この 3 つへ絞る — dam_sire_line 等の細かい軸はセル枯れして誤読源になる。
     """
     if factor not in ("waku", "sire_line", "leg"):
         raise ValueError(f"today factor must be waku/sire_line/leg: {factor}")
@@ -274,6 +287,7 @@ def today_trends(conn, date: str, factor: str = "waku") -> dict:
 
     buckets: dict[str, dict] = {}
     n_races = set()
+    _memo: dict[tuple, str] = {}
     for r in rows:
         n_races.add((r["tc"], r["rn"]))
         if factor == "waku":
@@ -281,8 +295,11 @@ def today_trends(conn, date: str, factor: str = "waku") -> dict:
         elif factor == "leg":
             value = {"1": "逃げ", "2": "先行", "3": "差し", "4": "追込"}.get(
                 (r["leg"] or "").strip(), "不明")
-        else:  # sire_line
-            value = classify_sire(r["sire"], conn=conn, sire_breeding_num=r["sire_bn"])
+        else:  # sire_line (ユニーク種牡馬単位でメモ化 — aggregate_course と同方針)
+            memo_key = (r["sire"], r["sire_bn"])
+            if memo_key not in _memo:
+                _memo[memo_key] = classify_sire(r["sire"], conn=conn, sire_breeding_num=r["sire_bn"])
+            value = _memo[memo_key]
         b = buckets.setdefault(value, {"n": 0, "wins": 0, "top3": 0})
         b["n"] += 1
         ordr = r["ord"] or 0
@@ -314,8 +331,15 @@ def today_trends(conn, date: str, factor: str = "waku") -> dict:
 
 
 def _rows_with_key(conn, sel: str, join: str, from_date: str, to_date: str,
-                   track_code: str, distance: int):
-    """race キー付きで factor 値・着順・単勝配当を引く (surface 後段フィルタ用)。"""
+                   track_code: str, distance: int,
+                   need_dam_bn: bool = False) -> tuple[list, bool]:
+    """race キー付きで factor 値・着順・単勝配当を引く (surface 後段フィルタ用)。
+
+    戻り: (rows, dam_bn_degraded)。dam_sire_breeding_num は dam_sire_line 集計
+    でのみ必要なので need_dam_bn=False では最初から NULL を選ぶ — 旧スキーマ DB
+    でも waku/jockey 等の集計が例外経路と無関係な warning を出さないため
+    (2026-07-05 data-pipeline 監査 R2)。縮退判定は接続毎にやり直すので、writer が
+    列を追加すれば再起動なしで自動復帰する。"""
     sql_tpl = """
         SELECT r.race_year AS ry, r.race_month_day AS rmd, r.track_code AS tc,
                r.kaiji AS kj, r.nichiji AS nj, r.race_num AS rn,
@@ -345,16 +369,20 @@ def _rows_with_key(conn, sel: str, join: str, from_date: str, to_date: str,
           AND h.confirmed_order IS NOT NULL AND h.confirmed_order > 0
     """
     params = (from_date, to_date, track_code, distance)
+    if not need_dam_bn:
+        return conn.execute(
+            sql_tpl.format(sel=sel, join=join, dam_bn="NULL"), params
+        ).fetchall(), False
     try:
         return conn.execute(
             sql_tpl.format(sel=sel, join=join, dam_bn="hm2.dam_sire_breeding_num"), params
-        ).fetchall()
+        ).fetchall(), False
     except sqlite3.OperationalError as e:
         # dam_sire_breeding_num 列が無い古い DB (readonly は migration しない)。
         # 母父系統は名前照合のみに縮退 (views.build_race と同方針)。
         if "no such column" not in str(e):
             raise
-        logger.warning("horse_masters.dam_sire_breeding_num 無し: 母父系統集計は名前照合のみに縮退")
+        logger.warning("horse_masters.dam_sire_breeding_num 無し: 母父系統集計は名前照合のみに縮退 (%s)", e)
         return conn.execute(
             sql_tpl.format(sel=sel, join=join, dam_bn="NULL"), params
-        ).fetchall()
+        ).fetchall(), True

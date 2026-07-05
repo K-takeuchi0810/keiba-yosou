@@ -112,6 +112,13 @@ def open_db_readonly(path: Path | str = DB_PATH):
 
 def init_db(conn: sqlite3.Connection) -> None:
     schema = SCHEMA_PATH.read_text(encoding="utf-8")
+    # schema.sql の idx_horse_masters_dam_sire が dam_sire_breeding_num を参照する
+    # ため、この列の補修は executescript より**先**に行う。後置だと「テーブルは
+    # あるが列が無い」旧 DB で index 作成が no such column で落ち、補修行に到達
+    # できず writer が起動不能になる (2026-07-05 data-pipeline 監査 R1)。
+    # 他の migration 列 (corner/lap/odds_fetched_at 等) は schema.sql に index が
+    # 無いので後置で問題ない。
+    _ensure_column_if_exists(conn, "horse_masters", "dam_sire_breeding_num", "TEXT")
     conn.executescript(schema)
     _ensure_column(conn, "horse_races", "odds_fetched_at", "TEXT")
     _ensure_column(conn, "horse_races", "odds_dataspec", "TEXT")
@@ -124,14 +131,18 @@ def init_db(conn: sqlite3.Connection) -> None:
     for _c in ("front3f_time", "front4f_time", "last3f_time", "last4f_time"):
         _ensure_column(conn, "races", _c, "INTEGER")
     _ensure_column(conn, "races", "lap_times", "TEXT")
-    # webapp の母父系統遡上用。readonly 側は列欠如で縮退するが、writer 側は
-    # ここで自己修復し方針を対称にする (2026-07-05 data-pipeline 監査指摘)。
-    _ensure_column(conn, "horse_masters", "dam_sire_breeding_num", "TEXT")
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
     cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
     if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+
+
+def _ensure_column_if_exists(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
+    """テーブルが存在する場合のみ列補修する (新規 DB は直後の schema.sql が列ごと作る)。"""
+    cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if cols and column not in cols:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
 

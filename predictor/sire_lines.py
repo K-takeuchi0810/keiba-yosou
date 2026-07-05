@@ -346,8 +346,9 @@ LINE_BY_SIRE: dict[str, str] = {
     "ワイルドアゲイン": "nearctic",   # 父アイスカペイド
     "ワイルドラッシュ": "nearctic",   # 父ワイルドアゲイン
     "トランセンド": "nearctic",      # 父ワイルドラッシュ
-    # 注: ダノンレジェンド (父 Macho Uno = In Reality 系) のような 10 大系統外は
-    # 辞書に載せず unknown (グレー) に落とす。誤答よりも「その他」が誠実。
+    # 注: ダノンレジェンド (父 Macho Uno = In Reality 系) やパーソロン系
+    # (メジロマックイーン等) のような 11 大系統外は辞書に載せず unknown (グレー)
+    # に落とす。誤答よりも「その他」が誠実。
 }
 
 # 父系遡上の始祖 (breeding_horses を遡って当たったらこの系統)。
@@ -375,7 +376,12 @@ FOUNDERS: dict[str, str] = {
 
 
 def _normalize(name: str | None) -> str:
-    """種牡馬名を照合キーに正規化 (全角空白除去 + trim)。"""
+    """種牡馬名を照合キーに正規化 (全角空白除去 + trim)。
+
+    注: 半角カナ・異表記 (海外馬の音写ゆれ等) には対応しない。breeding_horses の
+    表記が辞書キーとずれると遡上停止点を素通りし得る (2026-07-05 検証監査)。
+    その検出は scripts/audit_sire_lines.py の実 DB 突合で行う。
+    """
     if not name:
         return ""
     return name.replace("　", "").strip()

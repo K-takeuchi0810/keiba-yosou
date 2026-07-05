@@ -31,6 +31,10 @@
   <strong>{{ result.track_name }} {{ result.surface_label }}{{ result.distance }}m ／ {{ result.factor_label }}</strong>
   <div class="muted">{{ result.from_date }}〜{{ result.to_date }} ・ 対象 {{ result.total }} 走 ・ min_n={{ result.min_n }}
    ・ 同時比較 {{ result.n_values }} 値（多いほど最良セルの偶然上振れが起きやすい）</div>
+  {% if result.dam_bn_degraded %}
+  <div class="muted"><span class="chip">簡易分類</span>
+    母父系統は名前照合のみ（血統遡上なし・DB 旧スキーマ）。「その他」が実際より多めに出ます。</div>
+  {% endif %}
 </div>
 <div class="tablewrap">
 <table>

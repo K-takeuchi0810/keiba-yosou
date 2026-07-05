@@ -113,6 +113,27 @@ def test_aggregate_dam_sire_line_old_schema_fallback():
     assert by_value["turnto"]["color"] == "#7986cb"
     # B2 の母父Y は辞書外 + 遡上不能 → unknown
     assert by_value["unknown"]["n"] == 120
+    # 縮退フラグが立ち、テンプレートで「簡易分類」チップが出る
+    assert r["dam_bn_degraded"] is True
+
+
+def test_aggregate_dam_sire_line_new_schema_traversal():
+    """新スキーマ (dam_sire_breeding_num あり) では母父の血統遡上が実際に効く。
+
+    縮退側テストと対になる非縮退経路の regression (2026-07-05 validation 監査 #2)。
+    """
+    conn = _db()
+    conn.execute("ALTER TABLE horse_masters ADD COLUMN dam_sire_breeding_num TEXT")
+    # B1 の母父を辞書外の名前にし、breeding_horses 遡上でのみ分類可能にする
+    conn.execute("UPDATE horse_masters SET dam_sire_name='無名母父', dam_sire_breeding_num='D1' "
+                 "WHERE blood_register_num='B1'")
+    conn.execute("INSERT INTO breeding_horses VALUES ('D1','無名母父','サンデーサイレンス','D2')")
+    conn.commit()
+    r = agg.aggregate_course(conn, "05", "turf", 1600, "dam_sire_line",
+                             "20240101", "20241231", min_n=10)
+    by_value = {c["value"]: c for c in r["cells"]}
+    assert by_value["sunday"]["n"] == 40      # 遡上で父=サンデーサイレンス → sunday
+    assert r["dam_bn_degraded"] is False      # 非縮退
 
 
 def test_min_n_gate():

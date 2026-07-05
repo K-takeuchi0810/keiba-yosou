@@ -55,6 +55,9 @@
      見せる (本文色 + 枠) — 青文字の羅列は可読性が落ちる (実機指摘)。 */
   .grid a.chip { min-height:44px; display:inline-flex; align-items:center; padding:0 14px;
     font-size:14px; font-weight:600; }
+  /* 系統色 dot。不変条件: dot は色のみの識別に使わず**常にテキストラベルを併記**する
+     (turnto/storm/roberto は輝度比 ~1.03:1 で色覚多様性では色相判別不能 —
+     2026-07-05 mobile 監査。dot 単独出力のテンプレートを書いてはいけない)。 */
   .line-dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:5px;
     vertical-align:middle; box-shadow:0 0 0 1px var(--border); }  /* 円形に沿う縁取り */
   a.backlink { display:inline-flex; align-items:center; min-height:44px; }  /* HIG 44pt */
