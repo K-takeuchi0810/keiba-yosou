@@ -257,7 +257,7 @@ class Cell:
     ちょうど 1 セルに丸ごと入る。よって add_race を 1 レース 1 回呼べばよい。
     """
 
-    __slots__ = ("n", "sum_prob", "wins", "sum_sq_err", "top3", "warn_n",
+    __slots__ = ("n", "sum_prob", "wins", "sum_sq_err", "top3", "warn_n", "warn_types",
                  "payouts_trusted", "stakes_trusted", "n_trusted", "n_races", "field_sum")
 
     def __init__(self) -> None:
@@ -267,6 +267,9 @@ class Cell:
         self.sum_sq_err = 0.0   # Σ(p - y)^2 → Brier
         self.top3 = 0
         self.warn_n = 0         # feature_warnings 付きレコード数 (品質セグメント診断)
+        # 警告種別ごとの件数 (leg_quality_unavailable 等)。OR 集約 (warn_n) だけでは
+        # 「どの欠損が gap を駆動しているか」を切り分けられない (2026-07-05 監査指摘)。
+        self.warn_types: dict[str, int] = {}
         self.payouts_trusted: list[int] = []
         self.stakes_trusted: list[int] = []
         self.n_trusted = 0
@@ -279,7 +282,7 @@ class Cell:
         self.field_sum += field_size
 
     def add(self, prob: float, actual: int, top3: bool, payout: int, odds_trusted: bool,
-            has_warning: bool = False) -> None:
+            warnings: list[str] | None = None) -> None:
         """レコード単位の寄与 (pick は 1/レース、all は 1/馬)。"""
         p = max(0.0, min(1.0, float(prob)))  # calibration_report と同じクランプ
         y = 1 if actual else 0
@@ -288,8 +291,10 @@ class Cell:
         self.wins += y
         self.sum_sq_err += (p - y) ** 2
         self.top3 += int(top3)
-        if has_warning:
+        if warnings:
             self.warn_n += 1
+            for w in warnings:
+                self.warn_types[w] = self.warn_types.get(w, 0) + 1
         if odds_trusted:
             self.payouts_trusted.append(payout)
             self.stakes_trusted.append(100)
@@ -347,6 +352,8 @@ def summarize_cell(cell: Cell, min_n: int, subject: str) -> dict:
         # 「そのセグメントは特徴量欠損 (leg_quality 等) が多いだけでは」を即検証できる。
         "warn_n": cell.warn_n,
         "warn_pct": round(cell.warn_n / n * 100, 1) if n else 0.0,
+        # 種別内訳 (上位 5 種)。特定欠損が gap を駆動しているかを直接切り分ける。
+        "warn_types": dict(sorted(cell.warn_types.items(), key=lambda kv: -kv[1])[:5]),
         "return_pct": round(ret_point * 100, 1) if ret_point is not None else None,
         "return_ci": [round(ret_lo * 100, 1), round(ret_hi * 100, 1)] if ret_point is not None else None,
         "status": "ok" if qualifies else "insufficient",
@@ -397,8 +404,8 @@ def run_scan(conn, from_date: str, to_date: str, subject: str, axes: list[str],
         surface = surface_key(race)
         field_size = len(horses)
 
-        # レコード化: (prob, actual, top3, payout, has_warning)。subject で対象を切替。
-        records: list[tuple[float, int, bool, int, bool]] = []
+        # レコード化: (prob, actual, top3, payout, warnings)。subject で対象を切替。
+        records: list[tuple[float, int, bool, int, list]] = []
         if subject == "pick":
             if not include_tentative and is_tentative(preds):
                 n_skip_tentative += 1
@@ -408,14 +415,14 @@ def run_scan(conn, from_date: str, to_date: str, subject: str, axes: list[str],
             records.append((top.raw_blended_probability, actual,
                             top.horse_num in actual_top3,
                             get_payout(conn, race, top.horse_num, "tan"),
-                            bool(getattr(top, "feature_warnings", None))))
+                            list(getattr(top, "feature_warnings", None) or [])))
         else:  # all
             for p in preds:
                 actual = 1 if p.horse_num == actual_win["horse_num"] else 0
                 records.append((p.raw_blended_probability, actual,
                                 p.horse_num in actual_top3,
                                 get_payout(conn, race, p.horse_num, "tan"),
-                                bool(getattr(p, "feature_warnings", None))))
+                                list(getattr(p, "feature_warnings", None) or [])))
         if not records:
             continue
         n_races += 1
@@ -433,12 +440,12 @@ def run_scan(conn, from_date: str, to_date: str, subject: str, axes: list[str],
             cross_cells[c][cross_keys[c]].add_race(field_size)
 
         # レコード単位の寄与。
-        for prob, actual, top3, payout, has_warn in records:
-            global_cell.add(prob, actual, top3, payout, odds_trusted, has_warn)
+        for prob, actual, top3, payout, warns in records:
+            global_cell.add(prob, actual, top3, payout, odds_trusted, warns)
             for a in axes:
-                axis_cells[a][axis_keys[a]].add(prob, actual, top3, payout, odds_trusted, has_warn)
+                axis_cells[a][axis_keys[a]].add(prob, actual, top3, payout, odds_trusted, warns)
             for c in cross_specs:
-                cross_cells[c][cross_keys[c]].add(prob, actual, top3, payout, odds_trusted, has_warn)
+                cross_cells[c][cross_keys[c]].add(prob, actual, top3, payout, odds_trusted, warns)
 
     # 集計
     global_stats = summarize_cell(global_cell, min_n=0, subject=subject)

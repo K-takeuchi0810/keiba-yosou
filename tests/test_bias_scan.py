@@ -136,14 +136,17 @@ def test_streaming_brier_golden():
     assert st["actual_rate"] == round(sum(actuals) / len(actuals), 4)
 
 
-def test_warn_counter():
+def test_warn_counter_with_types():
     c = b.Cell()
     c.add_race(10)
-    c.add(0.2, 0, False, 0, True, has_warning=True)
-    c.add(0.2, 1, True, 300, True)  # 既定 False
+    c.add(0.2, 0, False, 0, True, warnings=["leg_quality_unavailable", "same_day_bias_unavailable"])
+    c.add(0.2, 1, True, 300, True)  # 警告なし
+    c.add(0.3, 0, False, 0, True, warnings=["leg_quality_unavailable"])
     st = b.summarize_cell(c, min_n=0, subject="pick")
-    assert st["warn_n"] == 1
-    assert st["warn_pct"] == 50.0
+    assert st["warn_n"] == 2                      # 警告付きレコード数 (OR)
+    assert st["warn_pct"] == round(2 / 3 * 100, 1)
+    # 種別内訳: どの欠損が支配的かを直接切り分けられる
+    assert st["warn_types"] == {"leg_quality_unavailable": 2, "same_day_bias_unavailable": 1}
 
 
 def test_severity_tag_levels():
