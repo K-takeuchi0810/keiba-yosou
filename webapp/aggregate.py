@@ -19,9 +19,12 @@ bias_scan の subject=all (正相関クラスタ) とは相関の向きが異な
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 
 from predictor.sire_lines import classify_sire, line_color, line_label
+
+logger = logging.getLogger(__name__)
 from predictor.stats import bootstrap_return_rate, wilson_ci
 from web.codes import track_name, track_type
 
@@ -43,6 +46,7 @@ FACTORS = {
     "sire": "種牡馬",
     "sire_line": "父系統",
     "dam_sire": "母父",
+    "dam_sire_line": "母父系統",
     "popularity": "人気帯",
 }
 
@@ -115,7 +119,7 @@ def _factor_select(factor: str) -> tuple[str, str]:
     if factor in ("sire", "sire_line"):
         return ("hm.sire_name",
                 "LEFT JOIN horse_masters hm ON hm.blood_register_num = h.blood_register_num")
-    if factor == "dam_sire":
+    if factor in ("dam_sire", "dam_sire_line"):
         return ("hm.dam_sire_name",
                 "LEFT JOIN horse_masters hm ON hm.blood_register_num = h.blood_register_num")
     if factor == "popularity":
@@ -165,6 +169,9 @@ def aggregate_course(conn, track_code: str, surface: str, distance: int, factor:
             value = popularity_bucket_of(fval)
         elif factor == "sire_line":
             value = classify_sire(fval, conn=conn, sire_breeding_num=r["sire_bn"])
+        elif factor == "dam_sire_line":
+            # dam_sire_bn は母父自身の繁殖番号 → そこから父系遡上で母父の大系統
+            value = classify_sire(fval, conn=conn, sire_breeding_num=r["dam_sire_bn"])
         else:
             value = (str(fval).replace("　", "").strip() if fval not in (None, "") else "不明")
         b = buckets.setdefault(value, {"n": 0, "wins": 0, "top3": 0,
@@ -192,8 +199,8 @@ def aggregate_course(conn, track_code: str, surface: str, distance: int, factor:
         ret_point, ret_lo, ret_hi = bootstrap_return_rate(b["payouts"], stakes) if n else (0.0, 0.0, 0.0)
         cell = {
             "value": value,
-            "label": line_label(value) if factor == "sire_line" else value,
-            "color": line_color(value) if factor == "sire_line" else None,
+            "label": line_label(value) if factor in ("sire_line", "dam_sire_line") else value,
+            "color": line_color(value) if factor in ("sire_line", "dam_sire_line") else None,
             "n": n,
             "wins": b["wins"],
             "top3": b["top3"],
@@ -309,12 +316,13 @@ def today_trends(conn, date: str, factor: str = "waku") -> dict:
 def _rows_with_key(conn, sel: str, join: str, from_date: str, to_date: str,
                    track_code: str, distance: int):
     """race キー付きで factor 値・着順・単勝配当を引く (surface 後段フィルタ用)。"""
-    sql = f"""
+    sql_tpl = """
         SELECT r.race_year AS ry, r.race_month_day AS rmd, r.track_code AS tc,
                r.kaiji AS kj, r.nichiji AS nj, r.race_num AS rn,
                {sel} AS fval,
                h.confirmed_order AS ord,
                hm2.sire_breeding_num AS sire_bn,
+               {dam_bn} AS dam_sire_bn,
                CASE
                  WHEN p.tan_horse_num1 = h.horse_num THEN p.tan_payout1
                  WHEN p.tan_horse_num2 = h.horse_num THEN p.tan_payout2
@@ -336,4 +344,17 @@ def _rows_with_key(conn, sel: str, join: str, from_date: str, to_date: str,
           AND r.track_code = ? AND r.distance = ?
           AND h.confirmed_order IS NOT NULL AND h.confirmed_order > 0
     """
-    return conn.execute(sql, (from_date, to_date, track_code, distance)).fetchall()
+    params = (from_date, to_date, track_code, distance)
+    try:
+        return conn.execute(
+            sql_tpl.format(sel=sel, join=join, dam_bn="hm2.dam_sire_breeding_num"), params
+        ).fetchall()
+    except sqlite3.OperationalError as e:
+        # dam_sire_breeding_num 列が無い古い DB (readonly は migration しない)。
+        # 母父系統は名前照合のみに縮退 (views.build_race と同方針)。
+        if "no such column" not in str(e):
+            raise
+        logger.warning("horse_masters.dam_sire_breeding_num 無し: 母父系統集計は名前照合のみに縮退")
+        return conn.execute(
+            sql_tpl.format(sel=sel, join=join, dam_bn="NULL"), params
+        ).fetchall()

@@ -42,7 +42,7 @@ def _db():
         """
     )
     # horse masters: 2 sires
-    conn.execute("INSERT INTO horse_masters VALUES ('B1','ディープインパクト','S1','母父X')")
+    conn.execute("INSERT INTO horse_masters VALUES ('B1','ディープインパクト','S1','タイキシャトル')")
     conn.execute("INSERT INTO horse_masters VALUES ('B2','キングカメハメハ','S2','母父Y')")
     # 40 races, 東京(05) 芝(11) 1600m, 4 horses each; horse 1 (B1) always wins。
     # race キーはユニークにする (race_num を 01..40 の連番に)。
@@ -98,6 +98,21 @@ def test_aggregate_sire_line_classifies_and_colors():
     assert "sunday" in by_value and by_value["sunday"]["label"] == "サンデーサイレンス系"
     assert by_value["sunday"]["color"] == "#8bc34a"
     assert "kingmambo" in by_value
+
+
+def test_aggregate_dam_sire_line_old_schema_fallback():
+    """母父系統軸。fixture の horse_masters は dam_sire_breeding_num 列なし
+    (旧スキーマ) なので、縮退 SELECT (名前照合のみ) の経路を実際に通す。"""
+    conn = _db()
+    r = agg.aggregate_course(conn, "05", "turf", 1600, "dam_sire_line",
+                             "20240101", "20241231", min_n=10)
+    by_value = {c["value"]: c for c in r["cells"]}
+    # B1 (勝ち馬) の母父タイキシャトル → ターントゥ系 (辞書照合のみで分類)
+    assert by_value["turnto"]["n"] == 40
+    assert by_value["turnto"]["label"] == "ターントゥ系(ヘイロー等)"
+    assert by_value["turnto"]["color"] == "#7986cb"
+    # B2 の母父Y は辞書外 + 遡上不能 → unknown
+    assert by_value["unknown"]["n"] == 120
 
 
 def test_min_n_gate():

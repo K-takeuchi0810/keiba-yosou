@@ -63,6 +63,47 @@ def test_line_facts_expansion_2026_07_05():
         assert sl.classify_sire(name) == expect, name
 
 
+def test_line_facts_expansion_round2_2026_07_05():
+    """辞書第 2 次拡充 (母父世代 + turnto 新設) の父系事実固定。"""
+    facts = {
+        "スペシャルウィーク": "sunday",       # SS 直仔
+        "デュランダル": "sunday",            # SS 直仔
+        "カネヒキリ": "sunday",              # 父フジキセキ
+        "エルコンドルパサー": "kingmambo",    # 父キングマンボ
+        "レモンポップ": "kingmambo",         # 父レモンドロップキッド (Kingmambo 直仔)
+        "アイルハヴアナザー": "mrprospector", # Flower Alley → Distorted Humor → Forty Niner
+        "エンパイアメーカー": "mrprospector", # 父アンブライドルド (Fappiano 系)
+        "アグネスデジタル": "mrprospector",   # 父クラフティプロスペクター
+        "エスケンデレヤ": "storm",           # 父ジャイアンツコーズウェイ
+        "キングヘイロー": "northern",        # 父ダンシングブレーヴ (Lyphard 系)
+        "メイショウサムソン": "northern",     # 父オペラハウス (Sadler's Wells 系)
+        "デインヒルダンサー": "northern",     # 父デインヒル (Danzig 系)
+        "マヤノトップガン": "roberto",       # 父ブライアンズタイム
+        "タイキシャトル": "turnto",          # 父デヴィルズバッグ (Halo 非 SS 枝)
+        "ニシケンモノノフ": "turnto",        # メイショウボーラー → タイキシャトル
+        "トウショウボーイ": "nasrullah",     # 父テスコボーイ (プリンスリーギフト系)
+        "タピット": "nasrullah",            # 父プルピット (A.P. Indy 系)
+        "カコイーシーズ": "native",          # 父アリダー (Raise a Native 系)
+        "トランセンド": "nearctic",          # ワイルドラッシュ → Wild Again → Icecapade
+    }
+    for name, expect in facts.items():
+        assert sl.classify_sire(name) == expect, name
+
+
+def test_turnto_founder_stop_is_not_roberto():
+    """FOUNDERS のヘイルトゥリーズン/ヘイローは turnto (旧: roberto 便宜寄せの是正)。
+    Roberto 系の遡上は「ロベルト」で先に停止するので roberto のまま。"""
+    assert sl.FOUNDERS["ヘイルトゥリーズン"] == "turnto"
+    assert sl.FOUNDERS["ヘイロー"] == "turnto"
+    assert sl.FOUNDERS["ロベルト"] == "roberto"
+    conn = _mem_db()
+    # 新X → 父 クリスエス(N2) → 父 ロベルト → (ヘイルトゥリーズンまで行かず停止)
+    conn.execute("INSERT INTO breeding_horses VALUES ('N1','新X','クリスエス','N2')")
+    conn.execute("INSERT INTO breeding_horses VALUES ('N2','クリスエス','ロベルト','N3')")
+    conn.commit()
+    assert sl.classify_sire("新X", conn=conn, sire_breeding_num="N1") == "roberto"
+
+
 def test_short_labels_complete():
     assert set(sl.LINE_LABEL_SHORT) == set(sl.LINE_LABEL)
     assert sl.line_label_short("sunday") == "サンデー系"
