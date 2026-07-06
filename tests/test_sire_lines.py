@@ -186,6 +186,24 @@ def test_short_labels_complete():
     assert sl.line_label_short("架空") == "その他"
 
 
+def test_english_ancestor_names_classify():
+    """UM 3 代血統は海外祖先を英語で格納する。英語名でも系統が引け、大小差を吸収
+    することを固定 (2026-07-06 父母父/母母父が英語名で「その他」化していた対処)。"""
+    # verify_pedigree で実際に観測された父母父/母母父
+    assert sl.classify_sire("Alzao") == "northern"        # 父 Lyphard
+    assert sl.classify_sire("Riverman") == "nasrullah"    # 父 Never Bend
+    assert sl.classify_sire("Affirmed") == "native"       # Raise a Native 系
+    assert sl.classify_sire("Silver Ghost") == "mrprospector"  # 父 Mr. Prospector
+    assert sl.classify_sire("Seattle Slew") == "nasrullah"
+    # 大小差の吸収 (小文字化)
+    assert sl.classify_sire("ALZAO") == sl.classify_sire("alzao") == "northern"
+    # 主要国際種牡馬
+    assert sl.classify_sire("Sadler's Wells") == "northern"
+    assert sl.classify_sire("Storm Cat") == "storm"
+    assert sl.classify_sire("Halo") == "turnto"
+    assert sl.classify_sire("Roberto") == "roberto"
+
+
 def test_normalize_large_kana_jvdata_convention():
     """JV-Data は大書き仮名 (ヤ/ユ/ヨ/ツ) で馬名を格納する。小書き仮名の辞書キーと
     照合できることを固定 (2026-07-06 実 DB で多数の既知種牡馬が小書き差で「その他」
