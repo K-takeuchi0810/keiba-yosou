@@ -74,10 +74,14 @@ def main() -> int:
             print("breeding_horses が空です (BLOD 未取込)。突合には HN レコードの取り込みが必要。")
             return 1
 
-        # 父・母父の双方を「種牡馬の出現」として集計 (weight = 産駒頭数)
+        # 父・母父・父母父・母母父の 4 世代を「種牡馬の出現」として集計 (weight=産駒頭数)。
+        # gen3 (父母父/母母父) は海外祖先の英語名が多く、英語名辞書の効果測定の主対象
+        # (2026-07-06 validation R-1 / data-pipeline P1: gen3 列を未カバーだった)。
         sires: Counter[tuple[str, str]] = Counter()
         for col_name, col_num in (("sire_name", "sire_breeding_num"),
-                                  ("dam_sire_name", "dam_sire_breeding_num")):
+                                  ("dam_sire_name", "dam_sire_breeding_num"),
+                                  ("sire_dam_sire_name", "sire_dam_sire_breeding_num"),
+                                  ("dam_dam_sire_name", "dam_dam_sire_breeding_num")):
             try:
                 rows = conn.execute(
                     f"SELECT {col_name} AS nm, {col_num} AS bn, COUNT(*) AS c "

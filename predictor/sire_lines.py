@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import unicodedata
 
 logger = logging.getLogger(__name__)
 
@@ -357,8 +358,12 @@ LINE_BY_SIRE: dict[str, str] = {
     "トランセンド": "nearctic",      # 父ワイルドラッシュ
     # --- 海外種牡馬 (英語名)。UM の 3 代血統は海外祖先を英語で格納するため
     #     (例: 父母父 Alzao / 母母父 Riverman)、英語名でも引けるよう併記する。
-    #     _normalize が英字を小文字化するので Title Case で書けば大小差を吸収。
-    #     2026-07-06 実 DB で父母父/母母父が英語名により「その他」化していた対処。---
+    #     _normalize が NFKC + 小文字化 + 記号/空白除去するので綴り変種 (Mr.Prospector /
+    #     A.P.Indy / Sadler's Wells の ' 字種 / 全角ローマ字) を吸収する。
+    #     2026-07-06 実 DB で父母父/母母父が英語名により「その他」化していた対処。
+    #     **実 DB で綴り観測済みは Alzao/Riverman/Affirmed/Seattle Slew/Silver Ghost の
+    #     数件のみ、残りは周知血統からの暫定** (不一致でも安全側=その他に劣化)。網羅
+    #     確認は scripts/audit_sire_lines.py (gen3 列対応済) の実機実行で行う。---
     # northern (Northern Dancer 系、Storm Cat 系を除く)
     "Northern Dancer": "northern", "Nijinsky": "northern", "Sadler's Wells": "northern",
     "Danzig": "northern", "Nureyev": "northern", "Lyphard": "northern",
@@ -509,6 +514,11 @@ COUNTRY_OVERRIDE: dict[str, str] = {
     "ザファクター": "usa",        # 父ウォーフロント
     # ロベルト系のうち米国残留枝 → 米国型 (roberto 既定=欧州の例外)。
     "ナダル": "usa",             # Blame←Arch←Kris S. 米国残留枝、米国ダート G1 のみ
+    # 英語名の併記 (3 代血統は海外祖先を英語で格納。カナ側 override と国別を一致させ、
+    # 表記で日/米/欧が割れないようにする — 2026-07-06 profitability/prediction-logic)。
+    "Mill Reef": "eur",          # =ミルリーフ (欧州名馬・スタミナ)
+    "Deputy Minister": "usa",    # ND 北米発展枝 (カナ子孫 クロフネ/フレンチデピュティ=usa と一致)
+    "Vice Regent": "usa",        # Deputy Minister の父 (北米)
 }
 
 
@@ -537,22 +547,27 @@ def country_color(country_key: str) -> str:
 # 小書き仮名 (シャ/ショ/ッ) なので、両者を大書きへ畳んで照合する (2026-07-06 実 DB
 # で小書き差により多数の既知種牡馬が「その他」落ちしていた構造バグの対処)。
 _KANA_SMALL_TO_LARGE = str.maketrans("ァィゥェォッャュョヮヵヶ", "アイウエオツヤユヨワカケ")
+# 照合時に除去する記号・空白 (英語名の綴り変種を吸収)。半角/全角スペース、ピリオド、
+# アポストロフィ 2 種 (' U+0027 / ’ U+2019)、バッククォート、ハイフン、中黒。
+_PUNCT_STRIP = str.maketrans("", "", " 　.'’`-・")
 
 
 def _normalize(name: str | None) -> str:
     """種牡馬名を照合キーに正規化。
 
-    処理: 全角空白除去 + 前後 trim + 小書き仮名→大書き仮名 + **英字小文字化**。
-    JV-Data は UM の 3 代血統で海外の祖先を英語 (ローマ字, Title Case) で格納する
-    (例: Alzao / Riverman / Seattle Slew) 一方、辞書はカタカナ主体なので、英語名の
-    大小差を吸収するため .lower() する (2026-07-06 実 DB で父母父/母母父の英語名が
-    照合できず「その他」化していた対処)。カタカナは .lower() の影響を受けない。
-    注: 英↔カナの音写ゆれ (Seattle Slew ↔ シアトルスルー) は別問題で、英語名の
-    エントリを辞書に併記して対応する。
+    処理順: NFKC 正規化 (全角英字→半角・半角カナ→全角) + 小書き仮名→大書き仮名 +
+    英字小文字化 + 記号/空白除去。JV-Data は UM 3 代血統で海外祖先を英語 (Title Case)
+    で格納し (Alzao / Seattle Slew 等)、綴りに Mr. Prospector↔Mr.Prospector、
+    A.P. Indy↔A.P.Indy、Sadler's Wells (' vs ’)、全角ローマ字等の揺れがある。
+    これらを畳んでカタカナ主体の辞書と大小・記号差を無視して照合する
+    (2026-07-06 実 DB で父母父/母母父の英語名が「その他」化 → 綴り変種で取りこぼす
+    リスクを検証監査が指摘 → NFKC+記号 fold で頑健化)。カタカナ/漢字は不変。
+    衝突は test_normalized_lookup_no_key_collision (len parity) が fail-fast で守る。
     """
     if not name:
         return ""
-    return name.replace("　", "").strip().translate(_KANA_SMALL_TO_LARGE).lower()
+    s = unicodedata.normalize("NFKC", name)
+    return s.translate(_KANA_SMALL_TO_LARGE).lower().translate(_PUNCT_STRIP).strip()
 
 
 # 辞書キー (小書き仮名の現代表記) を _normalize 済みの形に畳んだ照合表。

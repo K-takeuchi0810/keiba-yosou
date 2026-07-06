@@ -171,6 +171,57 @@ def test_country_confirmed_error_fixes_2026_07_05():
     assert sl.classify_country("モーリス", "roberto") == "eur"
 
 
+def test_no_duplicate_literal_dict_keys():
+    """sire_lines.py の全 dict リテラルに重複キーが無いこと (2026-07-06 code-quality)。
+    len parity は正規化衝突しか見ないが、リテラル完全重複は Python が評価前に畳むため
+    後勝ちで無音上書きする。ast でソースを直接検査して fail-fast 化する。"""
+    import ast
+    from pathlib import Path
+    tree = ast.parse(Path(sl.__file__).read_text(encoding="utf-8"))
+    dups = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            keys = [k.value for k in node.keys
+                    if isinstance(k, ast.Constant) and isinstance(k.value, str)]
+            dups += [k for k in set(keys) if keys.count(k) > 1]
+    assert not dups, f"重複リテラルキー: {dups}"
+
+
+def test_english_katakana_alias_consistency():
+    """英語名とカタカナ名が併存する主要ペアで系統・国別が一致 (2026-07-06 code-quality
+    /profitability: 片側だけ是正した際の静かな乖離を fail-fast)。"""
+    pairs = [
+        ("Northern Dancer", "ノーザンダンサー"), ("Storm Cat", "ストームキャット"),
+        ("Mr. Prospector", "ミスタープロスペクター"), ("Kingmambo", "キングマンボ"),
+        ("Seattle Slew", "シアトルスルー"), ("A.P. Indy", "エーピーインディ"),
+        ("Roberto", "ロベルト"), ("Halo", "ヘイロー"), ("Mill Reef", "ミルリーフ"),
+        ("Native Dancer", "ネイティヴダンサー"),
+    ]
+    for en, ja in pairs:
+        assert sl.classify_sire(en) == sl.classify_sire(ja), f"{en} != {ja} (系統)"
+        lk = sl.classify_sire(ja)
+        assert sl.classify_country(en, lk) == sl.classify_country(ja, lk), f"{en} 国別不一致"
+
+
+def test_normalize_punct_and_fullwidth_folding():
+    """NFKC + 記号/空白畳み込みで綴り変種を吸収 (2026-07-06 data-pipeline P2 / R-4)。"""
+    # ピリオド/スペース変種
+    assert sl.classify_sire("Mr.Prospector") == sl.classify_sire("Mr. Prospector") == "mrprospector"
+    assert sl.classify_sire("A.P.Indy") == sl.classify_sire("A.P. Indy") == "nasrullah"
+    assert sl.classify_sire("Kris S") == sl.classify_sire("Kris S.") == "roberto"
+    # 全角ローマ字・連続空白・アポストロフィ字種
+    assert sl.classify_sire("Ａｌｚａｏ") == "northern"
+    assert sl.classify_sire("Northern  Dancer") == "northern"
+    assert sl.classify_sire("Sadler’s Wells") == sl.classify_sire("Sadler's Wells") == "northern"
+
+
+def test_english_key_length_budget():
+    """英語キーは 20 字以内 (出馬表 subrow の折返し予算。2026-07-06 mobile #3)。
+    超長名を系統付きで出すと 320px で溢れる。"""
+    long = [k for k in sl.LINE_BY_SIRE if k.isascii() and len(k) > 20]
+    assert not long, f"20字超の英語キー: {long}"
+
+
 def test_normalized_lookup_no_key_collision():
     """仮名正規化 (小書き→大書き) で辞書キーが衝突しないこと。衝突すると dict 内包の
     後勝ちで 1 エントリが無音で消える (2026-07-06 code-quality P2 / validation R-3)。

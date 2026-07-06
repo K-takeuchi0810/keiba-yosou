@@ -110,6 +110,12 @@
   /* 狭い画面では補助列 (父/母父) を畳み、核心 (馬名/系統/人気/オッズ/印) を横スクロール
      なしで同時視認できるようにする。系統は色+ラベルで父系を要約するため父/母父は省略可。 */
   @media (max-width:480px) { .opt-col { display:none; } th,td { padding:7px 4px; } }
+  /* 狭幅では国系統バッジを系統名の下に折り、系統セル (nowrap) の min-content 幅で
+     横スクロールが出るのを防ぐ (2026-07-06 mobile 指摘。max-width で予算を viewport 基準に) */
+  @media (max-width:400px) {
+    .ctag { display:block; margin-left:0; margin-top:2px; width:max-content; }
+    .pedline { max-width:calc(100vw - 52px); }
+  }
 </style>
 </head>
 <body>
