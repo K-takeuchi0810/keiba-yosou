@@ -255,6 +255,8 @@ def test_non_top11_lines_classify():
     # country_label は「国キー」を受ける (line_key を渡すと判別不能になる区別を固定)。
     assert sl.country_label("eur") == "欧州型"
     assert sl.country_label("personon") == "判別不能"
+    # 注: personon の eur は founder 由来の「暫定」(亀谷公式リスト未突合、OPERATION.md §10-1)。
+    # 公式突合で型が変われば本アサートも更新する。
     # 真に系統不明なものは依然 unknown (誤答よりその他が誠実)
     assert sl.classify_sire("架空種牡馬ZZ") == "unknown"
 

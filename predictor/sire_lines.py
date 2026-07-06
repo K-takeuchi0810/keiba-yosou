@@ -65,7 +65,10 @@ LINE_LABEL_SHORT: dict[str, str] = {
     "unknown": "その他",
 }
 
-# WCAG を意識した識別しやすい色 (light/dark 双方で判別可能な中彩度)。
+# 系統 dot の色。14 系統でパレットは飽和しており、色単独では判別できない近接ペアが
+# ある (personon≈turnto/storm、stsimon≈roberto、hyperion≈northern — 2026-07-06 mobile
+# 監査で sRGB 距離実測)。したがって色は「雰囲気付けの補助」であり、識別の唯一の担保は
+# テキストラベル併記 (base.html.j2 の line-dot 不変条件参照)。dot 単独出力は禁止。
 LINE_COLOR: dict[str, str] = {
     "sunday": "#8bc34a",       # 黄緑 (SmartRC 慣習に合わせる)
     "kingmambo": "#e57373",    # 赤
@@ -79,7 +82,7 @@ LINE_COLOR: dict[str, str] = {
     "native": "#f06292",       # 桃
     "personon": "#9575cd",     # 藤
     "stsimon": "#8d6e63",      # 焦茶
-    "hyperion": "#4dd0e1",     # シアン
+    "hyperion": "#26c6da",     # シアン (#4dd0e1 は light 地で 1.84:1 と淡すぎ濃度上げ — 2026-07-06 mobile)
     "unknown": "#bdbdbd",      # グレー
 }
 
