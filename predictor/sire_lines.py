@@ -40,6 +40,10 @@ LINE_LABEL: dict[str, str] = {
     "nasrullah": "ナスルーラ系",
     "nearctic": "ネアルコ／ニアークティック系",
     "native": "ネイティヴダンサー系",
+    # 11 大系統外だが JRA で名の通った系統 (2026-07-06 追加。「その他」を実系統名にする)。
+    "personon": "パーソロン系",
+    "stsimon": "セントサイモン系",
+    "hyperion": "ハイペリオン系",
     "unknown": "その他",
 }
 
@@ -55,6 +59,9 @@ LINE_LABEL_SHORT: dict[str, str] = {
     "nasrullah": "ナスルーラ系",
     "nearctic": "ネアルコ系",
     "native": "ネイティヴD系",
+    "personon": "パーソロン系",
+    "stsimon": "セントサイモン系",
+    "hyperion": "ハイペリオン系",
     "unknown": "その他",
 }
 
@@ -70,6 +77,9 @@ LINE_COLOR: dict[str, str] = {
     "nasrullah": "#ffd54f",    # 黄
     "nearctic": "#4db6ac",     # 青緑
     "native": "#f06292",       # 桃
+    "personon": "#9575cd",     # 藤
+    "stsimon": "#8d6e63",      # 焦茶
+    "hyperion": "#4dd0e1",     # シアン
     "unknown": "#bdbdbd",      # グレー
 }
 
@@ -411,9 +421,30 @@ LINE_BY_SIRE: dict[str, str] = {
     "Southern Halo": "turnto", "More Than Ready": "turnto", "Habitat": "turnto",
     # nearctic / nearco
     "Nearco": "nearctic", "Nearctic": "nearctic", "Icecapade": "nearctic",
-    # 注: ダノンレジェンド (父 Macho Uno = In Reality 系) やパーソロン系
-    # (メジロマックイーン等) のような 11 大系統外は辞書に載せず unknown (グレー)
-    # に落とす。誤答よりも「その他」が誠実。
+    # --- 11 大系統外だが JRA で名の通った系統 (2026-07-06)。従来「その他」だったが
+    #     実系統名で表示する。父系事実で確度の高いものだけ収載。---
+    # パーソロン系 (Partholon。JRA 独自呼称の一系統)
+    "パーソロン": "personon",
+    "シンボリルドルフ": "personon",   # 父パーソロン
+    "トウカイテイオー": "personon",   # 父シンボリルドルフ
+    "メジロティターン": "personon",   # 父メジロアサマ (父パーソロン)
+    "メジロアサマ": "personon",       # 父パーソロン
+    "メジロマックイーン": "personon", # 父メジロティターン
+    "メジロデュレン": "personon",     # 父メジロティターン
+    # セントサイモン系 (St. Simon: Ribot / Princequillo / Prince Rose 各枝)
+    "セントサイモン": "stsimon", "St. Simon": "stsimon",
+    "Ribot": "stsimon", "リボー": "stsimon",
+    "His Majesty": "stsimon", "Graustark": "stsimon", "Tom Rolfe": "stsimon",
+    "Pleasant Colony": "stsimon",
+    "Princequillo": "stsimon", "Round Table": "stsimon", "Prince John": "stsimon",
+    "Prince Rose": "stsimon", "Prince Chevalier": "stsimon",
+    # ハイペリオン系 (Hyperion)
+    "ハイペリオン": "hyperion", "Hyperion": "hyperion",
+    "Aureole": "hyperion", "Khaled": "hyperion", "Swaps": "hyperion",
+    "Star Kingdom": "hyperion",
+    # 注: なお確度の低い/真に不明な系統は依然 unknown (グレー)。誤答よりも
+    # 「その他」が誠実。ダノンレジェンド (父 Macho Uno → Holy Bull → Great Above 系)
+    # 等は上記いずれにも該当しないため unknown のまま。
 }
 
 # 父系遡上の始祖 (breeding_horses を遡って当たったらこの系統)。
@@ -440,6 +471,11 @@ FOUNDERS: dict[str, str] = {
     "ネイティヴダンサー": "native",
     "ニアークティック": "nearctic",
     "ネアルコ": "nearctic",
+    # 11 大系統外の始祖 (遡上停止点)。より特異的な founder (ND/Nasrullah 等) が
+    # 先に当たるため、これらは末端の稀な枝でのみ発火する。
+    "パーソロン": "personon",
+    "セントサイモン": "stsimon", "St. Simon": "stsimon",
+    "ハイペリオン": "hyperion", "Hyperion": "hyperion",
 }
 
 
@@ -487,6 +523,11 @@ COUNTRY_BY_LINE: dict[str, str] = {
     "roberto": "eur",         # 日本の Roberto 系 (モーリス/エピファネイア) = 持続/パワー
     "turnto": "usa",          # Halo/Hail to Reason 米国。タイキシャトル系のスピード寄り
     "nearctic": "usa",        # Icecapade/Wild Again 米国ダート (トランセンド等)
+    # 11 大系統外の旧欧州スタミナ系 → 欧州型 (非 SS + 長距離/持続の質。亀谷公式
+    # 未突合の暫定)。
+    "personon": "eur",        # パーソロン系 (メジロマックイーン=長距離スタミナ)
+    "stsimon": "eur",         # セントサイモン系
+    "hyperion": "eur",        # ハイペリオン系
     "unknown": "unknown",
 }
 

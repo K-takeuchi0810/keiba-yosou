@@ -237,6 +237,24 @@ def test_short_labels_complete():
     assert sl.line_label_short("架空") == "その他"
 
 
+def test_non_top11_lines_classify():
+    """11 大系統外でも名の通った系統は「その他」でなく系統名で分類する
+    (2026-07-06 ユーザ要望: 11大系統外も系統国表示)。"""
+    # パーソロン系 (実 DB unknown 上位に居たトウカイテイオー/シンボリルドルフ/メジロマックイーン)
+    assert sl.classify_sire("シンボリルドルフ") == "personon"
+    assert sl.classify_sire("トウカイテイオー") == "personon"
+    assert sl.classify_sire("メジロマックイーン") == "personon"
+    # セントサイモン系 / ハイペリオン系
+    assert sl.classify_sire("Ribot") == "stsimon"
+    assert sl.classify_sire("Princequillo") == "stsimon"
+    assert sl.classify_sire("Hyperion") == "hyperion"
+    # 国系統も出る (判別不能でない)
+    assert sl.classify_country("メジロマックイーン", "personon") == "eur"
+    assert sl.country_label("personon") == "パーソロン系" or sl.line_label("personon") == "パーソロン系"
+    # 真に系統不明なものは依然 unknown (誤答よりその他が誠実)
+    assert sl.classify_sire("架空種牡馬ZZ") == "unknown"
+
+
 def test_english_ancestor_names_classify():
     """UM 3 代血統は海外祖先を英語で格納する。英語名でも系統が引け、大小差を吸収
     することを固定 (2026-07-06 父母父/母母父が英語名で「その他」化していた対処)。"""
