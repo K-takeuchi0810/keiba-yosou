@@ -33,10 +33,24 @@ def main() -> int:
             "FROM horse_masters WHERE sire_name='ディープインパクト' "
             "AND horse_name!='' LIMIT 6").fetchall()
         for r in rows:
-            print(f"  {r['horse_name']:<16} 父母父={r['sire_dam_sire_name']:<14} "
-                  f"母母父={r['dam_dam_sire_name']}")
+            sds = r["sire_dam_sire_name"]
+            dds = r["dam_dam_sire_name"]
+            sds_disp = "(NULL=未取込)" if sds is None else (sds or "(空)")
+            dds_disp = "(NULL=未取込)" if dds is None else (dds or "(空)")
+            print(f"  {r['horse_name']:<16} 父母父={sds_disp:<14} 母母父={dds_disp}")
         if not rows:
             print("  (ディープ産駒が見つからない — sire_name の表記を確認)")
+        # 3 代血統の充填状況を先に集計して原因を切り分ける
+        row = conn.execute(
+            "SELECT COUNT(*) t, "
+            "SUM(CASE WHEN sire_dam_sire_name IS NULL THEN 1 ELSE 0 END) nulls, "
+            "SUM(CASE WHEN sire_dam_sire_name='' THEN 1 ELSE 0 END) empties, "
+            "SUM(CASE WHEN sire_dam_sire_name IS NOT NULL AND sire_dam_sire_name!='' "
+            "         THEN 1 ELSE 0 END) filled FROM horse_masters").fetchone()
+        print(f"  → 父母父: 全{row['t']} / NULL(未取込){row['nulls']} / 空{row['empties']} / 値あり{row['filled']}")
+        if row["filled"] == 0:
+            print("  ★ 値ありが 0 = 新パーサで UM 未再取込。git pull 後に")
+            print("     ingest_all(force=True, dataspecs=['DIFN']) を実行してください。")
 
         print("\n" + "=" * 64)
         print("2. 産地 上位15 (安平町/新冠町/米/愛 等の地名・国名か。数字混入は異常)")
