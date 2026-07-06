@@ -266,12 +266,12 @@ def test_historic_unknown_top_sires_classify():
     に解決できることを固定 (2026-07-06 実機突合)。誤答防止のため父系 founder まで
     確度の高いものだけ収載。国系統も判別不能でないことを確認する。"""
     cases = {
-        "ミルジヨージ": ("nasrullah", "usa"),        # 父ミルリーフ → Never Bend → Nasrullah
+        "ミルジヨージ": ("nasrullah", "eur"),        # 父ミルリーフ (欧州枝) → COUNTRY_OVERRIDE eur
         "ブレイヴエストローマン": ("nasrullah", "usa"),  # 父 Never Bend
         "キンググローリアス": ("nasrullah", "usa"),   # 父 Naskra → Nasram → Nasrullah
         "ロイヤルスキー": ("nasrullah", "usa"),       # 父 Raja Baba → Bold Ruler
         "アローエクスプレス": ("nasrullah", "usa"),   # 父 Never Beat → Never Bend
-        "イエローゴツド": ("nasrullah", "usa"),       # 父 Red God → Nasrullah
+        "イエローゴツド": ("nasrullah", "eur"),       # 父 Red God (欧州枝) → COUNTRY_OVERRIDE eur
         "モガミ": ("northern", "eur"),               # 父 Lyphard → Northern Dancer
         "ノーザンデイクテイター": ("northern", "eur"), # 父 Northern Dancer
         "ホリスキー": ("northern", "eur"),           # 父マルゼンスキー → Nijinsky

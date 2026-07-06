@@ -568,6 +568,8 @@ COUNTRY_OVERRIDE: dict[str, str] = {
     "レインボウクエスト": "eur",   # Blushing Groom 系、欧州スタミナ
     "サクラローレル": "eur",      # 父レインボウクエスト
     "ミルリーフ": "eur",          # Never Bend 系だが英ダービー/凱旋門賞・欧州発展
+    "ミルジョージ": "eur",         # 父ミルリーフ (欧州枝の子孫。nasrullah 既定 usa の例外)
+    "イエローゴッド": "eur",       # 父 Red God (英仏で発展した欧州枝。Blushing Groom と同枝)
     "タマモクロス": "eur",         # 同 Grey Sovereign 枝 (トニービンと同質、天皇賞春=スタミナ)
     # ノーザンダンサー系のうち北米で発展した枝 → 米国型 (northern 既定=欧州の例外)。
     # Deputy Minister/Vice Regent 枝は ND の北米発展枝で亀谷氏の代表例
