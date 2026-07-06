@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from db import open_db
+from db import open_db_readonly
 from predictor.sire_lines import FOUNDERS, classify_sire, lookup_line, _normalize
 
 # _normalize は仮名を大書き化するため、生の FOUNDERS (小書きキー) を直接引くと
@@ -68,7 +68,9 @@ def main() -> int:
     ap.add_argument("--top", type=int, default=30, help="不一致/unknown の表示上限")
     args = ap.parse_args()
 
-    with (open_db(args.db) if args.db else open_db()) as conn:
+    # 読み取り専用で開く (診断は観察系。init_db の書込み migration を走らせて
+    #  GUI/ingest とロック競合させない — 2026-07-06 data-pipeline 指摘)。
+    with (open_db_readonly(args.db) if args.db else open_db_readonly()) as conn:
         n_hn = conn.execute("SELECT COUNT(*) FROM breeding_horses").fetchone()[0]
         if n_hn == 0:
             print("breeding_horses が空です (BLOD 未取込)。突合には HN レコードの取り込みが必要。")
@@ -121,8 +123,10 @@ def main() -> int:
         # BLOD (繁殖馬) の血統木が浅く founder まで遡れていない可能性が高い (辞書追加より
         # まず BLOD 取り込みの確認が必要)。
         if breakdown["unknown"] / total > 0.05 and breakdown["traversal_hit"] / total < 0.01:
-            print("⚠ traversal_hit がほぼ 0 です。breeding_horses の血統木が浅い/未取込の疑い —")
-            print("  辞書追加では long-tail に届きません。BLOD(繁殖馬) の取り込み状況を確認してください。")
+            print(f"⚠ unknown が高い一方 traversal_hit がほぼ 0 です (breeding_horses {n_hn} 行)。原因は 2 つ:")
+            print("  (i) BLOD の血統木が浅く founder まで遡れない → BLOD(繁殖馬) 再取込で改善。")
+            print("  (ii) 遡上は届くが FOUNDERS 辞書に停止点が不足 → founder 追加で traversal_hit が上がる。")
+            print("  いずれも個別種牡馬の辞書追加 (whack-a-mole) では long-tail に届きません。")
             print("=" * 70)
 
         if mismatches:

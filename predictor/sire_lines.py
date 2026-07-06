@@ -67,10 +67,10 @@ LINE_LABEL_SHORT: dict[str, str] = {
     "unknown": "その他",
 }
 
-# 系統 dot の色。14 系統でパレットは飽和しており、色単独では判別できない近接ペアが
-# ある (personon≈turnto/storm、stsimon≈roberto、hyperion≈northern — 2026-07-06 mobile
-# 監査で sRGB 距離実測)。したがって色は「雰囲気付けの補助」であり、識別の唯一の担保は
-# テキストラベル併記 (base.html.j2 の line-dot 不変条件参照)。dot 単独出力は禁止。
+# 系統 dot の色。15 系統でパレットは飽和しており、色単独では判別できない近接ペアが
+# ある (personon≈turnto/storm、stsimon≈roberto、hyperion≈northern、manowar≈stsimon(距離62)
+# — 2026-07-06 mobile 監査で sRGB 距離実測)。したがって色は「雰囲気付けの補助」であり、
+# 識別の唯一の担保はテキストラベル併記 (base.html.j2 の line-dot 不変条件参照)。dot 単独出力は禁止。
 LINE_COLOR: dict[str, str] = {
     "sunday": "#8bc34a",       # 黄緑 (SmartRC 慣習に合わせる)
     "kingmambo": "#e57373",    # 赤
@@ -473,7 +473,7 @@ LINE_BY_SIRE: dict[str, str] = {
     # --- ナスルーラ系の追加枝 ---
     "カンパラ": "nasrullah",             # Kalamoun → Zeddaan → Grey Sovereign → Nasrullah
     # --- ノーザンダンサー系の追加枝 ---
-    "パントレセレブル": "northern",       # 父 Sadler's Wells → Northern Dancer
+    "パントレセレブル": "northern",       # 父 Nureyev → Northern Dancer
     # --- マンノウォー系 (Man o'War → Fair Play。11 大系統外の米国基礎系統) ---
     "マンノウォー": "manowar",
     "タイテエム": "manowar",             # 父ヴェンチア → Relic → War Relic → Man o'War
@@ -565,9 +565,9 @@ COUNTRY_BY_LINE: dict[str, str] = {
     "roberto": "eur",         # 日本の Roberto 系 (モーリス/エピファネイア) = 持続/パワー
     "turnto": "usa",          # Halo/Hail to Reason 米国。タイキシャトル系のスピード寄り
     "nearctic": "usa",        # Icecapade/Wild Again 米国ダート (トランセンド等)
+    "manowar": "usa",         # マンノウォー系 (米国基礎種牡馬 Fair Play/Hastings 系)
     # 11 大系統外の旧欧州スタミナ系 → 欧州型 (非 SS + 長距離/持続の質。亀谷公式
     # 未突合の暫定)。
-    "manowar": "usa",         # マンノウォー系 (米国基礎種牡馬 Fair Play/Hastings 系)
     "personon": "eur",        # パーソロン系 (メジロマックイーン=長距離スタミナ)
     "stsimon": "eur",         # セントサイモン系
     "hyperion": "eur",        # ハイペリオン系
