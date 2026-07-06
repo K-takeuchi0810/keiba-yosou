@@ -44,6 +44,7 @@ LINE_LABEL: dict[str, str] = {
     "personon": "パーソロン系",
     "stsimon": "セントサイモン系",
     "hyperion": "ハイペリオン系",
+    "manowar": "マンノウォー系",
     "unknown": "その他",
 }
 
@@ -62,6 +63,7 @@ LINE_LABEL_SHORT: dict[str, str] = {
     "personon": "パーソロン系",
     "stsimon": "セントサイモン系",
     "hyperion": "ハイペリオン系",
+    "manowar": "マンノウォー系",
     "unknown": "その他",
 }
 
@@ -83,6 +85,7 @@ LINE_COLOR: dict[str, str] = {
     "personon": "#9575cd",     # 藤
     "stsimon": "#8d6e63",      # 焦茶
     "hyperion": "#26c6da",     # シアン (#4dd0e1 は light 地で 1.84:1 と淡すぎ濃度上げ — 2026-07-06 mobile)
+    "manowar": "#607d8b",      # 青灰 (Man o'War 系)
     "unknown": "#bdbdbd",      # グレー
 }
 
@@ -467,6 +470,15 @@ LINE_BY_SIRE: dict[str, str] = {
     # サンデーサイレンス系
     "マツリダゴッホ": "sunday",          # 父サンデーサイレンス
     "タヤスツヨシ": "sunday",            # 父サンデーサイレンス
+    # --- ナスルーラ系の追加枝 ---
+    "カンパラ": "nasrullah",             # Kalamoun → Zeddaan → Grey Sovereign → Nasrullah
+    # --- ノーザンダンサー系の追加枝 ---
+    "パントレセレブル": "northern",       # 父 Sadler's Wells → Northern Dancer
+    # --- マンノウォー系 (Man o'War → Fair Play。11 大系統外の米国基礎系統) ---
+    "マンノウォー": "manowar",
+    "タイテエム": "manowar",             # 父ヴェンチア → Relic → War Relic → Man o'War
+    "インリアリティ": "manowar",          # → Intent → War Relic → Man o'War
+    "リローンチ": "manowar",             # 父 In Reality
     # 注: なお確度の低い/真に不明な系統は依然 unknown (グレー)。誤答よりも
     # 「その他」が誠実。ダノンレジェンド (父 Macho Uno → Holy Bull → Great Above 系)
     # 等は上記いずれにも該当しないため unknown のまま。
@@ -501,6 +513,11 @@ FOUNDERS: dict[str, str] = {
     "パーソロン": "personon",
     "セントサイモン": "stsimon", "St. Simon": "stsimon",
     "ハイペリオン": "hyperion", "Hyperion": "hyperion",
+    # マンノウォー系の停止点 (Man o'War / War Relic / Relic / In Reality 枝。ND や
+    # Nasrullah を経由しない米国基礎系統なので、これらに達したら manowar)。
+    "マンノウォー": "manowar", "Man o'War": "manowar",
+    "War Relic": "manowar", "Relic": "manowar",
+    "In Reality": "manowar", "Intentionally": "manowar",
 }
 
 
@@ -550,6 +567,7 @@ COUNTRY_BY_LINE: dict[str, str] = {
     "nearctic": "usa",        # Icecapade/Wild Again 米国ダート (トランセンド等)
     # 11 大系統外の旧欧州スタミナ系 → 欧州型 (非 SS + 長距離/持続の質。亀谷公式
     # 未突合の暫定)。
+    "manowar": "usa",         # マンノウォー系 (米国基礎種牡馬 Fair Play/Hastings 系)
     "personon": "eur",        # パーソロン系 (メジロマックイーン=長距離スタミナ)
     "stsimon": "eur",         # セントサイモン系
     "hyperion": "eur",        # ハイペリオン系

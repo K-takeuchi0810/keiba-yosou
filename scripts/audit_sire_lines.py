@@ -112,9 +112,18 @@ def main() -> int:
         total = sum(breakdown.values()) or 1
         print("=" * 70)
         print(f"SIRE LINE AUDIT  (種牡馬出現 {total} 件 = 産駒頭数×父/母父)")
+        print(f"  breeding_horses 行数: {n_hn}")
         for k in ("dict_hit", "traversal_hit", "unknown"):
             print(f"  {k:<14} {breakdown[k]:>7} ({breakdown[k] / total * 100:.1f}%)")
         print("=" * 70)
+        # 「その他が大量に残る」ときの原因切り分け: 辞書追加では届かない long-tail は
+        # breeding_horses 遡上で拾うのが前提。traversal_hit がほぼ 0 で unknown が高い場合、
+        # BLOD (繁殖馬) の血統木が浅く founder まで遡れていない可能性が高い (辞書追加より
+        # まず BLOD 取り込みの確認が必要)。
+        if breakdown["unknown"] / total > 0.05 and breakdown["traversal_hit"] / total < 0.01:
+            print("⚠ traversal_hit がほぼ 0 です。breeding_horses の血統木が浅い/未取込の疑い —")
+            print("  辞書追加では long-tail に届きません。BLOD(繁殖馬) の取り込み状況を確認してください。")
+            print("=" * 70)
 
         if mismatches:
             print(f"\n### 辞書 vs 独立遡上の不一致 {len(mismatches)} 件 — 要目視確認 (辞書誤り or HN 欠損)")

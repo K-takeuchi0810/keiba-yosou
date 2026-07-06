@@ -248,6 +248,10 @@ def test_non_top11_lines_classify():
     assert sl.classify_sire("Ribot") == "stsimon"
     assert sl.classify_sire("Princequillo") == "stsimon"
     assert sl.classify_sire("Hyperion") == "hyperion"
+    # マンノウォー系 (Man o'War → Fair Play。米国基礎系統)
+    assert sl.classify_sire("マンノウォー") == "manowar"
+    assert sl.classify_sire("タイテエム") == "manowar"      # → War Relic → Man o'War
+    assert sl.classify_country("タイテエム", "manowar") == "usa"
     # 系統名は実系統名で出る (「その他」でない)
     assert sl.line_label("personon") == "パーソロン系"
     # 国系統も出る (判別不能でない)。classify_country は line_key から国を決める。
