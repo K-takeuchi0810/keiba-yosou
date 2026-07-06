@@ -248,9 +248,13 @@ def test_non_top11_lines_classify():
     assert sl.classify_sire("Ribot") == "stsimon"
     assert sl.classify_sire("Princequillo") == "stsimon"
     assert sl.classify_sire("Hyperion") == "hyperion"
-    # 国系統も出る (判別不能でない)
+    # 系統名は実系統名で出る (「その他」でない)
+    assert sl.line_label("personon") == "パーソロン系"
+    # 国系統も出る (判別不能でない)。classify_country は line_key から国を決める。
     assert sl.classify_country("メジロマックイーン", "personon") == "eur"
-    assert sl.country_label("personon") == "パーソロン系" or sl.line_label("personon") == "パーソロン系"
+    # country_label は「国キー」を受ける (line_key を渡すと判別不能になる区別を固定)。
+    assert sl.country_label("eur") == "欧州型"
+    assert sl.country_label("personon") == "判別不能"
     # 真に系統不明なものは依然 unknown (誤答よりその他が誠実)
     assert sl.classify_sire("架空種牡馬ZZ") == "unknown"
 
@@ -320,6 +324,17 @@ def test_no_dup_keys_lost():
     for key in set(sl.LINE_BY_SIRE.values()) | set(sl.FOUNDERS.values()):
         assert key in sl.LINE_LABEL, key
         assert key in sl.LINE_COLOR, key
+
+
+def test_founders_and_line_by_sire_agree_on_overlap():
+    """同一種牡馬が LINE_BY_SIRE と FOUNDERS の両方に載る場合、指す系統は一致すること。
+    (code-quality 指摘: 2 経路で系統が食い違うと遡上結果が起点次第で変わる。
+    正規化キーで突合し、辞書間の系統割当ズレを機械的に禁止する。)"""
+    line_n = sl._LINE_BY_SIRE_N
+    founders_n = sl._FOUNDERS_N
+    overlap = set(line_n) & set(founders_n)
+    mismatches = {k: (line_n[k], founders_n[k]) for k in overlap if line_n[k] != founders_n[k]}
+    assert not mismatches, f"LINE_BY_SIRE と FOUNDERS で系統が不一致: {mismatches}"
 
 
 def test_labels_and_colors_complete():
