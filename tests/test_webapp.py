@@ -107,8 +107,12 @@ def test_horse_detail_line_agari_rank_and_pace_provisional():
     assert d4["pace"] == "先行力(暫定) 4角データ無"
 
 
-def test_render_race_gen3_pedigree_and_origin():
-    """父母父/母母父の系統表示と、繁殖馬マスタ由来の産地表示 (SmartRC パリティ)。"""
+def test_render_race_gen3_pedigree_and_origin(monkeypatch):
+    """父母父/母母父の系統表示と、繁殖馬マスタ由来の産地表示 (SmartRC パリティ)。
+
+    産地表示は HN_BIRTHPLACE_VERIFIED (既定 False = 表示抑制) で門番されるため、
+    表示ロジック自体の検証はフラグを True に差し替えて行う。"""
+    monkeypatch.setattr(views, "HN_BIRTHPLACE_VERIFIED", True)
     conn = _db()
     html = views.render_race(conn, "20250518", "05", "01", "01", "01")
     assert html is not None
@@ -117,6 +121,16 @@ def test_render_race_gen3_pedigree_and_origin():
     assert "母母父 トニービン(ナスルーラ系)" in html          # 産地未取込 → 系統のみ
     # 父列の産地サフィックス (S1=安平)
     assert "(安平)" in html
+
+
+def test_render_race_birthplace_suppressed_when_unverified():
+    """HN_BIRTHPLACE_VERIFIED=False (既定) では産地を出さない (バイト位置未確定の
+    文字化けを表示しない — 2026-07-06)。系統は出る。"""
+    conn = _db()
+    html = views.render_race(conn, "20250518", "05", "01", "01", "01")
+    assert html is not None
+    assert "(安平)" not in html                       # 産地サフィックス抑制
+    assert "父母父 ノーザンテースト(ノーザンD系)" in html  # 系統は表示継続
     # 国系統バッジ (亀谷分類): B1 の父ディープ=日本型 / B2 の父キンカメ=米国型。
     # 塗り潰しでなく枠線+テーマ色チップ (ctag-jpn/ctag-usa)、country_key 駆動。
     assert 'class="ctag ctag-jpn"' in html

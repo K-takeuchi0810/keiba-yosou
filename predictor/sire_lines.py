@@ -208,6 +208,10 @@ LINE_BY_SIRE: dict[str, str] = {
     "ゴーンウェスト": "mrprospector", # 父ミスタープロスペクター
     "スパイツタウン": "mrprospector", # 父ゴーンウェスト
     "マテラスカイ": "mrprospector",   # 父スパイツタウン
+    "ケイムホーム": "mrprospector",   # 父ゴーンウェスト
+    "アフリート": "mrprospector",     # 父ミスタープロスペクター
+    "ヘクタープロテクター": "mrprospector",  # 父ウッドマン (Mr. Prospector 系)
+    "フォーティナイナーズサン": "mrprospector",  # 父フォーティナイナー
     # --- ストームキャット系 (ND 傘下だが慣習上独立表示) ---
     "ストームキャット": "storm",
     "ヨハネスブルグ": "storm",        # Hennessy 系
@@ -271,6 +275,8 @@ LINE_BY_SIRE: dict[str, str] = {
     "チーフベアハート": "northern",   # 父チーフズクラウン (Danzig 系)
     "アンバーシャダイ": "northern",   # 父ノーザンテースト
     "メジロライアン": "northern",     # 父アンバーシャダイ
+    "フサイチコンコルド": "northern", # 父カーリアン (Nijinsky → Northern Dancer)
+    "アジュディケーティング": "northern",  # 父ダンチヒ (Danzig)
     # --- ロベルト系 (Hail to Reason → Roberto) ---
     "ロベルト": "roberto",
     "ブライアンズタイム": "roberto",
@@ -299,6 +305,7 @@ LINE_BY_SIRE: dict[str, str] = {
     "ニシケンモノノフ": "turnto",     # 父メイショウボーラー
     "デヴィルヒズデュー": "turnto",   # 父デヴィルズバッグ
     "ロージズインメイ": "turnto",     # 父デヴィルヒズデュー
+    "ニホンピロウイナー": "turnto",   # 父スティールハート (Habitat → Sir Gaylord → Turn-to)
     # --- ナスルーラ系 (Bold Ruler → Seattle Slew → A.P. Indy 含む) ---
     "ナスルーラ": "nasrullah",
     "ボールドルーラー": "nasrullah",
@@ -333,12 +340,15 @@ LINE_BY_SIRE: dict[str, str] = {
     "ラニ": "nasrullah",             # 父タピット
     "カリフォルニアクローム": "nasrullah",  # 父ラッキーパルピット (Pulpit 系)
     "ベストウォーリア": "nasrullah",  # 父マジェスティックウォリアー
+    "ミスターシービー": "nasrullah",  # 父トウショウボーイ (テスコボーイ系)
+    "パラダイスクリーク": "nasrullah",  # 父アイリッシュリヴァー (Riverman → Never Bend)
     # --- ネイティヴダンサー系 ---
     "ネイティヴダンサー": "native",
     "レイズアネイティヴ": "native",   # 父ネイティヴダンサー
     "アファームド": "native",        # 父エクスクルーシヴネイティヴ (Raise a Native 系)
     "カコイーシーズ": "native",      # 父アリダー (Raise a Native 系)
     "アリダー": "native",            # 父レイズアネイティヴ
+    "リンドシェーバー": "native",     # 父アリダー (Raise a Native 系)
     # --- ネアルコ / ニアークティック ---
     "ニアークティック": "nearctic",
     "ネアルコ": "nearctic",
@@ -456,8 +466,8 @@ def classify_country(sire_name: str | None, line_key: str) -> str:
     (COUNTRY_BY_LINE) を使う。line_key は classify_sire の戻り値を渡す想定。
     """
     key = _normalize(sire_name)
-    if key in COUNTRY_OVERRIDE:
-        return COUNTRY_OVERRIDE[key]
+    if key in _COUNTRY_OVERRIDE_N:
+        return _COUNTRY_OVERRIDE_N[key]
     return COUNTRY_BY_LINE.get(line_key, "unknown")
 
 
@@ -469,16 +479,30 @@ def country_color(country_key: str) -> str:
     return COUNTRY_COLOR.get(country_key, COUNTRY_COLOR["unknown"])
 
 
-def _normalize(name: str | None) -> str:
-    """種牡馬名を照合キーに正規化 (全角空白除去 + trim)。
+# JV-Data の馬名は旧 JRA 表記の**大書き仮名** (ヤ/ユ/ヨ/ツ/ア…) で格納される
+# (例: リアルシヤダイ, トウシヨウボーイ, マツリダゴツホ)。辞書キーは現代表記の
+# 小書き仮名 (シャ/ショ/ッ) なので、両者を大書きへ畳んで照合する (2026-07-06 実 DB
+# で小書き差により多数の既知種牡馬が「その他」落ちしていた構造バグの対処)。
+_KANA_SMALL_TO_LARGE = str.maketrans("ァィゥェォッャュョヮ", "アイウエオツヤユヨワ")
 
-    注: 半角カナ・異表記 (海外馬の音写ゆれ等) には対応しない。breeding_horses の
-    表記が辞書キーとずれると遡上停止点を素通りし得る (2026-07-05 検証監査)。
+
+def _normalize(name: str | None) -> str:
+    """種牡馬名を照合キーに正規化 (全角空白除去 + trim + 小書き仮名→大書き仮名)。
+
+    注: 半角カナ・その他の異表記 (海外馬の音写ゆれ等) には対応しない。breeding_horses
+    の表記が辞書キーとずれると遡上停止点を素通りし得る (2026-07-05 検証監査)。
     その検出は scripts/audit_sire_lines.py の実 DB 突合で行う。
     """
     if not name:
         return ""
-    return name.replace("　", "").strip()
+    return name.replace("　", "").strip().translate(_KANA_SMALL_TO_LARGE)
+
+
+# 辞書キー (小書き仮名の現代表記) を _normalize 済みの形に畳んだ照合表。
+# 照合は必ずこれらを使う (生の LINE_BY_SIRE 等は可読性のための原本)。
+_LINE_BY_SIRE_N = {_normalize(k): v for k, v in LINE_BY_SIRE.items()}
+_FOUNDERS_N = {_normalize(k): v for k, v in FOUNDERS.items()}
+_COUNTRY_OVERRIDE_N = {_normalize(k): v for k, v in COUNTRY_OVERRIDE.items()}
 
 
 def classify_sire(sire_name: str | None, conn=None, sire_breeding_num: str | None = None,
@@ -491,10 +515,10 @@ def classify_sire(sire_name: str | None, conn=None, sire_breeding_num: str | Non
     3. いずれも当たらなければ "unknown"。
     """
     key = _normalize(sire_name)
-    if key in LINE_BY_SIRE:
-        return LINE_BY_SIRE[key]
-    if key in FOUNDERS:
-        return FOUNDERS[key]
+    if key in _LINE_BY_SIRE_N:
+        return _LINE_BY_SIRE_N[key]
+    if key in _FOUNDERS_N:
+        return _FOUNDERS_N[key]
 
     if conn is None or not sire_breeding_num:
         return "unknown"
@@ -533,10 +557,10 @@ def classify_sire(sire_name: str | None, conn=None, sire_breeding_num: str | Non
             name, parent_name, parent_num = row[0], row[1], row[2]
         for candidate in (name, parent_name):
             k = _normalize(candidate)
-            if k in LINE_BY_SIRE:
-                return LINE_BY_SIRE[k]
-            if k in FOUNDERS:
-                return FOUNDERS[k]
+            if k in _LINE_BY_SIRE_N:
+                return _LINE_BY_SIRE_N[k]
+            if k in _FOUNDERS_N:
+                return _FOUNDERS_N[k]
         cur = parent_num
     return "unknown"
 

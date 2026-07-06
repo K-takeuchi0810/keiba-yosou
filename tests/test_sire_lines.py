@@ -177,6 +177,36 @@ def test_short_labels_complete():
     assert sl.line_label_short("架空") == "その他"
 
 
+def test_normalize_large_kana_jvdata_convention():
+    """JV-Data は大書き仮名 (ヤ/ユ/ヨ/ツ) で馬名を格納する。小書き仮名の辞書キーと
+    照合できることを固定 (2026-07-06 実 DB で多数の既知種牡馬が小書き差で「その他」
+    落ちしていた構造バグの regression)。"""
+    # 辞書キーは小書き (リアルシャダイ/アンバーシャダイ/トウショウボーイ) だが
+    # DB は大書き (シヤ/シヨ) — どちらでも同じ系統に解決する
+    assert sl.classify_sire("リアルシヤダイ") == sl.classify_sire("リアルシャダイ") == "roberto"
+    assert sl.classify_sire("アンバーシヤダイ") == "northern"
+    assert sl.classify_sire("トウシヨウボーイ") == "nasrullah"
+    # 小書きッ→大書きツ
+    assert sl._normalize("マツリダゴッホ") == sl._normalize("マツリダゴツホ")
+
+
+def test_line_facts_unknown_reduction_2026_07_06():
+    """実 DB の unknown 上位から追加した高頻度種牡馬の父系事実固定。"""
+    facts = {
+        "アフリート": "mrprospector",       # 父ミスタープロスペクター
+        "ヘクタープロテクター": "mrprospector",  # 父ウッドマン
+        "ケイムホーム": "mrprospector",      # 父ゴーンウェスト
+        "フサイチコンコルド": "northern",     # 父カーリアン (Nijinsky 系)
+        "アジュディケーティング": "northern", # 父ダンチヒ
+        "ミスターシービー": "nasrullah",     # 父トウショウボーイ
+        "パラダイスクリーク": "nasrullah",    # 父アイリッシュリヴァー (Riverman 系)
+        "リンドシェーバー": "native",         # 父アリダー
+        "ニホンピロウイナー": "turnto",       # 父スティールハート (Sir Gaylord 系)
+    }
+    for name, expect in facts.items():
+        assert sl.classify_sire(name) == expect, name
+
+
 def test_normalize_fullwidth_space():
     # 末尾全角空白パディングを除去して照合できる
     assert sl.classify_sire("ディープインパクト　　") == "sunday"

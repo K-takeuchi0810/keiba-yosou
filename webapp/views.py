@@ -12,7 +12,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from config import CORNER_BYTES_VERIFIED
+from config import CORNER_BYTES_VERIFIED, HN_BIRTHPLACE_VERIFIED
 from predictor.sire_lines import (
     classify_country,
     classify_sire,
@@ -257,11 +257,13 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
             masters[m["blood_register_num"]] = m
 
     # 祖先の産地 (HN 繁殖馬マスタの産地名)。BLOD 未取込 / 旧スキーマなら空 dict に縮退。
+    # HN_BIRTHPLACE_VERIFIED=False の間は 205-229 のバイト位置が未確定 (2026-07-06 実 DB
+    # で先頭欠け+隣接混入=文字化けと判明) のため、産地は表示しない (誤データを出さない)。
     origins: dict[str, str] = {}
     anc_bns = {bn for m in masters.values()
                for bn in (m["sire_breeding_num"], m["dam_sire_breeding_num"],
                           m["sire_dam_sire_breeding_num"], m["dam_dam_sire_breeding_num"])
-               if bn}
+               if bn} if HN_BIRTHPLACE_VERIFIED else set()
     if anc_bns:
         try:
             qb = ",".join("?" * len(anc_bns))

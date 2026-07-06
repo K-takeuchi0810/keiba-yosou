@@ -57,6 +57,12 @@ DATA_PERIODS: dict[str, dict[str, str]] = {
 # 表示ラベルの単一情報源。緑化後の (暫定) 外し忘れ防止 — 2026-07-06 検証監査)。
 CORNER_BYTES_VERIFIED: bool = False
 
+# HN (繁殖馬マスタ) の産地名バイト位置が実データで確定済みか。
+# 2026-07-06 実 DB 検証で 205-229 のオフセットが誤り (産地が先頭欠け + 末尾に隣接
+# フィールド混入) と判明したため False。正しい位置を突き止めて確認できるまで
+# webapp は祖先の産地表示を抑制する (文字化けを出さない単一情報源)。
+HN_BIRTHPLACE_VERIFIED: bool = False
+
 
 # 買い目フィルタの既定値。アプリ全体で **必ずここを唯一の出典** とする。
 # 利用箇所: web/generator.py (公開 HTML 用) / gui/app.py:_is_buy_candidate
