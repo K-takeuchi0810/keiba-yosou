@@ -51,6 +51,12 @@ DATA_PERIODS: dict[str, dict[str, str]] = {
     "production": {"from": "20260101", "to": "20261231"},   # 本番 + HOLDOUT
 }
 
+# コーナー通過順位 (corner_order_*) のバイト位置が実 .jvd で検証済みか。
+# probe_corner_offsets --expect/--ra を実機で緑化したら True に反転する。
+# webapp はこのフラグ 1 箇所で「先行力(暫定)」ラベルの要否を決める (probe 状態と
+# 表示ラベルの単一情報源。緑化後の (暫定) 外し忘れ防止 — 2026-07-06 検証監査)。
+CORNER_BYTES_VERIFIED: bool = False
+
 
 # 買い目フィルタの既定値。アプリ全体で **必ずここを唯一の出典** とする。
 # 利用箇所: web/generator.py (公開 HTML 用) / gui/app.py:_is_buy_candidate

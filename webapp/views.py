@@ -12,6 +12,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from config import CORNER_BYTES_VERIFIED
 from predictor.sire_lines import (
     classify_country,
     classify_sire,
@@ -139,11 +140,13 @@ def _horse_detail_line(h: dict, feat: dict, recent: list[dict], cur_distance: in
     # 近3走着順 (新しい順)
     recent3 = "-".join(str(r["ord"]) for r in recent) if recent else "-"
     # 上がり (SmartRC「上がり P/T」相当。final_3f は検証済みバイト位置)。
-    # T=過去最速上がり3F (0.1 秒)、P=そのレース内での上がり順位 (best_final_3f_rank)。
+    # T=近走 (同馬場・同距離帯) の最速上がり3F (0.1 秒)。順位は best_final_3f_rank だが
+    # これは近走での**最良**上がり順位で、最速タイムを出した走とは別レースになり得る
+    # (features.py は両者を独立に min するため。2026-07-06 監査: 同一走と誤読させない)。
     b3f = feat.get("best_final_3f")
     a_rank = feat.get("best_final_3f_rank")
     if b3f:
-        agari = f"{b3f / 10:.1f}" + (f"(上{a_rank}位)" if a_rank else "")
+        agari = f"{b3f / 10:.1f}" + (f"(近走最高{a_rank}位)" if a_rank else "")
     else:
         agari = "-"
     # 出走間隔
@@ -154,7 +157,9 @@ def _horse_detail_line(h: dict, feat: dict, recent: list[dict], cur_distance: in
     if recent and cur_distance and recent[0]["dist"]:
         delta = cur_distance - recent[0]["dist"]
         dist_change = "同距離" if delta == 0 else (f"延長+{delta}m" if delta > 0 else f"短縮{abs(delta)}m")
-    # 父×馬場適性 (Share 相当)。n<10 非表示、10<=n<30 は括弧書き=標本少の参考値
+    # 父×馬場適性 (父産駒の同馬場複勝率。SmartRC の「シェア」列とは別物 — シェアは
+    # 未対応と凡例に明記。2026-07-06 検証監査: 用語の重複主張を解消)。
+    # n<10 非表示、10<=n<30 は括弧書き=標本少の参考値
     # (2026-07-05 収益性監査: 低 n 帯の過信抑止)。
     # "-" (データ無) と「n<10 につき抑制」を区別する (凡例の -=データ無 と意味衝突しない)
     apt = "-"
@@ -169,19 +174,22 @@ def _horse_detail_line(h: dict, feat: dict, recent: list[dict], cur_distance: in
     # samples>0 のときだけ表示 = hard gate クリア後に自動で有効化される安全設計。
     # corner_env=True (DB に corner データあり) で当該馬だけ履歴が無い場合は
     # 「4角-」を出し、未整備との区別をつける (凡例 -=データ無 と一貫)。
-    # テン/先行力 (SmartRC「テン P」相当)。4 角通過順の平均 = 隊列位置 (小=前)。
-    # corner データは probe 緑化 + backfill 後にのみ存在するため samples>0 のときだけ
-    # 表示 = hard gate クリア後に自動有効化される安全設計。バイト位置は probe 未検証の
-    # ため「テン(暫定)」と明示 (SmartRC の テンP は再現だが数値は要検証)。
+    # 先行力 (位置取り)。4 角通過順の平均 = レース終盤の隊列位置 (小=前)。
+    # 注: これは SmartRC の「テン」(=序盤ダッシュ力・テン1F) とは別概念で、テン1F は
+    # JV-Data 非提供のため 4 角位置取りで代替する。corner_order のバイト位置が
+    # config.CORNER_BYTES_VERIFIED=False の間は「(暫定)」を付す (probe 緑化で反転、
+    # ラベルと probe 状態の単一情報源 — 2026-07-06 監査)。corner データは probe 緑化 +
+    # backfill 後にのみ存在するため samples>0 のときだけ表示する。
+    prov = "" if CORNER_BYTES_VERIFIED else "(暫定)"
     pace = None
     c_n = feat.get("recent_4corner_samples") or 0
     c_avg = feat.get("recent_4corner_avg_position")
     c_chg = feat.get("recent_4corner_position_change")
     if c_n > 0 and c_avg is not None:
         chg = f"/上げ{c_chg:+.1f}" if c_chg is not None else ""
-        pace = f"テン(暫定)4角avg{c_avg:.1f}{chg}(n={c_n})"
+        pace = f"先行力{prov}4角avg{c_avg:.1f}{chg}(n={c_n})"
     elif corner_env:
-        pace = "テン(暫定)4角-"
+        pace = f"先行力{prov} 4角データ無"
     detail = {
         "burden": burden_weight_kg(h.get("burden_weight") or 0) or "-",
         "weight": weight, "leg": leg, "recent3": recent3, "agari_t": agari,

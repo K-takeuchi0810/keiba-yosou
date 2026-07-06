@@ -86,6 +86,27 @@ def test_render_race_has_line_color_and_masters():
     assert "父×馬場" in html
 
 
+def test_horse_detail_line_agari_rank_and_pace_provisional():
+    """サブ行の上がり順位併記・先行力(暫定)ラベル・corner_env fallback の 3 分岐
+    (2026-07-06 code-quality/validation 監査: 未テスト分岐の regression)。"""
+    # (i) 上がり最速 + 近走最高順位 併記
+    feat = {"best_final_3f": 335, "best_final_3f_rank": 2}
+    d = views._horse_detail_line({}, feat, [], 1600, corner_env=False)
+    assert d["agari_t"] == "33.5(近走最高2位)"
+    # (ii) rank なし → 時間のみ (誤ったペア表示をしない)
+    d2 = views._horse_detail_line({}, {"best_final_3f": 340}, [], 1600, corner_env=False)
+    assert d2["agari_t"] == "34.0"
+    # (iii) 先行力: samples>0 で「先行力(暫定)…」(CORNER_BYTES_VERIFIED=False 既定)
+    feat3 = {"recent_4corner_samples": 4, "recent_4corner_avg_position": 2.3,
+             "recent_4corner_position_change": 1.5}
+    d3 = views._horse_detail_line({}, feat3, [], 1600, corner_env=True)
+    assert d3["pace"].startswith("先行力(暫定)4角avg2.3")
+    assert "テン" not in d3["pace"]              # 「テン」誤用の撤回を固定
+    # (iv) corner_env だが履歴なし → データ無ラベル
+    d4 = views._horse_detail_line({}, {}, [], 1600, corner_env=True)
+    assert d4["pace"] == "先行力(暫定) 4角データ無"
+
+
 def test_render_race_gen3_pedigree_and_origin():
     """父母父/母母父の系統表示と、繁殖馬マスタ由来の産地表示 (SmartRC パリティ)。"""
     conn = _db()
@@ -105,6 +126,9 @@ def test_render_race_gen3_pedigree_and_origin():
     # 凡例に国系統の暫定注記と軸一覧 (凡例ドリフト防止の固定 assert)
     assert "亀谷分類の日本型/米国型/欧州型・暫定" in html
     assert "父/母父国系統の各軸に対応" in html
+    # SmartRC パネル部分実装の凡例トークン (凡例ドリフト防止の固定 assert)
+    assert "近走で記録した最良のレース内上がり順位" in html
+    assert "テン1F・CR・シェア" in html          # 未対応列の明示
     # 凡例は実表示と一致させる (「凡例と実表示の不一致」の 2 連続再発防止 —
     # gui-ux 監査。文言を変えたらこの assert も実表示と突合して更新する)
     assert "父/母父の丸括弧=産地" in html

@@ -110,8 +110,10 @@ def recent_corner_stats(
 ) -> tuple[float | None, float | None, int]:
     """直近レースのコーナー通過順位から先行力/差し脚力の代理指標を出す (Phase 4)。
 
-    テンP (SmartRC の先行力指標) に相当する自前シグナル。リーク防止のため
-    ``before_date`` 未満の確定レースのみ参照する。
+    「先行力 (レース終盤 4 角の位置取り)」の自前シグナル。SmartRC の「テン」
+    (=序盤ダッシュ力・テン1F) とは別概念 — テン1F は JV-Data 非提供のため 4 角
+    通過順で代替している (2026-07-06 予想ロジック監査: テンと4角の混同を是正)。
+    リーク防止のため ``before_date`` 未満の確定レースのみ参照する。
 
     返値: (avg_4corner_position, avg_position_change, samples)
       - avg_4corner_position : 直近の 4 角通過順位の平均。小さいほど前で運ぶ (先行力)。
@@ -1218,9 +1220,17 @@ def compute_features(
                     final3f_values.append(int(p["final_3f"]))
                 if p.get("finish_time") and pdist:
                     time_per_100_values.append(float(p["finish_time"]) / float(pdist) * 100.0)
+                # cache key に馬番を含める: relative_race_metrics は past_run の
+                # 馬番に固有の値 (time_diff/順位) を返すため、同一過去レースを走った
+                # 別の出走馬が feature_cache (レース内共有) 経由で 1 頭目の値に汚染
+                # される cross-horse バグを防ぐ (2026-07-06 検証監査で検出。rules.py の
+                # 上がり順位スコア・LGBM 特徴にも波及していた)。馬番はレース内で一意
+                # なので (レース識別 + 馬番) で past_run を一意に決定できる。
                 rel_diff, rel_rank = _cached(
                     cache,
-                    ("relative_race_metrics", p.get("race_year"), p.get("race_month_day"), p.get("track_code"), p.get("kaiji"), p.get("nichiji"), p.get("race_num")),
+                    ("relative_race_metrics", p.get("race_year"), p.get("race_month_day"),
+                     p.get("track_code"), p.get("kaiji"), p.get("nichiji"), p.get("race_num"),
+                     p.get("horse_num")),
                     lambda p=p: relative_race_metrics(conn, p),
                 )
                 if rel_diff is not None:
