@@ -138,9 +138,14 @@ def _horse_detail_line(h: dict, feat: dict, recent: list[dict], cur_distance: in
         weight = "-"
     # 近3走着順 (新しい順)
     recent3 = "-".join(str(r["ord"]) for r in recent) if recent else "-"
-    # 上がりT (直近の補正なし最速上がり3F, 0.1 秒単位)
+    # 上がり (SmartRC「上がり P/T」相当。final_3f は検証済みバイト位置)。
+    # T=過去最速上がり3F (0.1 秒)、P=そのレース内での上がり順位 (best_final_3f_rank)。
     b3f = feat.get("best_final_3f")
-    agari = f"{b3f / 10:.1f}" if b3f else "-"
+    a_rank = feat.get("best_final_3f_rank")
+    if b3f:
+        agari = f"{b3f / 10:.1f}" + (f"(上{a_rank}位)" if a_rank else "")
+    else:
+        agari = "-"
     # 出走間隔
     days = feat.get("days_since_last")
     rest = (f"休み明け({days}日)" if days and days >= 90 else f"間隔{days}日" if days else "-")
@@ -164,15 +169,19 @@ def _horse_detail_line(h: dict, feat: dict, recent: list[dict], cur_distance: in
     # samples>0 のときだけ表示 = hard gate クリア後に自動で有効化される安全設計。
     # corner_env=True (DB に corner データあり) で当該馬だけ履歴が無い場合は
     # 「4角-」を出し、未整備との区別をつける (凡例 -=データ無 と一貫)。
+    # テン/先行力 (SmartRC「テン P」相当)。4 角通過順の平均 = 隊列位置 (小=前)。
+    # corner データは probe 緑化 + backfill 後にのみ存在するため samples>0 のときだけ
+    # 表示 = hard gate クリア後に自動有効化される安全設計。バイト位置は probe 未検証の
+    # ため「テン(暫定)」と明示 (SmartRC の テンP は再現だが数値は要検証)。
     pace = None
     c_n = feat.get("recent_4corner_samples") or 0
     c_avg = feat.get("recent_4corner_avg_position")
     c_chg = feat.get("recent_4corner_position_change")
     if c_n > 0 and c_avg is not None:
         chg = f"/上げ{c_chg:+.1f}" if c_chg is not None else ""
-        pace = f"4角avg{c_avg:.1f}{chg}(n={c_n})"
+        pace = f"テン(暫定)4角avg{c_avg:.1f}{chg}(n={c_n})"
     elif corner_env:
-        pace = "4角-"
+        pace = "テン(暫定)4角-"
     detail = {
         "burden": burden_weight_kg(h.get("burden_weight") or 0) or "-",
         "weight": weight, "leg": leg, "recent3": recent3, "agari_t": agari,
