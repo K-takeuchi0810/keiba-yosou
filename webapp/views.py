@@ -296,11 +296,16 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
         "date": date, "track": track, "kaiji": kaiji, "nichiji": nichiji,
     }
     def _ped_extra(name: str, bn: str | None) -> str | None:
-        """父母父/母母父の補助表示「名前(系統短/産地)」。名前が無ければ None。"""
+        """父母父/母母父の補助表示「名前(系統短・国系統/産地)」。名前が無ければ None。
+        4 世代すべてで系統と国系統 (亀谷分類) を出すユーザ要望への対応。国系統は
+        判別不能なら省く (バッジ相当の情報を狭いテキスト行に畳んで見せる)。"""
         if not name:
             return None
         k = classify_sire(name, conn=conn, sire_breeding_num=bn)
         parts = line_label_short(k)
+        ck = classify_country(name, k)
+        if ck != "unknown":
+            parts += f"・{country_label(ck)}"
         org = origins.get(bn or "")
         if org:
             parts += f"/{org}"
@@ -323,6 +328,8 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
         dlk = classify_sire(dam_sire, conn=conn, sire_breeding_num=dam_sire_bn)
         # 国別タイプ (亀谷分類、SmartRC 国系統)。父の系統から日本型/米国型/欧州型。
         fc = classify_country(sire, lk)
+        # 母父も同様に国系統を出す (4 世代すべてで系統+国を出すユーザ要望)。
+        dc = classify_country(dam_sire, dlk)
         # 父母父・母母父 (3 代血統) は補助行に「名前(系統/産地)」で出す
         sds_disp, dds_disp = _ped_extra(sds, sds_bn), _ped_extra(dds, dds_bn)
         ped_parts = [p for p in (
@@ -341,6 +348,8 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
             "country_label": country_label(fc),
             "dam_line_color": line_color(dlk),
             "dam_line_short": line_label_short(dlk),
+            "dam_country_key": dc,
+            "dam_country_label": country_label(dc),
             "sire": sire, "dam_sire": dam_sire,
             "sire_origin": origins.get(sire_bn or ""),
             "dam_sire_origin": origins.get(dam_sire_bn or ""),

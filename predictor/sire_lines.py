@@ -445,6 +445,28 @@ LINE_BY_SIRE: dict[str, str] = {
     "ハイペリオン": "hyperion", "Hyperion": "hyperion",
     "Aureole": "hyperion", "Khaled": "hyperion", "Swaps": "hyperion",
     "Star Kingdom": "hyperion",
+    # --- 歴史的な内国産・輸入種牡馬 (実 DB の unknown 上位に居た古い父)。父系を founder
+    #     まで辿って確度の高いものだけ収載 (2026-07-06 実機 unknown 突合)。breeding_horses
+    #     の遡上でも拾えるが、古いレコードは血統木が疎で遡上が届かない場合があるため
+    #     名前で直接固定する。---
+    # ナスルーラ系
+    "ミルジョージ": "nasrullah",         # 父ミルリーフ → Never Bend → Nasrullah
+    "ブレイヴエストローマン": "nasrullah", # 父 Never Bend → Nasrullah
+    "キンググローリアス": "nasrullah",    # 父 Naskra → Nasram → Nasrullah
+    "ロイヤルスキー": "nasrullah",        # 父 Raja Baba → Bold Ruler → Nasrullah
+    "アローエクスプレス": "nasrullah",    # 父 Never Beat → Never Bend → Nasrullah
+    "イエローゴッド": "nasrullah",        # 父 Red God → Nasrullah
+    # ノーザンダンサー系
+    "モガミ": "northern",                # 父 Lyphard → Northern Dancer
+    "ノーザンディクテイター": "northern", # 父 Northern Dancer
+    "ホリスキー": "northern",            # 父マルゼンスキー → Nijinsky → Northern Dancer
+    "ヤマニンスキー": "northern",         # 父 Nijinsky → Northern Dancer
+    "アサティス": "northern",            # 父 Topsider → Northern Dancer
+    "スリルショー": "northern",          # 父 Northern Baby → Northern Dancer
+    "ロドリゴデトリアーノ": "northern",   # 父 El Gran Senor → Northern Dancer
+    # サンデーサイレンス系
+    "マツリダゴッホ": "sunday",          # 父サンデーサイレンス
+    "タヤスツヨシ": "sunday",            # 父サンデーサイレンス
     # 注: なお確度の低い/真に不明な系統は依然 unknown (グレー)。誤答よりも
     # 「その他」が誠実。ダノンレジェンド (父 Macho Uno → Holy Bull → Great Above 系)
     # 等は上記いずれにも該当しないため unknown のまま。

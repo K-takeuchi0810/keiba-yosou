@@ -37,7 +37,7 @@
         <div><span class="line-dot" style="background:{{ h.line_color }}"></span>{{ h.line_short }}{% if h.country_key != 'unknown' %}<span class="ctag ctag-{{ h.country_key }}">{{ h.country_label }}</span>{% endif %}</div>
         {% else %}<div>-</div>{% endif %}
         {% if h.dam_sire %}
-        <div class="damline"><span class="line-dot" style="background:{{ h.dam_line_color }}"></span>{{ h.dam_line_short }}</div>
+        <div class="damline"><span class="line-dot" style="background:{{ h.dam_line_color }}"></span>{{ h.dam_line_short }}{% if h.dam_country_key != 'unknown' %}<span class="ctag ctag-{{ h.dam_country_key }}">{{ h.dam_country_label }}</span>{% endif %}</div>
         {% else %}<div class="damline">-</div>{% endif %}
       </td>
       <td class="muted opt-col">{{ h.sire }}{% if h.sire_origin %}<span class="origin">({{ h.sire_origin }})</span>{% endif %}</td>
@@ -64,13 +64,14 @@
   </tbody>
 </table>
 </div>
-<p class="muted">系統=上段が父の大系統(+国系統バッジ=亀谷分類の日本型/米国型/欧州型・暫定)・下段(小)が母父の大系統。
+<p class="muted">系統=上段が父の大系統・下段(小)が母父の大系統。いずれも国系統バッジ(亀谷分類の日本型/米国型/欧州型・暫定)を併記。
+補助行の 父母父・母母父にも 系統・国系統 を出すので、父・母父・父母父・母母父の4世代すべてで系統と国系統が読める。
 系統・国系統は血統の分類・出自表示であり、
 成績・期待値の指標ではない（傾向集計は父系統・母父系統・父/母父国系統の各軸に対応）。
-「その他」=系統判別不能（主要系統辞書・血統遡上のいずれでも分類できず）。11大系統外でも名の通った系統は実系統名で表示（国系統は暫定）。
+「その他」=系統判別不能（主要系統辞書・血統遡上のいずれでも分類できず）。11大系統外でも名の通った系統は実系統名で表示（国系統は暫定）。国系統バッジ無し=判別不能。
 {% if show_origin %}父/母父の丸括弧=産地（狭い画面では父/母父列ごと省略）。
-補助行の 父母父・母母父=3代血統で、丸括弧は 系統/産地（産地未取込時は系統のみ）。{% else %}
-補助行の 父母父・母母父=3代血統（系統）。産地はデータ位置の検証未完了のため現在非表示（検証完了後に表示）。{% endif %}
+補助行の 父母父・母母父=3代血統で、丸括弧は 系統・国系統/産地（産地未取込時は系統・国系統のみ）。{% else %}
+補助行の 父母父・母母父=3代血統で、丸括弧は 系統・国系統。産地はデータ位置の検証未完了のため現在非表示（検証完了後に表示）。{% endif %}
 予想印・確率は predictor/rules.py（診断用）。
 サブ行: 近3走=着順(新しい順) / 上T=同馬場・同距離帯の近走での最速上がり3F・(近走最高N位)=近走で記録した最良のレース内上がり順位(最速タイムと別レースの場合あり) / 脚質※=推定 /
 父×馬場=父産駒の同馬場複勝率(n=標本数、丸括弧=標本少の参考値) /

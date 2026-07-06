@@ -261,6 +261,34 @@ def test_non_top11_lines_classify():
     assert sl.classify_sire("架空種牡馬ZZ") == "unknown"
 
 
+def test_historic_unknown_top_sires_classify():
+    """実機 unknown 上位に居た歴史的な父を、DB の大書き仮名スペルのまま系統+国系統
+    に解決できることを固定 (2026-07-06 実機突合)。誤答防止のため父系 founder まで
+    確度の高いものだけ収載。国系統も判別不能でないことを確認する。"""
+    cases = {
+        "ミルジヨージ": ("nasrullah", "usa"),        # 父ミルリーフ → Never Bend → Nasrullah
+        "ブレイヴエストローマン": ("nasrullah", "usa"),  # 父 Never Bend
+        "キンググローリアス": ("nasrullah", "usa"),   # 父 Naskra → Nasram → Nasrullah
+        "ロイヤルスキー": ("nasrullah", "usa"),       # 父 Raja Baba → Bold Ruler
+        "アローエクスプレス": ("nasrullah", "usa"),   # 父 Never Beat → Never Bend
+        "イエローゴツド": ("nasrullah", "usa"),       # 父 Red God → Nasrullah
+        "モガミ": ("northern", "eur"),               # 父 Lyphard → Northern Dancer
+        "ノーザンデイクテイター": ("northern", "eur"), # 父 Northern Dancer
+        "ホリスキー": ("northern", "eur"),           # 父マルゼンスキー → Nijinsky
+        "ヤマニンスキー": ("northern", "eur"),        # 父 Nijinsky
+        "アサティス": ("northern", "eur"),           # 父 Topsider
+        "スリルシヨー": ("northern", "eur"),          # 父 Northern Baby
+        "ロドリゴデトリアーノ": ("northern", "eur"),   # 父 El Gran Senor
+        "マツリダゴツホ": ("sunday", "jpn"),          # 父サンデーサイレンス
+        "タヤスツヨシ": ("sunday", "jpn"),            # 父サンデーサイレンス
+    }
+    for name, (line, country) in cases.items():
+        k = sl.classify_sire(name)
+        assert k == line, f"{name}: {k} != {line}"
+        assert sl.classify_country(name, k) == country, name
+        assert sl.line_label_short(k) != "その他", name
+
+
 def test_english_ancestor_names_classify():
     """UM 3 代血統は海外祖先を英語で格納する。英語名でも系統が引け、大小差を吸収
     することを固定 (2026-07-06 父母父/母母父が英語名で「その他」化していた対処)。"""

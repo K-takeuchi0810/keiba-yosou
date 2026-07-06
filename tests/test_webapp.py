@@ -116,9 +116,9 @@ def test_render_race_gen3_pedigree_and_origin(monkeypatch):
     conn = _db()
     html = views.render_race(conn, "20250518", "05", "01", "01", "01")
     assert html is not None
-    # 補助行の 3 代血統: 名前(系統短/産地)
-    assert "父母父 ノーザンテースト(ノーザンD系/米)" in html
-    assert "母母父 トニービン(ナスルーラ系)" in html          # 産地未取込 → 系統のみ
+    # 補助行の 3 代血統: 名前(系統短・国系統/産地)。4 世代すべてで系統+国系統を出す。
+    assert "父母父 ノーザンテースト(ノーザンD系・欧州型/米)" in html
+    assert "母母父 トニービン(ナスルーラ系・欧州型)" in html    # 産地未取込 → 系統・国系統のみ
     # 父列の産地サフィックス (S1=安平)
     assert "(安平)" in html
     # show_origin=True 分岐の凡例 (産地を出す旨)。凡例ドリフト固定 assert
@@ -132,13 +132,16 @@ def test_render_race_birthplace_suppressed_when_unverified():
     html = views.render_race(conn, "20250518", "05", "01", "01", "01")
     assert html is not None
     assert "(安平)" not in html                       # 産地サフィックス抑制
-    assert "父母父 ノーザンテースト(ノーザンD系)" in html  # 系統は表示継続
+    assert "父母父 ノーザンテースト(ノーザンD系・欧州型)" in html  # 系統+国系統 (産地のみ抑制)
     # 国系統バッジ (亀谷分類): B1 の父ディープ=日本型 / B2 の父キンカメ=米国型。
     # 塗り潰しでなく枠線+テーマ色チップ (ctag-jpn/ctag-usa)、country_key 駆動。
     assert 'class="ctag ctag-jpn"' in html
     assert 'class="ctag ctag-usa"' in html
     assert "日本型" in html
     assert "米国型" in html
+    # 母父の行 (damline) にも国系統バッジが付く (4 世代すべてで系統+国 — ユーザ要望)。
+    assert 'class="damline">' in html
+    assert "欧州型" in html          # 母父 or 補助行のいずれかで欧州型が出る
     # 凡例に国系統の暫定注記と軸一覧 (凡例ドリフト防止の固定 assert)
     assert "亀谷分類の日本型/米国型/欧州型・暫定" in html
     assert "父/母父国系統の各軸に対応" in html
@@ -166,7 +169,7 @@ def test_render_race_breeding_horses_without_birthplace():
     html = views.render_race(conn, "20250518", "05", "01", "01", "01")
     assert html is not None
     assert "(安平)" not in html                              # 産地サフィックス消滅
-    assert "父母父 ノーザンテースト(ノーザンD系)" in html      # 系統のみで継続
+    assert "父母父 ノーザンテースト(ノーザンD系・欧州型)" in html  # 系統+国系統で継続
 
 
 def test_render_race_old_schema_without_dam_sire_bn():
