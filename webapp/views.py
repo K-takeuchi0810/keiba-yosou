@@ -368,6 +368,10 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
         },
         "nav": nav,
         "horses": rows,
+        # 凡例の産地記述を実表示と単一情報源で連動させる (フラグ False の間は
+        # 産地は出ないので凡例も「検証中で非表示」に切替 — 凡例ドリフト構造的防止。
+        # 2026-07-06 gui-ux/mobile HOLD)。
+        "show_origin": HN_BIRTHPLACE_VERIFIED,
     }
 
 

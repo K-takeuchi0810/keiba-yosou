@@ -171,6 +171,15 @@ def test_country_confirmed_error_fixes_2026_07_05():
     assert sl.classify_country("モーリス", "roberto") == "eur"
 
 
+def test_normalized_lookup_no_key_collision():
+    """仮名正規化 (小書き→大書き) で辞書キーが衝突しないこと。衝突すると dict 内包の
+    後勝ちで 1 エントリが無音で消える (2026-07-06 code-quality P2 / validation R-3)。
+    将来「シャ」表記と「シヤ」表記を両方追加した等の事故を fail-fast 化する。"""
+    assert len(sl._LINE_BY_SIRE_N) == len(sl.LINE_BY_SIRE)
+    assert len(sl._FOUNDERS_N) == len(sl.FOUNDERS)
+    assert len(sl._COUNTRY_OVERRIDE_N) == len(sl.COUNTRY_OVERRIDE)
+
+
 def test_short_labels_complete():
     assert set(sl.LINE_LABEL_SHORT) == set(sl.LINE_LABEL)
     assert sl.line_label_short("sunday") == "サンデー系"

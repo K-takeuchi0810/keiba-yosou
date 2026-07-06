@@ -20,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from jvlink_client.ingest import _split_records
 from jvlink_client.parser import HN_LENGTH
 
 
@@ -36,8 +37,9 @@ def _find_blod_file(explicit: str | None) -> Path | None:
     # dataspec 別ディレクトリが無い場合は raw 直下から HN を含む .jvd を探す
     if root.is_dir():
         for f in sorted(root.rglob("*.jvd")):
-            head = f.read_bytes()[:2]
-            if head == b"HN":
+            with open(f, "rb") as fh:   # 先頭数十 byte だけ見る (全読み回避)
+                head = fh.read(64)
+            if b"HN" in head:           # 先頭が BT/SK でも途中に HN があれば採用
                 return f
     return None
 
@@ -60,22 +62,11 @@ def main() -> int:
     print(f"file: {path}")
 
     data = path.read_bytes()
-    # HN は 251 byte 固定 + CRLF。レコード先頭 2 byte が 'HN' のものを拾う。
-    recs = []
-    step = HN_LENGTH
-    i = 0
-    while i + HN_LENGTH <= len(data) and len(recs) < args.n:
-        rec = data[i:i + HN_LENGTH]
-        if rec[:2] == b"HN":
-            recs.append(rec)
-            i += HN_LENGTH
-            # CRLF スキップ
-            while i < len(data) and data[i:i + 1] in (b"\r", b"\n"):
-                i += 1
-        else:
-            i += 1
+    # BLOD の .jvd は BT/HN/SK 等が CRLF 区切りで混在するため、ingest と同じ
+    # _split_records (CRLF 分割 + 先頭 NUL 除去) で分割し、'HN' レコードだけ拾う。
+    recs = [r for r in _split_records(data) if r[:2] == b"HN"][:args.n]
     if not recs:
-        print("HN レコードが取れませんでした (先頭 2byte が 'HN' の固定長で分割不可)。")
+        print("HN レコードが見つかりませんでした。別の BLOD .jvd を --file で指定してください。")
         return 1
 
     print(f"\n=== 各レコードの馬名 (41-76) と 195-250 バイト領域 (1-indexed) ===")
@@ -93,6 +84,10 @@ def main() -> int:
         print(f"      候補 209-228(20) = '{_dec(rec[208:228])}'")
         # 数字フィールド候補 (持込区分/輸入年) の周辺
         print(f"      201-210 = '{_dec(rec[200:210])}'  (毛色203-204/性別201/品種202 の後)")
+        # 繁殖番号 (sire/dam) も同方向シフトの疑い — 数字同士で無音誤りするため併記
+        # (2026-07-06 data-pipeline MED-1)。10 桁数字が綺麗に出る位置が正。
+        print(f"      父繁殖 現行230-239 = '{_dec(rec[229:239])}' / 候補228-237 = '{_dec(rec[227:237])}'")
+        print(f"      母繁殖 現行240-249 = '{_dec(rec[239:249])}' / 候補238-247 = '{_dec(rec[237:247])}'")
     print("\nこの出力を貼ってください。産地名が全角で正しく読める開始位置を特定し、")
     print("parse_hn の 205(持込)/206-209(輸入年)/210-229(産地) を修正します。")
     return 0

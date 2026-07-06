@@ -27,7 +27,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from db import open_db
-from predictor.sire_lines import FOUNDERS, LINE_BY_SIRE, classify_sire, _normalize
+from predictor.sire_lines import FOUNDERS, classify_sire, lookup_line, _normalize
+
+# _normalize は仮名を大書き化するため、生の FOUNDERS (小書きキー) を直接引くと
+# 当たらない。独立遡上用に正規化済み FOUNDERS を作る (2026-07-06 code-quality P1)。
+_FOUNDERS_N = {_normalize(k): v for k, v in FOUNDERS.items()}
 
 
 def traversal_only_classify(conn, breeding_num: str | None, max_depth: int = 15) -> str:
@@ -52,8 +56,8 @@ def traversal_only_classify(conn, breeding_num: str | None, max_depth: int = 15)
             break
         for candidate in (row["horse_name"], row["sire_name"]):
             k = _normalize(candidate)
-            if k in FOUNDERS:
-                return FOUNDERS[k]
+            if k in _FOUNDERS_N:
+                return _FOUNDERS_N[k]
         cur = row["sire_breeding_num"]
     return "unknown"
 
@@ -89,7 +93,7 @@ def main() -> int:
         mismatches = []                # 辞書と遡上の両方が非 unknown で食い違い
         unknown_top: Counter[str] = Counter()
         for (name, bn), weight in sires.items():
-            dict_key = LINE_BY_SIRE.get(name) or FOUNDERS.get(name)
+            dict_key = lookup_line(name)   # 正規化照合 (仮名大書き対応)
             trav_key = traversal_only_classify(conn, bn)
             if dict_key:
                 breakdown["dict_hit"] += weight

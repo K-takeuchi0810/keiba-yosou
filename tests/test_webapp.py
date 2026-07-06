@@ -121,6 +121,8 @@ def test_render_race_gen3_pedigree_and_origin(monkeypatch):
     assert "母母父 トニービン(ナスルーラ系)" in html          # 産地未取込 → 系統のみ
     # 父列の産地サフィックス (S1=安平)
     assert "(安平)" in html
+    # show_origin=True 分岐の凡例 (産地を出す旨)。凡例ドリフト固定 assert
+    assert "父/母父の丸括弧=産地" in html
 
 
 def test_render_race_birthplace_suppressed_when_unverified():
@@ -143,10 +145,11 @@ def test_render_race_birthplace_suppressed_when_unverified():
     # SmartRC パネル部分実装の凡例トークン (凡例ドリフト防止の固定 assert)
     assert "近走で記録した最良のレース内上がり順位" in html
     assert "テン1F・CR・シェア" in html          # 未対応列の明示
-    # 凡例は実表示と一致させる (「凡例と実表示の不一致」の 2 連続再発防止 —
-    # gui-ux 監査。文言を変えたらこの assert も実表示と突合して更新する)
-    assert "父/母父の丸括弧=産地" in html
-    assert "丸括弧は 系統/産地（産地未取込時は系統のみ）" in html
+    # 凡例は実表示と一致させる。産地は show_origin (=HN_BIRTHPLACE_VERIFIED) で
+    # 連動門番: False の既定では「非表示」と説明し、「取込後に表示」等の実態と食い違う
+    # 文言を出さない (凡例ドリフトの 3 回目再発を構造的に根絶 — gui-ux/mobile HOLD)。
+    assert "産地はデータ位置の検証未完了のため現在非表示" in html
+    assert "父/母父の丸括弧=産地" not in html      # False 時は産地凡例を出さない
 
 
 def test_render_race_breeding_horses_without_birthplace():

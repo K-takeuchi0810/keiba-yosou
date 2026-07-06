@@ -211,7 +211,6 @@ LINE_BY_SIRE: dict[str, str] = {
     "ケイムホーム": "mrprospector",   # 父ゴーンウェスト
     "アフリート": "mrprospector",     # 父ミスタープロスペクター
     "ヘクタープロテクター": "mrprospector",  # 父ウッドマン (Mr. Prospector 系)
-    "フォーティナイナーズサン": "mrprospector",  # 父フォーティナイナー
     # --- ストームキャット系 (ND 傘下だが慣習上独立表示) ---
     "ストームキャット": "storm",
     "ヨハネスブルグ": "storm",        # Hennessy 系
@@ -368,6 +367,9 @@ FOUNDERS: dict[str, str] = {
     # Roberto 系は遡上中に「ロベルト」で先に停止するため、ここまで遡った
     # Hail to Reason 系は非 Roberto 枝 (Halo 非 SS 等) = turnto (2026-07-05 是正。
     # 旧: 便宜上 roberto 寄せ → タイキシャトル等が誤表示になるため独立させた)。
+    # 「ターントゥ系」ラベルは Turn-to 直下の Hail to Reason 枝 (Halo 等) に加え、
+    # Sir Gaylord 枝 (ニホンピロウイナー等、Hail to Reason を経由しない Turn-to 直系)
+    # も内包する広義の呼称 (2026-07-06 予想ロジック監査の注記反映)。
     "ヘイルトゥリーズン": "turnto",
     "ターントゥ": "turnto",
     "ヘイロー": "turnto",
@@ -483,7 +485,7 @@ def country_color(country_key: str) -> str:
 # (例: リアルシヤダイ, トウシヨウボーイ, マツリダゴツホ)。辞書キーは現代表記の
 # 小書き仮名 (シャ/ショ/ッ) なので、両者を大書きへ畳んで照合する (2026-07-06 実 DB
 # で小書き差により多数の既知種牡馬が「その他」落ちしていた構造バグの対処)。
-_KANA_SMALL_TO_LARGE = str.maketrans("ァィゥェォッャュョヮ", "アイウエオツヤユヨワ")
+_KANA_SMALL_TO_LARGE = str.maketrans("ァィゥェォッャュョヮヵヶ", "アイウエオツヤユヨワカケ")
 
 
 def _normalize(name: str | None) -> str:
@@ -563,6 +565,20 @@ def classify_sire(sire_name: str | None, conn=None, sire_breeding_num: str | Non
                 return _FOUNDERS_N[k]
         cur = parent_num
     return "unknown"
+
+
+def lookup_line(name: str | None) -> str | None:
+    """種牡馬名 → line_key を正規化照合で直接引く (遡上なし)。無ければ None。
+
+    LINE_BY_SIRE → FOUNDERS の順で _normalize 済みキーで照合する。モジュール外
+    (scripts/audit_sire_lines.py 等) が生の LINE_BY_SIRE/FOUNDERS を直接引くと
+    _normalize の仮名大書き化と食い違い小書きキーに当たらないため、照合は必ず
+    この公開関数を通す (2026-07-06 code-quality 監査 P1)。
+    """
+    k = _normalize(name)
+    if k in _LINE_BY_SIRE_N:
+        return _LINE_BY_SIRE_N[k]
+    return _FOUNDERS_N.get(k)
 
 
 def line_label(line_key: str) -> str:
