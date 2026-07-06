@@ -96,6 +96,15 @@ def test_render_race_gen3_pedigree_and_origin():
     assert "母母父 トニービン(ナスルーラ系)" in html          # 産地未取込 → 系統のみ
     # 父列の産地サフィックス (S1=安平)
     assert "(安平)" in html
+    # 国系統バッジ (亀谷分類): B1 の父ディープ=日本型 / B2 の父キンカメ=米国型。
+    # 塗り潰しでなく枠線+テーマ色チップ (ctag-jpn/ctag-usa)、country_key 駆動。
+    assert 'class="ctag ctag-jpn"' in html
+    assert 'class="ctag ctag-usa"' in html
+    assert "日本型" in html
+    assert "米国型" in html
+    # 凡例に国系統の暫定注記と軸一覧 (凡例ドリフト防止の固定 assert)
+    assert "亀谷分類の日本型/米国型/欧州型・暫定" in html
+    assert "父/母父国系統の各軸に対応" in html
     # 凡例は実表示と一致させる (「凡例と実表示の不一致」の 2 連続再発防止 —
     # gui-ux 監査。文言を変えたらこの assert も実表示と突合して更新する)
     assert "父/母父の丸括弧=産地" in html

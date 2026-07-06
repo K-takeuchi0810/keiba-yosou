@@ -136,6 +136,29 @@ def test_aggregate_dam_sire_line_new_schema_traversal():
     assert r["dam_bn_degraded"] is False      # 非縮退
 
 
+def test_aggregate_sire_country_axis():
+    """父国系統 (亀谷分類) 軸。B1=ディープ→日本型、B2=キンカメ→米国型。"""
+    conn = _db()
+    r = agg.aggregate_course(conn, "05", "turf", 1600, "sire_country",
+                             "20240101", "20241231", min_n=10)
+    by_value = {c["value"]: c for c in r["cells"]}
+    assert by_value["jpn"]["label"] == "日本型"      # ディープ産駒 (B1, 40 頭)
+    assert by_value["jpn"]["color"] == "#d32f2f"     # AA 達成色 (旧 #e53935 は白抜き未達)
+    assert by_value["usa"]["label"] == "米国型"      # キンカメ産駒 (B2, 120 頭)
+
+
+def test_aggregate_dam_sire_country_old_schema_fallback():
+    """母父国系統軸。旧スキーマ (dam_sire_breeding_num 列なし) fixture で縮退 SELECT
+    (need_dam_bn 経由) を実際に通す (2026-07-05 data-pipeline/code-quality 監査)。"""
+    conn = _db()
+    r = agg.aggregate_course(conn, "05", "turf", 1600, "dam_sire_country",
+                             "20240101", "20241231", min_n=10)
+    assert r["dam_bn_degraded"] is True            # 縮退フラグ
+    by_value = {c["value"]: c for c in r["cells"]}
+    # B1 母父タイキシャトル → turnto → 米国型、B2 母父Y → unknown → 判別不能
+    assert "usa" in by_value or "unknown" in by_value
+
+
 def test_min_n_gate():
     conn = _db()
     # min_n を 200 にすると全 cell が insufficient

@@ -86,6 +86,19 @@
   .origin { font-size:11px; margin-left:2px; }
   .pedline { margin-top:2px; }
   .pedline .peditem { display:inline-block; margin-right:12px; }
+  /* 国別血統タイプ (亀谷分類) のバッジ。塗り潰しでなく枠線+テーマ色テキストの
+     ニュートラルチップにする (2026-07-05 mobile/gui-ux 監査): (1) 白抜き塗りは
+     3 色とも AA 未達だった (赤4.23/青3.68/緑3.30:1)、(2) 塗り色が系統 dot の色相
+     (キンカメ赤/サンデー黄緑) と衝突した。テキスト色は既存テーマ変数 (--warn/
+     --accent/--good) を流用 — これらは light/dark 双方で本文地に対し AA 実測済。
+     必ずラベル文字を併記する (色単独識別に依存しない不変条件)。11px はプロダクト
+     最小フォント床 (上の .origin コメント参照) を守る。 */
+  .ctag { display:inline-block; margin-left:5px; padding:0 4px; border-radius:3px;
+    font-size:11px; font-weight:600; vertical-align:middle;
+    border:1px solid currentColor; }
+  .ctag-jpn { color:var(--warn); }
+  .ctag-usa { color:var(--accent); }
+  .ctag-eur { color:var(--good); }
   .grid { display:flex; flex-wrap:wrap; gap:8px; }
   .grid a { flex:1 1 auto; }
   select,button { font-size:16px; min-height:44px; padding:8px 10px; border-radius:8px;

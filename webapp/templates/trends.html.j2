@@ -31,9 +31,15 @@
   <strong>{{ result.track_name }} {{ result.surface_label }}{{ result.distance }}m ／ {{ result.factor_label }}</strong>
   <div class="muted">{{ result.from_date }}〜{{ result.to_date }} ・ 対象 {{ result.total }} 走 ・ min_n={{ result.min_n }}
    ・ 同時比較 {{ result.n_values }} 値（多いほど最良セルの偶然上振れが起きやすい）</div>
+  {% if result.factor in ('sire_country', 'dam_sire_country') %}
+  <div class="muted"><span class="chip">暫定</span>
+    国系統=亀谷分類の日本型/米国型/欧州型。系統既定値ベースの<strong>暫定分類</strong>で
+    公式リスト未突合のため、セル境界 (どの系統がどの国型か) 自体に誤差があり得ます。</div>
+  {% endif %}
   {% if result.dam_bn_degraded %}
   <div class="muted"><span class="chip">簡易分類</span>
-    母父系統は名前照合のみ（血統遡上なし・DB 旧スキーマ）。「その他」が実際より多めに出ます。</div>
+    母父の系統/国系統は名前照合のみ（血統遡上なし・DB 旧スキーマ）。
+    「その他」「判別不能」が実際より多めに出ます。</div>
   {% endif %}
 </div>
 <div class="tablewrap">

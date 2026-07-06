@@ -22,7 +22,14 @@ from __future__ import annotations
 import logging
 import sqlite3
 
-from predictor.sire_lines import classify_sire, line_color, line_label
+from predictor.sire_lines import (
+    classify_country,
+    classify_sire,
+    country_color,
+    country_label,
+    line_color,
+    line_label,
+)
 from predictor.stats import bootstrap_return_rate, wilson_ci
 from web.codes import track_name, track_type
 
@@ -47,6 +54,8 @@ FACTORS = {
     "sire_line": "父系統",
     "dam_sire": "母父",
     "dam_sire_line": "母父系統",
+    "sire_country": "父国系統",
+    "dam_sire_country": "母父国系統",
     "popularity": "人気帯",
 }
 
@@ -108,6 +117,29 @@ def list_courses(conn, from_date: str, to_date: str, min_races: int = 20) -> lis
     return out
 
 
+_LINE_FACTORS = ("sire_line", "dam_sire_line")
+_COUNTRY_FACTORS = ("sire_country", "dam_sire_country")
+# 母父繁殖番号 (dam_sire_breeding_num) を SELECT に要する factor。追加時の触り忘れ
+# 防止のため 1 出典化 (2026-07-05 code-quality 監査 F4)。
+_DAM_BN_FACTORS = ("dam_sire_line", "dam_sire_country")
+
+
+def _factor_cell_label(factor: str, value: str) -> str:
+    if factor in _LINE_FACTORS:
+        return line_label(value)
+    if factor in _COUNTRY_FACTORS:
+        return country_label(value)
+    return value
+
+
+def _factor_cell_color(factor: str, value: str) -> str | None:
+    if factor in _LINE_FACTORS:
+        return line_color(value)
+    if factor in _COUNTRY_FACTORS:
+        return country_color(value)
+    return None
+
+
 def _factor_select(factor: str) -> tuple[str, str]:
     """ファクターの SELECT 式と JOIN 句を返す。"""
     if factor == "waku":
@@ -116,10 +148,10 @@ def _factor_select(factor: str) -> tuple[str, str]:
         return "COALESCE(NULLIF(h.jockey_short_name,''), h.jockey_code)", ""
     if factor == "trainer":
         return "COALESCE(NULLIF(h.trainer_short_name,''), h.trainer_code)", ""
-    if factor in ("sire", "sire_line"):
+    if factor in ("sire", "sire_line", "sire_country"):
         return ("hm.sire_name",
                 "LEFT JOIN horse_masters hm ON hm.blood_register_num = h.blood_register_num")
-    if factor in ("dam_sire", "dam_sire_line"):
+    if factor in ("dam_sire", "dam_sire_line", "dam_sire_country"):
         return ("hm.dam_sire_name",
                 "LEFT JOIN horse_masters hm ON hm.blood_register_num = h.blood_register_num")
     if factor == "popularity":
@@ -159,7 +191,7 @@ def aggregate_course(conn, track_code: str, surface: str, distance: int, factor:
     }
     rows, dam_bn_degraded = _rows_with_key(
         conn, sel, join, from_date, to_date, track_code, distance,
-        need_dam_bn=(factor == "dam_sire_line"))
+        need_dam_bn=(factor in _DAM_BN_FACTORS))
     rows = [r for r in rows if (r["ry"], r["rmd"], r["tc"], r["kj"], r["nj"], r["rn"]) in ok_surface]
 
     # 集計。系統分類はユニーク種牡馬あたり 1 回で足りるので request 内でメモ化する
@@ -180,6 +212,14 @@ def aggregate_course(conn, track_code: str, surface: str, distance: int, factor:
             memo_key = (fval, r["dam_sire_bn"])
             value = line_memo.get(memo_key) or line_memo.setdefault(
                 memo_key, classify_sire(fval, conn=conn, sire_breeding_num=r["dam_sire_bn"]))
+        elif factor in ("sire_country", "dam_sire_country"):
+            # 国別タイプ (亀谷分類)。まず系統 line_key を出し (メモ化)、そこから
+            # classify_country で日本型/米国型/欧州型へ。
+            bn = r["dam_sire_bn"] if factor == "dam_sire_country" else r["sire_bn"]
+            memo_key = (fval, bn)
+            lk = line_memo.get(memo_key) or line_memo.setdefault(
+                memo_key, classify_sire(fval, conn=conn, sire_breeding_num=bn))
+            value = classify_country(fval, lk)
         else:
             value = (str(fval).replace("　", "").strip() if fval not in (None, "") else "不明")
         b = buckets.setdefault(value, {"n": 0, "wins": 0, "top3": 0,
@@ -207,8 +247,8 @@ def aggregate_course(conn, track_code: str, surface: str, distance: int, factor:
         ret_point, ret_lo, ret_hi = bootstrap_return_rate(b["payouts"], stakes) if n else (0.0, 0.0, 0.0)
         cell = {
             "value": value,
-            "label": line_label(value) if factor in ("sire_line", "dam_sire_line") else value,
-            "color": line_color(value) if factor in ("sire_line", "dam_sire_line") else None,
+            "label": _factor_cell_label(factor, value),
+            "color": _factor_cell_color(factor, value),
             "n": n,
             "wins": b["wins"],
             "top3": b["top3"],

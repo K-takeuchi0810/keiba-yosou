@@ -104,6 +104,73 @@ def test_turnto_founder_stop_is_not_roberto():
     assert sl.classify_sire("新X", conn=conn, sire_breeding_num="N1") == "roberto"
 
 
+def test_country_classification_defaults():
+    """亀谷分類 (国別血統) の系統既定値。2022 改訂: 日本型=SS系のみ。
+
+    注: 本 country 系テスト群は「実装した既定値の回帰固定」であり事実検証ではない
+    (実装と同じ根拠から書いた写しなので循環)。亀谷公式リストとの突合は
+    docs/OPERATION.md「亀谷公式リスト突合」節の手動手順で行う (JV-Link 内に独立
+    ソースが無いため audit_sire_lines のような DB 突合では確定できない)。
+    """
+    # 日本型 = サンデーサイレンス系
+    assert sl.classify_country("ディープインパクト", "sunday") == "jpn"
+    assert sl.classify_country("キタサンブラック", "sunday") == "jpn"
+    # 米国型 = ミスプロ/ストキャ/ネイティヴ/A.P.Indy 系
+    assert sl.classify_country("ロードカナロア", "kingmambo") == "usa"
+    assert sl.classify_country("ヘニーヒューズ", "storm") == "usa"
+    assert sl.classify_country("エーピーインディ", "nasrullah") == "usa"
+    # 欧州型 = ノーザンダンサー欧州系/ロベルト系
+    assert sl.classify_country("ハービンジャー", "northern") == "eur"
+    assert sl.classify_country("モーリス", "roberto") == "eur"
+
+
+def test_country_override_nasrullah_european_branch():
+    """ナスルーラ系でも欧州分枝 (Grey Sovereign/Blushing Groom) は override で欧州型。
+    A.P.Indy 系 (米国型) と血の質が分かれる点を種牡馬単位で解決する。"""
+    assert sl.classify_country("トニービン", "nasrullah") == "eur"
+    assert sl.classify_country("ジャングルポケット", "nasrullah") == "eur"
+    assert sl.classify_country("バゴ", "nasrullah") == "eur"
+    # 同系統でも A.P.Indy 枝は既定の米国型のまま
+    assert sl.classify_country("タピット", "nasrullah") == "usa"
+
+
+def test_country_labels_colors_complete_and_unknown():
+    assert set(sl.COUNTRY_LABEL) == set(sl.COUNTRY_COLOR)
+    assert sl.country_label("jpn") == "日本型"
+    assert sl.country_label("usa") == "米国型"
+    assert sl.country_label("eur") == "欧州型"
+    # 判別不能系統は unknown → ラベル「判別不能」(sire_line 軸の「その他」と区別)
+    assert sl.classify_country("架空種牡馬", "unknown") == "unknown"
+    assert sl.country_label("unknown") == "判別不能"
+
+
+def test_country_by_line_parity_with_line_label():
+    """COUNTRY_BY_LINE は LINE_LABEL の全系統キーを網羅する (系統追加時の割当漏れを
+    fail-fast。漏れると .get(line_key, 'unknown') で黙ってバッジが消える)。"""
+    assert set(sl.COUNTRY_BY_LINE) == set(sl.LINE_LABEL)
+
+
+def test_country_override_keys_exist_in_sire_dict():
+    """COUNTRY_OVERRIDE の種牡馬名は LINE_BY_SIRE に実在する (typo で無効な
+    override が黙って line 既定値に落ちるのを防ぐ)。"""
+    assert set(sl.COUNTRY_OVERRIDE) <= set(sl.LINE_BY_SIRE)
+
+
+def test_country_confirmed_error_fixes_2026_07_05():
+    """予想ロジック監査で確定誤りとされた分類の regression。
+    ND 北米発展枝 (Deputy Minister/War Front) とロベルト系米国残留枝を米国型に固定。"""
+    # クロフネ等 Deputy Minister 枝: northern 既定 eur → override で usa
+    assert sl.classify_country("クロフネ", "northern") == "usa"
+    assert sl.classify_country("フレンチデピュティ", "northern") == "usa"
+    assert sl.classify_country("マインドユアビスケッツ", "northern") == "usa"
+    # War Front 枝
+    assert sl.classify_country("デクラレーションオブウォー", "northern") == "usa"
+    # ナダル: roberto 既定 eur → override で usa (Kris S. 米国残留枝)
+    assert sl.classify_country("ナダル", "roberto") == "usa"
+    # モーリス/エピファネイアは roberto 既定 eur のまま (亀谷公表と整合)
+    assert sl.classify_country("モーリス", "roberto") == "eur"
+
+
 def test_short_labels_complete():
     assert set(sl.LINE_LABEL_SHORT) == set(sl.LINE_LABEL)
     assert sl.line_label_short("sunday") == "サンデー系"

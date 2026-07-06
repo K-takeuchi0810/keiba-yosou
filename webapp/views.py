@@ -12,7 +12,13 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from predictor.sire_lines import classify_sire, line_color, line_label_short
+from predictor.sire_lines import (
+    classify_country,
+    classify_sire,
+    country_label,
+    line_color,
+    line_label_short,
+)
 from web.codes import burden_weight_kg, ground_name, track_name, track_type, weather_name
 from webapp import aggregate as agg
 from webapp.aggregate import jra_track_clause
@@ -296,6 +302,8 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
         # 母父系統 (SmartRC 同様の 2 段表示用)。dam_sire_breeding_num は母父自身の
         # 繁殖番号なので、そこから父系遡上すれば母父の大系統が引ける。
         dlk = classify_sire(dam_sire, conn=conn, sire_breeding_num=dam_sire_bn)
+        # 国別タイプ (亀谷分類、SmartRC 国系統)。父の系統から日本型/米国型/欧州型。
+        fc = classify_country(sire, lk)
         # 父母父・母母父 (3 代血統) は補助行に「名前(系統/産地)」で出す
         sds_disp, dds_disp = _ped_extra(sds, sds_bn), _ped_extra(dds, dds_bn)
         ped_parts = [p for p in (
@@ -310,6 +318,8 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
             "horse_name": h.get("horse_name") or "",
             "line_color": line_color(lk),
             "line_short": line_label_short(lk),
+            "country_key": fc,
+            "country_label": country_label(fc),
             "dam_line_color": line_color(dlk),
             "dam_line_short": line_label_short(dlk),
             "sire": sire, "dam_sire": dam_sire,

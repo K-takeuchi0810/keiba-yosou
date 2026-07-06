@@ -375,6 +375,100 @@ FOUNDERS: dict[str, str] = {
 }
 
 
+# ===========================================================================
+# 国別血統タイプ (亀谷敬正の分類、SmartRC「国系統」)。系統 (父系大系統) とは別軸で、
+# 「その血が米国競馬で発展したか欧州競馬で発展したか」= 適性の質を表す。
+#   - jpn 日本型: サンデーサイレンス系。瞬発力・トップスピード・平均ペース。
+#   - usa 米国型: スピード・持続力・速いペース・短めの距離。ミスプロ/ストキャ等。
+#   - eur 欧州型: スタミナ・パワー・遅いペース・長い距離。ND 欧州系/ロベルト等。
+#
+# **暫定分類 (2026-07-05)**: 2022 年 8 月改訂の公表ルール「日本型 = SS 系のみ、
+# 非 SS 系は米国型/欧州型へ」に準拠し、非 SS 系は founder 由来 (Mr.Prospector/
+# Storm Cat/Bold Ruler 米国分枝=米国型、Sadler's Wells/Danzig/Roberto=欧州型) で
+# 既定値を置いた。亀谷氏の分類は本来**種牡馬個別**で会員サイトの公式リストが一次
+# 出典。同系統でも米欧が割れる枝は COUNTRY_OVERRIDE で吸収する (ND の北米発展枝
+# =Deputy Minister/War Front、ロベルト系米国残留枝=ナダル、ナスルーラ系欧州枝
+# =トニービン/バゴ 等を 2026-07-05 予想ロジック監査で補正済み)。
+# **なお公式リスト未突合の暫定が残る**: キングマンボ系の米/日 split、マクフィ
+# (ドバウィ系=欧州?)、チーフベアハート/タリスマニック (北米発展?)、プリンスリー
+# ギフト枝 (テスコボーイ/サクラバクシンオー)、ノーザンテースト。確定は
+# docs/OPERATION.md「亀谷公式リスト突合」節の手順で会員サイトと突合後。
+COUNTRY_LABEL: dict[str, str] = {
+    "jpn": "日本型", "usa": "米国型", "eur": "欧州型", "unknown": "判別不能",
+}
+# 傾向集計の国系統セル dot 用の色 (label 文字を必ず併記するので色単独識別ではない)。
+# 出馬表バッジは色相衝突 (系統 dot と重複) 回避のため塗りでなく枠線+テーマ色チップ
+# (base.html.j2 .ctag-*) を使い、この hex は使わない。値は白/淡地上で判読できる
+# 中彩度 (2026-07-05 mobile 監査: 旧 #e53935/#1e88e5/#43a047 は白文字 AA 未達だった)。
+COUNTRY_COLOR: dict[str, str] = {
+    "jpn": "#d32f2f",   # 赤 (日本)
+    "usa": "#1976d2",   # 青 (米)
+    "eur": "#2e7d32",   # 緑 (欧)
+    "unknown": "#bdbdbd",
+}
+
+# 大系統 line_key → 国別タイプの既定値 (種牡馬個別の例外は COUNTRY_OVERRIDE)。
+COUNTRY_BY_LINE: dict[str, str] = {
+    "sunday": "jpn",          # 改訂ルールの定義: 日本型 = SS 系
+    "kingmambo": "usa",       # Mr. Prospector 基盤 (キンカメ系は公式突合で要確認)
+    "mrprospector": "usa",
+    "storm": "usa",           # Storm Cat = 米国ダート/スピード
+    "native": "usa",          # Native Dancer/Raise a Native = 米国
+    "nasrullah": "usa",       # A.P. Indy/Bold Ruler 米国分枝を既定。欧州枝は override
+    "northern": "eur",        # Sadler's Wells/Danzig/Galileo/ハービンジャー = 欧州
+    "roberto": "eur",         # 日本の Roberto 系 (モーリス/エピファネイア) = 持続/パワー
+    "turnto": "usa",          # Halo/Hail to Reason 米国。タイキシャトル系のスピード寄り
+    "nearctic": "usa",        # Icecapade/Wild Again 米国ダート (トランセンド等)
+    "unknown": "unknown",
+}
+
+# 種牡馬個別のオーバーライド (所属 line の既定値と国別タイプが異なるもの)。
+# 最も確度が高いのはナスルーラ系の欧州分枝 (Grey Sovereign/Blushing Groom 経由) で、
+# A.P. Indy 系 (米国型) とは血の質が明確に分かれる。
+COUNTRY_OVERRIDE: dict[str, str] = {
+    # ナスルーラ系のうち欧州で発展した枝 → 欧州型
+    "トニービン": "eur",          # Grey Sovereign 系、欧州中長距離
+    "ジャングルポケット": "eur",   # 父トニービン
+    "トーセンジョーダン": "eur",   # 父ジャングルポケット
+    "バゴ": "eur",               # Blushing Groom 系、仏・凱旋門賞
+    "レインボウクエスト": "eur",   # Blushing Groom 系、欧州スタミナ
+    "サクラローレル": "eur",      # 父レインボウクエスト
+    "ミルリーフ": "eur",          # Never Bend 系だが英ダービー/凱旋門賞・欧州発展
+    "タマモクロス": "eur",         # 同 Grey Sovereign 枝 (トニービンと同質、天皇賞春=スタミナ)
+    # ノーザンダンサー系のうち北米で発展した枝 → 米国型 (northern 既定=欧州の例外)。
+    # Deputy Minister/Vice Regent 枝は ND の北米発展枝で亀谷氏の代表例
+    # (クロフネ=米国型)。2026-07-05 予想ロジック監査の確定誤り指摘を反映。
+    "クロフネ": "usa",            # 父フレンチデピュティ (Deputy Minister 枝、米国産ダート)
+    "フレンチデピュティ": "usa",   # Deputy Minister → Vice Regent (北米)
+    "マインドユアビスケッツ": "usa",  # Posse → Silver Deputy → Deputy Minister
+    "デクラレーションオブウォー": "usa",  # War Front (Danzig 米国残留枝、米国供用)
+    "アメリカンペイトリオット": "usa",    # 父ウォーフロント
+    "ザファクター": "usa",        # 父ウォーフロント
+    # ロベルト系のうち米国残留枝 → 米国型 (roberto 既定=欧州の例外)。
+    "ナダル": "usa",             # Blame←Arch←Kris S. 米国残留枝、米国ダート G1 のみ
+}
+
+
+def classify_country(sire_name: str | None, line_key: str) -> str:
+    """種牡馬名 + その大系統 line_key から国別タイプ (jpn/usa/eur/unknown) を返す。
+
+    種牡馬個別の COUNTRY_OVERRIDE を最優先し、無ければ line_key の既定値
+    (COUNTRY_BY_LINE) を使う。line_key は classify_sire の戻り値を渡す想定。
+    """
+    key = _normalize(sire_name)
+    if key in COUNTRY_OVERRIDE:
+        return COUNTRY_OVERRIDE[key]
+    return COUNTRY_BY_LINE.get(line_key, "unknown")
+
+
+def country_label(country_key: str) -> str:
+    return COUNTRY_LABEL.get(country_key, COUNTRY_LABEL["unknown"])
+
+
+def country_color(country_key: str) -> str:
+    return COUNTRY_COLOR.get(country_key, COUNTRY_COLOR["unknown"])
+
+
 def _normalize(name: str | None) -> str:
     """種牡馬名を照合キーに正規化 (全角空白除去 + trim)。
 
