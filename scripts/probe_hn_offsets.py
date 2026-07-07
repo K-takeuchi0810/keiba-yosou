@@ -94,6 +94,27 @@ def main() -> int:
             print("  対処: JVOpen の BLOD 取得で HN が含まれるか確認し、")
             print("        `python -m scripts.bootstrap --dataspecs BLOD` を実行して HN を取得してください。")
             print("        (JRA-VAN のデータ種別設定で『繁殖馬』が有効か、フルデータ契約かも確認)")
+        elif inv.get("HN", 0) > 0:
+            # 全 HN ファイルを走査し、総 HN レコード数と distinct breeding_num(offset 12-21)
+            # を数える。distinct が総数より大幅に少ない = breeding_num が衝突 = PK 誤パース。
+            # (breeding_horses が 86 ファイルから 6957 行しか無い謎の切り分け。)
+            total_hn, bn_set = 0, set()
+            for d in _blod_dirs(root):
+                for f in sorted(d.glob("*.jvd")):
+                    if f.name[:2].upper() != "HN":
+                        continue
+                    try:
+                        for r in _split_records(f.read_bytes()):
+                            if r[:2] == b"HN":
+                                total_hn += 1
+                                bn_set.add(bytes(r[11:21]))
+                    except Exception:  # noqa: BLE001
+                        continue
+            print(f"  HN レコード総数: {total_hn} / distinct breeding_num(12-21): {len(bn_set)}")
+            if total_hn and len(bn_set) < total_hn * 0.5:
+                print(f"  ⚠ distinct が総数の {len(bn_set)/total_hn*100:.0f}% しかない = breeding_num(offset 12) が")
+                print("    レコード間で衝突 = PK 誤パース。INSERT OR REPLACE で行が潰れ、UM とも join しない。")
+                print("    → parse_hn の breeding_num 位置が誤り。real な 10 桁繁殖番号の位置を要特定。")
         print()
 
     path = _find_blod_file(args.file)
