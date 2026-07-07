@@ -293,6 +293,34 @@ def test_historic_unknown_top_sires_classify():
         assert sl.line_label_short(k) != "その他", name
 
 
+def test_audit_top_unknown_sires_classify():
+    """実機 audit (2026-07-06) の unknown 上位を、DB の大書き仮名 / 英語スペルのまま
+    系統+国系統に解決できることを固定。父系 founder まで確度の高いもののみ収載。"""
+    cases = {
+        # 大書き仮名 (母父/父母父で頻出の古い父)
+        "ネヴアービート": ("nasrullah", "usa"),   # Never Beat → Never Bend → Nasrullah
+        "ヴエンチア": ("manowar", "usa"),         # Venture VII → Relic → War Relic → Man o'War
+        "チヤイナロツク": ("hyperion", "eur"),     # China Rock → Rockefella → Hyperion
+        "フアバージ": ("stsimon", "eur"),         # Faberge II → Prince Bio → Prince Rose
+        "シヤトーゲイ": ("hyperion", "eur"),       # Chateaugay → Swaps → Khaled → Hyperion
+        "シンザン": ("stsimon", "eur"),           # 父ヒンドスタン (Bois Roussel = St. Simon)
+        "フオルテイノ": ("nasrullah", "usa"),      # Fortino → Grey Sovereign → Nasrullah
+        "ボールドリツク": ("nasrullah", "usa"),    # Bold Ruckus → Boldnesian → Bold Ruler
+        # 英語スペル (UM 3代血統の海外祖先。小文字連結で格納)
+        "lefabuleux": ("stsimon", "eur"),        # Le Fabuleux → Rabelais → St. Simon
+        "lasttycoon": ("northern", "eur"),       # Last Tycoon → Try My Best → Northern Dancer
+        "kris": ("native", "usa"),               # Kris → Sharpen Up → Atan → Native Dancer
+        "wildagain": ("nearctic", "usa"),        # Wild Again → Icecapade → Nearctic
+        "lawsociety": ("stsimon", "eur"),        # Law Society → Tom Rolfe → Ribot
+        "chiefscrown": ("northern", "eur"),      # Chief's Crown → Danzig → Northern Dancer
+    }
+    for name, (line, country) in cases.items():
+        k = sl.classify_sire(name)
+        assert k == line, f"{name}: {k} != {line}"
+        assert sl.classify_country(name, k) == country, name
+        assert sl.line_label_short(k) != "その他", name
+
+
 def test_english_ancestor_names_classify():
     """UM 3 代血統は海外祖先を英語で格納する。英語名でも系統が引け、大小差を吸収
     することを固定 (2026-07-06 父母父/母母父が英語名で「その他」化していた対処)。"""

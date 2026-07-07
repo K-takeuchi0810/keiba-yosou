@@ -477,8 +477,41 @@ LINE_BY_SIRE: dict[str, str] = {
     # --- マンノウォー系 (Man o'War → Fair Play。11 大系統外の米国基礎系統) ---
     "マンノウォー": "manowar",
     "タイテエム": "manowar",             # 父ヴェンチア → Relic → War Relic → Man o'War
+    "ヴェンチア": "manowar",             # Venture VII → Relic → War Relic → Man o'War
     "インリアリティ": "manowar",          # → Intent → War Relic → Man o'War
     "リローンチ": "manowar",             # 父 In Reality
+    # --- 実機 audit (2026-07-06) の unknown 上位 (産駒数順) で父系 founder まで確度が
+    #     高いもの。多くは古い母父/父母父で英語 or 大書き仮名で格納される。BLOD 遡上が
+    #     効かない環境でも名前で直接引けるよう収載する。---
+    # ナスルーラ系
+    "ネヴァービート": "nasrullah",        # Never Beat → Never Bend → Nasrullah
+    "ダイハード": "nasrullah",           # Die Hard → Never Say Die → Nasrullah
+    "クリスタルパレス": "nasrullah",      # Crystal Palace → Caro → Fortino → Grey Sovereign → Nasrullah
+    "フォルティノ": "nasrullah",          # Fortino → Grey Sovereign → Nasrullah
+    "ボールドリック": "nasrullah",        # Bold Ruckus → Boldnesian → Bold Ruler → Nasrullah
+    "ライジングフレーム": "nasrullah",     # Rising Flame → Nasrullah
+    "ゴールドメリディアン": "nasrullah", "Gold Meridian": "nasrullah",  # → Seattle Slew → Bold Ruler
+    # ノーザンダンサー系
+    "ナイスダンサー": "northern",         # Nice Dancer → Northern Dancer
+    "カーネギー": "northern",            # Carnegie → Sadler's Wells → Northern Dancer
+    "ラストタイクーン": "northern", "Last Tycoon": "northern",  # → Try My Best → Northern Dancer
+    "チーフズクラウン": "northern", "Chief's Crown": "northern", # → Danzig → Northern Dancer
+    # ネイティヴダンサー系
+    "クリス": "native", "Kris": "native",         # Kris → Sharpen Up → Atan → Native Dancer
+    "ダンサーズイメージ": "native",       # Dancer's Image → Native Dancer
+    "ベーリング": "native", "Bering": "native",   # Arctic Tern → Sea-Bird → Dan Cupid → Native Dancer
+    # ニアークティック系
+    "Wild Again": "nearctic",  # → Icecapade → Nearctic (カナ ワイルドアゲイン は上で定義済)
+    # ハイペリオン系
+    "チャイナロック": "hyperion",         # China Rock → Rockefella → Hyperion
+    "シャトーゲイ": "hyperion",          # Chateaugay → Swaps → Khaled → Hyperion
+    # セントサイモン系 (Prince Rose / Rabelais / Ribot / Bois Roussel は St. Simon 系)
+    "ファバージ": "stsimon",             # Faberge II → Prince Bio → Prince Rose → … St. Simon
+    "ルファビュルー": "stsimon", "Le Fabuleux": "stsimon",  # → Wild Risk → Rialto → Rabelais → St. Simon
+    "ローソサエティ": "stsimon", "Law Society": "stsimon",   # → Alleged → Hoist the Flag → Tom Rolfe → Ribot
+    "ヒンドスタン": "stsimon",           # Hindostan → Bois Roussel → Vatout → Prince Chimay → Chaucer → St. Simon
+    "シンザン": "stsimon",              # 父ヒンドスタン (Bois Roussel 系 = St. Simon)
+    # マンノウォー系は上で定義済 (ヴェンチア 等)
     # 注: なお確度の低い/真に不明な系統は依然 unknown (グレー)。誤答よりも
     # 「その他」が誠実。ダノンレジェンド (父 Macho Uno → Holy Bull → Great Above 系)
     # 等は上記いずれにも該当しないため unknown のまま。

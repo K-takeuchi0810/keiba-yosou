@@ -50,14 +50,29 @@ def main() -> None:
         default=DEFAULT_FROMTIME,
         help=f"YYYYMMDDhhmmss (default: {DEFAULT_FROMTIME})",
     )
+    parser.add_argument(
+        "--dataspecs",
+        default=None,
+        help="カンマ区切りで対象 dataspec を限定 (例: BLOD)。省略時は全 BOOTSTRAP_DATASPECS。"
+             " 血統遡上 (breeding_horses) だけ埋め直したいときは --dataspecs BLOD で BLOD の"
+             " 繁殖馬マスタ (HN) を option=4 で一括取得できる。",
+    )
     args = parser.parse_args()
     fromtime = args.fromtime
+    if args.dataspecs:
+        requested = [d.strip().upper() for d in args.dataspecs.split(",") if d.strip()]
+        unknown = [d for d in requested if d not in BOOTSTRAP_DATASPECS]
+        if unknown:
+            parser.error(f"未知の dataspec: {unknown} (選択肢: {', '.join(BOOTSTRAP_DATASPECS)})")
+        target_dataspecs = requested
+    else:
+        target_dataspecs = BOOTSTRAP_DATASPECS
 
     started = time.time()
 
     print("=" * 60)
     print("bootstrap: 過去データ一括取得")
-    print(f"対象 dataspec: {', '.join(BOOTSTRAP_DATASPECS)}")
+    print(f"対象 dataspec: {', '.join(target_dataspecs)}")
     print("option = 4 (ダイアログなしセットアップ)")
     print(f"fromtime = {fromtime}")
     print("=" * 60)
@@ -67,7 +82,7 @@ def main() -> None:
         summaries = cli.fetch_all(
             fromtime=fromtime,
             option=4,
-            dataspecs=BOOTSTRAP_DATASPECS,
+            dataspecs=target_dataspecs,
             on_progress=progress,
         )
 
