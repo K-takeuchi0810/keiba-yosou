@@ -46,6 +46,9 @@ LINE_LABEL: dict[str, str] = {
     "hyperion": "ハイペリオン系",
     "manowar": "マンノウォー系",
     "finetop": "ファイントップ系",
+    "teddy": "テディ系",
+    "herbager": "エルバジェ系",
+    "blandford": "ブランドフォード系",
     "unknown": "その他",
 }
 
@@ -66,6 +69,9 @@ LINE_LABEL_SHORT: dict[str, str] = {
     "hyperion": "ハイペリオン系",
     "manowar": "マンノウォー系",
     "finetop": "ファイントップ系",
+    "teddy": "テディ系",
+    "herbager": "エルバジェ系",
+    "blandford": "ブランドフォード系",
     "unknown": "その他",
 }
 
@@ -89,6 +95,9 @@ LINE_COLOR: dict[str, str] = {
     "hyperion": "#26c6da",     # シアン (#4dd0e1 は light 地で 1.84:1 と淡すぎ濃度上げ — 2026-07-06 mobile)
     "manowar": "#607d8b",      # 青灰 (Man o'War 系)
     "finetop": "#ffb300",      # 琥珀 (ファイントップ系。仏スプリンター/マイラー)
+    "teddy": "#6d4c41",        # 焦茶濃 (テディ系。仏/米の古典基礎系統)
+    "herbager": "#558b2f",     # 深緑 (エルバジェ系。仏スタミナ)
+    "blandford": "#5d4037",    # 茶 (ブランドフォード系。英スタミナ)
     "unknown": "#bdbdbd",      # グレー
 }
 
@@ -535,6 +544,20 @@ LINE_BY_SIRE: dict[str, str] = {
     "サッカーボーイ": "finetop",                            # 父ディクタス
     # ロベルト系 (Brian's Time 枝。ブライアンズタイム/マヤノトップガンは既存収載)
     "ナリタブライアン": "roberto",                          # 父ブライアンズタイム → Roberto
+    # --- 既存 line への確度の高い追加 (unknown 上位) ---
+    "スルーピー": "nasrullah", "Slewpy": "nasrullah",       # 父 Seattle Slew → Bold Ruler → Nasrullah
+    "ホールドユアピース": "stsimon", "Hold Your Peace": "stsimon",  # → Speak John → Prince John → Princequillo → St. Simon
+    "ハイトップ": "nearctic", "High Top": "nearctic",       # → Derring-Do → Darius → Dante → Nearco
+    "シルバーシャーク": "manowar",                          # 父 Buisson Ardent → Relic → War Relic → Man o'War
+    # --- テディ系 (Teddy → Ajax。米/仏の古典基礎系統) ---
+    "テディ": "teddy", "Teddy": "teddy",
+    "ヴィクトリアパーク": "teddy", "Victoria Park": "teddy",  # → Chop Chop → Flares → Gallant Fox → Sir Gallahad III → Teddy
+    # --- エルバジェ系 (Herbager → Vandale。仏スタミナ) ---
+    "エルバジェ": "herbager", "Herbager": "herbager",
+    "シーホーク": "herbager",                              # Sea Hawk II、父 Herbager
+    # --- ブランドフォード系 (Blandford → Swynford。英スタミナ) ---
+    "ブランドフォード": "blandford", "Blandford": "blandford",
+    "リマンド": "blandford",                                # Remand → Alcide → Alycidon → Donatello II → Blenheim → Blandford
     # マンノウォー系は上で定義済 (ヴェンチア 等)
     # 注: なお確度の低い/真に不明な系統は依然 unknown (グレー)。誤答よりも
     # 「その他」が誠実。ダノンレジェンド (父 Macho Uno → Holy Bull → Great Above 系)
@@ -578,6 +601,10 @@ FOUNDERS: dict[str, str] = {
     # ファイントップ系の停止点
     "ファイントップ": "finetop", "Fine Top": "finetop",
     "サンクチュス": "finetop", "Sanctus": "finetop",
+    # テディ/エルバジェ/ブランドフォード系の停止点 (遡上末端の稀枝でのみ発火)
+    "テディ": "teddy", "Teddy": "teddy",
+    "エルバジェ": "herbager", "Herbager": "herbager",
+    "ブランドフォード": "blandford", "Blandford": "blandford",
 }
 
 
@@ -632,6 +659,9 @@ COUNTRY_BY_LINE: dict[str, str] = {
     "stsimon": "eur",         # セントサイモン系
     "hyperion": "eur",        # ハイペリオン系
     "finetop": "eur",         # ファイントップ系 (仏 Fine Top→Sanctus→Dictus)
+    "teddy": "eur",           # テディ系 (Teddy→Ajax。仏/欧古典)
+    "herbager": "eur",        # エルバジェ系 (Herbager→Vandale。仏スタミナ)
+    "blandford": "eur",       # ブランドフォード系 (Blandford→Swynford。英スタミナ)
     "unknown": "unknown",
 }
 

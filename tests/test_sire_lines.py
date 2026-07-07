@@ -445,6 +445,30 @@ def test_finetop_line_and_brians_time():
     assert sl.classify_sire("ブライアンズタイム") == "roberto"
 
 
+def test_batch_teddy_herbager_blandford_and_existing():
+    """unknown 上位(産駒数順)の確度の高い追加。既存 line への収載 + 古典基礎系統
+    (Teddy/Herbager/Blandford) の named line 化。DB 大書き仮名でも解決。"""
+    cases = {
+        # 既存 line
+        "slewpy": ("nasrullah", "usa"),          # Slewpy → Seattle Slew → Bold Ruler
+        "holdyourpeace": ("stsimon", "eur"),     # Hold Your Peace → … → Princequillo → St. Simon
+        "hightop": ("nearctic", "usa"),          # High Top → Derring-Do → Darius → Dante → Nearco
+        "シルバーシヤーク": ("manowar", "usa"),    # Silver Shark → Buisson Ardent → Relic → Man o'War
+        # 新 named line
+        "victoriapark": ("teddy", "eur"),        # → Chop Chop → … → Sir Gallahad III → Teddy
+        "シーホーク": ("herbager", "eur"),         # Sea Hawk II、父 Herbager
+        "リマンド": ("blandford", "eur"),          # Remand → Alcide → Alycidon → … → Blandford
+    }
+    for name, (line, country) in cases.items():
+        k = sl.classify_sire(name)
+        assert k == line, f"{name}: {k} != {line}"
+        assert sl.classify_country(name, k) == country, name
+        assert sl.line_label_short(k) != "その他", name
+    assert sl.line_label("teddy") == "テディ系"
+    assert sl.line_label("herbager") == "エルバジェ系"
+    assert sl.line_label("blandford") == "ブランドフォード系"
+
+
 def test_unknown_without_conn():
     assert sl.classify_sire("架空種牡馬XYZ") == "unknown"
     assert sl.classify_sire(None) == "unknown"
