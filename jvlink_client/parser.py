@@ -787,20 +787,24 @@ class BreedingHorse:
 
 
 def parse_hn(rec: bytes) -> BreedingHorse:
-    """HN (繁殖馬マスタ) parser。仕様書 §18 (PDF page 20)。
+    """HN (繁殖馬マスタ) parser。
 
     1-2: rec_type / 3: data_div / 4-11: data_created
     12-21: breeding_num / 30-39: blood_register_num / 41-76: horse_name
-    197-200: birth_year / 201: sex_code / 202: breed_code / 203-204: coat
-    205: 持込区分 / 206-209: 輸入年 / 210-229: 産地名 (20)
-    230-239: sire_breeding_num / 240-249: dam_breeding_num
-    ⚠ **2026-07-06 実 DB 検証で 205-229 のオフセットは誤りと判明** (産地が先頭 1 文字
-    欠け + 末尾に隣接繁殖番号の "11" 混入 = 数バイトずれ)。webapp は
-    config.HN_BIRTHPLACE_VERIFIED=False で産地表示を抑制中。正しい位置は
-    scripts/probe_hn_offsets.py で生バイトから特定し、本 parse_hn を修正 →
-    BLOD を force 再取込 → フラグ True に反転、の順で確定する (docs/OPERATION.md §9)。
-    **注意**: 230-239/240-249 の繁殖番号も同方向にずれている可能性 (数字同士で
-    無音誤り)。probe で繁殖番号列も併せて確認すること。それまで 205-249 は未検証。
+    195-198: birth_year / 199: sex_code / 200: breed_code / 201-202: coat
+    203: 持込区分 / 204-207: 輸入年 / 208-227: 産地名 (20)
+    228-237: sire_breeding_num / 238-247: dam_breeding_num
+
+    ⚠→✓ **2026-07-06 実 .jvd (probe_hn_offsets) で birth_year 以降の tail 全体が
+    従来 -2 バイトずれていたと確定・修正**。決め手は国内産レコード (安平町) が
+    従来 210 では '平町…11' と先頭欠け+隣接繁殖番号混入だったのに対し、208 で
+    '安平町' と正しく読めたこと。加えて 持込区分=0(国内)+産地あり / =9(外国)+産地空
+    が相関し、この -2 補正で全フィールドが整合した (birth_year=2014/2002、
+    輸入年、産地、父母繁殖番号)。**この -2 は sire_breeding_num にも及ぶ = 血統遡上
+    (traversal) が繋がらなかった主因の 1 つ**。
+    反映後の手順 (docs/OPERATION.md §9-4): BLOD を `scripts.bootstrap --dataspecs BLOD`
+    で再取込 → breeding_horses を埋め直し → `scripts.audit_sire_lines` で
+    traversal_hit の上昇を確認 → 問題なければ config.HN_BIRTHPLACE_VERIFIED=True。
     """
     if len(rec) < HN_LENGTH:
         rec = rec.ljust(HN_LENGTH, b"\x00")
@@ -813,15 +817,15 @@ def parse_hn(rec: bytes) -> BreedingHorse:
         breeding_num=_ascii(rec, 12, 10),
         blood_register_num=_ascii(rec, 30, 10),
         horse_name=_str(rec, 41, 36),
-        sex_code=_ascii(rec, 201, 1),
-        breed_code=_ascii(rec, 202, 1),
-        coat_code=_ascii(rec, 203, 2),
-        birth_year=_ascii(rec, 197, 4),
-        sire_breeding_num=_ascii(rec, 230, 10),
-        dam_breeding_num=_ascii(rec, 240, 10),
-        mochikomi_kubun=_ascii(rec, 205, 1),
-        import_year=_ascii(rec, 206, 4),
-        birthplace=_str(rec, 210, 20),
+        sex_code=_ascii(rec, 199, 1),
+        breed_code=_ascii(rec, 200, 1),
+        coat_code=_ascii(rec, 201, 2),
+        birth_year=_ascii(rec, 195, 4),
+        sire_breeding_num=_ascii(rec, 228, 10),
+        dam_breeding_num=_ascii(rec, 238, 10),
+        mochikomi_kubun=_ascii(rec, 203, 1),
+        import_year=_ascii(rec, 204, 4),
+        birthplace=_str(rec, 208, 20),
     )
 
 

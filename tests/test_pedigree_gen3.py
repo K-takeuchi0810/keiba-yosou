@@ -66,17 +66,19 @@ def test_parse_um_gen3_empty_slots_backward_compat():
 
 
 def _hn_record() -> bytes:
+    # 2026-07-06 実 .jvd で確定した -2 補正後のオフセットで組む
+    # (旧 197/205/206/210/230/240 は tail 全体が +2 ずれていた誤り)。
     buf = bytearray(b"0" * HN_LENGTH)
     _put_ascii(buf, 1, "HN")
     _put_ascii(buf, 12, "8888888888")           # breeding_num
     _put_cp932(buf, 41, "ノーザンテースト", 36)
-    _put_ascii(buf, 197, "1971")                # birth_year
-    _put_ascii(buf, 203, "01")                  # coat
-    _put_ascii(buf, 205, "1")                   # 持込区分
-    _put_ascii(buf, 206, "1972")                # 輸入年
-    _put_cp932(buf, 210, "米", 20)              # 産地名
-    _put_ascii(buf, 230, "7777777777")          # sire_breeding_num
-    _put_ascii(buf, 240, "6666666666")          # dam_breeding_num
+    _put_ascii(buf, 195, "1971")                # birth_year
+    _put_ascii(buf, 201, "01")                  # coat
+    _put_ascii(buf, 203, "1")                   # 持込区分
+    _put_ascii(buf, 204, "1972")                # 輸入年
+    _put_cp932(buf, 208, "米", 20)              # 産地名
+    _put_ascii(buf, 228, "7777777777")          # sire_breeding_num
+    _put_ascii(buf, 238, "6666666666")          # dam_breeding_num
     return bytes(buf)
 
 
@@ -96,9 +98,34 @@ def test_parse_hn_birthplace_roundtrip():
 
 def test_parse_hn_domestic_no_import():
     buf = bytearray(_hn_record())
-    _put_ascii(buf, 205, "0")
-    _put_ascii(buf, 206, "0000")
-    _put_cp932(buf, 210, "安平町", 20)
+    _put_ascii(buf, 203, "0")
+    _put_ascii(buf, 204, "0000")
+    _put_cp932(buf, 208, "安平町", 20)
     hn = parse_hn(bytes(buf))
     assert hn.birthplace == "安平町"
     assert hn.import_year == "0000"
+
+
+def test_parse_hn_real_record_offsets():
+    """実 .jvd (probe_hn_offsets, HNVM2020…) の国内産レコードを模した固定バイト列で
+    -2 補正後のオフセットを固定する。従来 (210/230) では birthplace が '平町…11' と
+    先頭欠け+繁殖番号混入していた回帰を防ぐ。決め手: 持込区分=0(国内)+産地あり の相関。"""
+    buf = bytearray(b"0" * HN_LENGTH)
+    _put_ascii(buf, 1, "HN")
+    _put_ascii(buf, 12, "1234567890")           # breeding_num (PK)
+    _put_cp932(buf, 41, "イデオロレイ", 36)
+    _put_ascii(buf, 195, "2014")                # birth_year
+    _put_ascii(buf, 199, "1")                   # sex
+    _put_ascii(buf, 200, "1")                   # breed
+    _put_ascii(buf, 201, "03")                  # coat
+    _put_ascii(buf, 203, "0")                   # 持込区分 = 国内
+    _put_ascii(buf, 204, "0000")                # 輸入年
+    _put_cp932(buf, 208, "安平町", 20)          # 産地名
+    _put_ascii(buf, 228, "1120200612")          # sire_breeding_num
+    _put_ascii(buf, 238, "2594851243")          # dam_breeding_num
+    hn = parse_hn(bytes(buf))
+    assert hn.birth_year == "2014"
+    assert hn.mochikomi_kubun == "0"
+    assert hn.birthplace == "安平町"            # 208 で先頭欠けなく読める
+    assert hn.sire_breeding_num == "1120200612" # 228。traversal はこの列を辿る
+    assert hn.dam_breeding_num == "2594851243"  # 238
