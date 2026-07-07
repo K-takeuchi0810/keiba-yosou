@@ -45,6 +45,7 @@ LINE_LABEL: dict[str, str] = {
     "stsimon": "セントサイモン系",
     "hyperion": "ハイペリオン系",
     "manowar": "マンノウォー系",
+    "finetop": "ファイントップ系",
     "unknown": "その他",
 }
 
@@ -64,6 +65,7 @@ LINE_LABEL_SHORT: dict[str, str] = {
     "stsimon": "セントサイモン系",
     "hyperion": "ハイペリオン系",
     "manowar": "マンノウォー系",
+    "finetop": "ファイントップ系",
     "unknown": "その他",
 }
 
@@ -86,6 +88,7 @@ LINE_COLOR: dict[str, str] = {
     "stsimon": "#8d6e63",      # 焦茶
     "hyperion": "#26c6da",     # シアン (#4dd0e1 は light 地で 1.84:1 と淡すぎ濃度上げ — 2026-07-06 mobile)
     "manowar": "#607d8b",      # 青灰 (Man o'War 系)
+    "finetop": "#ffb300",      # 琥珀 (ファイントップ系。仏スプリンター/マイラー)
     "unknown": "#bdbdbd",      # グレー
 }
 
@@ -525,6 +528,13 @@ LINE_BY_SIRE: dict[str, str] = {
     "ラーイ": "nasrullah", "Rahy": "nasrullah",           # → Blushing Groom → Red God → Nasrullah
     "スターデナスクラ": "nasrullah", "Star de Naskra": "nasrullah",  # → Naskra → Nasram → Nasrullah
     "ダイアトム": "stsimon", "Diatome": "stsimon",         # → Sicambre → Prince Bio → Prince Rose → St. Simon
+    # ファイントップ系 (仏 Fine Top → Sanctus → Dictus。11大系統外の named line)
+    "ファイントップ": "finetop", "Fine Top": "finetop",
+    "サンクチュス": "finetop", "Sanctus": "finetop",
+    "ディクタス": "finetop", "Dictus": "finetop",          # 父サンクチュス
+    "サッカーボーイ": "finetop",                            # 父ディクタス
+    # ロベルト系 (Brian's Time 枝。ブライアンズタイム/マヤノトップガンは既存収載)
+    "ナリタブライアン": "roberto",                          # 父ブライアンズタイム → Roberto
     # マンノウォー系は上で定義済 (ヴェンチア 等)
     # 注: なお確度の低い/真に不明な系統は依然 unknown (グレー)。誤答よりも
     # 「その他」が誠実。ダノンレジェンド (父 Macho Uno → Holy Bull → Great Above 系)
@@ -565,6 +575,9 @@ FOUNDERS: dict[str, str] = {
     "マンノウォー": "manowar", "Man o'War": "manowar",
     "War Relic": "manowar", "Relic": "manowar",
     "In Reality": "manowar", "Intentionally": "manowar",
+    # ファイントップ系の停止点
+    "ファイントップ": "finetop", "Fine Top": "finetop",
+    "サンクチュス": "finetop", "Sanctus": "finetop",
 }
 
 
@@ -618,6 +631,7 @@ COUNTRY_BY_LINE: dict[str, str] = {
     "personon": "eur",        # パーソロン系 (メジロマックイーン=長距離スタミナ)
     "stsimon": "eur",         # セントサイモン系
     "hyperion": "eur",        # ハイペリオン系
+    "finetop": "eur",         # ファイントップ系 (仏 Fine Top→Sanctus→Dictus)
     "unknown": "unknown",
 }
 

@@ -431,6 +431,20 @@ def test_name_based_traversal_when_breeding_num_mismatches():
     assert sl.classify_sire("全く未知の父ZZ", conn=conn, sire_breeding_num="UMzzz") == "unknown"
 
 
+def test_finetop_line_and_brians_time():
+    """ファイントップ系 (仏 Fine Top→Sanctus→Dictus) の追加と、ロベルト系の
+    Brian's Time 枝。ユーザ指摘 (デイクタス=ディクタス が「その他」) への対処 +
+    ナリタブライアンを誤って finetop にした混入の回帰ガード (正: roberto)。"""
+    assert sl.classify_sire("デイクタス") == "finetop"      # DB 大書き仮名
+    assert sl.classify_sire("ディクタス") == "finetop"
+    assert sl.classify_sire("サッカーボーイ") == "finetop"
+    assert sl.classify_country("ディクタス", "finetop") == "eur"
+    assert sl.line_label("finetop") == "ファイントップ系"
+    # ナリタブライアン/マヤノトップガンは父ブライアンズタイム = Roberto (finetop でない)
+    assert sl.classify_sire("ナリタブライアン") == "roberto"
+    assert sl.classify_sire("ブライアンズタイム") == "roberto"
+
+
 def test_unknown_without_conn():
     assert sl.classify_sire("架空種牡馬XYZ") == "unknown"
     assert sl.classify_sire(None) == "unknown"
