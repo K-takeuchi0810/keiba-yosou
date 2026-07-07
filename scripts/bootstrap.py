@@ -61,6 +61,10 @@ def main() -> None:
     fromtime = args.fromtime
     if args.dataspecs:
         requested = [d.strip().upper() for d in args.dataspecs.split(",") if d.strip()]
+        if not requested:
+            # 空 (",," や空白のみ) を素通しすると fetch_all の `dataspecs or ALL` 分岐で
+            # 全 dataspec(5-15GB) を静かに取得してしまう (意図と正反対)。fail-fast する。
+            parser.error("--dataspecs が空です。取得する dataspec を 1 つ以上指定してください。")
         unknown = [d for d in requested if d not in BOOTSTRAP_DATASPECS]
         if unknown:
             parser.error(f"未知の dataspec: {unknown} (選択肢: {', '.join(BOOTSTRAP_DATASPECS)})")

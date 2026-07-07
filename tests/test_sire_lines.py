@@ -304,7 +304,7 @@ def test_audit_top_unknown_sires_classify():
         "フアバージ": ("stsimon", "eur"),         # Faberge II → Prince Bio → Prince Rose
         "シヤトーゲイ": ("hyperion", "eur"),       # Chateaugay → Swaps → Khaled → Hyperion
         "シンザン": ("stsimon", "eur"),           # 父ヒンドスタン (Bois Roussel = St. Simon)
-        "フオルテイノ": ("nasrullah", "usa"),      # Fortino → Grey Sovereign → Nasrullah
+        "フオルテイノ": ("nasrullah", "eur"),      # Fortino → Grey Sovereign (仏欧州枝→eur override)
         "ボールドリツク": ("nasrullah", "usa"),    # Bold Ruckus → Boldnesian → Bold Ruler
         # 英語スペル (UM 3代血統の海外祖先。小文字連結で格納)
         "lefabuleux": ("stsimon", "eur"),        # Le Fabuleux → Rabelais → St. Simon

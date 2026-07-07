@@ -488,7 +488,7 @@ LINE_BY_SIRE: dict[str, str] = {
     "ダイハード": "nasrullah",           # Die Hard → Never Say Die → Nasrullah
     "クリスタルパレス": "nasrullah",      # Crystal Palace → Caro → Fortino → Grey Sovereign → Nasrullah
     "フォルティノ": "nasrullah",          # Fortino → Grey Sovereign → Nasrullah
-    "ボールドリック": "nasrullah",        # Bold Ruckus → Boldnesian → Bold Ruler → Nasrullah
+    "ボールドリック": "nasrullah",        # Bold Ruckus 想定 → Boldnesian → Bold Ruler (原名は BLOD で要確認。Bold Ruler 系なら line は安全)
     "ライジングフレーム": "nasrullah",     # Rising Flame → Nasrullah
     "ゴールドメリディアン": "nasrullah", "Gold Meridian": "nasrullah",  # → Seattle Slew → Bold Ruler
     # ノーザンダンサー系
@@ -613,6 +613,9 @@ COUNTRY_BY_LINE: dict[str, str] = {
 COUNTRY_OVERRIDE: dict[str, str] = {
     # ナスルーラ系のうち欧州で発展した枝 → 欧州型
     "トニービン": "eur",          # Grey Sovereign 系、欧州中長距離
+    "カンパラ": "eur",            # 父 (Kalamoun→Zeddaan→Grey Sovereign)。トニービンと同枝=欧州
+    "フォルティノ": "eur",         # Grey Sovereign 直仔 (仏)。欧州スプリンター/マイラー
+    "クリスタルパレス": "eur",     # 父 Caro → Fortino → Grey Sovereign (仏)。欧州
     "ジャングルポケット": "eur",   # 父トニービン
     "トーセンジョーダン": "eur",   # 父ジャングルポケット
     "バゴ": "eur",               # Blushing Groom 系、仏・凱旋門賞

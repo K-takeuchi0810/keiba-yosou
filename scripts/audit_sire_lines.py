@@ -123,9 +123,13 @@ def main() -> int:
         # BLOD (繁殖馬) の血統木が浅く founder まで遡れていない可能性が高い (辞書追加より
         # まず BLOD 取り込みの確認が必要)。
         if breakdown["unknown"] / total > 0.05 and breakdown["traversal_hit"] / total < 0.01:
-            print(f"⚠ unknown が高い一方 traversal_hit がほぼ 0 です (breeding_horses {n_hn} 行)。原因は 2 つ:")
-            print("  (i) BLOD の血統木が浅く founder まで遡れない → BLOD(繁殖馬) 再取込で改善。")
-            print("  (ii) 遡上は届くが FOUNDERS 辞書に停止点が不足 → founder 追加で traversal_hit が上がる。")
+            print(f"⚠ unknown が高い一方 traversal_hit がほぼ 0 です (breeding_horses {n_hn} 行)。原因は 3 つ:")
+            print("  (i) breeding_horses の行数不足 → BLOD(繁殖馬) を option=4 で一括取込")
+            print("      (`python -m scripts.bootstrap --dataspecs BLOD`) で埋め直す。")
+            print("  (ii) 行は埋まるが HN の sire_breeding_num オフセット(230)がバイトずれで")
+            print("       親ポインタが garbage → 行を足しても遡上が繋がらない。BLOD 取込前に")
+            print("       `scripts/probe_hn_offsets.py` で 230/240 を確定すること (OPERATION.md §9-2)。")
+            print("  (iii) 遡上は届くが FOUNDERS 辞書に停止点が不足 → founder 追加で traversal_hit が上がる。")
             print("  いずれも個別種牡馬の辞書追加 (whack-a-mole) では long-tail に届きません。")
             print("=" * 70)
 

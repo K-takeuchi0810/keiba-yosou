@@ -292,6 +292,33 @@ SELECT sire_dam_sire_name, COUNT(*) FROM horse_masters
 WHERE sire_dam_sire_name GLOB '*[A-Za-z]*' GROUP BY 1 ORDER BY 2 DESC LIMIT 30;
 ```
 
+### 9-4. traversal_hit=0 (「その他」大量残存) の切り分けと BLOD 埋め直し runbook (2026-07-06 追加)
+
+2026-07-06 実機 audit で `breeding_horses=6957 行 / traversal_hit=0.0% / unknown=56.5%` を観測。
+父系遡上 (traversal) が全く効いておらず、「その他」大量残存の主因は辞書不足でなく **血統遡上
+データ (breeding_horses=HN 繁殖馬) の欠落**。切り分けと修復の順序:
+
+1. **audit で現状を保存** (before): `python -m scripts.audit_sire_lines --top 40 > data/audit_before.txt`。
+   `breeding_horses` 行数と `traversal_hit` を記録。
+2. **【必須の前提検証】HN オフセットの確定**: `traversal_hit=0` は行数不足だけでなく、HN の
+   `sire_breeding_num` (offset 230) が**バイトずれ**で親ポインタが壊れている可能性がある
+   (§9-2 参照。産地 offset が誤りと判明済で、230/240 も同方向シフトの疑い)。
+   **行を埋めてもポインタが garbage なら traversal は 0% のまま**。BLOD 取込前に
+   `python -m scripts.probe_hn_offsets` で 230 (sire) / 240 (dam) を確定し、ずれていれば
+   `jvlink_client/parser.py` の parse_hn を先に修正すること。
+3. **BLOD を一括取込** (option=4 セットアップ。差分でなく繁殖馬マスタ全体):
+   ```
+   .venv32\Scripts\python.exe -m scripts.bootstrap --dataspecs BLOD
+   ```
+   (全 dataspec 5-15GB を再取得せず BLOD=HN だけ埋め直す。JRA-VAN フルデータ契約が前提。)
+4. **audit を再実行で閉ループ確認** (after): `python -m scripts.audit_sire_lines --top 40`。
+   **traversal_hit が 0% から上昇し unknown が低下**したら BLOD 欠落が主因だったと確定。
+   上がらなければ (2) の HN offset ずれが主因 — parser 修正へ戻る。
+5. **深祖 founder は BLOD では終端しない**: Nasrullah/Man o'War 等の古い海外始祖は JRA-VAN の
+   繁殖馬マスタに個別行が無いのが通例。中間祖先まで BLOD で chain が通っても、最終停止は
+   `LINE_BY_SIRE`/`FOUNDERS` の名前照合が担う。よって**辞書 (founder) 併用は恒久的に必要**
+   (辞書は「深祖の終端」、BLOD は「中間 chain の充填」で役割が異なる)。
+
 ## 10. 亀谷公式リスト突合 (国別血統タイプの確定手順) (2026-07-05 追加)
 
 出馬表の国系統バッジ・傾向集計の父/母父国系統軸は、亀谷敬正の「国別血統」
