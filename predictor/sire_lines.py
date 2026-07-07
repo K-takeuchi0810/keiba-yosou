@@ -714,27 +714,45 @@ _FOUNDERS_N = {_normalize(k): v for k, v in FOUNDERS.items()}
 _COUNTRY_OVERRIDE_N = {_normalize(k): v for k, v in COUNTRY_OVERRIDE.items()}
 
 
-def classify_sire(sire_name: str | None, conn=None, sire_breeding_num: str | None = None,
-                  max_depth: int = 12) -> str:
-    """種牡馬名 (と任意で breeding_num) から大系統 line_key を返す。
+# breeding_horses の「正規化馬名 → breeding_num」索引のキャッシュ (接続ごと)。
+# UM 3 代血統の sire_breeding_num は HN の breeding_num と採番系が食い違う実 DB がある
+# (2026-07-06 実機: breeding_num 一致率 0.6%)。そこで遡上の入口を「名前一致」にし、
+# breeding_horses 内部で自己整合な breeding_num ポインタで上に辿る。名前は _normalize
+# (仮名 fold + 記号/空白畳み込み) で照合するため、exact SQL 一致が 0% でも拾える。
+_bh_name_index_cache: dict[int, tuple[int, dict[str, str]]] = {}
 
-    1. LINE_BY_SIRE の直接照合。
-    2. conn と sire_breeding_num があれば breeding_horses を父系遡上し、
-       各世代の父名を LINE_BY_SIRE / FOUNDERS に照合。
-    3. いずれも当たらなければ "unknown"。
-    """
-    key = _normalize(sire_name)
-    if key in _LINE_BY_SIRE_N:
-        return _LINE_BY_SIRE_N[key]
-    if key in _FOUNDERS_N:
-        return _FOUNDERS_N[key]
 
-    if conn is None or not sire_breeding_num:
-        return "unknown"
+def _breeding_name_to_num(conn) -> dict[str, str]:
+    """breeding_horses を「正規化馬名 → breeding_num」に索引化してキャッシュ。
+    行数が変われば再構築 (再取込への追随)。テーブルが無ければ空 dict。"""
+    try:
+        count = conn.execute("SELECT COUNT(*) FROM breeding_horses").fetchone()[0]
+    except sqlite3.OperationalError:
+        return {}
+    cached = _bh_name_index_cache.get(id(conn))
+    if cached is not None and cached[0] == count:
+        return cached[1]
+    idx: dict[str, str] = {}
+    try:
+        for row in conn.execute("SELECT horse_name, breeding_num FROM breeding_horses"):
+            try:
+                nm, bn = row["horse_name"], row["breeding_num"]
+            except (TypeError, IndexError, KeyError):
+                nm, bn = row[0], row[1]
+            k = _normalize(nm)
+            if k and bn:
+                idx.setdefault(k, bn)  # 同名は先勝ち (重複スナップショット対策)
+    except sqlite3.OperationalError:
+        return {}
+    _bh_name_index_cache[id(conn)] = (count, idx)
+    return idx
 
-    # breeding_horses を sire_breeding_num で遡上する。
+
+def _traverse_from_num(conn, start_num: str | None, max_depth: int) -> str | None:
+    """breeding_horses を breeding_num で父系遡上し、各世代の馬名を辞書照合。
+    当たれば line_key、当たらなければ None。テーブル欠如は 1 回警告して None。"""
     seen: set[str] = set()
-    cur = sire_breeding_num
+    cur = start_num
     for _ in range(max_depth):
         if not cur or cur in seen:
             break
@@ -746,31 +764,58 @@ def classify_sire(sire_name: str | None, conn=None, sire_breeding_num: str | Non
                 (cur,),
             ).fetchone()
         except sqlite3.OperationalError as e:
-            # breeding_horses 未作成の古い DB (BLOD 未取込 + readonly 接続で
-            # migration も走らない) では遡上せず辞書照合のみで劣化させる。
-            # 静かな劣化は「全部その他」症状の原因切り分けを不能にするので
-            # 1 回だけ警告を出す (2026-07-05 code-quality 監査指摘)。
             global _warned_no_breeding_table
             if not _warned_no_breeding_table:
                 _warned_no_breeding_table = True
                 logger.warning("血統遡上を無効化して辞書照合のみで継続します: %s", e)
-            break
+            return None
         if row is None:
             break
-        # row は sqlite3.Row 想定 (dict-like)。tuple の場合も許容。
         try:
-            name = row["horse_name"]
-            parent_name = row["sire_name"]
-            parent_num = row["sire_breeding_num"]
+            name, parent_name, parent_num = (
+                row["horse_name"], row["sire_name"], row["sire_breeding_num"])
         except (TypeError, IndexError, KeyError):
             name, parent_name, parent_num = row[0], row[1], row[2]
-        for candidate in (name, parent_name):
+        for candidate in (name, parent_name):  # sire_name は空の DB もある
             k = _normalize(candidate)
             if k in _LINE_BY_SIRE_N:
                 return _LINE_BY_SIRE_N[k]
             if k in _FOUNDERS_N:
                 return _FOUNDERS_N[k]
         cur = parent_num
+    return None
+
+
+def classify_sire(sire_name: str | None, conn=None, sire_breeding_num: str | None = None,
+                  max_depth: int = 12) -> str:
+    """種牡馬名 (と任意で breeding_num) から大系統 line_key を返す。
+
+    1. LINE_BY_SIRE / FOUNDERS の直接照合。
+    2. conn があれば breeding_horses を父系遡上:
+       (a) UM 由来 sire_breeding_num で遡上 (採番系が一致する DB 用)。
+       (b) 失敗したら**種牡馬名で breeding_horses を引き HN の breeding_num を得てから**遡上
+           (UM と HN で breeding_num 採番系が食い違う実 DB の救済)。
+    3. いずれも当たらなければ "unknown"。
+    """
+    key = _normalize(sire_name)
+    if key in _LINE_BY_SIRE_N:
+        return _LINE_BY_SIRE_N[key]
+    if key in _FOUNDERS_N:
+        return _FOUNDERS_N[key]
+    if conn is None:
+        return "unknown"
+
+    # (a) UM 由来 breeding_num で遡上
+    if sire_breeding_num:
+        r = _traverse_from_num(conn, sire_breeding_num, max_depth)
+        if r:
+            return r
+    # (b) 名前照合で HN の breeding_num を得てから遡上 (採番系不一致の救済)
+    hn_num = _breeding_name_to_num(conn).get(key)
+    if hn_num and hn_num != sire_breeding_num:
+        r = _traverse_from_num(conn, hn_num, max_depth)
+        if r:
+            return r
     return "unknown"
 
 

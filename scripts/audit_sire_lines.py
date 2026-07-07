@@ -200,6 +200,20 @@ def main() -> int:
                 print("    名前で join すべき (または番号の変換規則を特定)。名前一致も低ければ HN 名の表記揺れ。")
             except sqlite3.OperationalError as e:
                 print(f"  (同名突合 skip: {e})")
+            # 正規化名での入口一致率 (classify_sire の名前ベース遡上が効くかの実測)。
+            # exact SQL 一致が 0% でも _normalize (仮名 fold+空白/記号畳み込み) で拾える。
+            try:
+                from predictor.sire_lines import _normalize, _breeding_name_to_num
+                name_idx = _breeding_name_to_num(conn)
+                um_names = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT sire_name FROM horse_masters WHERE sire_name != ''").fetchall()]
+                norm_hit = sum(1 for nm in um_names if _normalize(nm) in name_idx)
+                print(f"  正規化名 入口一致 (UM.sire_name → breeding_horses.horse_name): "
+                      f"{norm_hit} / {len(um_names)} "
+                      f"({(norm_hit / len(um_names) * 100 if um_names else 0):.1f}%)")
+                print("  → この率が高ければ classify_sire の名前ベース遡上で traversal_hit が上がる。")
+            except Exception as e:  # noqa: BLE001
+                print(f"  (正規化名一致 skip: {e})")
             print("=" * 70)
         except sqlite3.OperationalError as e:
             print(f"(join 診断 skip: {e})")

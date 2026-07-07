@@ -391,6 +391,32 @@ def test_normalize_fullwidth_space():
     assert sl.classify_sire("  キズナ ") == "sunday"
 
 
+def test_name_based_traversal_when_breeding_num_mismatches():
+    """UM 3代血統の sire_breeding_num が HN の breeding_num と採番系不一致な実 DB
+    (2026-07-06 実機: breeding_num 一致率 0.6%) の救済。辞書に無い父でも、名前で
+    breeding_horses を引いて HN の breeding_num を得てから内部ポインタで遡上し、
+    祖先名が founder に届けば分類する。名前照合は _normalize で仮名/空白揺れを吸収。"""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE breeding_horses (breeding_num TEXT PRIMARY KEY, "
+                 "horse_name TEXT, sire_name TEXT, sire_breeding_num TEXT)")
+    # 辞書に無い架空父 → 中間馬 → ノーザンダンサー(founder)。HN 内部番号 H1/H2/H3。
+    conn.executemany("INSERT INTO breeding_horses VALUES (?,?,?,?)", [
+        ("H1", "マイナー種牡馬X", "", "H2"),
+        ("H2", "マイナー中間馬Y", "", "H3"),
+        ("H3", "ノーザンダンサー", "", "H4"),
+        ("H9", "テスト　シヤダイ", "", "H1"),  # 全角空白+大書き仮名の揺れ
+    ])
+    conn.commit()
+    assert sl.lookup_line("マイナー種牡馬X") is None  # 辞書には無い
+    # UM 由来 breeding_num は HN と一致しない ('UMxxxx') が、名前入口で遡上できる
+    assert sl.classify_sire("マイナー種牡馬X", conn=conn, sire_breeding_num="UMxxxx") == "northern"
+    # 表記揺れ (全角空白/小書き→大書き) も _normalize で吸収して入口一致
+    assert sl.classify_sire("テストシャダイ", conn=conn, sire_breeding_num="UMyyy") == "northern"
+    # 名前も breeding_horses に無ければ unknown (誤答より unknown)
+    assert sl.classify_sire("全く未知の父ZZ", conn=conn, sire_breeding_num="UMzzz") == "unknown"
+
+
 def test_unknown_without_conn():
     assert sl.classify_sire("架空種牡馬XYZ") == "unknown"
     assert sl.classify_sire(None) == "unknown"
