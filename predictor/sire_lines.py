@@ -548,7 +548,7 @@ LINE_BY_SIRE: dict[str, str] = {
     "スルーピー": "nasrullah", "Slewpy": "nasrullah",       # 父 Seattle Slew → Bold Ruler → Nasrullah
     "ホールドユアピース": "stsimon", "Hold Your Peace": "stsimon",  # → Speak John → Prince John → Princequillo → St. Simon
     "ハイトップ": "nearctic", "High Top": "nearctic",       # → Derring-Do → Darius → Dante → Nearco
-    "シルバーシャーク": "manowar",                          # 父 Buisson Ardent → Relic → War Relic → Man o'War
+    "シルバーシャーク": "manowar", "Silver Shark": "manowar",  # 父 Buisson Ardent → Relic → War Relic → Man o'War
     # --- テディ系 (Teddy → Ajax。米/仏の古典基礎系統) ---
     "テディ": "teddy", "Teddy": "teddy",
     "ヴィクトリアパーク": "teddy", "Victoria Park": "teddy",  # → Chop Chop → Flares → Gallant Fox → Sir Gallahad III → Teddy
@@ -695,6 +695,18 @@ COUNTRY_OVERRIDE: dict[str, str] = {
     "ザファクター": "usa",        # 父ウォーフロント
     # ロベルト系のうち米国残留枝 → 米国型 (roberto 既定=欧州の例外)。
     "ナダル": "usa",             # Blame←Arch←Kris S. 米国残留枝、米国ダート G1 のみ
+    # nearctic 系のうち英国発展枝 → 欧州型 (nearctic 既定=usa の例外)。
+    # High Top は英 2000 ギニー馬、Derring-Do/Darius/Dante も全英国馬 = Nearco 欧州枝。
+    # (2026-07-06 予想ロジック監査で「usa は事実疑義」指摘。全英国供用のため eur が筋。)
+    "ハイトップ": "eur", "High Top": "eur",
+    # stsimon 系のうち米国発展枝 → 米国型 (stsimon 既定=eur の例外)。
+    # Hold Your Peace は Prince John 枝で米国産・米国供用。同枝の Meadowlake=usa と対称化
+    # (2026-07-06 予想ロジック監査: Meadowlake との非対称是正)。
+    "ホールドユアピース": "usa", "Hold Your Peace": "usa",
+    # manowar 系のうち仏発展枝 → 欧州型 (manowar 既定=usa の例外)。
+    # Silver Shark は仏スプリンター、父 Buisson Ardent→Relic も仏で発展した欧州枝
+    # (2026-07-06 予想ロジック監査: 米国基礎種牡馬 Man o'War 系でも仏枝は eur 寄り)。
+    "シルバーシャーク": "eur", "Silver Shark": "eur",
     # 英語名の併記 (3 代血統は海外祖先を英語で格納。カナ側 override と国別を一致させ、
     # 表記で日/米/欧が割れないようにする — 2026-07-06 profitability/prediction-logic)。
     "Mill Reef": "eur",          # =ミルリーフ (欧州名馬・スタミナ)

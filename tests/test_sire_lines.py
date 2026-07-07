@@ -171,6 +171,22 @@ def test_country_confirmed_error_fixes_2026_07_05():
     assert sl.classify_country("モーリス", "roberto") == "eur"
 
 
+def test_country_branch_overrides_2026_07_06():
+    """予想ロジック監査 (2026-07-06 バッチ) の country 軸是正 regression。
+    父系 male-line の line_key は正しいが、国別が line 既定と割れる枝の個別補正。"""
+    # High Top: nearctic 既定 usa → override eur (英 2000 ギニー馬・全英供用の Nearco 欧州枝)
+    assert sl.classify_country("ハイトップ", "nearctic") == "eur"
+    assert sl.classify_country("High Top", "nearctic") == "eur"
+    # Hold Your Peace: stsimon 既定 eur → override usa (Prince John 枝・米国産米国供用)。
+    # 同枝の Meadowlake=usa と対称。
+    assert sl.classify_country("ホールドユアピース", "stsimon") == "usa"
+    assert sl.classify_country("Hold Your Peace", "stsimon") == "usa"
+    assert sl.classify_country("メドウレイク", "stsimon") == "usa"
+    # Silver Shark: manowar 既定 usa → override eur (仏スプリンター・Relic 仏発展枝)
+    assert sl.classify_country("シルバーシャーク", "manowar") == "eur"
+    assert sl.classify_country("Silver Shark", "manowar") == "eur"
+
+
 def test_no_duplicate_literal_dict_keys():
     """sire_lines.py の全 dict リテラルに重複キーが無いこと (2026-07-06 code-quality)。
     len parity は正規化衝突しか見ないが、リテラル完全重複は Python が評価前に畳むため
@@ -451,9 +467,13 @@ def test_batch_teddy_herbager_blandford_and_existing():
     cases = {
         # 既存 line
         "slewpy": ("nasrullah", "usa"),          # Slewpy → Seattle Slew → Bold Ruler
-        "holdyourpeace": ("stsimon", "eur"),     # Hold Your Peace → … → Princequillo → St. Simon
-        "hightop": ("nearctic", "usa"),          # High Top → Derring-Do → Darius → Dante → Nearco
-        "シルバーシヤーク": ("manowar", "usa"),    # Silver Shark → Buisson Ardent → Relic → Man o'War
+        # Hold Your Peace: 父系は stsimon だが Prince John 枝=米国産米国供用 → usa
+        # (2026-07-06 監査で Meadowlake=usa との非対称を是正)
+        "holdyourpeace": ("stsimon", "usa"),     # Hold Your Peace → … → Princequillo → St. Simon
+        # High Top: nearctic だが英 2000 ギニー馬・全英供用 (Nearco 欧州枝) → eur
+        "hightop": ("nearctic", "eur"),          # High Top → Derring-Do → Darius → Dante → Nearco
+        # Silver Shark: manowar だが仏スプリンター (Relic 仏発展枝) → eur
+        "シルバーシヤーク": ("manowar", "eur"),    # Silver Shark → Buisson Ardent → Relic → Man o'War
         # 新 named line
         "victoriapark": ("teddy", "eur"),        # → Chop Chop → … → Sir Gallahad III → Teddy
         "シーホーク": ("herbager", "eur"),         # Sea Hawk II、父 Herbager
