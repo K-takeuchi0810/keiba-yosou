@@ -313,12 +313,22 @@ def test_audit_top_unknown_sires_classify():
         "wildagain": ("nearctic", "usa"),        # Wild Again → Icecapade → Nearctic
         "lawsociety": ("stsimon", "eur"),        # Law Society → Tom Rolfe → Ribot
         "chiefscrown": ("northern", "eur"),      # Chief's Crown → Danzig → Northern Dancer
+        # audit 2 巡目の追加
+        "alleged": ("stsimon", "eur"),           # Alleged → Hoist the Flag → Tom Rolfe → Ribot
+        "ターゴワイス": ("stsimon", "eur"),        # Targowice → Round Table → Princequillo
+        "worden": ("stsimon", "eur"),            # Worden → Wild Risk → Rabelais → St. Simon
+        "meadowlake": ("stsimon", "eur"),        # Meadowlake → … → Prince John → Princequillo
+        "vaguelynoble": ("hyperion", "eur"),     # Vaguely Noble → Vienna → Aureole → Hyperion
+        "mining": ("mrprospector", "usa"),       # 父 Mr. Prospector
+        "ステイールハート": ("turnto", "usa"),      # Steel Heart → Habitat → Sir Gaylord → Turn-to
     }
     for name, (line, country) in cases.items():
         k = sl.classify_sire(name)
         assert k == line, f"{name}: {k} != {line}"
         assert sl.classify_country(name, k) == country, name
         assert sl.line_label_short(k) != "その他", name
+    # 誤って Alydar を stsimon にした placeholder 混入の回帰ガード (native が正)
+    assert sl.classify_sire("アリダー") == "native"
 
 
 def test_english_ancestor_names_classify():

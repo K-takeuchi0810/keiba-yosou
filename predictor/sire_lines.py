@@ -511,6 +511,15 @@ LINE_BY_SIRE: dict[str, str] = {
     "ローソサエティ": "stsimon", "Law Society": "stsimon",   # → Alleged → Hoist the Flag → Tom Rolfe → Ribot
     "ヒンドスタン": "stsimon",           # Hindostan → Bois Roussel → Vatout → Prince Chimay → Chaucer → St. Simon
     "シンザン": "stsimon",              # 父ヒンドスタン (Bois Roussel 系 = St. Simon)
+    # --- 実機 audit 2 巡目 (2026-07-06) の unknown 上位で父系 founder まで確度が高いもの ---
+    "アレツジド": "stsimon", "Alleged": "stsimon",        # → Hoist the Flag → Tom Rolfe → Ribot → St. Simon
+    "ターゴワイス": "stsimon", "Targowice": "stsimon",     # → Round Table → Princequillo → St. Simon
+    "ウォーデン": "stsimon", "Worden": "stsimon",         # → Wild Risk → Rialto → Rabelais → St. Simon
+    "ヴイミー": "stsimon", "Vimy": "stsimon",             # → Wild Risk → Rabelais → St. Simon
+    "メドウレイク": "stsimon", "Meadowlake": "stsimon",   # → Hold Your Peace → Speak John → Prince John → Princequillo → St. Simon
+    "ヴェイグリーノーブル": "hyperion", "Vaguely Noble": "hyperion",  # → Vienna → Aureole → Hyperion
+    "マイニング": "mrprospector", "Mining": "mrprospector",  # 父 Mr. Prospector
+    "スティールハート": "turnto", "Steel Heart": "turnto",  # → Habitat → Sir Gaylord → Turn-to
     # マンノウォー系は上で定義済 (ヴェンチア 等)
     # 注: なお確度の低い/真に不明な系統は依然 unknown (グレー)。誤答よりも
     # 「その他」が誠実。ダノンレジェンド (父 Macho Uno → Holy Bull → Great Above 系)
