@@ -24,22 +24,47 @@ from jvlink_client.ingest import _split_records
 from jvlink_client.parser import HN_LENGTH
 
 
+def _blod_dirs(root: Path) -> list[Path]:
+    return [root / sub for sub in ("BLOD", "blod") if (root / sub).is_dir()]
+
+
+def _has_hn(path: Path) -> bool:
+    """.jvd に HN レコードが 1 件でも含まれるか (CRLF 分割で厳密判定)。"""
+    try:
+        return any(r[:2] == b"HN" for r in _split_records(path.read_bytes()))
+    except Exception:  # noqa: BLE001 — 壊れたファイルは skip
+        return False
+
+
+def _inventory(root: Path) -> dict[str, int]:
+    """BLOD 配下 .jvd をレコード種別 (ファイル名先頭2文字) 別に件数集計して可視化する。
+    HN(繁殖馬) ファイルが 0 なら BLOD 取得で HN が来ていない = breeding_horses を埋められない。"""
+    counts: dict[str, int] = {}
+    for d in _blod_dirs(root):
+        for f in sorted(d.glob("*.jvd")):
+            prefix = f.name[:2].upper()
+            counts[prefix] = counts.get(prefix, 0) + 1
+    return counts
+
+
 def _find_blod_file(explicit: str | None) -> Path | None:
     if explicit:
         return Path(explicit)
     root = Path(__file__).resolve().parent.parent / "data" / "raw"
-    for sub in ("BLOD", "blod"):
-        d = root / sub
-        if d.is_dir():
-            files = sorted(d.glob("*.jvd"))
-            if files:
-                return files[0]
-    # dataspec 別ディレクトリが無い場合は raw 直下から HN を含む .jvd を探す
+    # 1) BLOD 配下でファイル名が HN* のもの (JV-Link はレコード種別でファイル名を付ける)
+    for d in _blod_dirs(root):
+        for f in sorted(d.glob("*.jvd")):
+            if f.name[:2].upper() == "HN":
+                return f
+    # 2) 名前が BT/SK でも中身に HN レコードを含む .jvd を内容走査で探す
+    for d in _blod_dirs(root):
+        for f in sorted(d.glob("*.jvd")):
+            if _has_hn(f):
+                return f
+    # 3) dataspec 別ディレクトリが無い場合は raw 直下を内容走査
     if root.is_dir():
         for f in sorted(root.rglob("*.jvd")):
-            with open(f, "rb") as fh:   # 先頭数十 byte だけ見る (全読み回避)
-                head = fh.read(64)
-            if b"HN" in head:           # 先頭が BT/SK でも途中に HN があれば採用
+            if _has_hn(f):
                 return f
     return None
 
@@ -54,10 +79,27 @@ def main() -> int:
     ap.add_argument("-n", type=int, default=6, help="表示するレコード数")
     args = ap.parse_args()
 
+    # まず BLOD 配下のレコード種別インベントリを出す (HN が来ているかの切り分け)。
+    root = Path(__file__).resolve().parent.parent / "data" / "raw"
+    inv = _inventory(root)
+    if inv:
+        print("=== data/raw/BLOD のファイル種別 (先頭2文字=レコード種別) ===")
+        for k, v in sorted(inv.items()):
+            tag = {"BT": "系統", "HN": "繁殖馬", "SK": "産駒"}.get(k, "?")
+            print(f"  {k} ({tag}): {v} ファイル")
+        if inv.get("HN", 0) == 0:
+            print()
+            print("⚠ HN(繁殖馬) ファイルが 0 です。BLOD を取得しても HN が来ていません。")
+            print("  breeding_horses は HN からしか埋まらないため、これが traversal_hit=0 の主因です。")
+            print("  対処: JVOpen の BLOD 取得で HN が含まれるか確認し、")
+            print("        `python -m scripts.bootstrap --dataspecs BLOD` を実行して HN を取得してください。")
+            print("        (JRA-VAN のデータ種別設定で『繁殖馬』が有効か、フルデータ契約かも確認)")
+        print()
+
     path = _find_blod_file(args.file)
     if path is None or not path.exists():
-        print("BLOD/HN の .jvd が見つかりません。--file で明示してください。")
-        print("(例: data/raw/BLOD/ 配下の .jvd)")
+        print("HN レコードを含む .jvd が見つかりません。--file で明示してください。")
+        print("(例: data/raw/BLOD/HNxxxx.jvd)")
         return 1
     print(f"file: {path}")
 
