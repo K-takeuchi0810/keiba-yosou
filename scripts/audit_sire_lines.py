@@ -172,6 +172,34 @@ def main() -> int:
             elif distinct_bn and matched_bn / distinct_bn < 0.3:
                 print("  → 一部一致。key 体系は正しく、未一致分は breeding_horses の不足。")
                 print("    `scripts.bootstrap --dataspecs BLOD` で全繁殖馬を取込めば traversal_hit が上がる。")
+            # 決定打: 同名の種牡馬が両テーブルに居る場合の breeding_num を並べ、
+            # 「同じ馬なのに UM と HN で番号が違う」= parse/format 変換ずれを直接見る。
+            try:
+                name_matched = conn.execute(
+                    "SELECT COUNT(DISTINCT hm.sire_name) FROM horse_masters hm "
+                    "JOIN breeding_horses bh ON hm.sire_name = bh.horse_name "
+                    "WHERE hm.sire_name != ''"
+                ).fetchone()[0]
+                distinct_name = conn.execute(
+                    "SELECT COUNT(DISTINCT sire_name) FROM horse_masters WHERE sire_name != ''"
+                ).fetchone()[0]
+                pairs = conn.execute(
+                    "SELECT hm.sire_name, hm.sire_breeding_num, bh.breeding_num "
+                    "FROM horse_masters hm JOIN breeding_horses bh ON hm.sire_name = bh.horse_name "
+                    "WHERE hm.sire_name != '' AND hm.sire_breeding_num != '0000000000' "
+                    "GROUP BY hm.sire_name LIMIT 8"
+                ).fetchall()
+                print("同名突合 (UM.sire_name = breeding_horses.horse_name):")
+                print(f"  名前一致する distinct 父: {name_matched} / {distinct_name} "
+                      f"({(name_matched / distinct_name * 100 if distinct_name else 0):.1f}%)")
+                print("  同じ馬の breeding_num 比較 (UM 側 vs HN 側):")
+                for nm, um_bn, hn_bn in pairs:
+                    flag = "一致" if um_bn == hn_bn else "★不一致"
+                    print(f"    {nm}: UM={um_bn} / HN={hn_bn}  {flag}")
+                print("  → 名前一致率が高いのに breeding_num が『★不一致』なら、遡上は breeding_num でなく")
+                print("    名前で join すべき (または番号の変換規則を特定)。名前一致も低ければ HN 名の表記揺れ。")
+            except sqlite3.OperationalError as e:
+                print(f"  (同名突合 skip: {e})")
             print("=" * 70)
         except sqlite3.OperationalError as e:
             print(f"(join 診断 skip: {e})")
