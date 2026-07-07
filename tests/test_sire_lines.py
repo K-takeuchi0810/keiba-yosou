@@ -321,6 +321,12 @@ def test_audit_top_unknown_sires_classify():
         "vaguelynoble": ("hyperion", "eur"),     # Vaguely Noble → Vienna → Aureole → Hyperion
         "mining": ("mrprospector", "usa"),       # 父 Mr. Prospector
         "ステイールハート": ("turnto", "usa"),      # Steel Heart → Habitat → Sir Gaylord → Turn-to
+        # audit 3 巡目 (pycache 一掃後の新 unknown 上位)
+        "rahy": ("nasrullah", "usa"),            # Rahy → Blushing Groom → Red God → Nasrullah
+        "yourhost": ("hyperion", "eur"),         # Your Host → Alibhai → Hyperion
+        "hornbeam": ("hyperion", "eur"),         # Hornbeam → Hyperion
+        "stardenaskra": ("nasrullah", "usa"),    # Star de Naskra → Naskra → Nasram → Nasrullah
+        "ダイアトム": ("stsimon", "eur"),          # Diatome → Sicambre → Prince Bio → Prince Rose
     }
     for name, (line, country) in cases.items():
         k = sl.classify_sire(name)

@@ -518,8 +518,13 @@ LINE_BY_SIRE: dict[str, str] = {
     "ヴイミー": "stsimon", "Vimy": "stsimon",             # → Wild Risk → Rabelais → St. Simon
     "メドウレイク": "stsimon", "Meadowlake": "stsimon",   # → Hold Your Peace → Speak John → Prince John → Princequillo → St. Simon
     "ヴェイグリーノーブル": "hyperion", "Vaguely Noble": "hyperion",  # → Vienna → Aureole → Hyperion
+    "ユアホスト": "hyperion", "Your Host": "hyperion",     # → Alibhai → Hyperion
+    "ホーンビーム": "hyperion", "Hornbeam": "hyperion",    # 父 Hyperion
     "マイニング": "mrprospector", "Mining": "mrprospector",  # 父 Mr. Prospector
     "スティールハート": "turnto", "Steel Heart": "turnto",  # → Habitat → Sir Gaylord → Turn-to
+    "ラーイ": "nasrullah", "Rahy": "nasrullah",           # → Blushing Groom → Red God → Nasrullah
+    "スターデナスクラ": "nasrullah", "Star de Naskra": "nasrullah",  # → Naskra → Nasram → Nasrullah
+    "ダイアトム": "stsimon", "Diatome": "stsimon",         # → Sicambre → Prince Bio → Prince Rose → St. Simon
     # マンノウォー系は上で定義済 (ヴェンチア 等)
     # 注: なお確度の低い/真に不明な系統は依然 unknown (グレー)。誤答よりも
     # 「その他」が誠実。ダノンレジェンド (父 Macho Uno → Holy Bull → Great Above 系)
