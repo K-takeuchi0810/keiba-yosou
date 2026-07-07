@@ -391,6 +391,20 @@ def test_normalize_fullwidth_space():
     assert sl.classify_sire("  キズナ ") == "sunday"
 
 
+def test_normalize_strips_halfwidth_kana_bleed():
+    """breeding_horses(HN) の馬名は parse 上、末尾に隣接フィールド(半角カナ名)の
+    先頭が混入する (2026-07-06 実機: 'ディープインパクト　…　ﾃﾞ' 等)。末尾の半角カナ
+    混入を剥がして、クリーンな UM 父名と正規化一致することを固定。"""
+    # bleed 付き (全角名+全角空白+半角カナ) がクリーン名と同じキーに正規化される
+    assert sl._normalize("ディープインパクト　　　ﾃﾞ") == sl._normalize("ディープインパクト")
+    assert sl._normalize("サンデーサイレンス　　　ｻﾞ") == sl._normalize("サンデーサイレンス")
+    assert sl._normalize("ラオンジヤツク　　　　　ﾌﾞ") == sl._normalize("ラオンジヤツク")
+    # 正常名・英名・辞書キーは影響を受けない (末尾が半角カナでない)
+    assert sl.classify_sire("ディープインパクト") == "sunday"
+    assert sl.classify_sire("Storm Cat") == "storm"
+    assert sl.classify_sire("Alzao") == "northern"
+
+
 def test_name_based_traversal_when_breeding_num_mismatches():
     """UM 3代血統の sire_breeding_num が HN の breeding_num と採番系不一致な実 DB
     (2026-07-06 実機: breeding_num 一致率 0.6%) の救済。辞書に無い父でも、名前で

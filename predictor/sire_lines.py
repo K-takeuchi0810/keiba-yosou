@@ -703,7 +703,15 @@ def _normalize(name: str | None) -> str:
     """
     if not name:
         return ""
-    s = unicodedata.normalize("NFKC", name)
+    # 繁殖馬マスタ(HN)の馬名フィールドは parse 上、全角名+パディングの末尾に
+    # 隣接フィールド(半角カナ名)の先頭数文字が混入する (2026-07-06 実機判明:
+    # 'ラオンジヤツク　…　ﾌﾞ' 等)。NFKC 前に**末尾の半角カナ(U+FF61-FF9F)+空白**を
+    # 剥がす。全角馬名は末尾が半角カナにならず、英字/カタカナ辞書キーも影響を受けない
+    # ので安全。これで breeding_horses の馬名が UM の父名と正規化一致する。
+    s = name
+    while s and (s[-1] in "　 \t\r\n\x00" or 0xFF61 <= ord(s[-1]) <= 0xFF9F):
+        s = s[:-1]
+    s = unicodedata.normalize("NFKC", s)
     return s.translate(_KANA_SMALL_TO_LARGE).lower().translate(_PUNCT_STRIP).strip()
 
 
