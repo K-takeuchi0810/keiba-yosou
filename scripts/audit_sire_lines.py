@@ -20,6 +20,7 @@ usage:
 from __future__ import annotations
 
 import argparse
+import sqlite3
 import sys
 from collections import Counter
 from pathlib import Path
@@ -118,6 +119,42 @@ def main() -> int:
         for k in ("dict_hit", "traversal_hit", "unknown"):
             print(f"  {k:<14} {breakdown[k]:>7} ({breakdown[k] / total * 100:.1f}%)")
         print("=" * 70)
+
+        # 遡上入口の join 健全性診断: horse_masters.sire_breeding_num (UM 由来、遡上の
+        # 起点) が breeding_horses.breeding_num (HN の PK) にどれだけ存在するか。
+        # traversal_hit=0 の原因が「行数不足/未取込 (=join は成立し得るが対象が居ない)」か
+        # 「採番系の不一致 (=そもそも key が噛み合わない)」かを、再取込前に切り分ける。
+        try:
+            distinct_bn = conn.execute(
+                "SELECT COUNT(DISTINCT sire_breeding_num) FROM horse_masters "
+                "WHERE sire_breeding_num IS NOT NULL AND sire_breeding_num != ''"
+            ).fetchone()[0]
+            matched_bn = conn.execute(
+                "SELECT COUNT(DISTINCT hm.sire_breeding_num) FROM horse_masters hm "
+                "JOIN breeding_horses bh ON hm.sire_breeding_num = bh.breeding_num "
+                "WHERE hm.sire_breeding_num IS NOT NULL AND hm.sire_breeding_num != ''"
+            ).fetchone()[0]
+            um_samples = [r[0] for r in conn.execute(
+                "SELECT DISTINCT sire_breeding_num FROM horse_masters "
+                "WHERE sire_breeding_num != '' LIMIT 5").fetchall()]
+            hn_samples = [r[0] for r in conn.execute(
+                "SELECT breeding_num FROM breeding_horses LIMIT 5").fetchall()]
+            print("遡上入口 join 診断 (UM.sire_breeding_num ⇔ breeding_horses.breeding_num):")
+            print(f"  horse_masters の distinct 父繁殖番号: {distinct_bn}")
+            print(f"  うち breeding_horses に存在: {matched_bn} "
+                  f"({(matched_bn / distinct_bn * 100 if distinct_bn else 0):.1f}%)")
+            print(f"  UM 側サンプル: {um_samples}")
+            print(f"  HN 側サンプル: {hn_samples}")
+            if distinct_bn and matched_bn == 0:
+                print("  ⚠ 一致 0 件。BLOD 再取込で breeding_horses を増やしても、サンプルの桁/形式が")
+                print("    UM と HN で食い違うなら採番系の不一致 (parse_um/parse_hn の breeding_num")
+                print("    位置ずれ or そもそも別体系) を疑う。桁数・prefix を上の 2 サンプルで比較。")
+            elif distinct_bn and matched_bn / distinct_bn < 0.3:
+                print("  → 一部一致。key 体系は正しく、未一致分は breeding_horses の不足。")
+                print("    `scripts.bootstrap --dataspecs BLOD` で全繁殖馬を取込めば traversal_hit が上がる。")
+            print("=" * 70)
+        except sqlite3.OperationalError as e:
+            print(f"(join 診断 skip: {e})")
         # 「その他が大量に残る」ときの原因切り分け: 辞書追加では届かない long-tail は
         # breeding_horses 遡上で拾うのが前提。traversal_hit がほぼ 0 で unknown が高い場合、
         # BLOD (繁殖馬) の血統木が浅く founder まで遡れていない可能性が高い (辞書追加より
