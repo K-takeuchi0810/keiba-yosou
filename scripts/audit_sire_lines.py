@@ -134,21 +134,41 @@ def main() -> int:
                 "JOIN breeding_horses bh ON hm.sire_breeding_num = bh.breeding_num "
                 "WHERE hm.sire_breeding_num IS NOT NULL AND hm.sire_breeding_num != ''"
             ).fetchone()[0]
+            # 代替 join: UM.sire_breeding_num が「繁殖登録番号」でなく「血統登録番号」を
+            # 格納している可能性を検証する (breeding_horses.blood_register_num と突合)。
+            matched_blood = 0
+            try:
+                matched_blood = conn.execute(
+                    "SELECT COUNT(DISTINCT hm.sire_breeding_num) FROM horse_masters hm "
+                    "JOIN breeding_horses bh ON hm.sire_breeding_num = bh.blood_register_num "
+                    "WHERE hm.sire_breeding_num IS NOT NULL AND hm.sire_breeding_num != ''"
+                ).fetchone()[0]
+            except sqlite3.OperationalError:
+                pass
             um_samples = [r[0] for r in conn.execute(
                 "SELECT DISTINCT sire_breeding_num FROM horse_masters "
                 "WHERE sire_breeding_num != '' LIMIT 5").fetchall()]
-            hn_samples = [r[0] for r in conn.execute(
+            hn_bn_samples = [r[0] for r in conn.execute(
                 "SELECT breeding_num FROM breeding_horses LIMIT 5").fetchall()]
-            print("遡上入口 join 診断 (UM.sire_breeding_num ⇔ breeding_horses.breeding_num):")
+            hn_blood_samples = [r[0] for r in conn.execute(
+                "SELECT blood_register_num FROM breeding_horses "
+                "WHERE blood_register_num IS NOT NULL AND blood_register_num != '' LIMIT 5").fetchall()]
+            print("遡上入口 join 診断 (UM.sire_breeding_num を各 HN 列と突合):")
             print(f"  horse_masters の distinct 父繁殖番号: {distinct_bn}")
-            print(f"  うち breeding_horses に存在: {matched_bn} "
+            print(f"  ⇔ breeding_horses.breeding_num(PK) 一致: {matched_bn} "
                   f"({(matched_bn / distinct_bn * 100 if distinct_bn else 0):.1f}%)")
-            print(f"  UM 側サンプル: {um_samples}")
-            print(f"  HN 側サンプル: {hn_samples}")
-            if distinct_bn and matched_bn == 0:
-                print("  ⚠ 一致 0 件。BLOD 再取込で breeding_horses を増やしても、サンプルの桁/形式が")
-                print("    UM と HN で食い違うなら採番系の不一致 (parse_um/parse_hn の breeding_num")
-                print("    位置ずれ or そもそも別体系) を疑う。桁数・prefix を上の 2 サンプルで比較。")
+            print(f"  ⇔ breeding_horses.blood_register_num 一致: {matched_blood} "
+                  f"({(matched_blood / distinct_bn * 100 if distinct_bn else 0):.1f}%)")
+            print(f"  UM.sire_breeding_num サンプル: {um_samples}")
+            print(f"  HN.breeding_num サンプル:       {hn_bn_samples}")
+            print(f"  HN.blood_register_num サンプル: {hn_blood_samples}")
+            if distinct_bn and matched_blood > matched_bn and matched_blood > 0:
+                print("  → blood_register_num 側で一致が多い。UM 3代血統は『血統登録番号』を格納しており")
+                print("    遡上は breeding_num でなく blood_register_num に join すべき (要コード修正)。")
+            elif distinct_bn and matched_bn == 0 and matched_blood == 0:
+                print("  ⚠ どちらも 0 件。(a) breeding_horses が対象祖先を含まない(=要 BLOD 全取込) か、")
+                print("    (b) HN.breeding_num/blood_register_num の parse 位置ずれ。probe_hn_offsets の")
+                print("    HEAD ダンプ (breeding_num 12-21) で PK の桁/形式を UM サンプルと比較して切り分ける。")
             elif distinct_bn and matched_bn / distinct_bn < 0.3:
                 print("  → 一部一致。key 体系は正しく、未一致分は breeding_horses の不足。")
                 print("    `scripts.bootstrap --dataspecs BLOD` で全繁殖馬を取込めば traversal_hit が上がる。")

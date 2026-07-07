@@ -111,7 +111,18 @@ def main() -> int:
         print("HN レコードが見つかりませんでした。別の BLOD .jvd を --file で指定してください。")
         return 1
 
-    print(f"\n=== 各レコードの馬名 (41-76) と 195-250 バイト領域 (1-indexed) ===")
+    # HEAD 領域 (1-45) の目視: breeding_num(12-21, PK) と blood_register_num(30-39) の
+    # 実バイトを確認する。DB の breeding_num サンプルが不自然に規則的 (…00 で終わる等) な
+    # 場合、この PK 自体の位置ずれ or UM 3代血統が別番号 (血統登録番号) を格納している
+    # 可能性の切り分けに使う (2026-07-06 join 診断 0% を受けて)。
+    print("=== HEAD 1-45 (breeding_num=12-21 / blood_register_num=30-39 の検証) ===")
+    for k, rec in enumerate(recs):
+        print(f"[{k}] 1-45 raw       = '{_dec(rec[0:45])}'")
+        print(f"    breeding_num 12-21    = '{_dec(rec[11:21])}'  (この列が breeding_horses PK)")
+        print(f"    blood_register 30-39  = '{_dec(rec[29:39])}'  (血統登録番号。UM 側と一致するか)")
+    print()
+
+    print(f"=== 各レコードの馬名 (41-76) と 195-250 バイト領域 (1-indexed) ===")
     print("□ = 全角空白 (パディング)。産地名の実際の開始位置と幅を目視で特定する。\n")
     for k, rec in enumerate(recs):
         name = _dec(rec[40:76]).rstrip("□ ")
