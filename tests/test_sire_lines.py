@@ -212,6 +212,11 @@ def test_english_katakana_alias_consistency():
         ("Seattle Slew", "シアトルスルー"), ("A.P. Indy", "エーピーインディ"),
         ("Roberto", "ロベルト"), ("Halo", "ヘイロー"), ("Mill Reef", "ミルリーフ"),
         ("Native Dancer", "ネイティヴダンサー"),
+        # 2026-07-06 country 是正で英語名を対で追加した枝別 override。片側だけ将来
+        # 是正したときに黙って line 既定へ落ちる silent-failure を汎用ガードで捕捉する
+        # (code-quality 監査の推奨: 個別 regression だけに頼らない)。
+        ("High Top", "ハイトップ"), ("Hold Your Peace", "ホールドユアピース"),
+        ("Silver Shark", "シルバーシャーク"),
     ]
     for en, ja in pairs:
         assert sl.classify_sire(en) == sl.classify_sire(ja), f"{en} != {ja} (系統)"
