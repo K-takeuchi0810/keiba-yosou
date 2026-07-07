@@ -123,12 +123,14 @@ def main() -> int:
         # BLOD (繁殖馬) の血統木が浅く founder まで遡れていない可能性が高い (辞書追加より
         # まず BLOD 取り込みの確認が必要)。
         if breakdown["unknown"] / total > 0.05 and breakdown["traversal_hit"] / total < 0.01:
-            print(f"⚠ unknown が高い一方 traversal_hit がほぼ 0 です (breeding_horses {n_hn} 行)。原因は 3 つ:")
-            print("  (i) breeding_horses の行数不足 → BLOD(繁殖馬) を option=4 で一括取込")
-            print("      (`python -m scripts.bootstrap --dataspecs BLOD`) で埋め直す。")
-            print("  (ii) 行は埋まるが HN の sire_breeding_num オフセット(230)がバイトずれで")
-            print("       親ポインタが garbage → 行を足しても遡上が繋がらない。BLOD 取込前に")
-            print("       `scripts/probe_hn_offsets.py` で 230/240 を確定すること (OPERATION.md §9-2)。")
+            print(f"⚠ unknown が高い一方 traversal_hit がほぼ 0 です (breeding_horses {n_hn} 行)。原因の候補:")
+            print("  (i) breeding_horses の行が旧オフセットで取り込まれている or 行数不足。")
+            print("      parse_hn は 2026-07-06 に HN の -2 ずれを修正済 (sire_breeding_num=228)。")
+            print("      `python -m scripts.bootstrap --dataspecs BLOD` で BLOD を再取込し、")
+            print("      新オフセットで breeding_horses を埋め直す (OPERATION.md §9-4)。")
+            print("  (ii) 再取込しても 0% のままなら、遡上の入口 = UM(競走馬マスタ)側の")
+            print("       sire_breeding_num と HN の breeding_num(PK) の採番系が突合しない疑い。")
+            print("       UM gen3 の breeding_num フィールド位置 / 採番系を確認する。")
             print("  (iii) 遡上は届くが FOUNDERS 辞書に停止点が不足 → founder 追加で traversal_hit が上がる。")
             print("  いずれも個別種牡馬の辞書追加 (whack-a-mole) では long-tail に届きません。")
             print("=" * 70)

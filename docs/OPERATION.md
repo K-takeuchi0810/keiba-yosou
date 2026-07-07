@@ -311,26 +311,34 @@ WHERE sire_dam_sire_name GLOB '*[A-Za-z]*' GROUP BY 1 ORDER BY 2 DESC LIMIT 30;
 父系遡上 (traversal) が全く効いておらず、「その他」大量残存の主因は辞書不足でなく **血統遡上
 データ (breeding_horses=HN 繁殖馬) の欠落**。切り分けと修復の順序:
 
+**前提 (2026-07-06 済)**: HN オフセットの -2 ずれは実 .jvd で**確定・parse_hn 修正済み**
+(§9-2。sire_breeding_num=228 等)。**再 probe は不要** — 既存 breeding_horses は旧オフセットの
+garbage 値を保持しているので、下記の再取込で新オフセット値に置き換えるのが要点。
+
 1. **audit で現状を保存** (before): `python -m scripts.audit_sire_lines --top 40 > data/audit_before.txt`。
-   `breeding_horses` 行数と `traversal_hit` を記録。
-2. **【必須の前提検証】HN オフセットの確定**: `traversal_hit=0` は行数不足だけでなく、HN の
-   `sire_breeding_num` (offset 230) が**バイトずれ**で親ポインタが壊れている可能性がある
-   (§9-2 参照。産地 offset が誤りと判明済で、230/240 も同方向シフトの疑い)。
-   **行を埋めてもポインタが garbage なら traversal は 0% のまま**。BLOD 取込前に
-   `python -m scripts.probe_hn_offsets` で 230 (sire) / 240 (dam) を確定し、ずれていれば
-   `jvlink_client/parser.py` の parse_hn を先に修正すること。
+   `breeding_horses` 行数と `traversal_hit` を記録 (今回の基準は `data/audit_sire_lines/20260706_before_blod.txt`)。
+2. **parse_hn 修正を取得**: 実機で `git pull` (HN -2 補正入り)。
 3. **BLOD を一括取込** (option=4 セットアップ。差分でなく繁殖馬マスタ全体):
    ```
    .venv32\Scripts\python.exe -m scripts.bootstrap --dataspecs BLOD
    ```
-   (全 dataspec 5-15GB を再取得せず BLOD=HN だけ埋め直す。JRA-VAN フルデータ契約が前提。)
+   (全 dataspec 5-15GB を再取得せず BLOD=HN だけ埋め直す。JRA-VAN フルデータ契約が前提。
+   upsert は breeding_num PK の REPLACE なので旧 garbage 行は新オフセット値へ決定的に置換される。)
 4. **audit を再実行で閉ループ確認** (after): `python -m scripts.audit_sire_lines --top 40`。
-   **traversal_hit が 0% から上昇し unknown が低下**したら BLOD 欠落が主因だったと確定。
-   上がらなければ (2) の HN offset ずれが主因 — parser 修正へ戻る。
+   **traversal_hit が 0% から上昇し unknown が低下**したら「旧オフセット/行数不足」が主因だったと確定。
+   **上がらない場合の切り分け** (HN 内部だけに戻さない):
+   - (a) breeding_horses 行数が増えていない → BLOD 取得自体が失敗/HN 未取得 (probe_hn_offsets の
+     インベントリで HN ファイル数を確認)。
+   - (b) 行は増えたが traversal 0% → 遡上の**入口**の疑い: UM(競走馬マスタ)側の sire_breeding_num
+     と HN の breeding_num(PK) の**採番系が突合しない** or UM gen3 の breeding_num フィールド位置ずれ。
+     `SELECT sire_breeding_num FROM horse_masters LIMIT 5` と `SELECT breeding_num FROM breeding_horses
+     LIMIT 5` の桁・体系を突合する。
 5. **深祖 founder は BLOD では終端しない**: Nasrullah/Man o'War 等の古い海外始祖は JRA-VAN の
    繁殖馬マスタに個別行が無いのが通例。中間祖先まで BLOD で chain が通っても、最終停止は
    `LINE_BY_SIRE`/`FOUNDERS` の名前照合が担う。よって**辞書 (founder) 併用は恒久的に必要**
    (辞書は「深祖の終端」、BLOD は「中間 chain の充填」で役割が異なる)。
+6. 上記 4 で traversal_hit が上昇し、産地の目視検証 (§9-2) も通れば
+   `config.HN_BIRTHPLACE_VERIFIED=True` に反転して産地表示を有効化する。
 
 ## 10. 亀谷公式リスト突合 (国別血統タイプの確定手順) (2026-07-05 追加)
 

@@ -257,8 +257,10 @@ def build_race(conn, date: str, track: str, kaiji: str, nichiji: str, num: str) 
             masters[m["blood_register_num"]] = m
 
     # 祖先の産地 (HN 繁殖馬マスタの産地名)。BLOD 未取込 / 旧スキーマなら空 dict に縮退。
-    # HN_BIRTHPLACE_VERIFIED=False の間は 205-229 のバイト位置が未確定 (2026-07-06 実 DB
-    # で先頭欠け+隣接混入=文字化けと判明) のため、産地は表示しない (誤データを出さない)。
+    # 産地のバイト位置は 2026-07-06 実 .jvd で -2 ずれと確定し parse_hn を 208 に修正済み。
+    # ただし既存 DB は旧オフセットで取り込んだ文字化け値を保持しているため、BLOD 再取込
+    # (OPERATION.md §9-4) + 目視検証を通すまで HN_BIRTHPLACE_VERIFIED=False で非表示に据え置く
+    # (誤データを出さない fail-safe)。再取込・検証後に True へ反転する。
     origins: dict[str, str] = {}
     anc_bns = {bn for m in masters.values()
                for bn in (m["sire_breeding_num"], m["dam_sire_breeding_num"],
