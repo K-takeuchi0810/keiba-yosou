@@ -9,7 +9,28 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
+# python-dotenv は任意依存にする。診断/監査系を素の `python` (dotenv 未導入) で
+# 起動しても config が ModuleNotFoundError で落ちないよう、無ければ .env を素朴に
+# 読む no-op フォールバックにする (2026-07-06: audit を素の python で実行 →
+# `No module named 'dotenv'` で全ツールが起動不能だった実機報告への対処)。
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:
+    def load_dotenv(path: "Path | str | None" = None, *_a, **_k) -> bool:
+        """dotenv 未導入時の簡易フォールバック。KEY=VALUE 行だけ環境変数へ流し込む
+        (export/クォート/補間等は非対応。本格運用は python-dotenv を導入すること)。"""
+        if path is None:
+            return False
+        p = Path(path)
+        if not p.exists():
+            return False
+        for line in p.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+        return True
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
