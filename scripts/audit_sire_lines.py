@@ -213,6 +213,22 @@ def main() -> int:
                       f"{norm_hit} / {len(um_names)} "
                       f"({(norm_hit / len(um_names) * 100 if um_names else 0):.1f}%)")
                 print("  → この率が高ければ classify_sire の名前ベース遡上で traversal_hit が上がる。")
+                # なぜ一致しないかを目視するための正規化名サンプル (両テーブル)。
+                um_name_s = [f"{nm!r}->{_normalize(nm)!r}" for nm in um_names[:4]]
+                hn_name_s = [f"{r[0]!r}->{_normalize(r[0])!r}" for r in conn.execute(
+                    "SELECT horse_name FROM breeding_horses WHERE horse_name != '' LIMIT 4").fetchall()]
+                print(f"  UM.sire_name 正規化サンプル: {um_name_s}")
+                print(f"  HN.horse_name 正規化サンプル: {hn_name_s}")
+                # 著名種牡馬が breeding_horses に居るか (exact/正規化)。居なければ HN 名の
+                # parse ずれ or 別表記。近い名前も探す。
+                for probe in ("ディープインパクト", "サンデーサイレンス", "キングカメハメハ"):
+                    exact = conn.execute("SELECT COUNT(*) FROM breeding_horses WHERE horse_name=?",
+                                         (probe,)).fetchone()[0]
+                    innorm = _normalize(probe) in name_idx
+                    like = [r[0] for r in conn.execute(
+                        "SELECT horse_name FROM breeding_horses WHERE horse_name LIKE ? LIMIT 3",
+                        (probe[:4] + "%",)).fetchall()]
+                    print(f"  probe {probe}: exact={exact} 正規化index={innorm} 前方一致例={like}")
             except Exception as e:  # noqa: BLE001
                 print(f"  (正規化名一致 skip: {e})")
             print("=" * 70)
