@@ -28,7 +28,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from db import open_db_readonly
-from predictor.sire_lines import FOUNDERS, classify_sire, lookup_line, _normalize
+from predictor.sire_lines import (
+    FOUNDERS, classify_sire, lookup_line, _normalize, _breeding_name_to_num,
+)
 
 # _normalize は仮名を大書き化するため、生の FOUNDERS (小書きキー) を直接引くと
 # 当たらない。独立遡上用に正規化済み FOUNDERS を作る (2026-07-06 code-quality P1)。
@@ -203,7 +205,6 @@ def main() -> int:
             # 正規化名での入口一致率 (classify_sire の名前ベース遡上が効くかの実測)。
             # exact SQL 一致が 0% でも _normalize (仮名 fold+空白/記号畳み込み) で拾える。
             try:
-                from predictor.sire_lines import _normalize, _breeding_name_to_num
                 name_idx = _breeding_name_to_num(conn)
                 um_names = [r[0] for r in conn.execute(
                     "SELECT DISTINCT sire_name FROM horse_masters WHERE sire_name != ''").fetchall()]
