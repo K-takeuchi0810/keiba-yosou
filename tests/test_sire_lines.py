@@ -317,7 +317,7 @@ def test_audit_top_unknown_sires_classify():
         "alleged": ("stsimon", "eur"),           # Alleged → Hoist the Flag → Tom Rolfe → Ribot
         "ターゴワイス": ("stsimon", "eur"),        # Targowice → Round Table → Princequillo
         "worden": ("stsimon", "eur"),            # Worden → Wild Risk → Rabelais → St. Simon
-        "meadowlake": ("stsimon", "eur"),        # Meadowlake → … → Prince John → Princequillo
+        "meadowlake": ("stsimon", "usa"),        # 系統 stsimon だが米国産 → COUNTRY_OVERRIDE usa
         "vaguelynoble": ("hyperion", "eur"),     # Vaguely Noble → Vienna → Aureole → Hyperion
         "mining": ("mrprospector", "usa"),       # 父 Mr. Prospector
         "ステイールハート": ("turnto", "usa"),      # Steel Heart → Habitat → Sir Gaylord → Turn-to
