@@ -156,6 +156,18 @@ def test_country_override_keys_exist_in_sire_dict():
     assert set(sl.COUNTRY_OVERRIDE) <= set(sl.LINE_BY_SIRE)
 
 
+def test_every_line_has_founder_stop_point():
+    """LINE_BY_SIRE に現れる全 line_key は FOUNDERS の停止点にも存在する
+    (2026-07-08 code-quality 監査の変更失敗モード対策)。新 line を追加したのに
+    FOUNDERS へ遡上停止点を登録し忘れると、その系統の dict 未収載子孫が BLOD 遡上で
+    親系統 (例 Nasrullah) の founder まで素通りし、例外も出さず親系統ラベルへ silent
+    誤分類する。この構造ガードで停止点の網羅漏れを fail-fast にする。"""
+    lines = set(sl.LINE_BY_SIRE.values()) - {"unknown"}
+    founder_lines = set(sl.FOUNDERS.values())
+    missing = lines - founder_lines
+    assert not missing, f"FOUNDERS 停止点が無い line: {sorted(missing)}"
+
+
 def test_country_confirmed_error_fixes_2026_07_05():
     """予想ロジック監査で確定誤りとされた分類の regression。
     ND 北米発展枝 (Deputy Minister/War Front) とロベルト系米国残留枝を米国型に固定。"""
@@ -404,6 +416,9 @@ def test_line_facts_unknown_reduction_2026_07_06():
     }
     for name, expect in facts.items():
         assert sl.classify_sire(name) == expect, name
+    # パラダイスクリークは neverbend 移設で国別が usa→eur に変化 (父アイリッシュリヴァー=仏
+    # Riverman 系)。silent flip を防ぐため country も明示固定 (2026-07-08 code-quality 監査)。
+    assert sl.classify_country("パラダイスクリーク", "neverbend") == "eur"
 
 
 def test_normalize_fullwidth_space():
