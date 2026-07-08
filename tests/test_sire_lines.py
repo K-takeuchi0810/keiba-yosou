@@ -497,19 +497,25 @@ def test_batch_teddy_herbager_blandford_and_existing():
 def test_batch_live_webapp_broodmare_sires_2026_07_08():
     """実 webapp 出馬表を HTTP でレンダして「その他」化していた現代の主要母父/母母父の
     継続追加 regression。父系 male-line が founder まで確度が高いもののみ (低確度は unknown
-    据置)。英語名 (3 代血統は英語格納) とカナ双方で解決することを確認。"""
+    据置)。
+
+    実 webapp の母父セル (views.py classify_sire(dam_sire, ...)) に流れる dam_sire_name は
+    JVData master 由来で**カナが主経路**。英語名 (3 代血統=父母父/母母父) だけ検証すると、
+    将来カナキーが typo/削除された際にこの test は緑のまま実機の母父セルだけ静かに「その他」
+    へ回帰する (code-quality 監査 2026-07-08 指摘の変更失敗モード)。よって**カナ・英語の
+    両側を必ず assert** する。"""
     cases = {
-        "スマートストライク": ("mrprospector", "usa"),  # 父 Mr. Prospector 直仔
-        "Smart Strike": ("mrprospector", "usa"),
-        "Mr. Greeley": ("mrprospector", "usa"),          # → Gone West → Mr. Prospector
-        "Motivator": ("northern", "eur"),                # → Montjeu → Sadler's Wells → ND (英ダービー馬)
-        "Barathea": ("northern", "eur"),                 # 父 Sadler's Wells → ND
-        "Ghostzapper": ("northern", "usa"),              # → Awesome Again → Deputy Minister (北米)
-        "Silver Deputy": ("northern", "usa"),            # 父 Deputy Minister (北米)
-        "Vindication": ("nasrullah", "usa"),             # 父 Seattle Slew → Bold Ruler → Nasrullah
-        "All American": ("roberto", "usa"),              # 父 Red Ransom (米国 Roberto 枝)
-        "ハイセイコー": ("hyperion", "eur"),               # 父チャイナロック → Rockefella → Hyperion
-        "Bustino": ("blandford", "eur"),                 # → Busted → Crepello → Donatello → Blenheim → Blandford
+        # カナ (母父=実 webapp 主経路)                     英語 (3 代血統=父母父/母母父経路)
+        "スマートストライク": ("mrprospector", "usa"),  "Smart Strike": ("mrprospector", "usa"),
+        "ミスターグリーリー": ("mrprospector", "usa"),  "Mr. Greeley": ("mrprospector", "usa"),
+        "モティベーター": ("northern", "eur"),          "Motivator": ("northern", "eur"),
+        "バラシア": ("northern", "eur"),                "Barathea": ("northern", "eur"),
+        "ゴーストザッパー": ("northern", "usa"),        "Ghostzapper": ("northern", "usa"),
+        "シルヴァーデピュティ": ("northern", "usa"),    "Silver Deputy": ("northern", "usa"),
+        "ヴィンディケーション": ("nasrullah", "usa"),   "Vindication": ("nasrullah", "usa"),
+        "オールアメリカン": ("roberto", "usa"),         "All American": ("roberto", "usa"),
+        "バスティーノ": ("blandford", "eur"),           "Bustino": ("blandford", "eur"),
+        "ハイセイコー": ("hyperion", "eur"),             # 日本馬 (英名なし)。父チャイナロック→Rockefella→Hyperion
     }
     for name, (line, country) in cases.items():
         k = sl.classify_sire(name)
