@@ -600,7 +600,7 @@ LINE_BY_SIRE: dict[str, str] = {
     "グルームダンサー": "nasrullah", "Groom Dancer": "nasrullah",  # → Blushing Groom → Red God → Nasrullah
     # Grey Sovereign 枝 (Kalamoun/Caro → Zeddaan/Fortino → Grey Sovereign → Nasrullah)。仏系 → eur。
     "ハイエストオナー": "nasrullah", "Highest Honor": "nasrullah",  # → Kenmare → Kalamoun → Zeddaan → Grey Sovereign → Nasrullah
-    "ケンドー": "nasrullah", "Kendor": "nasrullah",             # → Kenmare → Kalamoun → Grey Sovereign → Nasrullah
+    "ケンドー": "nasrullah", "Kendor": "nasrullah",             # → Kenmare → Kalamoun → Zeddaan → Grey Sovereign → Nasrullah
     "カルドゥン": "nasrullah", "Kaldoun": "nasrullah",           # → Caro → Fortino → Grey Sovereign → Nasrullah
     # Gone West → Mr. Prospector の欧州チャンピオン枝。mrprospector 既定 usa → override eur。
     "ザフォニック": "mrprospector", "Zafonic": "mrprospector",   # → Gone West → Mr. Prospector (英 2000 ギニー)
