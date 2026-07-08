@@ -494,6 +494,30 @@ def test_batch_teddy_herbager_blandford_and_existing():
     assert sl.line_label("blandford") == "ブランドフォード系"
 
 
+def test_batch_live_webapp_broodmare_sires_2026_07_08():
+    """実 webapp 出馬表を HTTP でレンダして「その他」化していた現代の主要母父/母母父の
+    継続追加 regression。父系 male-line が founder まで確度が高いもののみ (低確度は unknown
+    据置)。英語名 (3 代血統は英語格納) とカナ双方で解決することを確認。"""
+    cases = {
+        "スマートストライク": ("mrprospector", "usa"),  # 父 Mr. Prospector 直仔
+        "Smart Strike": ("mrprospector", "usa"),
+        "Mr. Greeley": ("mrprospector", "usa"),          # → Gone West → Mr. Prospector
+        "Motivator": ("northern", "eur"),                # → Montjeu → Sadler's Wells → ND (英ダービー馬)
+        "Barathea": ("northern", "eur"),                 # 父 Sadler's Wells → ND
+        "Ghostzapper": ("northern", "usa"),              # → Awesome Again → Deputy Minister (北米)
+        "Silver Deputy": ("northern", "usa"),            # 父 Deputy Minister (北米)
+        "Vindication": ("nasrullah", "usa"),             # 父 Seattle Slew → Bold Ruler → Nasrullah
+        "All American": ("roberto", "usa"),              # 父 Red Ransom (米国 Roberto 枝)
+        "ハイセイコー": ("hyperion", "eur"),               # 父チャイナロック → Rockefella → Hyperion
+        "Bustino": ("blandford", "eur"),                 # → Busted → Crepello → Donatello → Blenheim → Blandford
+    }
+    for name, (line, country) in cases.items():
+        k = sl.classify_sire(name)
+        assert k == line, f"{name}: {k} != {line}"
+        assert sl.classify_country(name, k) == country, name
+        assert sl.line_label_short(k) != "その他", name
+
+
 def test_unknown_without_conn():
     assert sl.classify_sire("架空種牡馬XYZ") == "unknown"
     assert sl.classify_sire(None) == "unknown"

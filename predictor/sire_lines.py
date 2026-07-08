@@ -558,6 +558,18 @@ LINE_BY_SIRE: dict[str, str] = {
     # --- ブランドフォード系 (Blandford → Swynford。英スタミナ) ---
     "ブランドフォード": "blandford", "Blandford": "blandford",
     "リマンド": "blandford",                                # Remand → Alcide → Alycidon → Donatello II → Blenheim → Blandford
+    "バスティーノ": "blandford", "Bustino": "blandford",     # → Busted → Crepello → Donatello II → Blenheim → Blandford
+    # --- 実 webapp 出馬表検証 (2026-07-08) で「その他」化していた現代の主要母父/母母父 ---
+    # (自ら HTTP でレンダ結果を確認し、確度の高いものだけを継続追加。低確度は unknown 据置)
+    "スマートストライク": "mrprospector",                  # 父 Mr. Prospector 直仔 (英名 Smart Strike は上で収載済)
+    "ミスターグリーリー": "mrprospector", "Mr. Greeley": "mrprospector",   # → Gone West → Mr. Prospector
+    "モティベーター": "northern", "Motivator": "northern",   # → Montjeu → Sadler's Wells → Northern Dancer (英ダービー馬)
+    "バラシア": "northern", "Barathea": "northern",          # 父 Sadler's Wells → Northern Dancer
+    "ゴーストザッパー": "northern", "Ghostzapper": "northern",  # → Awesome Again → Deputy Minister → Vice Regent → ND
+    "シルヴァーデピュティ": "northern", "Silver Deputy": "northern",  # 父 Deputy Minister → Vice Regent → ND
+    "ヴィンディケーション": "nasrullah", "Vindication": "nasrullah",  # 父 Seattle Slew → Bold Reasoning → Bold Ruler → Nasrullah
+    "オールアメリカン": "roberto", "All American": "roberto",  # 父 Red Ransom → Roberto → Hail to Reason (米国残留枝)
+    "ハイセイコー": "hyperion",                              # 父チャイナロック → Rockefella → Hyperion
     # マンノウォー系は上で定義済 (ヴェンチア 等)
     # 注: なお確度の低い/真に不明な系統は依然 unknown (グレー)。誤答よりも
     # 「その他」が誠実。ダノンレジェンド (父 Macho Uno → Holy Bull → Great Above 系)
@@ -707,6 +719,12 @@ COUNTRY_OVERRIDE: dict[str, str] = {
     # Silver Shark は仏スプリンター、父 Buisson Ardent→Relic も仏で発展した欧州枝
     # (2026-07-06 予想ロジック監査: 米国基礎種牡馬 Man o'War 系でも仏枝は eur 寄り)。
     "シルバーシャーク": "eur", "Silver Shark": "eur",
+    # northern 系のうち北米 Deputy Minister 枝 → 米国型 (northern 既定=eur の例外)。
+    # 既存のクロフネ/フレンチデピュティ=usa と同枝で整合 (2026-07-08 実 webapp 検証)。
+    "ゴーストザッパー": "usa", "Ghostzapper": "usa",  # → Awesome Again → Deputy Minister (北米)
+    "シルヴァーデピュティ": "usa", "Silver Deputy": "usa",  # 父 Deputy Minister (北米)
+    # roberto 系のうち米国残留枝 → 米国型 (roberto 既定=eur の例外。ナダルと同扱い)。
+    "オールアメリカン": "usa", "All American": "usa",  # 父 Red Ransom (米国産 Roberto 枝)
     # 英語名の併記 (3 代血統は海外祖先を英語で格納。カナ側 override と国別を一致させ、
     # 表記で日/米/欧が割れないようにする — 2026-07-06 profitability/prediction-logic)。
     "Mill Reef": "eur",          # =ミルリーフ (欧州名馬・スタミナ)
