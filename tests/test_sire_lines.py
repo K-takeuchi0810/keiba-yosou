@@ -539,7 +539,8 @@ def test_batch_real_db_intl_broodmare_sires_2026_07_08():
         "ハイシャパラル": ("northern", "eur"),         "High Chaparral": ("northern", "eur"),
         "シングスピール": ("northern", "eur"),         "Singspiel": ("northern", "eur"),
         # Kingmambo / A.P. Indy / Machiavellian 米国枝 → usa
-        "ドバイデスティネーション": ("kingmambo", "usa"), "Dubai Destination": ("kingmambo", "usa"),
+        # Dubai Destination は kingmambo 系だが Godolphin 欧州マイラー → 欧州型 (亀谷分類・ユーザ確認)
+        "ドバイデスティネーション": ("kingmambo", "eur"), "Dubai Destination": ("kingmambo", "eur"),
         "バーナディーニ": ("nasrullah", "usa"),        "Bernardini": ("nasrullah", "usa"),
         "ストリートクライ": ("mrprospector", "usa"),   "Street Cry": ("mrprospector", "usa"),
     }

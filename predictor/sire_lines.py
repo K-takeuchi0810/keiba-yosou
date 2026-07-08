@@ -582,10 +582,10 @@ LINE_BY_SIRE: dict[str, str] = {
     "ピヴォタル": "northern", "Pivotal": "northern",                 # → Polar Falcon → Nureyev → ND
     "ハイシャパラル": "northern", "High Chaparral": "northern",       # → Sadler's Wells → ND
     "シングスピール": "northern", "Singspiel": "northern",           # → In The Wings → Sadler's Wells → ND
-    # Kingmambo → Mr. Prospector (kingmambo 既定 usa)
-    "ドバイデスティネーション": "kingmambo", "Dubai Destination": "kingmambo",  # 父 Kingmambo → Mr. Prospector
+    # Kingmambo → Mr. Prospector (kingmambo 既定 usa。ただし欧州発展個体は下の COUNTRY_OVERRIDE で eur)
+    "ドバイデスティネーション": "kingmambo", "Dubai Destination": "kingmambo",  # 父 Kingmambo → Mr. Prospector (Godolphin 欧州マイラー=欧州型)
     # A.P. Indy 枝 (nasrullah 既定 usa)
-    "バーナディーニ": "nasrullah", "Bernardini": "nasrullah",         # → A.P. Indy → Seattle Slew → Bold Ruler → Nasrullah
+    "バーナディーニ": "nasrullah", "Bernardini": "nasrullah",         # → A.P. Indy → Seattle Slew → Bold Reasoning → Bold Ruler → Nasrullah
     # Machiavellian → Mr. Prospector (mrprospector 既定 usa)
     "ストリートクライ": "mrprospector", "Street Cry": "mrprospector",  # → Machiavellian → Mr. Prospector
     # マンノウォー系は上で定義済 (ヴェンチア 等)
@@ -743,6 +743,10 @@ COUNTRY_OVERRIDE: dict[str, str] = {
     "シルヴァーデピュティ": "usa", "Silver Deputy": "usa",  # 父 Deputy Minister (北米)
     # roberto 系のうち米国残留枝 → 米国型 (roberto 既定=eur の例外。ナダルと同扱い)。
     "オールアメリカン": "usa", "All American": "usa",  # 父 Red Ransom (米国産 Roberto 枝)
+    # kingmambo 系のうち欧州発展個体 → 欧州型 (kingmambo 既定=usa の例外)。
+    # Dubai Destination は Godolphin の欧州マイラー (Queen Anne S.)。亀谷分類でも欧州型
+    # (2026-07-08 ユーザ実 DB フィードバック: 「ドバイデスティネーションは欧州系」)。
+    "ドバイデスティネーション": "eur", "Dubai Destination": "eur",
     # 英語名の併記 (3 代血統は海外祖先を英語で格納。カナ側 override と国別を一致させ、
     # 表記で日/米/欧が割れないようにする — 2026-07-06 profitability/prediction-logic)。
     "Mill Reef": "eur",          # =ミルリーフ (欧州名馬・スタミナ)
