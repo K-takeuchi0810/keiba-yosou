@@ -291,11 +291,11 @@ def test_historic_unknown_top_sires_classify():
     に解決できることを固定 (2026-07-06 実機突合)。誤答防止のため父系 founder まで
     確度の高いものだけ収載。国系統も判別不能でないことを確認する。"""
     cases = {
-        "ミルジヨージ": ("nasrullah", "eur"),        # 父ミルリーフ (欧州枝) → COUNTRY_OVERRIDE eur
-        "ブレイヴエストローマン": ("nasrullah", "usa"),  # 父 Never Bend
+        "ミルジヨージ": ("neverbend", "eur"),        # 父ミルリーフ → Never Bend (亀谷=ネヴァーベンド系)
+        "ブレイヴエストローマン": ("neverbend", "eur"),  # 父 Never Bend
         "キンググローリアス": ("nasrullah", "usa"),   # 父 Naskra → Nasram → Nasrullah
         "ロイヤルスキー": ("nasrullah", "usa"),       # 父 Raja Baba → Bold Ruler
-        "アローエクスプレス": ("nasrullah", "usa"),   # 父 Never Beat → Never Bend
+        "アローエクスプレス": ("neverbend", "eur"),   # 父 Never Beat → Never Bend
         "イエローゴツド": ("nasrullah", "eur"),       # 父 Red God (欧州枝) → COUNTRY_OVERRIDE eur
         "モガミ": ("northern", "eur"),               # 父 Lyphard → Northern Dancer
         "ノーザンデイクテイター": ("northern", "eur"), # 父 Northern Dancer
@@ -319,7 +319,7 @@ def test_audit_top_unknown_sires_classify():
     系統+国系統に解決できることを固定。父系 founder まで確度の高いもののみ収載。"""
     cases = {
         # 大書き仮名 (母父/父母父で頻出の古い父)
-        "ネヴアービート": ("nasrullah", "usa"),   # Never Beat → Never Bend → Nasrullah
+        "ネヴアービート": ("neverbend", "eur"),   # Never Beat → Never Bend (亀谷=ネヴァーベンド系)
         "ヴエンチア": ("manowar", "usa"),         # Venture VII → Relic → War Relic → Man o'War
         "チヤイナロツク": ("hyperion", "eur"),     # China Rock → Rockefella → Hyperion
         "フアバージ": ("stsimon", "eur"),         # Faberge II → Prince Bio → Prince Rose
@@ -363,7 +363,7 @@ def test_english_ancestor_names_classify():
     することを固定 (2026-07-06 父母父/母母父が英語名で「その他」化していた対処)。"""
     # verify_pedigree で実際に観測された父母父/母母父
     assert sl.classify_sire("Alzao") == "northern"        # 父 Lyphard
-    assert sl.classify_sire("Riverman") == "nasrullah"    # 父 Never Bend
+    assert sl.classify_sire("Riverman") == "neverbend"    # 父 Never Bend (亀谷=ネヴァーベンド系)
     assert sl.classify_sire("Affirmed") == "native"       # Raise a Native 系
     assert sl.classify_sire("Silver Ghost") == "mrprospector"  # 父 Mr. Prospector
     assert sl.classify_sire("Seattle Slew") == "nasrullah"
@@ -398,7 +398,7 @@ def test_line_facts_unknown_reduction_2026_07_06():
         "フサイチコンコルド": "northern",     # 父カーリアン (Nijinsky 系)
         "アジュディケーティング": "northern", # 父ダンチヒ
         "ミスターシービー": "nasrullah",     # 父トウショウボーイ
-        "パラダイスクリーク": "nasrullah",    # 父アイリッシュリヴァー (Riverman 系)
+        "パラダイスクリーク": "neverbend",    # 父アイリッシュリヴァー → Riverman → Never Bend
         "リンドシェーバー": "native",         # 父アリダー
         "ニホンピロウイナー": "turnto",       # 父スティールハート (Sir Gaylord 系)
     }
@@ -557,10 +557,11 @@ def test_batch_european_classic_broodmare_sires_2026_07_08():
     国別はいずれも欧州発展のため eur (line 既定が usa の nasrullah/mrprospector/native は
     COUNTRY_OVERRIDE で、northern は既定 eur)。母父=カナ主経路のため英名+カナ両側を検証。"""
     cases = {
-        # Mill Reef/Blushing Groom/Grey Sovereign 枝 → nasrullah / eur
-        "ダラカニ": ("nasrullah", "eur"),          "Dalakhani": ("nasrullah", "eur"),
-        "ダーシャーン": ("nasrullah", "eur"),        "Darshaan": ("nasrullah", "eur"),
-        "シャーリーハイツ": ("nasrullah", "eur"),     "Shirley Heights": ("nasrullah", "eur"),
+        # Mill Reef 枝 → neverbend (亀谷=ネヴァーベンド系。ナスルーラ系と別枠) / eur
+        "ダラカニ": ("neverbend", "eur"),          "Dalakhani": ("neverbend", "eur"),
+        "ダーシャーン": ("neverbend", "eur"),        "Darshaan": ("neverbend", "eur"),
+        "シャーリーハイツ": ("neverbend", "eur"),     "Shirley Heights": ("neverbend", "eur"),
+        # Blushing Groom/Grey Sovereign 枝 → nasrullah / eur
         "レインボウクエスト": ("nasrullah", "eur"),   "Rainbow Quest": ("nasrullah", "eur"),
         "グルームダンサー": ("nasrullah", "eur"),     "Groom Dancer": ("nasrullah", "eur"),
         "ハイエストオナー": ("nasrullah", "eur"),     "Highest Honor": ("nasrullah", "eur"),

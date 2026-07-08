@@ -38,6 +38,7 @@ LINE_LABEL: dict[str, str] = {
     "roberto": "ロベルト系",
     "turnto": "ターントゥ系(ヘイロー等)",
     "nasrullah": "ナスルーラ系",
+    "neverbend": "ネヴァーベンド系",
     "nearctic": "ネアルコ／ニアークティック系",
     "native": "ネイティヴダンサー系",
     # 11 大系統外だが JRA で名の通った系統 (2026-07-06 追加。「その他」を実系統名にする)。
@@ -62,6 +63,7 @@ LINE_LABEL_SHORT: dict[str, str] = {
     "roberto": "ロベルト系",
     "turnto": "ターントゥ系",
     "nasrullah": "ナスルーラ系",
+    "neverbend": "ネヴァーベンド系",
     "nearctic": "ネアルコ系",
     "native": "ネイティヴD系",
     "personon": "パーソロン系",
@@ -88,6 +90,7 @@ LINE_COLOR: dict[str, str] = {
     "roberto": "#a1887f",      # 茶
     "turnto": "#7986cb",       # 藍
     "nasrullah": "#ffd54f",    # 黄
+    "neverbend": "#c0ca33",    # ライム (ネヴァーベンド系。ナスルーラ黄と隣接だが別相)
     "nearctic": "#4db6ac",     # 青緑
     "native": "#f06292",       # 桃
     "personon": "#9575cd",     # 藤
@@ -362,14 +365,14 @@ LINE_BY_SIRE: dict[str, str] = {
     "ブラッシンググルーム": "nasrullah",  # 父レッドゴッド (Nasrullah 直仔)
     "レインボウクエスト": "nasrullah",# 父ブラッシンググルーム
     "サクラローレル": "nasrullah",    # 父レインボウクエスト
-    "ミルリーフ": "nasrullah",        # 父ネヴァーベンド (Nasrullah 直仔)
+    "ミルリーフ": "neverbend",        # 父ネヴァーベンド (亀谷分類=ネヴァーベンド系)
     "ボストンハーバー": "nasrullah",  # 父カポーティ (Seattle Slew 系)
     "タピット": "nasrullah",         # 父プルピット (A.P. Indy 系)
     "ラニ": "nasrullah",             # 父タピット
     "カリフォルニアクローム": "nasrullah",  # 父ラッキーパルピット (Pulpit 系)
     "ベストウォーリア": "nasrullah",  # 父マジェスティックウォリアー
     "ミスターシービー": "nasrullah",  # 父トウショウボーイ (テスコボーイ系)
-    "パラダイスクリーク": "nasrullah",  # 父アイリッシュリヴァー (Riverman → Never Bend)
+    "パラダイスクリーク": "neverbend",  # 父アイリッシュリヴァー → Riverman → Never Bend
     # --- ネイティヴダンサー系 ---
     "ネイティヴダンサー": "native",
     "レイズアネイティヴ": "native",   # 父ネイティヴダンサー
@@ -421,8 +424,8 @@ LINE_BY_SIRE: dict[str, str] = {
     "Nasrullah": "nasrullah", "Bold Ruler": "nasrullah", "Secretariat": "nasrullah",
     "Seattle Slew": "nasrullah",      # 母母父アンカーで観測
     "A.P. Indy": "nasrullah", "Pulpit": "nasrullah", "Tapit": "nasrullah",
-    "Never Bend": "nasrullah", "Mill Reef": "nasrullah",
-    "Riverman": "nasrullah",          # 父 Never Bend (母母父アンカーで観測)
+    "Never Bend": "neverbend", "Mill Reef": "neverbend",  # 亀谷分類=ネヴァーベンド系
+    "Riverman": "neverbend",          # 父 Never Bend (母母父アンカーで観測)
     "Red God": "nasrullah", "Blushing Groom": "nasrullah", "Nashwan": "nasrullah",
     "Grey Sovereign": "nasrullah", "Caro": "nasrullah", "Cozzene": "nasrullah",
     "Capote": "nasrullah",
@@ -465,11 +468,11 @@ LINE_BY_SIRE: dict[str, str] = {
     #     の遡上でも拾えるが、古いレコードは血統木が疎で遡上が届かない場合があるため
     #     名前で直接固定する。---
     # ナスルーラ系
-    "ミルジョージ": "nasrullah",         # 父ミルリーフ → Never Bend → Nasrullah
-    "ブレイヴエストローマン": "nasrullah", # 父 Never Bend → Nasrullah
+    "ミルジョージ": "neverbend",         # 父ミルリーフ → Never Bend
+    "ブレイヴエストローマン": "neverbend", # 父 Never Bend
     "キンググローリアス": "nasrullah",    # 父 Naskra → Nasram → Nasrullah
     "ロイヤルスキー": "nasrullah",        # 父 Raja Baba → Bold Ruler → Nasrullah
-    "アローエクスプレス": "nasrullah",    # 父 Never Beat → Never Bend → Nasrullah
+    "アローエクスプレス": "neverbend",    # 父 Never Beat → Never Bend
     "イエローゴッド": "nasrullah",        # 父 Red God → Nasrullah
     # ノーザンダンサー系
     "モガミ": "northern",                # 父 Lyphard → Northern Dancer
@@ -496,7 +499,7 @@ LINE_BY_SIRE: dict[str, str] = {
     #     高いもの。多くは古い母父/父母父で英語 or 大書き仮名で格納される。BLOD 遡上が
     #     効かない環境でも名前で直接引けるよう収載する。---
     # ナスルーラ系
-    "ネヴァービート": "nasrullah",        # Never Beat → Never Bend → Nasrullah
+    "ネヴァービート": "neverbend",        # Never Beat → Never Bend
     "ダイハード": "nasrullah",           # Die Hard → Never Say Die → Nasrullah
     "クリスタルパレス": "nasrullah",      # Crystal Palace → Caro → Fortino → Grey Sovereign → Nasrullah
     "フォルティノ": "nasrullah",          # Fortino → Grey Sovereign → Nasrullah
@@ -591,10 +594,11 @@ LINE_BY_SIRE: dict[str, str] = {
     # --- 実 DB フィードバック (2026-07-08 ユーザ指摘: Dalakhani 等) 欧州古典系母父の一括収載 ---
     # 凱旋門賞/欧州ダービー級の名馬が line 未収載で「その他」化していた重大な取りこぼし。
     # 父系 founder まで確度が高いもののみ。国別は下の COUNTRY_OVERRIDE で欧州発展を eur 指定。
-    # Mill Reef 枝 (→ Never Bend → Nasrullah)。nasrullah 既定 usa → 欧州枝は override eur。
-    "ダラカニ": "nasrullah", "Dalakhani": "nasrullah",         # → Darshaan → Shirley Heights → Mill Reef → Never Bend → Nasrullah (凱旋門賞)
-    "ダーシャーン": "nasrullah", "Darshaan": "nasrullah",       # → Shirley Heights → Mill Reef → Never Bend → Nasrullah
-    "シャーリーハイツ": "nasrullah", "Shirley Heights": "nasrullah",  # → Mill Reef → Never Bend → Nasrullah (英ダービー)
+    # ネヴァーベンド系 (Mill Reef 枝)。亀谷分類ではナスルーラ系と別枠 (2026-07-08 ユーザ確認)。
+    # neverbend 既定 eur なので国別 override 不要。
+    "ダラカニ": "neverbend", "Dalakhani": "neverbend",         # → Darshaan → Shirley Heights → Mill Reef → Never Bend (凱旋門賞)
+    "ダーシャーン": "neverbend", "Darshaan": "neverbend",       # → Shirley Heights → Mill Reef → Never Bend
+    "シャーリーハイツ": "neverbend", "Shirley Heights": "neverbend",  # → Mill Reef → Never Bend (英ダービー)
     # Blushing Groom/Red God 枝 (→ Nasrullah)。欧州枝 → eur。
     "Rainbow Quest": "nasrullah",                             # → Blushing Groom → Red God → Nasrullah (凱旋門賞。カナは上で eur 収載済)
     "グルームダンサー": "nasrullah", "Groom Dancer": "nasrullah",  # → Blushing Groom → Red God → Nasrullah
@@ -648,6 +652,11 @@ FOUNDERS: dict[str, str] = {
     "ノーザンダンサー": "northern",
     "ナスルーラ": "nasrullah",
     "ボールドルーラー": "nasrullah",
+    # ネヴァーベンド系 (Nasrullah 直仔 Never Bend の独立 line。亀谷分類では
+    # ナスルーラ系と別枠。遡上が Nasrullah に達する前に Never Bend で停止させる)。
+    "ネヴァーベンド": "neverbend", "Never Bend": "neverbend",
+    "ミルリーフ": "neverbend", "Mill Reef": "neverbend",  # Never Bend の代表産駒 (欧州)
+    "リヴァーマン": "neverbend", "Riverman": "neverbend",  # Never Bend の産駒 (仏)
     "ネイティヴダンサー": "native",
     "ニアークティック": "nearctic",
     "ネアルコ": "nearctic",
@@ -711,6 +720,7 @@ COUNTRY_BY_LINE: dict[str, str] = {
     "storm": "usa",           # Storm Cat = 米国ダート/スピード
     "native": "usa",          # Native Dancer/Raise a Native = 米国
     "nasrullah": "usa",       # A.P. Indy/Bold Ruler 米国分枝を既定。欧州枝は override
+    "neverbend": "eur",       # ネヴァーベンド系 (Mill Reef/Riverman 欧州枝が主流。亀谷=欧州型)
     "northern": "eur",        # Sadler's Wells/Danzig/Galileo/ハービンジャー = 欧州
     "roberto": "eur",         # 日本の Roberto 系 (モーリス/エピファネイア) = 持続/パワー
     "turnto": "usa",          # Halo/Hail to Reason 米国。タイキシャトル系のスピード寄り
@@ -742,9 +752,8 @@ COUNTRY_OVERRIDE: dict[str, str] = {
     "バゴ": "eur",               # Blushing Groom 系、仏・凱旋門賞
     "レインボウクエスト": "eur",   # Blushing Groom 系、欧州スタミナ
     "サクラローレル": "eur",      # 父レインボウクエスト
-    "ミルリーフ": "eur",          # Never Bend 系だが英ダービー/凱旋門賞・欧州発展
+    # (ミルリーフ/ミルジョージ は neverbend line に移り既定 eur になったため override 撤去)
     "メドウレイク": "usa", "Meadowlake": "usa",  # stsimon 系だが米国産・米国供用 (Prince John 枝)
-    "ミルジョージ": "eur",         # 父ミルリーフ (欧州枝の子孫。nasrullah 既定 usa の例外)
     "イエローゴッド": "eur",       # 父 Red God (英仏で発展した欧州枝。Blushing Groom と同枝)
     "タマモクロス": "eur",         # 同 Grey Sovereign 枝 (トニービンと同質、天皇賞春=スタミナ)
     # ノーザンダンサー系のうち北米で発展した枝 → 米国型 (northern 既定=欧州の例外)。
@@ -780,11 +789,9 @@ COUNTRY_OVERRIDE: dict[str, str] = {
     # Dubai Destination は Godolphin の欧州マイラー (Queen Anne S.)。亀谷分類でも欧州型
     # (2026-07-08 ユーザ実 DB フィードバック: 「ドバイデスティネーションは欧州系」)。
     "ドバイデスティネーション": "eur", "Dubai Destination": "eur",
-    # nasrullah 系のうち欧州古典枝 (Mill Reef/Blushing Groom/Grey Sovereign) → 欧州型
+    # nasrullah 系のうち欧州古典枝 (Blushing Groom/Grey Sovereign) → 欧州型
     # (nasrullah 既定=usa の例外。既存トニービン/バゴ/レインボウクエスト等と同じ扱い)。
-    "ダラカニ": "eur", "Dalakhani": "eur",
-    "ダーシャーン": "eur", "Darshaan": "eur",
-    "シャーリーハイツ": "eur", "Shirley Heights": "eur",
+    # 注: Mill Reef 枝 (Dalakhani/Darshaan/Shirley Heights) は neverbend line に移設済 (既定 eur)。
     "Rainbow Quest": "eur",                       # カナ レインボウクエスト は上で eur 収載済
     "グルームダンサー": "eur", "Groom Dancer": "eur",
     "ハイエストオナー": "eur", "Highest Honor": "eur",
@@ -801,7 +808,7 @@ COUNTRY_OVERRIDE: dict[str, str] = {
     "アークティックターン": "eur", "Arctic Tern": "eur",
     # 英語名の併記 (3 代血統は海外祖先を英語で格納。カナ側 override と国別を一致させ、
     # 表記で日/米/欧が割れないようにする — 2026-07-06 profitability/prediction-logic)。
-    "Mill Reef": "eur",          # =ミルリーフ (欧州名馬・スタミナ)
+    # (Mill Reef は neverbend line に移設済で既定 eur。override 撤去)
     "Deputy Minister": "usa",    # ND 北米発展枝 (カナ子孫 クロフネ/フレンチデピュティ=usa と一致)
     "Vice Regent": "usa",        # Deputy Minister の父 (北米)
 }
