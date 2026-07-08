@@ -588,6 +588,39 @@ LINE_BY_SIRE: dict[str, str] = {
     "バーナディーニ": "nasrullah", "Bernardini": "nasrullah",         # → A.P. Indy → Seattle Slew → Bold Reasoning → Bold Ruler → Nasrullah
     # Machiavellian → Mr. Prospector (mrprospector 既定 usa)
     "ストリートクライ": "mrprospector", "Street Cry": "mrprospector",  # → Machiavellian → Mr. Prospector
+    # --- 実 DB フィードバック (2026-07-08 ユーザ指摘: Dalakhani 等) 欧州古典系母父の一括収載 ---
+    # 凱旋門賞/欧州ダービー級の名馬が line 未収載で「その他」化していた重大な取りこぼし。
+    # 父系 founder まで確度が高いもののみ。国別は下の COUNTRY_OVERRIDE で欧州発展を eur 指定。
+    # Mill Reef 枝 (→ Never Bend → Nasrullah)。nasrullah 既定 usa → 欧州枝は override eur。
+    "ダラカニ": "nasrullah", "Dalakhani": "nasrullah",         # → Darshaan → Shirley Heights → Mill Reef → Never Bend → Nasrullah (凱旋門賞)
+    "ダーシャーン": "nasrullah", "Darshaan": "nasrullah",       # → Shirley Heights → Mill Reef → Never Bend → Nasrullah
+    "シャーリーハイツ": "nasrullah", "Shirley Heights": "nasrullah",  # → Mill Reef → Never Bend → Nasrullah (英ダービー)
+    # Blushing Groom/Red God 枝 (→ Nasrullah)。欧州枝 → eur。
+    "Rainbow Quest": "nasrullah",                             # → Blushing Groom → Red God → Nasrullah (凱旋門賞。カナは上で eur 収載済)
+    "グルームダンサー": "nasrullah", "Groom Dancer": "nasrullah",  # → Blushing Groom → Red God → Nasrullah
+    # Grey Sovereign 枝 (Kalamoun/Caro → Zeddaan/Fortino → Grey Sovereign → Nasrullah)。仏系 → eur。
+    "ハイエストオナー": "nasrullah", "Highest Honor": "nasrullah",  # → Kenmare → Kalamoun → Zeddaan → Grey Sovereign → Nasrullah
+    "ケンドー": "nasrullah", "Kendor": "nasrullah",             # → Kenmare → Kalamoun → Grey Sovereign → Nasrullah
+    "カルドゥン": "nasrullah", "Kaldoun": "nasrullah",           # → Caro → Fortino → Grey Sovereign → Nasrullah
+    # Gone West → Mr. Prospector の欧州チャンピオン枝。mrprospector 既定 usa → override eur。
+    "ザフォニック": "mrprospector", "Zafonic": "mrprospector",   # → Gone West → Mr. Prospector (英 2000 ギニー)
+    "ザミンダー": "mrprospector", "Zamindar": "mrprospector",    # → Gone West → Mr. Prospector (Zafonic 全弟)
+    # Northern Dancer 欧州枝 (northern 既定 eur。override 不要)。
+    "ペイントルセレブル": "northern", "Peintre Celebre": "northern",  # → Nureyev → Northern Dancer (凱旋門賞)
+    "グリーンダンサー": "northern", "Green Dancer": "northern",   # → Nijinsky → Northern Dancer (仏)
+    "ファビュラスダンサー": "northern", "Fabulous Dancer": "northern",  # 父 Northern Dancer (仏)
+    "アナバー": "northern", "Anabaa": "northern",               # → Danzig → Northern Dancer (仏スプリンター)
+    "リナミクス": "northern", "Linamix": "northern",             # → Mendez → Bellypha → Lyphard → Northern Dancer (仏)
+    "シンダー": "northern", "Sinndar": "northern",               # → Grand Lodge → Chief's Crown → Danzig → ND (ダービー+凱旋門賞)
+    "シーザスターズ": "northern", "Sea The Stars": "northern",    # → Cape Cross → Green Desert → Danzig → ND
+    "エルナンド": "northern", "Hernando": "northern",            # → Niniski → Nijinsky → Northern Dancer (仏ダービー)
+    "ジェネラス": "northern", "Generous": "northern",            # → Caerleon → Nijinsky → Northern Dancer (英ダービー/KG)
+    # Sharpen Up/Sea-Bird 経由の Native Dancer 欧州枝。native 既定 usa → 欧州枝は override eur。
+    "シャープンアップ": "native", "Sharpen Up": "native",         # → Atan → Native Dancer
+    "ダイエシス": "native", "Diesis": "native",                  # → Sharpen Up → Atan → Native Dancer
+    "セルカーク": "native", "Selkirk": "native",                # → Sharpen Up → Native Dancer (英マイラー)
+    "トランポリーノ": "native", "Trempolino": "native",          # → Sharpen Up → Native Dancer (凱旋門賞)
+    "アークティックターン": "native", "Arctic Tern": "native",    # → Sea-Bird → Dan Cupid → Native Dancer (仏)
     # マンノウォー系は上で定義済 (ヴェンチア 等)
     # 注: なお確度の低い/真に不明な系統は依然 unknown (グレー)。誤答よりも
     # 「その他」が誠実。ダノンレジェンド (父 Macho Uno → Holy Bull → Great Above 系)
@@ -747,6 +780,25 @@ COUNTRY_OVERRIDE: dict[str, str] = {
     # Dubai Destination は Godolphin の欧州マイラー (Queen Anne S.)。亀谷分類でも欧州型
     # (2026-07-08 ユーザ実 DB フィードバック: 「ドバイデスティネーションは欧州系」)。
     "ドバイデスティネーション": "eur", "Dubai Destination": "eur",
+    # nasrullah 系のうち欧州古典枝 (Mill Reef/Blushing Groom/Grey Sovereign) → 欧州型
+    # (nasrullah 既定=usa の例外。既存トニービン/バゴ/レインボウクエスト等と同じ扱い)。
+    "ダラカニ": "eur", "Dalakhani": "eur",
+    "ダーシャーン": "eur", "Darshaan": "eur",
+    "シャーリーハイツ": "eur", "Shirley Heights": "eur",
+    "Rainbow Quest": "eur",                       # カナ レインボウクエスト は上で eur 収載済
+    "グルームダンサー": "eur", "Groom Dancer": "eur",
+    "ハイエストオナー": "eur", "Highest Honor": "eur",
+    "ケンドー": "eur", "Kendor": "eur",
+    "カルドゥン": "eur", "Kaldoun": "eur",
+    # mrprospector 系のうち Gone West 欧州チャンピオン枝 → 欧州型 (mrprospector 既定=usa の例外)。
+    "ザフォニック": "eur", "Zafonic": "eur",
+    "ザミンダー": "eur", "Zamindar": "eur",
+    # native 系のうち Sharpen Up/Sea-Bird 欧州枝 → 欧州型 (native 既定=usa の例外)。
+    "シャープンアップ": "eur", "Sharpen Up": "eur",
+    "ダイエシス": "eur", "Diesis": "eur",
+    "セルカーク": "eur", "Selkirk": "eur",
+    "トランポリーノ": "eur", "Trempolino": "eur",
+    "アークティックターン": "eur", "Arctic Tern": "eur",
     # 英語名の併記 (3 代血統は海外祖先を英語で格納。カナ側 override と国別を一致させ、
     # 表記で日/米/欧が割れないようにする — 2026-07-06 profitability/prediction-logic)。
     "Mill Reef": "eur",          # =ミルリーフ (欧州名馬・スタミナ)

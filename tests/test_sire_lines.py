@@ -551,6 +551,48 @@ def test_batch_real_db_intl_broodmare_sires_2026_07_08():
         assert sl.line_label_short(k) != "その他", name
 
 
+def test_batch_european_classic_broodmare_sires_2026_07_08():
+    """実 DB フィードバック (ユーザ指摘の Dalakhani 等) で line 未収載=「その他」化していた
+    欧州古典系 (凱旋門賞/欧州ダービー級) 母父の一括収載。父系 founder まで確度が高いもののみ。
+    国別はいずれも欧州発展のため eur (line 既定が usa の nasrullah/mrprospector/native は
+    COUNTRY_OVERRIDE で、northern は既定 eur)。母父=カナ主経路のため英名+カナ両側を検証。"""
+    cases = {
+        # Mill Reef/Blushing Groom/Grey Sovereign 枝 → nasrullah / eur
+        "ダラカニ": ("nasrullah", "eur"),          "Dalakhani": ("nasrullah", "eur"),
+        "ダーシャーン": ("nasrullah", "eur"),        "Darshaan": ("nasrullah", "eur"),
+        "シャーリーハイツ": ("nasrullah", "eur"),     "Shirley Heights": ("nasrullah", "eur"),
+        "レインボウクエスト": ("nasrullah", "eur"),   "Rainbow Quest": ("nasrullah", "eur"),
+        "グルームダンサー": ("nasrullah", "eur"),     "Groom Dancer": ("nasrullah", "eur"),
+        "ハイエストオナー": ("nasrullah", "eur"),     "Highest Honor": ("nasrullah", "eur"),
+        "ケンドー": ("nasrullah", "eur"),           "Kendor": ("nasrullah", "eur"),
+        "カルドゥン": ("nasrullah", "eur"),          "Kaldoun": ("nasrullah", "eur"),
+        # Gone West 欧州チャンピオン枝 → mrprospector / eur
+        "ザフォニック": ("mrprospector", "eur"),     "Zafonic": ("mrprospector", "eur"),
+        "ザミンダー": ("mrprospector", "eur"),       "Zamindar": ("mrprospector", "eur"),
+        # Northern Dancer 欧州枝 → northern / eur (既定)
+        "ペイントルセレブル": ("northern", "eur"),    "Peintre Celebre": ("northern", "eur"),
+        "グリーンダンサー": ("northern", "eur"),      "Green Dancer": ("northern", "eur"),
+        "ファビュラスダンサー": ("northern", "eur"),   "Fabulous Dancer": ("northern", "eur"),
+        "アナバー": ("northern", "eur"),            "Anabaa": ("northern", "eur"),
+        "リナミクス": ("northern", "eur"),           "Linamix": ("northern", "eur"),
+        "シンダー": ("northern", "eur"),            "Sinndar": ("northern", "eur"),
+        "シーザスターズ": ("northern", "eur"),        "Sea The Stars": ("northern", "eur"),
+        "エルナンド": ("northern", "eur"),           "Hernando": ("northern", "eur"),
+        "ジェネラス": ("northern", "eur"),           "Generous": ("northern", "eur"),
+        # Sharpen Up/Sea-Bird 経由 Native Dancer 欧州枝 → native / eur
+        "シャープンアップ": ("native", "eur"),        "Sharpen Up": ("native", "eur"),
+        "ダイエシス": ("native", "eur"),            "Diesis": ("native", "eur"),
+        "セルカーク": ("native", "eur"),            "Selkirk": ("native", "eur"),
+        "トランポリーノ": ("native", "eur"),         "Trempolino": ("native", "eur"),
+        "アークティックターン": ("native", "eur"),    "Arctic Tern": ("native", "eur"),
+    }
+    for name, (line, country) in cases.items():
+        k = sl.classify_sire(name)
+        assert k == line, f"{name}: {k} != {line}"
+        assert sl.classify_country(name, k) == country, name
+        assert sl.line_label_short(k) != "その他", name
+
+
 def test_unknown_without_conn():
     assert sl.classify_sire("架空種牡馬XYZ") == "unknown"
     assert sl.classify_sire(None) == "unknown"
