@@ -570,6 +570,24 @@ LINE_BY_SIRE: dict[str, str] = {
     "ヴィンディケーション": "nasrullah", "Vindication": "nasrullah",  # 父 Seattle Slew → Bold Reasoning → Bold Ruler → Nasrullah
     "オールアメリカン": "roberto", "All American": "roberto",  # 父 Red Ransom → Roberto → Hail to Reason (米国残留枝)
     "ハイセイコー": "hyperion",                              # 父チャイナロック → Rockefella → Hyperion
+    # --- 実 DB フィードバック (2026-07-08 ユーザ指摘: Oasis Dream/Dubai Destination 等) ---
+    # 現代の輸入繁殖牝馬に多い国際的主要母父。父系 founder まで確度が高いもののみ。
+    # 母父セルは JVData カナが主経路なので英名+カナ双方を収載 (code-quality 監査)。
+    # Danzig 系欧州スプリンター枝 (Green Desert/Danehill → Danzig → Northern Dancer)。northern 既定 eur。
+    "オアシスドリーム": "northern", "Oasis Dream": "northern",       # → Green Desert → Danzig → ND
+    "Cape Cross": "northern",                                       # → Green Desert → Danzig → ND (カナは上で収載済)
+    "インヴィンシブルスピリット": "northern", "Invincible Spirit": "northern",  # → Green Desert → Danzig
+    "Danehill Dancer": "northern",                                  # → Danehill → Danzig → ND (カナは上で収載済)
+    "Rock of Gibraltar": "northern",                               # → Danehill → Danzig (カナは上で収載済)
+    "ピヴォタル": "northern", "Pivotal": "northern",                 # → Polar Falcon → Nureyev → ND
+    "ハイシャパラル": "northern", "High Chaparral": "northern",       # → Sadler's Wells → ND
+    "シングスピール": "northern", "Singspiel": "northern",           # → In The Wings → Sadler's Wells → ND
+    # Kingmambo → Mr. Prospector (kingmambo 既定 usa)
+    "ドバイデスティネーション": "kingmambo", "Dubai Destination": "kingmambo",  # 父 Kingmambo → Mr. Prospector
+    # A.P. Indy 枝 (nasrullah 既定 usa)
+    "バーナディーニ": "nasrullah", "Bernardini": "nasrullah",         # → A.P. Indy → Seattle Slew → Bold Ruler → Nasrullah
+    # Machiavellian → Mr. Prospector (mrprospector 既定 usa)
+    "ストリートクライ": "mrprospector", "Street Cry": "mrprospector",  # → Machiavellian → Mr. Prospector
     # マンノウォー系は上で定義済 (ヴェンチア 等)
     # 注: なお確度の低い/真に不明な系統は依然 unknown (グレー)。誤答よりも
     # 「その他」が誠実。ダノンレジェンド (父 Macho Uno → Holy Bull → Great Above 系)

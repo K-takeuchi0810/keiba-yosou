@@ -524,6 +524,32 @@ def test_batch_live_webapp_broodmare_sires_2026_07_08():
         assert sl.line_label_short(k) != "その他", name
 
 
+def test_batch_real_db_intl_broodmare_sires_2026_07_08():
+    """実 DB フィードバック (ユーザ指摘の Oasis Dream/Dubai Destination 等) で「その他」化
+    していた国際的主要母父の継続追加。父系 male-line が founder まで確度が高いもののみ。
+    母父=カナ主経路のため英名+カナ両側を必ず検証 (code-quality 監査の変更失敗モード対策)。"""
+    cases = {
+        # Danzig 系欧州スプリンター枝 → northern / eur
+        "オアシスドリーム": ("northern", "eur"),      "Oasis Dream": ("northern", "eur"),
+        "ケープクロス": ("northern", "eur"),          "Cape Cross": ("northern", "eur"),
+        "インヴィンシブルスピリット": ("northern", "eur"), "Invincible Spirit": ("northern", "eur"),
+        "デインヒルダンサー": ("northern", "eur"),    "Danehill Dancer": ("northern", "eur"),
+        "ロックオブジブラルタル": ("northern", "eur"), "Rock of Gibraltar": ("northern", "eur"),
+        "ピヴォタル": ("northern", "eur"),            "Pivotal": ("northern", "eur"),
+        "ハイシャパラル": ("northern", "eur"),         "High Chaparral": ("northern", "eur"),
+        "シングスピール": ("northern", "eur"),         "Singspiel": ("northern", "eur"),
+        # Kingmambo / A.P. Indy / Machiavellian 米国枝 → usa
+        "ドバイデスティネーション": ("kingmambo", "usa"), "Dubai Destination": ("kingmambo", "usa"),
+        "バーナディーニ": ("nasrullah", "usa"),        "Bernardini": ("nasrullah", "usa"),
+        "ストリートクライ": ("mrprospector", "usa"),   "Street Cry": ("mrprospector", "usa"),
+    }
+    for name, (line, country) in cases.items():
+        k = sl.classify_sire(name)
+        assert k == line, f"{name}: {k} != {line}"
+        assert sl.classify_country(name, k) == country, name
+        assert sl.line_label_short(k) != "その他", name
+
+
 def test_unknown_without_conn():
     assert sl.classify_sire("架空種牡馬XYZ") == "unknown"
     assert sl.classify_sire(None) == "unknown"
