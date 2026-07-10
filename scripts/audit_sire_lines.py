@@ -69,6 +69,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="系統辞書の実 DB 突合診断")
     ap.add_argument("--db", default=None)
     ap.add_argument("--top", type=int, default=30, help="不一致/unknown の表示上限")
+    ap.add_argument("--dump-unknown", default=None,
+                    help="「その他」になる全種牡馬を産駒数順 CSV で書き出すパス "
+                         "(例: --dump-unknown data/unknown_sires.csv)。全件洗い出し用。")
     args = ap.parse_args()
 
     # 読み取り専用で開く (診断は観察系。init_db の書込み migration を走らせて
@@ -83,6 +86,15 @@ def main() -> int:
         # gen3 (父母父/母母父) は海外祖先の英語名が多く、英語名辞書の効果測定の主対象
         # (2026-07-06 validation R-1 / data-pipeline P1: gen3 列を未カバーだった)。
         sires: Counter[tuple[str, str]] = Counter()
+        # 正規化キー → 生スペルの出現数。unknown 洗い出しで「元の読める名前」を復元する
+        # (_normalize は小書き畳み込み+英字小文字化+記号除去で読みにくいため)。列ごとに
+        # カナ (母父) と英語 (父母父/母母父) が別スペルで入るので、両方を候補として保持し
+        # 代表 = 最頻スペルを表示する。
+        raw_names: dict[str, Counter] = {}
+        # 各種牡馬がどの世代 (父/母父/父母父/母母父) に出たかも記録 (洗い出しの手がかり)。
+        gen_of: dict[str, set[str]] = {}
+        _GEN = {"sire_name": "父", "dam_sire_name": "母父",
+                "sire_dam_sire_name": "父母父", "dam_dam_sire_name": "母母父"}
         for col_name, col_num in (("sire_name", "sire_breeding_num"),
                                   ("dam_sire_name", "dam_sire_breeding_num"),
                                   ("sire_dam_sire_name", "sire_dam_sire_breeding_num"),
@@ -96,7 +108,15 @@ def main() -> int:
                 print(f"skip {col_name}: {e}")
                 continue
             for r in rows:
-                sires[(_normalize(r["nm"]), (r["bn"] or "").strip())] += r["c"]
+                norm = _normalize(r["nm"])
+                sires[(norm, (r["bn"] or "").strip())] += r["c"]
+                raw_names.setdefault(norm, Counter())[r["nm"]] += r["c"]
+                gen_of.setdefault(norm, set()).add(_GEN[col_name])
+
+        def _raw_of(norm: str) -> str:
+            """正規化キーから最頻の生スペル (読める名前) を返す。"""
+            c = raw_names.get(norm)
+            return c.most_common(1)[0][0] if c else norm
 
         breakdown = Counter()          # dict_hit / traversal_hit / unknown (weighted)
         mismatches = []                # 辞書と遡上の両方が非 unknown で食い違い
@@ -258,9 +278,26 @@ def main() -> int:
         else:
             print("\n辞書 vs 独立遡上の不一致なし (遡上可能な範囲で辞書は整合)")
 
-        print(f"\n### unknown 上位 (辞書追加候補, 産駒数順)")
-        for name, w in unknown_top.most_common(args.top):
-            print(f"  {name} (産駒 {w})")
+        distinct_unknown = len(unknown_top)
+        print(f"\n### unknown (=「その他」) 種牡馬: distinct {distinct_unknown} 件 / 産駒延べ "
+              f"{breakdown['unknown']} 件。上位 {min(args.top, distinct_unknown)} 件 (産駒数順):")
+        for norm, w in unknown_top.most_common(args.top):
+            gens = "/".join(sorted(gen_of.get(norm, set())))
+            print(f"  {_raw_of(norm)} (産駒 {w}, 出現世代 {gens})")
+
+        # 全件洗い出し: --dump-unknown で「その他」になる全種牡馬を産駒数順 CSV に書き出す。
+        # 読める生スペル + 産駒数 + 出現世代 + 正規化キーを出力し、そのまま貼れば辞書追加
+        # 対象を一望できる (top 打ち切りなし)。
+        if args.dump_unknown:
+            out = Path(args.dump_unknown)
+            csv_lines = ["raw_name,occurrences,generations,normalized_key"]
+            for norm, w in unknown_top.most_common():
+                rn = _raw_of(norm).replace('"', '""')
+                gens = "/".join(sorted(gen_of.get(norm, set())))
+                csv_lines.append(f'"{rn}",{w},{gens},"{norm}"')
+            out.write_text("\n".join(csv_lines) + "\n", encoding="utf-8")
+            print(f"\n→ 「その他」全 {distinct_unknown} 件を {out} に産駒数順 CSV で書き出しました。")
+            print("  この CSV を貼るか添付すれば、確度の高いものからまとめて系統分類します。")
 
     return 0
 
