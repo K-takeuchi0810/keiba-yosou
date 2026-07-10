@@ -20,6 +20,7 @@ usage:
 from __future__ import annotations
 
 import argparse
+import csv
 import sqlite3
 import sys
 from collections import Counter
@@ -104,7 +105,7 @@ def main() -> int:
                     f"SELECT {col_name} AS nm, {col_num} AS bn, COUNT(*) AS c "
                     f"FROM horse_masters WHERE nm IS NOT NULL AND nm != '' "
                     f"GROUP BY nm, bn").fetchall()
-            except Exception as e:  # noqa: BLE001 — 列欠如等は skip して続行
+            except sqlite3.OperationalError as e:  # 旧スキーマの列欠如等は skip して続行
                 print(f"skip {col_name}: {e}")
                 continue
             for r in rows:
@@ -117,6 +118,10 @@ def main() -> int:
             """正規化キーから最頻の生スペル (読める名前) を返す。"""
             c = raw_names.get(norm)
             return c.most_common(1)[0][0] if c else norm
+
+        def _gens_of(norm: str) -> str:
+            """出現世代 (父/母父/父母父/母母父) を安定順で "/" 連結。"""
+            return "/".join(sorted(gen_of.get(norm, set())))
 
         breakdown = Counter()          # dict_hit / traversal_hit / unknown (weighted)
         mismatches = []                # 辞書と遡上の両方が非 unknown で食い違い
@@ -282,20 +287,21 @@ def main() -> int:
         print(f"\n### unknown (=「その他」) 種牡馬: distinct {distinct_unknown} 件 / 産駒延べ "
               f"{breakdown['unknown']} 件。上位 {min(args.top, distinct_unknown)} 件 (産駒数順):")
         for norm, w in unknown_top.most_common(args.top):
-            gens = "/".join(sorted(gen_of.get(norm, set())))
-            print(f"  {_raw_of(norm)} (産駒 {w}, 出現世代 {gens})")
+            print(f"  {_raw_of(norm)} (産駒 {w}, 出現世代 {_gens_of(norm)})")
 
         # 全件洗い出し: --dump-unknown で「その他」になる全種牡馬を産駒数順 CSV に書き出す。
         # 読める生スペル + 産駒数 + 出現世代 + 正規化キーを出力し、そのまま貼れば辞書追加
         # 対象を一望できる (top 打ち切りなし)。
         if args.dump_unknown:
             out = Path(args.dump_unknown)
-            csv_lines = ["raw_name,occurrences,generations,normalized_key"]
-            for norm, w in unknown_top.most_common():
-                rn = _raw_of(norm).replace('"', '""')
-                gens = "/".join(sorted(gen_of.get(norm, set())))
-                csv_lines.append(f'"{rn}",{w},{gens},"{norm}"')
-            out.write_text("\n".join(csv_lines) + "\n", encoding="utf-8")
+            out.parent.mkdir(parents=True, exist_ok=True)  # 親ディレクトリを用意 (診断中断防止)
+            # csv.writer で quoting/エスケープを一任 (手組み連結の破損リスク回避)。
+            # Excel で直接開いてもカナが化けないよう BOM 付き UTF-8。
+            with out.open("w", encoding="utf-8-sig", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["raw_name", "occurrences", "generations", "normalized_key"])
+                for norm, w in unknown_top.most_common():
+                    writer.writerow([_raw_of(norm), w, _gens_of(norm), norm])
             print(f"\n→ 「その他」全 {distinct_unknown} 件を {out} に産駒数順 CSV で書き出しました。")
             print("  この CSV を貼るか添付すれば、確度の高いものからまとめて系統分類します。")
 
