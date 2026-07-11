@@ -1,0 +1,49 @@
+{% extends "base.html.j2" %}
+{% block body %}
+<h1>当日傾向速報 <span class="muted">{{ date_label }}</span></h1>
+<p class="muted">その日に確定した全 JRA レースの結果を層別。「今どの枠・系統・脚質が来ているか」の定点観測。</p>
+
+<form class="card" method="get" action="/today">
+  <input type="hidden" name="date" value="{{ date }}">
+  <div class="grid">
+    <label>切り口
+      <select name="factor" onchange="this.form.submit()">
+        {% for f in factors %}
+        <option value="{{ f.key }}" {% if f.selected %}selected{% endif %}>{{ f.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">表示</button>{# JS 無効環境でも操作可能に (trends と操作一貫) #}
+  </div>
+</form>
+
+<div class="card">
+  <strong>{{ result.factor_label }}別</strong>
+  <span class="muted">（確定 {{ result.n_races_done }} レース）</span>
+</div>
+
+{% if result.cells %}
+<div class="tablewrap">
+<table>
+  <thead><tr>
+    <th>{{ result.factor_label }}</th><th class="num">頭数</th><th class="num">勝</th>
+    <th class="num">複勝率</th><th style="width:34%">複勝率</th>
+  </tr></thead>
+  <tbody>
+  {% for c in result.cells %}
+    <tr>
+      <td>{% if c.color %}<span class="line-dot" style="background:{{ c.color }}"></span>{% endif %}{{ c.label }}</td>
+      <td class="num">{{ c.n }}</td>
+      <td class="num">{{ c.wins }}</td>
+      <td class="num">{{ c.top3_pct }}%</td>
+      <td><div class="bar" style="width:{{ c.top3_pct }}%"></div></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted" style="margin-top:10px;">当日サンプルは少数。速報は傾向の目安で、確定的な判断材料ではない。</p>
+{% else %}
+<div class="card muted">この日の確定レースがまだありません。</div>
+{% endif %}
+{% endblock %}

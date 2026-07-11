@@ -9,9 +9,9 @@ from scripts.backtest import (
     _empty_market_snapshot_stats,
     _finish_market_snapshot_stats,
     _horse_bonus_candidate,
-    _popularity_config,
-    _race_odds_untrusted,
-    _snapshot_meta,
+    popularity_config,
+    race_odds_untrusted,
+    snapshot_meta,
     _snapshot_age_min,
     payout_from_row,
 )
@@ -64,27 +64,27 @@ def test_snapshot_age_boundaries():
 def test_race_odds_untrusted_all_null_is_trusted():
     """odds_fetched_at が全て NULL (確定オッズ / 歴史的 data_div 7) は信頼する。"""
     horses = [horse("01", 1, None), horse("02", 2, None)]
-    assert _race_odds_untrusted(horses, RACE, 30) is False
+    assert race_odds_untrusted(horses, RACE, 30) is False
 
 
 def test_race_odds_untrusted_post_start_is_untrusted():
     """発走後 (age<0) に取得した snapshot を含むレースは untrusted。"""
     horses = [horse("01", 1, "2026-06-07T12:00:00"), horse("02", 2, "2026-06-07T12:31:00")]
-    assert _race_odds_untrusted(horses, RACE, 30) is True
+    assert race_odds_untrusted(horses, RACE, 30) is True
 
 
 def test_race_odds_untrusted_all_stale_is_untrusted():
     """全 snapshot が stale (最新でも age>max) なら untrusted。"""
     horses = [horse("01", 1, "2026-06-07T11:00:00"), horse("02", 2, "2026-06-07T11:30:00")]
     # 11:30 → age 60 > 30 = max。最新でも stale。
-    assert _race_odds_untrusted(horses, RACE, 30) is True
+    assert race_odds_untrusted(horses, RACE, 30) is True
 
 
 def test_race_odds_untrusted_one_fresh_snapshot_is_trusted():
     """1 頭でも fresh (age<=max, age>=0) snapshot があれば信頼する。"""
     horses = [horse("01", 1, "2026-06-07T11:00:00"), horse("02", 2, "2026-06-07T12:10:00")]
     # 12:10 → age 20 <= 30 = fresh。
-    assert _race_odds_untrusted(horses, RACE, 30) is False
+    assert race_odds_untrusted(horses, RACE, 30) is False
 
 
 def test_market_snapshot_counts_fresh_stale_unknown_and_bonus_candidates():
@@ -159,7 +159,7 @@ def test_popularity_config_respects_env_overrides_for_snapshot_conditions():
         os.environ["PRED_W_popularity_first"] = "1"
         os.environ["PRED_W_popularity_second"] = "0"
         os.environ["PRED_W_popularity_third"] = "0"
-        cfg_ = _popularity_config()
+        cfg_ = popularity_config()
     finally:
         for k, v in old.items():
             if v is None:
@@ -327,7 +327,7 @@ def test_snapshot_meta_records_any_pred_w_env_override():
     old = os.environ.get(key)
     try:
         os.environ[key] = "123"
-        meta = _snapshot_meta()
+        meta = snapshot_meta()
     finally:
         if old is None:
             os.environ.pop(key, None)
@@ -342,7 +342,7 @@ def test_snapshot_meta_records_second_blend_env_overrides(monkeypatch):
     monkeypatch.setenv("PRED_DISABLE_BLEND", "1")
     monkeypatch.setenv("PRED_DISABLE_SECOND_BLEND", "1")
 
-    meta = _snapshot_meta()
+    meta = snapshot_meta()
 
     assert meta["env_overrides"]["PRED_BLEND_MODE"] == "logit"
     assert meta["env_overrides"]["PRED_DISABLE_BLEND"] == "1"

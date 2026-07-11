@@ -73,18 +73,83 @@ def open_db(path: Path | str = DB_PATH):
         conn.close()
 
 
+@contextmanager
+def open_db_readonly(path: Path | str = DB_PATH):
+    """読み取り専用接続 (webapp 等の観察系ツール用。2026-07-05)。
+
+    open_db は接続のたびに init_db (schema 実行 + ALTER migration = 書込み
+    トランザクション) を発行するため、観察系ツールが使うと GUI/ingest の
+    予想生成ワークフローと書込みロックで競合し得る。本関数は:
+      - init_db を実行しない (migration は予想生成側の open_db だけが担う)
+      - URI mode=ro で開き、さらに PRAGMA query_only=ON で SQL 層でも書込みを封じる
+      - WAL リーダなので writer (GUI/ingest) をブロックしない
+    DB ファイルが無ければ FileNotFoundError (mode=ro は新規作成しない)。
+    WAL の -shm が read-only で開けない環境では rw ハンドル + query_only に
+    フォールバックする。保証強度の差に注意: 主経路 mode=ro は OS レベルで
+    不可逆、フォールバックは SQL 層ガード (query_only) のみ — 同一接続で
+    PRAGMA query_only=OFF を発行すれば解除できるため、観察系コードに
+    query_only=OFF を書かないこと (tests の不変条件テストが混入を検知する)。
+    """
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"DB がありません: {p}")
+    try:
+        conn = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
+    except sqlite3.OperationalError:
+        # read-only WAL の -shm 制約等で開けない場合のフォールバック。
+        # mode=rw (no-create) にすることで、exists() チェックと connect の間に
+        # DB が消えた場合 (TOCTOU) でも空ファイルを新規作成しない
+        # (2026-07-05 fable data-pipeline 監査指摘)。
+        conn = sqlite3.connect(f"file:{p.as_posix()}?mode=rw", uri=True)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only=ON")
+    conn.execute("PRAGMA busy_timeout=5000")
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
 def init_db(conn: sqlite3.Connection) -> None:
     schema = SCHEMA_PATH.read_text(encoding="utf-8")
+    # schema.sql の idx_horse_masters_dam_sire が dam_sire_breeding_num を参照する
+    # ため、この列の補修は executescript より**先**に行う。後置だと「テーブルは
+    # あるが列が無い」旧 DB で index 作成が no such column で落ち、補修行に到達
+    # できず writer が起動不能になる (2026-07-05 data-pipeline 監査 R1)。
+    # 他の migration 列 (corner/lap/odds_fetched_at 等) は schema.sql に index が
+    # 無いので後置で問題ない。
+    _ensure_column_if_exists(conn, "horse_masters", "dam_sire_breeding_num", "TEXT")
     conn.executescript(schema)
     _ensure_column(conn, "horse_races", "odds_fetched_at", "TEXT")
     _ensure_column(conn, "horse_races", "odds_dataspec", "TEXT")
     _ensure_column(conn, "training_times", "data_div", "TEXT")
     _ensure_column(conn, "training_times", "data_created", "TEXT")
+    # コーナー通過順位 (Phase 4)。既存 DB への後方互換 migration。
+    for _c in ("corner_order_1", "corner_order_2", "corner_order_3", "corner_order_4"):
+        _ensure_column(conn, "horse_races", _c, "INTEGER")
+    # レースラップ / ハロンタイム (2026-07-05)。既存 DB への後方互換 migration。
+    for _c in ("front3f_time", "front4f_time", "last3f_time", "last4f_time"):
+        _ensure_column(conn, "races", _c, "INTEGER")
+    _ensure_column(conn, "races", "lap_times", "TEXT")
+    # 3 代血統 (父母父/母母父) + HN 産地情報 (2026-07-05)。schema.sql に index が
+    # 無いので後置で安全 (index を足す場合は dam_sire_breeding_num と同様に前置へ)。
+    for _c in ("sire_dam_sire_breeding_num", "sire_dam_sire_name",
+               "dam_dam_sire_breeding_num", "dam_dam_sire_name"):
+        _ensure_column(conn, "horse_masters", _c, "TEXT")
+    for _c in ("mochikomi_kubun", "import_year", "birthplace"):
+        _ensure_column(conn, "breeding_horses", _c, "TEXT")
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
     cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
     if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+
+
+def _ensure_column_if_exists(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
+    """テーブルが存在する場合のみ列補修する (新規 DB は直後の schema.sql が列ごと作る)。"""
+    cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if cols and column not in cols:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
 
@@ -119,7 +184,26 @@ def upsert_race(conn: sqlite3.Connection, ra: RaceInfo) -> None:
     row = _ra_to_row(ra)
     cols = list(row.keys())
     placeholders = ",".join(f":{c}" for c in cols)
-    sql = f"INSERT OR REPLACE INTO races ({','.join(cols)}) VALUES ({placeholders})"
+    update_exprs = []
+    for col in cols:
+        if col in _RACE_PK:
+            continue
+        if col in ("front3f_time", "front4f_time", "last3f_time", "last4f_time"):
+            # 結果確定後のラップを、後から来る発走前 RA (全 0) で潰さない
+            # (horse_races.corner_order と同型ガード。2026-07-05 data-pipeline 監査指摘)。
+            update_exprs.append(
+                f"{col}=CASE WHEN excluded.{col} > 0 THEN excluded.{col} ELSE races.{col} END")
+        elif col == "lap_times":
+            # 非ゼロラップを 1 つでも含む場合のみ上書き (GLOB の文字クラスで判定)。
+            update_exprs.append(
+                "lap_times=CASE WHEN excluded.lap_times GLOB '*[1-9]*' "
+                "THEN excluded.lap_times ELSE races.lap_times END")
+        else:
+            update_exprs.append(f"{col}=excluded.{col}")
+    sql = (
+        f"INSERT INTO races ({','.join(cols)}) VALUES ({placeholders}) "
+        f"ON CONFLICT({','.join(_RACE_PK)}) DO UPDATE SET {','.join(update_exprs)}"
+    )
     conn.execute(sql, row)
 
 
@@ -131,7 +215,9 @@ def upsert_horse_race(conn: sqlite3.Connection, se: HorseRaceInfo) -> None:
     for col in cols:
         if col in {"race_year", "race_month_day", "track_code", "kaiji", "nichiji", "race_num", "horse_num"}:
             continue
-        if col in {"mining_time", "mining_predicted_order", "win_odds", "win_popularity"}:
+        if col in {"mining_time", "mining_predicted_order", "win_odds", "win_popularity",
+                   "corner_order_1", "corner_order_2", "corner_order_3", "corner_order_4"}:
+            # 確定後の corner 順位を、後から来る発走前 SE (corner=0) で潰さない。
             update_exprs.append(f"{col}=CASE WHEN excluded.{col} > 0 THEN excluded.{col} ELSE horse_races.{col} END")
         else:
             update_exprs.append(f"{col}=excluded.{col}")
@@ -228,6 +314,24 @@ def upsert_horse_master(conn: sqlite3.Connection, um: HorseMaster) -> None:
     cols = list(row.keys())
     placeholders = ",".join(f":{c}" for c in cols)
     sql = f"INSERT OR REPLACE INTO horse_masters ({','.join(cols)}) VALUES ({placeholders})"
+    conn.execute(sql, row)
+
+
+def insert_horse_master_if_absent(conn: sqlite3.Connection, um: HorseMaster) -> None:
+    """行が無い場合のみ INSERT (HS レコード用)。
+
+    HS (市場取引) は血統登録番号と父母の繁殖番号程度しか持たない骨組み行で、
+    INSERT OR REPLACE に流すと UM 由来のフル行 (馬名/父名/3代血統/産地参照…) を
+    空文字で丸ごと潰す (2026-07-05 data-pipeline 監査 R2 で実証されたクロバー)。
+    raw 全量再構築の取込順は DIFN(UM) < HOSE(HS) なので、REPLACE のままだと
+    再構築が正しい状態に収束しない。IF ABSENT 化で順序非依存になる
+    (HS 先行 → 骨組み、後から UM がフル REPLACE / UM 先行 → HS は no-op)。
+    """
+    row = asdict(um)
+    row.pop("record_type", None)
+    cols = list(row.keys())
+    placeholders = ",".join(f":{c}" for c in cols)
+    sql = f"INSERT OR IGNORE INTO horse_masters ({','.join(cols)}) VALUES ({placeholders})"
     conn.execute(sql, row)
 
 

@@ -11,6 +11,16 @@ model: fable
 一流のモデラーである。「実際の回収率」は profitability-judge の領分 — ここでは
 **ロジックの構造が、勝てるモデルの構造になっているか** を見る。
 
+## 適用範囲 (改修タイプ — v4, 2026-06-30)
+
+採点前に `git show HEAD --stat` で改修タイプを分類・宣言する (`_rubric.md`「改修タイプ別ゲート適用」)。
+本 agent の「Required Evidence」「Hard Fail (専門領域)」のうち **P25 固有項目** (A/B/C 層 factorial /
+bonus_subset_metrics / calibrator refit / market_snapshot) は **type-A (predictor ロジック変更) の改修
+にのみ適用**。type-B (診断/検証ツール。予測ロジック不変) / type-C / type-D では該当項目を
+**「N/A (対象外)」と明記**し、自分の汎用ゲート (シグナルの市場残差性・確率変換構造の妥当性・
+race 内正規化と校正の相互作用・train-serve skew・設計整合性) で採点する。診断ツールが calibration gap
+等を測る場合は「どの確率量を測っているか (raw vs calibrated) が目的に整合するか」を汎用観点で評価する。
+
 ## P25 期の追加責務 (2026-06-17 強化) — 二重取り込み + calibration mismatch
 
 P25 検証の中核論点は「市場シグナルを 3 経路で取り込んでいるロジックが、

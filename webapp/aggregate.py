@@ -1,0 +1,428 @@
+"""傾向集計 — コース × ファクター別の成績集計 (SmartRC「傾向集計」踏襲)。
+
+指定コース (競馬場 × 芝ダ × 距離帯) の過去 N 年のレース結果を、各ファクター
+(枠番 / 騎手 / 調教師 / 種牡馬 / 父系統 / 母父 / 母父系統 / 人気帯) で層別し、
+出走数・勝率・複勝率・単勝回収率を Wilson CI 付きで集計する。
+
+bias_scan.py の規律を継承:
+- min_n サンプル数ゲート (未満は insufficient として ranked から除外)
+- Wilson CI (複勝率の区間) で「たまたま」を区別
+- 全数 SQL 1 パス + Python 集計 (predict_race は不要なので高速)
+
+統計注記 (クラスタ相関): 回収率の bootstrap は馬行単位でリサンプルするが、
+セル内の同一レース馬 (同枠・同父等で高々数頭) の単勝結果は「勝者は 1 頭」の
+制約により**負相関**であり、CI は過小でなく保守側に働く (2026-07-05 検証監査確認)。
+bias_scan の subject=all (正相関クラスタ) とは相関の向きが異なる点に注意。
+
+回収率は payouts テーブルがあれば単勝配当から算出 (無ければ None)。
+"""
+
+from __future__ import annotations
+
+import logging
+import sqlite3
+
+from predictor.sire_lines import (
+    classify_country,
+    classify_sire,
+    country_color,
+    country_label,
+    line_color,
+    line_label,
+)
+from predictor.stats import bootstrap_return_rate, wilson_ci
+from web.codes import track_name, track_type
+
+logger = logging.getLogger(__name__)
+
+# JRA 中央場 (track_code 01-10) 判定の webapp 内単一出典。
+# 注意: scripts/gui 側には同判定の直書きが残存しており (backtest/filter_sweep 等 8 箇所)、
+# 範囲変更時はそれらも要修正。全体一元化は backtest API 整理時の別課題 (2026-07-05 監査)。
+JRA_TRACK_MIN, JRA_TRACK_MAX = 1, 10
+
+
+def jra_track_clause(col: str = "track_code") -> str:
+    """JRA 中央場フィルタの SQL 断片。col でテーブル別名付きカラムも指定可。"""
+    return f"CAST({col} AS INTEGER) BETWEEN {JRA_TRACK_MIN} AND {JRA_TRACK_MAX}"
+
+# ファクター定義: key -> (表示名, 集計単位の説明)
+FACTORS = {
+    "waku": "枠番",
+    "jockey": "騎手",
+    "trainer": "調教師",
+    "sire": "種牡馬",
+    "sire_line": "父系統",
+    "dam_sire": "母父",
+    "dam_sire_line": "母父系統",
+    "sire_country": "父国系統",
+    "dam_sire_country": "母父国系統",
+    "popularity": "人気帯",
+}
+
+
+def surface_of(track_type_code: str | None) -> str:
+    """トラックコード -> turf/dirt/jump/other。
+
+    コード範囲 (10-22/23-29/51-59) の単一出典は web.codes.track_type。
+    ここで範囲を再記述しない (bias_scan.surface_key と同方式。2026-07-05 監査)。
+    """
+    jp = track_type(track_type_code or "")
+    return {"芝": "turf", "ダート": "dirt", "障害": "jump"}.get(jp, "other")
+
+
+def popularity_bucket_of(pop: int | None) -> str:
+    p = pop or 0
+    if p <= 0:
+        return "unknown"
+    if p <= 3:
+        return "1-3"
+    if p <= 6:
+        return "4-6"
+    if p <= 9:
+        return "7-9"
+    return "10+"
+
+
+def _pop_sort_key(v: str) -> tuple:
+    order = {"1-3": 0, "4-6": 1, "7-9": 2, "10+": 3, "unknown": 9}
+    return (order.get(v, 5), v)
+
+
+def list_courses(conn, from_date: str, to_date: str, min_races: int = 20) -> list[dict]:
+    """集計対象になり得るコース一覧 (competition が min_races 以上あるもの)。"""
+    rows = conn.execute(
+        f"""
+        SELECT track_code, track_type_code, distance, COUNT(*) AS n
+        FROM races
+        WHERE (race_year || race_month_day) BETWEEN ? AND ?
+          AND {jra_track_clause()}
+          AND distance > 0
+        GROUP BY track_code, track_type_code, distance
+        """,
+        (from_date, to_date),
+    ).fetchall()
+    agg: dict[tuple, int] = {}
+    for r in rows:
+        surf = surface_of(r["track_type_code"])
+        key = (r["track_code"], surf, int(r["distance"] or 0))
+        agg[key] = agg.get(key, 0) + int(r["n"])
+    out = []
+    for (track, surf, dist), n in agg.items():
+        if n >= min_races:
+            out.append({
+                "track_code": track, "track_name": track_name(track),
+                "surface": surf, "distance": dist, "n_races": n,
+            })
+    out.sort(key=lambda c: (c["track_code"], c["surface"], c["distance"]))
+    return out
+
+
+_LINE_FACTORS = ("sire_line", "dam_sire_line")
+_COUNTRY_FACTORS = ("sire_country", "dam_sire_country")
+# 母父繁殖番号 (dam_sire_breeding_num) を SELECT に要する factor。追加時の触り忘れ
+# 防止のため 1 出典化 (2026-07-05 code-quality 監査 F4)。
+_DAM_BN_FACTORS = ("dam_sire_line", "dam_sire_country")
+
+
+def _factor_cell_label(factor: str, value: str) -> str:
+    if factor in _LINE_FACTORS:
+        return line_label(value)
+    if factor in _COUNTRY_FACTORS:
+        return country_label(value)
+    return value
+
+
+def _factor_cell_color(factor: str, value: str) -> str | None:
+    if factor in _LINE_FACTORS:
+        return line_color(value)
+    if factor in _COUNTRY_FACTORS:
+        return country_color(value)
+    return None
+
+
+def _factor_select(factor: str) -> tuple[str, str]:
+    """ファクターの SELECT 式と JOIN 句を返す。"""
+    if factor == "waku":
+        return "h.waku_num", ""
+    if factor == "jockey":
+        return "COALESCE(NULLIF(h.jockey_short_name,''), h.jockey_code)", ""
+    if factor == "trainer":
+        return "COALESCE(NULLIF(h.trainer_short_name,''), h.trainer_code)", ""
+    if factor in ("sire", "sire_line", "sire_country"):
+        return ("hm.sire_name",
+                "LEFT JOIN horse_masters hm ON hm.blood_register_num = h.blood_register_num")
+    if factor in ("dam_sire", "dam_sire_line", "dam_sire_country"):
+        return ("hm.dam_sire_name",
+                "LEFT JOIN horse_masters hm ON hm.blood_register_num = h.blood_register_num")
+    if factor == "popularity":
+        return "h.win_popularity", ""
+    raise ValueError(f"unknown factor: {factor}")
+
+
+def aggregate_course(conn, track_code: str, surface: str, distance: int, factor: str,
+                     from_date: str, to_date: str, min_n: int = 30) -> dict:
+    """1 コース × 1 ファクターの傾向集計。
+
+    戻り: {"cells": [...ranked...], "insufficient": [...], "factor": ..., "total": ...}
+    各 cell: value/label/n/wins/top3/win_pct/top3_pct/ci_lo/ci_hi/return_pct/color
+    """
+    if factor not in FACTORS:
+        raise ValueError(f"unknown factor: {factor}")
+    if surface not in ("turf", "dirt", "jump", "other"):
+        raise ValueError(f"unknown surface: {surface}")
+
+    sel, join = _factor_select(factor)
+
+    # surface は race 単位属性 (track_type_code のコード範囲) なので、対象 race を
+    # 先に引いて surface 一致の race キー集合を作り、明細行を後段フィルタする。
+    # (同一 track×distance に芝/ダート両方が存在しうるため surface で分離する)
+    surf_races = conn.execute(
+        """
+        SELECT race_year, race_month_day, track_code, kaiji, nichiji, race_num, track_type_code
+        FROM races
+        WHERE (race_year || race_month_day) BETWEEN ? AND ?
+          AND track_code = ? AND distance = ?
+        """,
+        (from_date, to_date, track_code, distance),
+    ).fetchall()
+    ok_surface = {
+        (r["race_year"], r["race_month_day"], r["track_code"], r["kaiji"], r["nichiji"], r["race_num"])
+        for r in surf_races if surface_of(r["track_type_code"]) == surface
+    }
+    rows, dam_bn_degraded = _rows_with_key(
+        conn, sel, join, from_date, to_date, track_code, distance,
+        need_dam_bn=(factor in _DAM_BN_FACTORS))
+    rows = [r for r in rows if (r["ry"], r["rmd"], r["tc"], r["kj"], r["nj"], r["rn"]) in ok_surface]
+
+    # 集計。系統分類はユニーク種牡馬あたり 1 回で足りるので request 内でメモ化する
+    # (人気種牡馬は数百行重複し、辞書 miss の遡上が最も高くつくため。2026-07-05 監査 R3)。
+    buckets: dict[str, dict] = {}
+    total_n = 0
+    line_memo: dict[tuple, str] = {}
+    for r in rows:
+        fval = r["fval"]
+        if factor == "popularity":
+            value = popularity_bucket_of(fval)
+        elif factor == "sire_line":
+            memo_key = (fval, r["sire_bn"])
+            value = line_memo.get(memo_key) or line_memo.setdefault(
+                memo_key, classify_sire(fval, conn=conn, sire_breeding_num=r["sire_bn"]))
+        elif factor == "dam_sire_line":
+            # dam_sire_bn は母父自身の繁殖番号 → そこから父系遡上で母父の大系統
+            memo_key = (fval, r["dam_sire_bn"])
+            value = line_memo.get(memo_key) or line_memo.setdefault(
+                memo_key, classify_sire(fval, conn=conn, sire_breeding_num=r["dam_sire_bn"]))
+        elif factor in ("sire_country", "dam_sire_country"):
+            # 国別タイプ (亀谷分類)。まず系統 line_key を出し (メモ化)、そこから
+            # classify_country で日本型/米国型/欧州型へ。
+            bn = r["dam_sire_bn"] if factor == "dam_sire_country" else r["sire_bn"]
+            memo_key = (fval, bn)
+            lk = line_memo.get(memo_key) or line_memo.setdefault(
+                memo_key, classify_sire(fval, conn=conn, sire_breeding_num=bn))
+            value = classify_country(fval, lk)
+        else:
+            value = (str(fval).replace("　", "").strip() if fval not in (None, "") else "不明")
+        b = buckets.setdefault(value, {"n": 0, "wins": 0, "top3": 0,
+                                       "payouts": [], "payout_missing": 0})
+        b["n"] += 1
+        # 単勝を 100 円均等買いした場合の払戻系列 (bootstrap CI 用)。外れは 0。
+        payout = r["tan_payout"] or 0
+        b["payouts"].append(payout)
+        ordr = r["ord"] or 0
+        if ordr == 1:
+            b["wins"] += 1
+            # 勝ち馬なのに払戻 join が無い (payouts 未 ingest) → 回収率を下方に歪める
+            if payout == 0:
+                b["payout_missing"] += 1
+        if 1 <= ordr <= 3:
+            b["top3"] += 1
+        total_n += 1
+
+    cells, insufficient = [], []
+    for value, b in buckets.items():
+        n = b["n"]
+        top3_rate = b["top3"] / n if n else 0.0
+        lo, hi = wilson_ci(b["top3"], n)
+        stakes = [100] * n
+        ret_point, ret_lo, ret_hi = bootstrap_return_rate(b["payouts"], stakes) if n else (0.0, 0.0, 0.0)
+        cell = {
+            "value": value,
+            "label": _factor_cell_label(factor, value),
+            "color": _factor_cell_color(factor, value),
+            "n": n,
+            "wins": b["wins"],
+            "top3": b["top3"],
+            "win_pct": round(b["wins"] / n * 100, 1) if n else 0.0,
+            "top3_pct": round(top3_rate * 100, 1),
+            "ci_lo": round(lo * 100, 1),
+            "ci_hi": round(hi * 100, 1),
+            "return_pct": round(ret_point * 100, 1),
+            # 単勝回収率の bootstrap 95% CI。CI 下限 > 100 でなければ「妙味」と断定しない。
+            "return_ci_lo": round(ret_lo * 100, 1),
+            "return_ci_hi": round(ret_hi * 100, 1),
+            "payout_missing": b["payout_missing"],
+            "status": "ok" if n >= min_n else "insufficient",
+        }
+        (cells if n >= min_n else insufficient).append(cell)
+
+    if factor == "waku":
+        cells.sort(key=lambda c: (c["value"] or "", ))
+    elif factor == "popularity":
+        cells.sort(key=lambda c: _pop_sort_key(c["value"]))
+    else:
+        cells.sort(key=lambda c: c["top3_pct"], reverse=True)
+    insufficient.sort(key=lambda c: c["n"], reverse=True)
+
+    return {
+        "factor": factor,
+        "factor_label": FACTORS[factor],
+        "track_code": track_code,
+        "track_name": track_name(track_code),
+        "surface": surface,
+        "distance": distance,
+        "from_date": from_date,
+        "to_date": to_date,
+        "min_n": min_n,
+        "total": total_n,
+        # 多重比較の開示: この 1 集計で同時に見ている値 (セル) の数。
+        # コース数 × ファクター数 × この値のぶん「最良セルが偶然良く見える」試行が走る。
+        "n_values": len(cells) + len(insufficient),
+        # 旧スキーマ縮退中 (母父の血統遡上なし、名前照合のみ)。True なら unknown が
+        # 多めに出る旨をテンプレートで開示する (2026-07-05 profitability 監査推奨)。
+        "dam_bn_degraded": dam_bn_degraded,
+        "cells": cells,
+        "insufficient": insufficient,
+    }
+
+
+def today_trends(conn, date: str, factor: str = "waku") -> dict:
+    """当日傾向速報 (SmartRC 定点観測)。指定日に確定済みの全 JRA レースを、
+    枠番 / 父系統 / 脚質 で層別し「今どの枠・系統・脚質が来ているか」を集計する。
+
+    date は YYYYMMDD。予想 (predict_race) は使わず確定結果のみを見る軽量集計。
+    当日集計は母数が 1 日分 (数十〜100 レース強) しかないため、軸は意図的に
+    この 3 つへ絞る — dam_sire_line 等の細かい軸はセル枯れして誤読源になる。
+    """
+    if factor not in ("waku", "sire_line", "leg"):
+        raise ValueError(f"today factor must be waku/sire_line/leg: {factor}")
+    year, md = date[:4], date[4:]
+    rows = conn.execute(
+        f"""
+        SELECT h.waku_num AS waku, h.confirmed_order AS ord,
+               h.leg_quality_code AS leg,
+               hm.sire_name AS sire, hm.sire_breeding_num AS sire_bn,
+               r.track_code AS tc, r.race_num AS rn
+        FROM races r
+        JOIN horse_races h
+          ON h.race_year=r.race_year AND h.race_month_day=r.race_month_day
+         AND h.track_code=r.track_code AND h.kaiji=r.kaiji
+         AND h.nichiji=r.nichiji AND h.race_num=r.race_num
+        LEFT JOIN horse_masters hm ON hm.blood_register_num = h.blood_register_num
+        WHERE r.race_year=? AND r.race_month_day=?
+          AND {jra_track_clause("r.track_code")}
+          AND h.confirmed_order IS NOT NULL AND h.confirmed_order > 0
+        """,
+        (year, md),
+    ).fetchall()
+
+    buckets: dict[str, dict] = {}
+    n_races = set()
+    _memo: dict[tuple, str] = {}
+    for r in rows:
+        n_races.add((r["tc"], r["rn"]))
+        if factor == "waku":
+            value = (r["waku"] or "?")
+        elif factor == "leg":
+            value = {"1": "逃げ", "2": "先行", "3": "差し", "4": "追込"}.get(
+                (r["leg"] or "").strip(), "不明")
+        else:  # sire_line (ユニーク種牡馬単位でメモ化 — aggregate_course と同方針)
+            memo_key = (r["sire"], r["sire_bn"])
+            if memo_key not in _memo:
+                _memo[memo_key] = classify_sire(r["sire"], conn=conn, sire_breeding_num=r["sire_bn"])
+            value = _memo[memo_key]
+        b = buckets.setdefault(value, {"n": 0, "wins": 0, "top3": 0})
+        b["n"] += 1
+        ordr = r["ord"] or 0
+        if ordr == 1:
+            b["wins"] += 1
+        if 1 <= ordr <= 3:
+            b["top3"] += 1
+
+    cells = []
+    for value, b in buckets.items():
+        n = b["n"]
+        cells.append({
+            "value": value,
+            "label": line_label(value) if factor == "sire_line" else str(value),
+            "color": line_color(value) if factor == "sire_line" else None,
+            "n": n, "wins": b["wins"], "top3": b["top3"],
+            "win_pct": round(b["wins"] / n * 100, 1) if n else 0.0,
+            "top3_pct": round(b["top3"] / n * 100, 1) if n else 0.0,
+        })
+    if factor == "waku":
+        cells.sort(key=lambda c: str(c["value"]))
+    else:
+        cells.sort(key=lambda c: c["top3_pct"], reverse=True)
+    return {
+        "date": date, "factor": factor,
+        "factor_label": {"waku": "枠番", "sire_line": "父系統", "leg": "脚質"}[factor],
+        "n_races_done": len(n_races), "cells": cells,
+    }
+
+
+def _rows_with_key(conn, sel: str, join: str, from_date: str, to_date: str,
+                   track_code: str, distance: int,
+                   need_dam_bn: bool = False) -> tuple[list, bool]:
+    """race キー付きで factor 値・着順・単勝配当を引く (surface 後段フィルタ用)。
+
+    戻り: (rows, dam_bn_degraded)。dam_sire_breeding_num は dam_sire_line 集計
+    でのみ必要なので need_dam_bn=False では最初から NULL を選ぶ — 旧スキーマ DB
+    でも waku/jockey 等の集計が例外経路と無関係な warning を出さないため
+    (2026-07-05 data-pipeline 監査 R2)。縮退判定は接続毎にやり直すので、writer が
+    列を追加すれば再起動なしで自動復帰する。"""
+    sql_tpl = """
+        SELECT r.race_year AS ry, r.race_month_day AS rmd, r.track_code AS tc,
+               r.kaiji AS kj, r.nichiji AS nj, r.race_num AS rn,
+               {sel} AS fval,
+               h.confirmed_order AS ord,
+               hm2.sire_breeding_num AS sire_bn,
+               {dam_bn} AS dam_sire_bn,
+               CASE
+                 WHEN p.tan_horse_num1 = h.horse_num THEN p.tan_payout1
+                 WHEN p.tan_horse_num2 = h.horse_num THEN p.tan_payout2
+                 WHEN p.tan_horse_num3 = h.horse_num THEN p.tan_payout3
+                 ELSE 0
+               END AS tan_payout
+        FROM races r
+        JOIN horse_races h
+          ON h.race_year=r.race_year AND h.race_month_day=r.race_month_day
+         AND h.track_code=r.track_code AND h.kaiji=r.kaiji
+         AND h.nichiji=r.nichiji AND h.race_num=r.race_num
+        {join}
+        LEFT JOIN horse_masters hm2 ON hm2.blood_register_num = h.blood_register_num
+        LEFT JOIN payouts p
+          ON p.race_year=r.race_year AND p.race_month_day=r.race_month_day
+         AND p.track_code=r.track_code AND p.kaiji=r.kaiji
+         AND p.nichiji=r.nichiji AND p.race_num=r.race_num
+        WHERE (r.race_year || r.race_month_day) BETWEEN ? AND ?
+          AND r.track_code = ? AND r.distance = ?
+          AND h.confirmed_order IS NOT NULL AND h.confirmed_order > 0
+    """
+    params = (from_date, to_date, track_code, distance)
+    if not need_dam_bn:
+        return conn.execute(
+            sql_tpl.format(sel=sel, join=join, dam_bn="NULL"), params
+        ).fetchall(), False
+    try:
+        return conn.execute(
+            sql_tpl.format(sel=sel, join=join, dam_bn="hm2.dam_sire_breeding_num"), params
+        ).fetchall(), False
+    except sqlite3.OperationalError as e:
+        # dam_sire_breeding_num 列が無い古い DB (readonly は migration しない)。
+        # 母父系統は名前照合のみに縮退 (views.build_race と同方針)。
+        if "no such column" not in str(e):
+            raise
+        logger.warning("horse_masters.dam_sire_breeding_num 無し: 母父系統集計は名前照合のみに縮退 (%s)", e)
+        return conn.execute(
+            sql_tpl.format(sel=sel, join=join, dam_bn="NULL"), params
+        ).fetchall(), True

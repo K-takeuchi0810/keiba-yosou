@@ -85,6 +85,22 @@ class RaceInfo:
     weather_code: str
     turf_condition: str
     dirt_condition: str
+    # レースラップ / ハロンタイム (2026-07-05 追加・**暫定確定**。テン3F = 先行力分析の素データ)。
+    # バイト位置の根拠: JV_RA_RACE は dirt_condition(890, 実データ検証済アンカー) の後
+    #   LapTime×25(各3)=891-965 → 障害マイル(4)=966 → 前3F(3)=970 → 前4F(3)=973 →
+    #   後3F(3)=976 → 後4F(3)=979 → コーナー情報(72×4)=982-1269 → 更新区分=1270
+    # で RA_LENGTH=1272 (+CRLF) に端点一致する。
+    # 注意: 端点整合は幅の総和しか拘束せず、S3/S4/L3/L4 の内部並び順は端点だけでは
+    # 一意化できない (公知構造体順への依拠)。
+    # ★必須ゲート: 本番 backfill 前に scripts/probe_corner_offsets.py --ra を実 RA
+    # .jvd で**緑化するまでラップの利用を禁止** (前3F ≒ 先頭3ハロン和 / 後3F ≒ 末尾
+    # 3ハロン和のサニティで並び順を実データ確定できる)。値は 1/10 秒、0=未収録。
+    front3f_time: int = 0
+    front4f_time: int = 0
+    last3f_time: int = 0
+    last4f_time: int = 0
+    # 25 ハロンぶんのラップ (1/10 秒) をカンマ区切り文字列で保持 (未使用ハロンは 0)。
+    lap_times: str = ""
 
     @property
     def race_id(self) -> str:
@@ -128,6 +144,12 @@ def parse_ra(rec: bytes) -> RaceInfo:
         weather_code=_ascii(rec, 888, 1),
         turf_condition=_ascii(rec, 889, 1),
         dirt_condition=_ascii(rec, 890, 1),
+        # ラップ 25×3 (891-965) とハロンタイム。位置根拠は dataclass 注記。
+        lap_times=",".join(str(_int(rec, 891 + i * 3, 3)) for i in range(25)),
+        front3f_time=_int(rec, 970, 3),
+        front4f_time=_int(rec, 973, 3),
+        last3f_time=_int(rec, 976, 3),
+        last4f_time=_int(rec, 979, 3),
     )
 
 
@@ -175,6 +197,30 @@ class HorseRaceInfo:
     mining_time: int
     mining_predicted_order: int
     leg_quality_code: str  # 1=逃 2=先 3=差 4=追
+    # コーナー通過順位 (隊列/先行力の素データ)。0 = 不明/未通過 (小回り 1000m 等は
+    # 1-2 角が無いので 0 が正常)。
+    # バイト位置 352/354/356/358 の根拠 (2026-07-05 **暫定確定** — 実データ突合まで):
+    #   実データ検証済みアンカー Time=339(4), Odds=360(4), Ninki=364(2),
+    #   final_3f=391(3), mining=538(5), 脚質=553(1) との突合で、343-359 の 17B が
+    #   着差コード×3(9B)+1〜4角(8B) に過不足なく埋まり、後方連鎖 (394-403=1着馬
+    #   血統番号 → mining=538) も一致する。※旧値 394-401 は 1 着馬血統登録番号を
+    #   誤読するバグだった。
+    #   注意: 端点整合は必要条件であって十分条件ではない。17B 内の「着差→角」の
+    #   順序は公開実装 (specially198/jra-van-race-horse-table RaceUmaService.cs) の
+    #   フィールド順に依拠しており、独立な裏取りではなく相補的な補完である。
+    #   ★必須ゲート: 本番 backfill 前に scripts/probe_corner_offsets.py --expect
+    #   (JRA 公式成績の既知値突合) を実 SE .jvd で**緑化するまで corner の
+    #   backfill・先行力指標の利用を禁止** (2026-07-05 検証監査で hard gate 再確認)。
+    #   ★backfill 前処理: バグ窓 (旧 394 offset の 2026-07-04 版) で results ingest を
+    #   実行していた場合、非ゼロのゴミ corner が upsert の >0 ガードにより正しい 0 で
+    #   上書きできず残留する。再 ingest 前に
+    #     UPDATE horse_races SET corner_order_1=0, corner_order_2=0,
+    #                            corner_order_3=0, corner_order_4=0;
+    #   でゼロ化してから ingest_all(force=True) を実行すること。
+    corner_order_1: int = 0
+    corner_order_2: int = 0
+    corner_order_3: int = 0
+    corner_order_4: int = 0
 
     @property
     def race_id(self) -> str:
@@ -229,6 +275,12 @@ def parse_se(rec: bytes) -> HorseRaceInfo:
         mining_time=_int(rec, 538, 5),
         mining_predicted_order=_int(rec, 551, 2),
         leg_quality_code=_ascii(rec, 553, 1),
+        # 1-4 角通過順位 (各2桁)。着差コード×3 (343-351) の直後、単勝オッズ (360) の
+        # 直前。位置根拠は dataclass 注記参照 (アンカー逆算 + 公開実装で順序確認)。
+        corner_order_1=_int(rec, 352, 2),
+        corner_order_2=_int(rec, 354, 2),
+        corner_order_3=_int(rec, 356, 2),
+        corner_order_4=_int(rec, 358, 2),
     )
 
 
@@ -465,9 +517,27 @@ class HorseMaster:
     dam_sire_breeding_num: str
     dam_sire_name: str
     leg_tendency_code: str
+    # 3 代血統の追加 2 頭 (2026-07-05、SmartRC パリティ: 父母父・母母父の系統表示用)。
+    # HS レコード経由 (parse_hs) では取得できないため既定は空。
+    sire_dam_sire_breeding_num: str = ""   # 父母父 (3 代血統 idx 8)
+    sire_dam_sire_name: str = ""
+    dam_dam_sire_breeding_num: str = ""    # 母母父 (3 代血統 idx 12)
+    dam_dam_sire_name: str = ""
 
 
 def _pedigree_item(rec: bytes, idx: int) -> tuple[str, str]:
+    """UM 3 代血統情報 (pos 205 起点、1 頭 = 繁殖番号 10 + 馬名 36 = 46 byte × 14 頭)。
+
+    配列順は JV-Data 標準の幅優先:
+      0 父 / 1 母 / 2 父父 / 3 父母 / 4 母父 / 5 母母 /
+      6 父父父 / 7 父父母 / 8 父母父 / 9 父母母 / 10 母父父 / 11 母父母 /
+      12 母母父 / 13 母母母
+    idx 0 (父) と idx 4 (母父) は実運用 DB の表示で検証済みのアンカーで、2 点が
+    base=205 と stride=46 を拘束する。idx 8 (父母父) / idx 12 (母母父) はその配列
+    算術による導出。**2026-07-06 実機 DB で確定**: ディープインパクト産駒 6 頭すべての
+    父母父 = Alzao (=ディープの母ウインドインハーヘアの父) と一致し、母母父も妥当
+    (充填率 89〜94%)。gen3 内の順列取り違えを唯一検出できる血統表突合を通過済み。
+    """
     pos = 205 + idx * 46
     return _ascii(rec, pos, 10), _str(rec, pos + 10, 36)
 
@@ -479,6 +549,8 @@ def parse_um(rec: bytes) -> HorseMaster:
         rec = rec[:UM_LENGTH]
     sire_num, sire_name = _pedigree_item(rec, 0)
     dam_sire_num, dam_sire_name = _pedigree_item(rec, 4)
+    sds_num, sds_name = _pedigree_item(rec, 8)    # 父母父
+    dds_num, dds_name = _pedigree_item(rec, 12)   # 母母父
     return HorseMaster(
         record_type=_ascii(rec, 1, 2),
         data_div=_ascii(rec, 3, 1),
@@ -492,6 +564,10 @@ def parse_um(rec: bytes) -> HorseMaster:
         dam_sire_breeding_num=dam_sire_num,
         dam_sire_name=dam_sire_name,
         leg_tendency_code=_ascii(rec, 1593, 4),
+        sire_dam_sire_breeding_num=sds_num,
+        sire_dam_sire_name=sds_name,
+        dam_dam_sire_breeding_num=dds_num,
+        dam_dam_sire_name=dds_name,
     )
 
 
@@ -704,15 +780,31 @@ class BreedingHorse:
     birth_year: str
     sire_breeding_num: str
     dam_breeding_num: str
+    # 産地情報 (2026-07-05、祖先の産国/産地表示用)。
+    mochikomi_kubun: str = ""   # 繁殖馬持込区分 (1 byte)
+    import_year: str = ""       # 輸入年 (4 byte、輸入馬のみ)
+    birthplace: str = ""        # 産地名 (20 byte。国内=市町村名、外国産=国名系)
 
 
 def parse_hn(rec: bytes) -> BreedingHorse:
-    """HN (繁殖馬マスタ) parser。仕様書 §18 (PDF page 20)。
+    """HN (繁殖馬マスタ) parser。
 
     1-2: rec_type / 3: data_div / 4-11: data_created
     12-21: breeding_num / 30-39: blood_register_num / 41-76: horse_name
-    197-200: birth_year / 201: sex_code / 202: breed_code / 203-204: coat
-    230-239: sire_breeding_num / 240-249: dam_breeding_num
+    195-198: birth_year / 199: sex_code / 200: breed_code / 201-202: coat
+    203: 持込区分 / 204-207: 輸入年 / 208-227: 産地名 (20)
+    228-237: sire_breeding_num / 238-247: dam_breeding_num
+
+    ⚠→✓ **2026-07-06 実 .jvd (probe_hn_offsets) で birth_year 以降の tail 全体が
+    従来 -2 バイトずれていたと確定・修正**。決め手は国内産レコード (安平町) が
+    従来 210 では '平町…11' と先頭欠け+隣接繁殖番号混入だったのに対し、208 で
+    '安平町' と正しく読めたこと。加えて 持込区分=0(国内)+産地あり / =9(外国)+産地空
+    が相関し、この -2 補正で全フィールドが整合した (birth_year=2014/2002、
+    輸入年、産地、父母繁殖番号)。**この -2 は sire_breeding_num にも及ぶ = 血統遡上
+    (traversal) が繋がらなかった主因の 1 つ**。
+    反映後の手順 (docs/OPERATION.md §9-4): BLOD を `scripts.bootstrap --dataspecs BLOD`
+    で再取込 → breeding_horses を埋め直し → `scripts.audit_sire_lines` で
+    traversal_hit の上昇を確認 → 問題なければ config.HN_BIRTHPLACE_VERIFIED=True。
     """
     if len(rec) < HN_LENGTH:
         rec = rec.ljust(HN_LENGTH, b"\x00")
@@ -725,12 +817,15 @@ def parse_hn(rec: bytes) -> BreedingHorse:
         breeding_num=_ascii(rec, 12, 10),
         blood_register_num=_ascii(rec, 30, 10),
         horse_name=_str(rec, 41, 36),
-        sex_code=_ascii(rec, 201, 1),
-        breed_code=_ascii(rec, 202, 1),
-        coat_code=_ascii(rec, 203, 2),
-        birth_year=_ascii(rec, 197, 4),
-        sire_breeding_num=_ascii(rec, 230, 10),
-        dam_breeding_num=_ascii(rec, 240, 10),
+        sex_code=_ascii(rec, 199, 1),
+        breed_code=_ascii(rec, 200, 1),
+        coat_code=_ascii(rec, 201, 2),
+        birth_year=_ascii(rec, 195, 4),
+        sire_breeding_num=_ascii(rec, 228, 10),
+        dam_breeding_num=_ascii(rec, 238, 10),
+        mochikomi_kubun=_ascii(rec, 203, 1),
+        import_year=_ascii(rec, 204, 4),
+        birthplace=_str(rec, 208, 20),
     )
 
 

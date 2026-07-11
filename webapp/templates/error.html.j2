@@ -1,0 +1,9 @@
+{% extends "base.html.j2" %}
+{% block body %}
+<h1>{{ heading }}</h1>
+<div class="card">
+  <p>{{ message }}</p>
+  {% if status_note %}<p class="muted">{{ status_note }}</p>{% endif %}
+</div>
+<p><a class="backlink" href="/">← 開催一覧へ戻る</a></p>
+{% endblock %}

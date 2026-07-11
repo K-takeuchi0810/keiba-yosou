@@ -102,6 +102,49 @@ def _gate_zone(horse_num: str | int | None, starter_count: int | None) -> str:
     return "outer"
 
 
+def recent_corner_stats(
+    conn: sqlite3.Connection,
+    blood_register_num: str,
+    before_date: str,
+    limit: int = 6,
+) -> tuple[float | None, float | None, int]:
+    """直近レースのコーナー通過順位から先行力/差し脚力の代理指標を出す (Phase 4)。
+
+    「先行力 (レース終盤 4 角の位置取り)」の自前シグナル。SmartRC の「テン」
+    (=序盤ダッシュ力・テン1F) とは別概念 — テン1F は JV-Data 非提供のため 4 角
+    通過順で代替している (2026-07-06 予想ロジック監査: テンと4角の混同を是正)。
+    リーク防止のため ``before_date`` 未満の確定レースのみ参照する。
+
+    返値: (avg_4corner_position, avg_position_change, samples)
+      - avg_4corner_position : 直近の 4 角通過順位の平均。小さいほど前で運ぶ (先行力)。
+      - avg_position_change  : (4角順位 − 確定着順) の平均。正なら 4 角から順位を上げる
+                               = 差し脚 (末脚) が効くタイプ。
+      - samples              : 有効サンプル数 (corner_order_4 > 0 の過去走数)。
+
+    corner_order_4 が未 ingest (全て 0/NULL) の環境では samples=0, 指標 None を返し、
+    呼び出し側は「データ無し」として扱えるので後方互換。
+    """
+    if not blood_register_num or blood_register_num == "0" * 10:
+        return None, None, 0
+    rows = conn.execute(
+        """
+        SELECT corner_order_4, confirmed_order
+        FROM horse_races
+        WHERE blood_register_num = ?
+          AND (race_year || race_month_day) < ?
+          AND corner_order_4 IS NOT NULL AND corner_order_4 > 0
+          AND confirmed_order IS NOT NULL AND confirmed_order > 0
+        ORDER BY (race_year || race_month_day) DESC
+        LIMIT ?
+        """,
+        (blood_register_num, before_date, limit),
+    ).fetchall()
+    if not rows:
+        return None, None, 0
+    positions = [r["corner_order_4"] for r in rows]
+    changes = [r["corner_order_4"] - r["confirmed_order"] for r in rows]
+    n = len(positions)
+    return (round(sum(positions) / n, 2), round(sum(changes) / n, 2), n)
 def _draw_position(horse_num: str | int | None, starter_count: int | None) -> float | None:
     """馬番 / 頭数 を 0-1 に正規化した枠位置 (F2)。小さいほど内枠。発走前に既知=leak-free。"""
     try:
@@ -1004,6 +1047,9 @@ def compute_features(
         "high_grade_close_loss": 0,
         "high_grade_midfield_close": 0,
         "recent_trend_delta": None,
+        "recent_4corner_avg_position": None,   # Phase 4: 先行力 (小=前)
+        "recent_4corner_position_change": None,  # Phase 4: 4角→着で上げた順位 (正=差し脚)
+        "recent_4corner_samples": 0,
         "same_track_type_runs": 0,
         "same_track_type_wins": 0,
         "same_track_type_top3": 0,
@@ -1161,6 +1207,17 @@ def compute_features(
                     final3f_values.append(int(p["final_3f"]))
                 if p.get("finish_time") and pdist:
                     time_per_100_values.append(float(p["finish_time"]) / float(pdist) * 100.0)
+                # cache key に馬番を含める: relative_race_metrics は past_run の
+                # 馬番に固有の値 (time_diff/順位) を返すため、同一過去レースを走った
+                # 別の出走馬が feature_cache (レース内共有) 経由で 1 頭目の値に汚染
+                # される cross-horse バグを防ぐ (2026-07-06 検証監査で検出。rules.py の
+                # 上がり順位スコア・LGBM 特徴にも波及していた)。馬番はレース内で一意
+                # なので (レース識別 + 馬番) で past_run を一意に決定できる。
+                rel_diff, rel_rank = _cached(
+                    cache,
+                    ("relative_race_metrics", p.get("race_year"), p.get("race_month_day"),
+                     p.get("track_code"), p.get("kaiji"), p.get("nichiji"), p.get("race_num"),
+                     p.get("horse_num")),
                 # キーには馬識別 (horse_num) が必須。relative_race_metrics は「その馬の」
                 # レース内相対値を返すため、過去に対戦した 2 頭が同じ過去レースを共有すると
                 # 馬識別なしでは先勝ちの値を使い回す (2026-07-02 忠実性監査で発見した
@@ -1210,6 +1267,29 @@ def compute_features(
         )
         feat["high_grade_close_loss"] = cl
         feat["high_grade_midfield_close"] = mc
+
+    # Phase 4: コーナー通過順位ベースの先行力/差し脚指標 (現状 scoring 未配線の dormant)。
+    # corner 未 ingest の DB では全馬 samples=0 なので、ホットループで無償 SQL を
+    # 毎頭発行しないよう「corner データが 1 件でも存在するか」を run 単位で 1 回だけ判定し、
+    # 不在なら以降スキップする (backfill 前の backtest 実行時間を無駄にしない)。
+    # cache=None の公開契約を破らない (_cached は None 安全。2026-07-05 監査指摘)
+    corner_present = _cached(
+        cache,
+        ("_corner_data_present",),
+        lambda: conn.execute(
+            "SELECT 1 FROM horse_races WHERE corner_order_4 IS NOT NULL "
+            "AND corner_order_4 > 0 LIMIT 1"
+        ).fetchone() is not None,
+    )
+    if corner_present:
+        c_avg, c_chg, c_n = _cached(
+            cache,
+            ("corner_stats", blood, before),
+            lambda: recent_corner_stats(conn, blood, before),
+        )
+        feat["recent_4corner_avg_position"] = c_avg
+        feat["recent_4corner_position_change"] = c_chg
+        feat["recent_4corner_samples"] = c_n
 
     jockey_code = horse.get("jockey_code", "")
     rate, n = _cached(

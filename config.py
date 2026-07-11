@@ -9,7 +9,28 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
+# python-dotenv は任意依存にする。診断/監査系を素の `python` (dotenv 未導入) で
+# 起動しても config が ModuleNotFoundError で落ちないよう、無ければ .env を素朴に
+# 読む no-op フォールバックにする (2026-07-06: audit を素の python で実行 →
+# `No module named 'dotenv'` で全ツールが起動不能だった実機報告への対処)。
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:
+    def load_dotenv(path: "Path | str | None" = None, *_a, **_k) -> bool:
+        """dotenv 未導入時の簡易フォールバック。KEY=VALUE 行だけ環境変数へ流し込む
+        (export/クォート/補間等は非対応。本格運用は python-dotenv を導入すること)。"""
+        if path is None:
+            return False
+        p = Path(path)
+        if not p.exists():
+            return False
+        for line in p.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+        return True
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
@@ -50,6 +71,18 @@ DATA_PERIODS: dict[str, dict[str, str]] = {
     "test":       {"from": "20240101", "to": "20251231"},   # 2 年 / 採用判断・A/B
     "production": {"from": "20260101", "to": "20261231"},   # 本番 + HOLDOUT
 }
+
+# コーナー通過順位 (corner_order_*) のバイト位置が実 .jvd で検証済みか。
+# probe_corner_offsets --expect/--ra を実機で緑化したら True に反転する。
+# webapp はこのフラグ 1 箇所で「先行力(暫定)」ラベルの要否を決める (probe 状態と
+# 表示ラベルの単一情報源。緑化後の (暫定) 外し忘れ防止 — 2026-07-06 検証監査)。
+CORNER_BYTES_VERIFIED: bool = False
+
+# HN (繁殖馬マスタ) の産地名を webapp で表示してよいか (バイト位置確定 + DB 反映済みか)。
+# バイト位置は 2026-07-06 実 .jvd で -2 ずれと確定し parse_hn を 208 に修正済み。ただし
+# 既存 DB は旧オフセットの文字化け値を保持しているため、BLOD 再取込 (OPERATION.md §9-4) +
+# 産地の目視検証を通すまで False で据え置く (誤データを出さない単一情報源)。再取込・検証後に True。
+HN_BIRTHPLACE_VERIFIED: bool = False
 
 
 # F3 PIT ゲート (2026-07-03 ユーザ確定, docs/F3_MARKET_RESIDUAL_DESIGN.md D1)。

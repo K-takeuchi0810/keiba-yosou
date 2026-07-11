@@ -5,7 +5,42 @@ description: keiba-yosou プロジェクトの **現状スナップショット*
 
 # keiba-yosou プロジェクト 現状スナップショット
 
-## 1 行サマリ
+## ⚠ 2026-07-05 更新 (この節が最新。以降の節は歴史的記録として残置)
+
+**下記の旧サマリ (P12 184%) は崩壊済み** — P12 は PRODUCTION 2026 で 45% に暴落
+(CLAUDE.md 必須ルール 4 の教訓)。さらに 2026-06-14 の答え合わせ診断でモデルの
+EV/Kelly 信号は **anti-predictive** と確証され、`BUY_FILTER_DEFAULT` の min_kelly は
+撤廃済み (現 config.py 参照。利益エッジは現在主張していない)。
+
+### 2026-06-29〜07-05 セッションの成果 (branch: claude/feature-bias-validation-yl5key)
+
+1. **`scripts/bias_scan.py`** — 層別特徴量バイアス検証 (場/馬場/天候/開催進行/kaiji 等 ×
+   calibration gap、Wilson CI + min_n + 多重比較開示、subject=all はレース内相関補正済)。
+   重み変更の前提 3 条件 (多重補正・2024/2025 再現・holdout) を docstring に明記。
+2. **rubric v4** (`.claude/agents/_rubric.md`) — 改修タイプ別ゲート (type-A〜E)。P25 固有
+   ゲートは type-A のみ適用、非該当は N/A (NOT_EVALUABLE 乱発の誤発火を是正)。
+3. **`webapp/`** — SmartRC 踏襲の独自出馬表 (stdlib http.server + jinja2、127.0.0.1)。
+   出馬表(系統色分け+補助指標サブ行)/傾向集計(回収率 bootstrap CI 付)/当日速報。
+   **予想生成に非干渉**: `db.open_db_readonly` (mode=ro+query_only、migration 非実行)。
+4. **コーナー順位 + RA ラップ ingest** — SE corner_order_1..4 (352/354/356/358。旧 394 は
+   1着馬血統番号誤読の実バグを修正)、races に front3f_time 等 + lap_times。
+   `predictor.features.recent_corner_stats` (先行力/差し脚) は **scoring 未配線の dormant**。
+5. **★hard gate (未消化・次セッション最優先)**: 実 .jvd で
+   `python -m scripts.probe_corner_offsets <SE.jvd> --expect race_id:馬番:c1:c2:c3:c4` と
+   `... <RA.jvd> --ra` を**緑化するまで corner/lap の backfill・利用は禁止**。
+   緑化後: `ingest_all(force=True)` で backfill → webapp 出馬表の 4角avg 表示が自動有効化。
+
+### 次の優先課題 (2026-07-05 時点)
+
+1. probe 2 種の緑化 → backfill (上記 hard gate)
+2. bias_scan を実 DB で実行し、layered gap の実測 (subject=pick/all 両方、--save)
+3. 先行力指標の scoring 配線前の**単独 ablation backtest** (配線 PR の受入条件)
+4. Fable 5 復旧時に expert-review を fable で再採点 (現行 scorecard は Opus 代替)
+
+最新 scorecard: `20260705_0140_webapp_parity.md` (7 名全員 PASS)。直近の全 scorecard は
+20260629_2344 以降を参照。**以下の旧節の数値 (184%/min_odds 8-20 等) は現状と異なる。**
+
+## 1 行サマリ (歴史的記録: 2026-05-15 時点 — ⚠上記更新で上書き済み)
 
 JRA-VAN JV-Link を使うローカル競馬予想 GUI。**2026-05-15 P12 wl5_pop_1_2 採用** で TEST 2024-25 buy_only 回収率 **184.0%** / **Bootstrap CI [116.4%, 266.5%]** / 収支 **+55,360 円** を達成。CI 下限ですら +100% 超え = 統計的に勝ち戦略確立。LGBM v4 (84 features 含 Tier 1 場別相性) + 3-fold walk-forward sweep (69 filters) で `wl5_pop_1_2` (5 場 × 1-2 人気) を最強と検出。年間 ~330 戦。
 

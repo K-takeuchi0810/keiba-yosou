@@ -1,0 +1,83 @@
+{% extends "base.html.j2" %}
+{% block body %}
+<p class="muted">
+  <a class="backlink" href="/">← 開催一覧</a>
+  {% if nav.prev %}<a class="backlink" href="/race?date={{ nav.date }}&amp;track={{ nav.track }}&amp;kaiji={{ nav.kaiji }}&amp;nichiji={{ nav.nichiji }}&amp;num={{ nav.prev }}">‹ 前R</a>{% endif %}
+  {% if nav.next %}<a class="backlink" href="/race?date={{ nav.date }}&amp;track={{ nav.track }}&amp;kaiji={{ nav.kaiji }}&amp;nichiji={{ nav.nichiji }}&amp;num={{ nav.next }}">次R ›</a>{% endif %}
+</p>
+<h1>{{ race.track_name }} {{ race.race_num_int }}R <span class="muted">{{ race.date_label }}</span></h1>
+<div class="card">
+  <div>{{ race.name }}</div>
+  <div class="muted">{{ race.surface_label }}{{ race.distance }}m ・ {{ race.weather }} ・ 馬場 {{ race.going }} ・ {{ race.starter_count }}頭</div>
+</div>
+
+<div class="banner warn">◎印・予想は診断支援であり買い推奨ではありません。calibration 検証済みの確率ではない画面表示です。</div>
+
+<h2>出馬表（血統系統・予想）</h2>
+<div class="tablewrap">
+<table>
+  <thead><tr>
+    <th class="num">枠</th><th class="num">馬番</th><th>印</th><th>馬名</th>
+    <th>系統(父/母父)</th>
+    <th class="opt-col">父</th><th class="opt-col">母父</th><th>騎手</th>
+    <th class="num">人気</th><th class="num">オッズ</th>
+  </tr></thead>
+  <tbody class="pairs">
+  {% for h in horses %}
+    {# alt は mainrow/subrow の両方に付与 (1 頭=2 行ペアの縞。nth-child 非依存) #}
+    {% set alt = ' alt' if loop.index0 % 2 else '' %}
+    <tr class="mainrow{{ alt }}">
+      <td class="num">{{ h.waku }}</td>
+      <td class="num">{{ h.horse_num }}</td>
+      <td class="mark {{ 'mark-honmei' if h.mark == '◎' else '' }}">{{ h.mark }}</td>
+      <td>{{ h.horse_name }}</td>
+      <td class="lines">
+        {# 名前が空 = データ無 (「-」)。「その他」(分類不能) と区別する — gui-ux 監査指摘 #}
+        {% if h.sire %}
+        <div><span class="line-dot" style="background:{{ h.line_color }}"></span>{{ h.line_short }}{% if h.country_key != 'unknown' %}<span class="ctag ctag-{{ h.country_key }}">{{ h.country_label }}</span>{% endif %}</div>
+        {% else %}<div>-</div>{% endif %}
+        {% if h.dam_sire %}
+        <div class="damline"><span class="line-dot" style="background:{{ h.dam_line_color }}"></span>{{ h.dam_line_short }}{% if h.dam_country_key != 'unknown' %}<span class="ctag ctag-{{ h.dam_country_key }}">{{ h.dam_country_label }}</span>{% endif %}</div>
+        {% else %}<div class="damline">-</div>{% endif %}
+      </td>
+      <td class="muted opt-col">{{ h.sire }}{% if h.sire_origin %}<span class="origin">({{ h.sire_origin }})</span>{% endif %}</td>
+      <td class="muted opt-col">{{ h.dam_sire }}{% if h.dam_sire_origin %}<span class="origin">({{ h.dam_sire_origin }})</span>{% endif %}</td>
+      <td>{{ h.jockey }}</td>
+      <td class="num">{{ h.popularity or '-' }}</td>
+      <td class="num">{{ h.odds or '-' }}</td>
+    </tr>
+    <tr class="subrow{{ alt }}">
+      <td colspan="10">
+        {% if h.detail.empty %}補助データ無し{% else %}
+        近3走 {{ h.detail.recent3 }} ・ 上T {{ h.detail.agari_t }} ・ {{ h.detail.leg }} ・
+        斤{{ h.detail.burden }} ・ 馬体{{ h.detail.weight }} ・ {{ h.detail.rest }} ・
+        {{ h.detail.dist_change }} ・ 父×馬場 {{ h.detail.sire_apt }}{% if h.detail.pace %} ・ {{ h.detail.pace }}{% endif %}
+        {% endif %}
+        {# 3 代血統。各項目を inline-block で括り、375px でも項目境界で折り返す
+           (名前の途中で折れない — mobile 監査 S2)。狭幅 (≤480px) では父/母父の
+           列 (opt-col) が畳まれる一方この行は残る: gen-3 の置き場が他に無いため
+           の意図的な非対称 (opt-col へ移さないこと)。 #}
+        {% if h.ped_parts %}<div class="pedline">{% for p in h.ped_parts %}<span class="peditem">{{ p }}</span>{% endfor %}</div>{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted">系統=上段が父の大系統・下段(小)が母父の大系統。いずれも国系統バッジ(亀谷分類の日本型/米国型/欧州型・暫定)を併記。
+補助行の 父母父・母母父にも 系統・国系統 を出すので、父・母父・父母父・母母父の4世代すべてで系統と国系統が読める。
+系統・国系統は血統の分類・出自表示であり、
+成績・期待値の指標ではない（傾向集計は父系統・母父系統・父/母父国系統の各軸に対応）。
+「その他」=系統判別不能（主要系統辞書・血統遡上のいずれでも分類できず）。11大系統外でも名の通った系統は実系統名で表示（国系統は暫定）。国系統バッジ無し=判別不能。
+{% if show_origin %}父/母父の丸括弧=産地（狭い画面では父/母父列ごと省略）。
+補助行の 父母父・母母父=3代血統で、丸括弧は 系統・国系統/産地（産地未取込時は系統・国系統のみ）。{% else %}
+補助行の 父母父・母母父=3代血統で、丸括弧は 系統・国系統。産地はデータ位置の検証未完了のため現在非表示（検証完了後に表示）。{% endif %}
+予想印・確率は predictor/rules.py（診断用）。
+サブ行: 近3走=着順(新しい順) / 上T=同馬場・同距離帯の近走での最速上がり3F・(近走最高N位)=近走で記録した最良のレース内上がり順位(最速タイムと別レースの場合あり) / 脚質※=推定 /
+父×馬場=父産駒の同馬場複勝率(n=標本数、丸括弧=標本少の参考値) /
+先行力4角avg=直近の4角通過順位平均(小=前で運ぶ)・上げ=4角→着順の平均上昇(正=差し脚) / ※=推定・暫定 / -=データ無。</p>
+<p class="muted">SmartRC との差異: 「テン1F・CR・シェア」列は JV-Data に該当値が無いため未対応。
+「先行力」は 4 角の位置取りで、SmartRC の「テン」(序盤ダッシュ力) とは別概念です。
+先行力の(暫定)表記は、取込データの検証が未完了で確定していない意味です（検証完了後に外れます）。
+上がり3F は検証済みデータです。</p>
+{% endblock %}

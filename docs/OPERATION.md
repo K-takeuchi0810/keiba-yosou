@@ -202,3 +202,192 @@ Copy-Item data\fetch_state.json data\backup\fetch_state_$(Get-Date -Format yyyyM
 - 年間 +80% = 月平均 +6.7% (= 100 円ベースで月 6.7 円利益 / 100 円賭金)
 - 月次は -20% 〜 +50% の variance を許容
 - 連続 3 ヶ月 -10% 未満 → 自動サスペンド + 戦略再選定
+
+## 9. 3代血統 (父母父/母母父)・産地の反映と検証 (2026-07-05 追加)
+
+webapp 出馬表の 父母父・母母父・産地表示は、UM (競走馬マスタ) の 3 代血統と
+HN (繁殖馬マスタ) の産地名を使う。**列の追加は writer 起動時に自動** だが、
+**中身は再取込しないと全馬 NULL のまま** (ingested_files に記録済みのため)。
+
+### 9-1. データ反映手順 (実機・32bit venv)
+
+```
+.venv32/Scripts/python.exe -c "from jvlink_client.ingest import ingest_all; \
+    print(ingest_all(force=True, dataspecs=['DIFN', 'BLOD']))"
+```
+
+- **必ず dataspecs を DIFN (UM) と BLOD (HN) に限定する**。
+- 補足: HS (HOSE) の horse_masters 書込みは 2026-07-05 に INSERT OR IGNORE 化
+  したため、dataspec 無指定の force でも UM 行が空文字で潰れることは無くなったが、
+  無指定 force は全 dataspec を再取込して数時間かかるので時間の無駄。
+
+### 9-2. バイト位置の実機検証 (状態: UM=確定済み / HN=-2 ずれ確定・修正済み)
+
+**UM idx8/idx12 (父母父/母母父) は 2026-07-06 実 DB で確定済み** — ディープ産駒 6 頭
+すべての父母父 = Alzao と一致、充填 89-94% (scripts/verify_pedigree.py の出力)。
+
+**HN の birth_year 以降の tail は -2 バイトずれが確定 → parse_hn を修正済み (2026-07-06)**。
+`scripts.probe_hn_offsets` の実 .jvd (HNVM2020…) ダンプで、国内産レコードの産地が
+従来 210 では '平町…11'(先頭欠け+繁殖番号混入) だったのに対し **208 で '安平町' と
+正しく読め**、かつ 持込区分=0(国内)+産地あり / =9(外国)+産地空 が相関して全フィールドが
+-2 補正で整合した。修正後の正しいオフセット:
+
+| フィールド | 旧(誤) | 新(-2) |
+|---|---|---|
+| birth_year | 197 | **195** |
+| sex/breed/coat | 201/202/203 | **199/200/201** |
+| 持込区分 | 205 | **203** |
+| 輸入年 | 206 | **204** |
+| 産地名(20) | 210 | **208** |
+| sire_breeding_num | 230 | **228** |
+| dam_breeding_num | 240 | **238** |
+
+**この -2 は sire_breeding_num にも及んでいた = 血統遡上 (traversal) が繋がらなかった
+主因の 1 つ**。修正を反映するには BLOD 再取込が必須 (§9-4 の runbook)。反映手順:
+
+- 実機で `git pull` (parse_hn 修正を取得) →
+- `.venv32\Scripts\python.exe -m scripts.bootstrap --dataspecs BLOD` で BLOD 再取込
+  (breeding_horses を新オフセットで埋め直す) →
+- `python -m scripts.audit_sire_lines` で **traversal_hit が 0% から上昇**することを確認 →
+- 産地の目視検証 (下記) を通過したら config.HN_BIRTHPLACE_VERIFIED=True に反転。
+
+**gen3 の順列取り違えと HN 数字フィールドの入替は無音で誤る**ため、確認を省略しない。
+
+1. **UM gen3 の血統表突合** (順列ミスはこれでしか検出できない・確定済みだが再確認可):
+   ```sql
+   SELECT horse_name, sire_name, sire_dam_sire_name, dam_dam_sire_name
+   FROM horse_masters WHERE sire_name = 'ディープインパクト' LIMIT 5;
+   ```
+   → sire_dam_sire_name (父母父) が **Alzao** (ディープの母ウインドインハーヘアの父)
+   になっているか。キズナ産駒でも同様に父母父 = **ストームキャット**
+   (キズナの母父) を確認。netkeiba/JBIS の血統表と 2-3 頭突合。
+2. **HN 産地名の目視**:
+   ```sql
+   SELECT birthplace, COUNT(*) FROM breeding_horses
+   GROUP BY birthplace ORDER BY 2 DESC LIMIT 30;
+   ```
+   → 上位が 安平町/新冠町/日高町/米/愛/英 等の地名・国名か。
+   **数字が混入していたら 205-229 の順序疑い** → 表示を止めて再調査。
+3. **数字フィールドの入替検出** (無音故障対策):
+   - `SELECT DISTINCT mochikomi_kubun FROM breeding_horses` → {0,1,2} 程度の小集合か
+   - `SELECT DISTINCT import_year ...` → '0000' または 19xx/20xx の 4 桁のみか
+   - クロス整合: import_year が実年の馬は birthplace が国名系、内国産は '0000'。
+     既知例: ノーザンテースト = 加 (1971 生・輸入)。
+4. **充填率**: `SELECT COUNT(*) FILTER (WHERE sire_dam_sire_name != '') * 1.0 / COUNT(*)
+   FROM horse_masters` → force 再取込後に 9 割超が期待値。
+5. 異常時: webapp の表示は自動縮退しないので、該当フィールドの表示を止めてから
+   parser のオフセットを再調査 (docs/JV-Data4901.pdf §13 UM / §18 HN と照合)。
+
+あわせて `python -m scripts.audit_sire_lines` (系統辞書の独立突合、scorecard
+20260705_0500 の残作業) も同じセッションで流すと効率が良い。
+
+### 9-3. 「その他」削減の効果測定 (英語名辞書・仮名正規化の検証)
+
+2026-07-06 に「その他」の主因 2 つ (JV-Data の大書き仮名 vs 辞書小書き仮名の差、
+海外祖先の英語名格納) を _normalize (NFKC+仮名+小文字+記号畳み込み) と英語名辞書で
+対処した。効果は実 DB でしか測れないため以下を実行:
+
+```
+python -m scripts.audit_sire_lines
+```
+
+- gen3 列 (父母父/母母父) を含む 4 世代の dict_hit / traversal_hit / unknown 内訳が出る。
+- **unknown 上位に英語名 (Mr.Prospector 系のピリオド/空白変種、Sadler's Wells 系の
+  アポストロフィ、全角ローマ字) や既知種牡馬が残っていれば、その実綴りを辞書に追記**
+  (綴り変種は _normalize で大半吸収されるが、想定外表記は残り得る)。
+- 改修前後の unknown 率比較は HEAD~1 checkout で再実行。
+- **残る「その他」の一部は正しい** (パーソロン系メジロマックイーン、In Reality 系
+  ダノンレジェンド 等の 11 大系統外 = 誤答よりその他が誠実)。これらは辞書に載せない。
+
+直接クエリで残存英語名を確認する場合 (gen3 両列):
+```sql
+SELECT sire_dam_sire_name, COUNT(*) FROM horse_masters
+WHERE sire_dam_sire_name GLOB '*[A-Za-z]*' GROUP BY 1 ORDER BY 2 DESC LIMIT 30;
+```
+
+### 9-4. traversal_hit=0 (「その他」大量残存) の切り分けと BLOD 埋め直し runbook (2026-07-06 追加)
+
+2026-07-06 実機 audit で `breeding_horses=6957 行 / traversal_hit=0.0% / unknown=56.5%` を観測。
+父系遡上 (traversal) が全く効いておらず、「その他」大量残存の主因は辞書不足でなく **血統遡上
+データ (breeding_horses=HN 繁殖馬) の欠落**。切り分けと修復の順序:
+
+**前提 (2026-07-06 済)**: HN オフセットの -2 ずれは実 .jvd で**確定・parse_hn 修正済み**
+(§9-2。sire_breeding_num=228 等)。**再 probe は不要** — 既存 breeding_horses は旧オフセットの
+garbage 値を保持しているので、下記の再取込で新オフセット値に置き換えるのが要点。
+
+1. **audit で現状を保存** (before): `python -m scripts.audit_sire_lines --top 40 > data/audit_before.txt`。
+   `breeding_horses` 行数と `traversal_hit` を記録 (今回の基準は `data/audit_sire_lines/20260706_before_blod.txt`)。
+2. **parse_hn 修正を取得**: 実機で `git pull` (HN -2 補正入り)。
+3. **BLOD を一括取込** (option=4 セットアップ。差分でなく繁殖馬マスタ全体):
+   ```
+   .venv32\Scripts\python.exe -m scripts.bootstrap --dataspecs BLOD
+   ```
+   (全 dataspec 5-15GB を再取得せず BLOD=HN だけ埋め直す。JRA-VAN フルデータ契約が前提。
+   upsert は breeding_num PK の REPLACE なので旧 garbage 行は新オフセット値へ決定的に置換される。)
+4. **audit を再実行で閉ループ確認** (after): `python -m scripts.audit_sire_lines --top 40`。
+   **traversal_hit が 0% から上昇し unknown が低下**したら「旧オフセット/行数不足」が主因だったと確定。
+   **上がらない場合の切り分け** (HN 内部だけに戻さない):
+   - (a) breeding_horses 行数が増えていない → BLOD 取得自体が失敗/HN 未取得 (probe_hn_offsets の
+     インベントリで HN ファイル数を確認)。
+   - (b) 行は増えたが traversal 0% → 遡上の**入口**の疑い: UM(競走馬マスタ)側の sire_breeding_num
+     と HN の breeding_num(PK) の**採番系が突合しない** or UM gen3 の breeding_num フィールド位置ずれ。
+     `SELECT sire_breeding_num FROM horse_masters LIMIT 5` と `SELECT breeding_num FROM breeding_horses
+     LIMIT 5` の桁・体系を突合する。
+5. **深祖 founder は BLOD では終端しない**: Nasrullah/Man o'War 等の古い海外始祖は JRA-VAN の
+   繁殖馬マスタに個別行が無いのが通例。中間祖先まで BLOD で chain が通っても、最終停止は
+   `LINE_BY_SIRE`/`FOUNDERS` の名前照合が担う。よって**辞書 (founder) 併用は恒久的に必要**
+   (辞書は「深祖の終端」、BLOD は「中間 chain の充填」で役割が異なる)。
+6. 上記 4 で traversal_hit が上昇し、産地の目視検証 (§9-2) も通れば
+   `config.HN_BIRTHPLACE_VERIFIED=True` に反転して産地表示を有効化する。
+
+## 10. 亀谷公式リスト突合 (国別血統タイプの確定手順) (2026-07-05 追加)
+
+出馬表の国系統バッジ・傾向集計の父/母父国系統軸は、亀谷敬正の「国別血統」
+(日本型/米国型/欧州型) を `predictor/sire_lines.py` の COUNTRY_BY_LINE (系統既定) +
+COUNTRY_OVERRIDE (種牡馬個別) で近似している。**これは暫定分類**で、確定には
+会員サイトの公式リストとの手動突合が必要 (JV-Link 内に独立ソースが無いため
+`audit_sire_lines.py` のような DB 突合では確定できない)。
+
+### 10-1. 突合の対象 (優先順)
+
+コード内 docstring で「公式リスト未突合」と明記済みの枝を優先確認する:
+
+1. **キングマンボ系の米/日 split** — キンカメ/ロードカナロア/ドゥラメンテ等。現状
+   一律 usa (Mr.Prospector 基盤)。2022 改訂前は「日本型」とされた時期があり、
+   改訂後の公式帰属を確認。JRA 最頻出系統のため実害大。
+2. **マクフィ** (ドバウィ系=欧州?)、**チーフベアハート/タリスマニック** (北米発展?)。
+3. **プリンスリーギフト枝** (テスコボーイ/サクラバクシンオー/ビッグアーサー等)。
+4. **ノーザンテースト** (仏 G1 → eur 可)。
+5. **ナスルーラ系の Never Bend 直系枝の米/欧 (2026-07-06)** — ミルリーフ(欧州発展)は
+   `COUNTRY_OVERRIDE`=eur、その子孫ミルジョージも eur・Red God 欧州枝イエローゴッドも eur
+   に補正済。一方 Never Bend 直仔ブレイヴエストローマン・Never Beat 枝アローエクスプレスは
+   nasrullah 既定の usa のまま (Never Bend 自体は米国馬で、eur は Mill Reef 枝固有という
+   判断)。公式突合で Never Bend 系全体の型を確認し、枝ごとの usa/eur 割りを確定する。
+6. **11 大系統外の 3 系統 (2026-07-06 追加)** — personon (パーソロン系: シンボリルドルフ/
+   トウカイテイオー/メジロマックイーン枝)、stsimon (セントサイモン系: Ribot/Princequillo/
+   Round Table 枝)、hyperion (ハイペリオン系: Hyperion/Aureole/Swaps 枝)。現状いずれも
+   `COUNTRY_BY_LINE` で **eur (欧州型) 暫定**。founder が古典的欧州スタミナ系で非 SS のため
+   保守既定として eur を置いたが、亀谷公式リスト未突合。特に Princequillo/Round Table 枝は
+   北米競走の実績があり型論では usa 寄りの見方もあるため要確認。
+
+### 10-2. 突合手順
+
+1. 亀谷氏の会員サイト (血統ビーム) / 書籍『血統ビーム 名種牡馬読本』の国別分類表を参照。
+2. 上記対象種牡馬の公式タイプと `classify_country(名前, line_key)` の出力を突合。
+   ```
+   .venv32/Scripts/python.exe -c "from predictor.sire_lines import classify_country, classify_sire; \
+     [print(n, classify_country(n, classify_sire(n))) for n in ['キングカメハメハ','ロードカナロア','マクフィ','サクラバクシンオー','ノーザンテースト']]"
+   ```
+3. 不一致は `COUNTRY_OVERRIDE` に種牡馬名→正しいタイプを追記
+   (系統既定値と異なる個別例外のみ。既定値そのものがずれていれば COUNTRY_BY_LINE を修正)。
+4. **2022 年 8 月以降の再改訂の有無**も確認 (亀谷氏は分類を定期的に見直す。
+   本実装のカットオフは 2026-01)。
+5. 追記後 `tests/test_sire_lines.py` の country 系テストに regression を 1 行固定。
+
+### 10-3. 確定済み (2026-07-05 予想ロジック監査で補正)
+
+- ND 北米発展枝 (クロフネ/フレンチデピュティ/マインドユアビスケッツ/War Front 枝) → 米国型
+- ロベルト系米国残留枝 (ナダル) → 米国型
+- ナスルーラ系欧州分枝 (トニービン/バゴ/ジャングルポケット/レインボウクエスト/
+  タマモクロス等) → 欧州型
+これらは血統事実として確度が高く override 済み。残りは 10-1 の未突合枝。
