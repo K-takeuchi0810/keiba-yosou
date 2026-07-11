@@ -592,3 +592,27 @@ CREATE TABLE IF NOT EXISTS start_time_changes (
     data_created   TEXT,
     PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji, race_num, announced_time)
 );
+
+-- F3: 単勝オッズの PIT スナップショット時系列 (2026-07-03, docs/F3_MARKET_RESIDUAL_DESIGN.md)。
+-- horse_races.win_odds (最新 1 枚, UPDATE) とは別に、取得時刻ごとの履歴を INSERT で蓄積する。
+-- fetched_at は ISO8601。オッズドリフト特徴の唯一の源。
+-- ★PIT 規律: 特徴計算に使ってよいのは fetched_at ≤ 発走時刻 − PIT_GATE_MINUTES のみ
+--   (config.PIT_GATE_MINUTES=10、backtest と live で同一値)。発走後スナップも監査用に
+--   保存はするが、predictor/pit_gate.py のフィルタを通さない参照は禁止。
+CREATE TABLE IF NOT EXISTS odds_snapshots (
+    race_year      TEXT NOT NULL,
+    race_month_day TEXT NOT NULL,
+    track_code     TEXT NOT NULL,
+    kaiji          TEXT NOT NULL,
+    nichiji        TEXT NOT NULL,
+    race_num       TEXT NOT NULL,
+    horse_num      TEXT NOT NULL,
+    fetched_at     TEXT NOT NULL,   -- ISO8601 (取得時刻)
+    win_odds       INTEGER,         -- 0.1 倍単位
+    win_popularity INTEGER,
+    source         TEXT,            -- 0B31 / morning / backfill_0B31 等
+    PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji, race_num, horse_num, fetched_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_odds_snapshots_race
+    ON odds_snapshots (race_year, race_month_day, track_code, kaiji, nichiji, race_num);

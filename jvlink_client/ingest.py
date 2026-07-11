@@ -159,7 +159,15 @@ def ingest_file_dispatch(
                 upsert_payout(conn, parse_hr(rec))
                 hr_count += 1
             elif rec_type == "O1":
-                update_win_odds(conn, parse_o1(rec), fetched_at=fetched_at, dataspec=dataspec or "0B31")
+                # RACE dataspec の O1 は確定オッズ (data_div=5)。historical=True で
+                # odds_fetched_at=NULL (信頼) を維持し、リアルタイム snapshot を
+                # 上書きしない (2026-07-03: mtime 刻印で全レースが odds ゲート除外
+                # される事故の再発防止)。
+                update_win_odds(
+                    conn, parse_o1(rec), fetched_at=fetched_at,
+                    dataspec=dataspec or "0B31",
+                    historical=(dataspec == "RACE"),
+                )
                 o1_count += 1
             elif rec_type == "UM":
                 upsert_horse_master(conn, parse_um(rec))

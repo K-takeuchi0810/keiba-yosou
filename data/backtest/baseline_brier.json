@@ -1,11 +1,11 @@
 {
-  "brier_score": 0.059658,
-  "log_loss": 0.233896,
-  "n_records": 3450,
+  "brier_score": 0.060354,
+  "log_loss": 0.215345,
+  "n_records": 3589,
   "source": "measure_recent_brier (本番 pipeline と同一経路)",
   "period": [
-    "20260514",
-    "20260613"
+    "20260603",
+    "20260703"
   ],
-  "frozen_at": "2026-06-13T04:08:39"
+  "frozen_at": "2026-07-03T11:12:41"
 }

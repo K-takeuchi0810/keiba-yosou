@@ -105,3 +105,38 @@ def test_update_win_odds_applies_newer_snapshot_and_null():
     row = conn.execute("SELECT win_odds, odds_fetched_at FROM horse_races").fetchone()
     assert row["win_odds"] == 60
     assert row["odds_fetched_at"] == "2026-06-07T12:20:00"
+
+
+def test_update_win_odds_historical_keeps_null_fetched_at():
+    """RACE dataspec の確定オッズは odds_fetched_at=NULL (信頼) を維持する。
+
+    2026-06-30 バックフィルが確定オッズ行にファイル mtime (発走後) を刻印し、
+    Step1 odds ゲートが 2021-2026 の全 261k 行を post-start 扱いにした事故の回帰。
+    """
+    conn = _conn()
+    _add_race(conn, "01", confirmed=1)
+    conn.commit()
+
+    n = update_win_odds(conn, _o1([("01", 45, 1)]), fetched_at="2026-06-30T18:00:00",
+                        dataspec="RACE", historical=True)
+    assert n == 1
+    row = conn.execute("SELECT win_odds, odds_fetched_at, odds_dataspec FROM horse_races").fetchone()
+    assert row["win_odds"] == 45
+    assert row["odds_fetched_at"] is None, "確定オッズに発走後 mtime を刻印しない"
+    assert row["odds_dataspec"] == "RACE"
+
+
+def test_update_win_odds_historical_does_not_clobber_realtime_snapshot():
+    """historical はリアルタイム PIT snapshot (odds_fetched_at 非NULL) を上書きしない。"""
+    conn = _conn()
+    _add_race(conn, "01", confirmed=0)
+    conn.commit()
+
+    # 発走前スナップショット (mining) が先にある
+    update_win_odds(conn, _o1([("01", 80, 3)]), fetched_at="2026-06-07T12:00:00", dataspec="0B31")
+    # 後から確定オッズを historical 取り込み → スキップされる
+    n = update_win_odds(conn, _o1([("01", 45, 1)]), dataspec="RACE", historical=True)
+    assert n == 0
+    row = conn.execute("SELECT win_odds, odds_fetched_at FROM horse_races").fetchone()
+    assert row["win_odds"] == 80, "PIT snapshot が確定オッズで潰されない"
+    assert row["odds_fetched_at"] == "2026-06-07T12:00:00"
