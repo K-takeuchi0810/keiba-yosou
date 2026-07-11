@@ -636,8 +636,21 @@ LINE_BY_SIRE: dict[str, str] = {
     "Private Account": "teddy",                               # 父 Damascus (米。→ Sun Teddy → Teddy)
     "Cutlass": "teddy",                                       # 父 Damascus (米。→ Sun Teddy → Teddy)
     "カウアイキング": "native", "Kauai King": "native",         # 父 Native Dancer (米ダービー/プリークネス)
-    "ノノアルコ": "nearctic", "Nonoalco": "nearctic",           # 父 Nearctic (仏 2000 ギニー。ND 非経由の欧州 Nearctic 枝)
+    "ノノアルコ": "nearctic", "Nonoalco": "nearctic",           # 父 Nearctic (英 2000 ギニー(仏調教)。ND 非経由の欧州 Nearctic 枝)
     "Understanding": "teddy", "アンダースタンディング": "teddy",  # → Promised Land → Palestinian → Sun Again → Sun Teddy → Teddy (米)
+    # --- 実 DB 洗い出し 第2バッチ (確度の高い米/欧の著名母父。国別は全て line 既定) ---
+    "Nashua": "nasrullah",                                    # 父 Nasrullah (米)
+    "Bold Bidder": "nasrullah",                               # 父 Bold Ruler → Nasrullah (米)
+    "Chieftain": "nasrullah",                                 # 父 Bold Ruler → Nasrullah (米)
+    "Jacinto": "nasrullah",                                   # 父 Bold Ruler → Nasrullah (米)
+    "Successor": "nasrullah",                                 # 父 Bold Ruler → Nasrullah (米)
+    "Bold Reasoning": "nasrullah",                            # → Boldnesian → Bold Ruler → Nasrullah (Seattle Slew 父)
+    "Majestic Prince": "native",                              # 父 Raise a Native → Native Dancer (米ダービー)
+    "Raise a Cup": "native",                                  # 父 Raise a Native → Native Dancer (米)
+    "Native Charger": "native",                               # 父 Native Dancer (米)
+    "Best Turn": "turnto",                                    # 父 Turn-to (米)
+    "The Minstrel": "northern",                               # 父 Northern Dancer (英ダービー/KG。欧州)
+    "Thatching": "hyperion",                                  # → Thatch → Forli → Aristophanes → Hyperion (愛スプリンター)
     # マンノウォー系は上で定義済 (ヴェンチア 等)
     # 注: なお確度の低い/真に不明な系統は依然 unknown (グレー)。誤答よりも
     # 「その他」が誠実。ダノンレジェンド (父 Macho Uno → Holy Bull → Great Above 系)
@@ -824,7 +837,7 @@ COUNTRY_OVERRIDE: dict[str, str] = {
     "Private Account": "usa",    # 父 Damascus (米)
     "Cutlass": "usa",            # 父 Damascus (米)
     # nearctic 系のうち仏 Nearctic 枝 → 欧州型 (nearctic 既定=usa の例外)。
-    "ノノアルコ": "eur", "Nonoalco": "eur",  # 父 Nearctic (仏 2000 ギニー、ND 非経由の欧州枝)
+    "ノノアルコ": "eur", "Nonoalco": "eur",  # 父 Nearctic (英 2000 ギニー(仏調教)、ND 非経由の欧州枝)
     "Understanding": "usa", "アンダースタンディング": "usa",  # teddy 系 Sun Teddy 米国枝 (Damascus と同枝)
     # 英語名の併記 (3 代血統は海外祖先を英語で格納。カナ側 override と国別を一致させ、
     # 表記で日/米/欧が割れないようにする — 2026-07-06 profitability/prediction-logic)。

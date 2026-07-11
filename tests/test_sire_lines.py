@@ -229,6 +229,9 @@ def test_english_katakana_alias_consistency():
         # (code-quality 監査の推奨: 個別 regression だけに頼らない)。
         ("High Top", "ハイトップ"), ("Hold Your Peace", "ホールドユアピース"),
         ("Silver Shark", "シルバーシャーク"),
+        # 2026-07-08 実 DB 洗い出しで en/kana 両側収載したもの (汎用ガードにも登録)。
+        ("Kauai King", "カウアイキング"), ("Nonoalco", "ノノアルコ"),
+        ("Understanding", "アンダースタンディング"),
     ]
     for en, ja in pairs:
         assert sl.classify_sire(en) == sl.classify_sire(ja), f"{en} != {ja} (系統)"
@@ -623,10 +626,33 @@ def test_batch_unknown_csv_top_sires_2026_07_08():
         "Cutlass": ("teddy", "usa"),             # 父 Damascus
         "Kauai King": ("native", "usa"),         # 父 Native Dancer
         "カウアイキング": ("native", "usa"),
-        "Nonoalco": ("nearctic", "eur"),         # 父 Nearctic (仏枝)
+        "Nonoalco": ("nearctic", "eur"),         # 父 Nearctic (英2000ギニー・仏調教)
         "ノノアルコ": ("nearctic", "eur"),
         "Understanding": ("teddy", "usa"),       # → Promised Land → … → Sun Teddy → Teddy (米)
         "アンダースタンディング": ("teddy", "usa"),
+    }
+    for name, (line, country) in cases.items():
+        k = sl.classify_sire(name)
+        assert k == line, f"{name}: {k} != {line}"
+        assert sl.classify_country(name, k) == country, name
+        assert sl.line_label_short(k) != "その他", name
+
+
+def test_batch_unknown_csv_top_sires_round2_2026_07_08():
+    """実 DB 洗い出し 第2バッチ (確度の高い米/欧の著名母父。国別は全て line 既定)。"""
+    cases = {
+        "Nashua": ("nasrullah", "usa"),          # 父 Nasrullah
+        "Bold Bidder": ("nasrullah", "usa"),     # 父 Bold Ruler
+        "Chieftain": ("nasrullah", "usa"),       # 父 Bold Ruler
+        "Jacinto": ("nasrullah", "usa"),         # 父 Bold Ruler
+        "Successor": ("nasrullah", "usa"),       # 父 Bold Ruler
+        "Bold Reasoning": ("nasrullah", "usa"),  # → Boldnesian → Bold Ruler (Seattle Slew 父)
+        "Majestic Prince": ("native", "usa"),    # 父 Raise a Native
+        "Raise a Cup": ("native", "usa"),        # 父 Raise a Native
+        "Native Charger": ("native", "usa"),     # 父 Native Dancer
+        "Best Turn": ("turnto", "usa"),          # 父 Turn-to
+        "The Minstrel": ("northern", "eur"),     # 父 Northern Dancer (欧州)
+        "Thatching": ("hyperion", "eur"),        # → Thatch → Forli → Aristophanes → Hyperion
     }
     for name, (line, country) in cases.items():
         k = sl.classify_sire(name)
