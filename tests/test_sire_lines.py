@@ -609,6 +609,32 @@ def test_batch_european_classic_broodmare_sires_2026_07_08():
         assert sl.line_label_short(k) != "その他", name
 
 
+def test_batch_unknown_csv_top_sires_2026_07_08():
+    """実 DB 全洗い出し (unknown_sires.csv 産駒数上位) で「その他」化していた著名母父を、
+    父系 founder まで確度が高いもののみ収載。DB は英名/カナ双方で出るため両側を検証。"""
+    cases = {
+        "El Gran Senor": ("northern", "eur"),    # 父 Northern Dancer
+        "Theatrical": ("northern", "eur"),       # → Nureyev → ND
+        "Irish River": ("neverbend", "eur"),     # → Riverman → Never Bend
+        "Reviewer": ("nasrullah", "usa"),        # 父 Bold Ruler
+        "Bold Hour": ("nasrullah", "usa"),       # 父 Bold Ruler
+        "Damascus": ("teddy", "usa"),            # → Sword Dancer → Sun Teddy → Teddy
+        "Private Account": ("teddy", "usa"),     # 父 Damascus
+        "Cutlass": ("teddy", "usa"),             # 父 Damascus
+        "Kauai King": ("native", "usa"),         # 父 Native Dancer
+        "カウアイキング": ("native", "usa"),
+        "Nonoalco": ("nearctic", "eur"),         # 父 Nearctic (仏枝)
+        "ノノアルコ": ("nearctic", "eur"),
+        "Understanding": ("teddy", "usa"),       # → Promised Land → … → Sun Teddy → Teddy (米)
+        "アンダースタンディング": ("teddy", "usa"),
+    }
+    for name, (line, country) in cases.items():
+        k = sl.classify_sire(name)
+        assert k == line, f"{name}: {k} != {line}"
+        assert sl.classify_country(name, k) == country, name
+        assert sl.line_label_short(k) != "その他", name
+
+
 def test_unknown_without_conn():
     assert sl.classify_sire("架空種牡馬XYZ") == "unknown"
     assert sl.classify_sire(None) == "unknown"

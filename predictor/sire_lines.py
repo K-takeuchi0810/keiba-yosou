@@ -625,6 +625,19 @@ LINE_BY_SIRE: dict[str, str] = {
     "セルカーク": "native", "Selkirk": "native",                # → Sharpen Up → Native Dancer (英マイラー)
     "トランポリーノ": "native", "Trempolino": "native",          # → Sharpen Up → Native Dancer (凱旋門賞)
     "アークティックターン": "native", "Arctic Tern": "native",    # → Sea-Bird → Dan Cupid → Native Dancer (仏)
+    # --- 実 DB 全洗い出し (2026-07-08 unknown_sires.csv 産駒数上位) の確度の高い母父/母母父 ---
+    # (3 代血統は英名格納が主なので英名中心。カナも DB に出る馬は両方収載)
+    "El Gran Senor": "northern",                              # 父 Northern Dancer (愛ダービー)
+    "Theatrical": "northern",                                 # → Nureyev → Northern Dancer (愛/米芝)
+    "Irish River": "neverbend",                               # → Riverman → Never Bend (仏チャンピオン)
+    "Reviewer": "nasrullah",                                  # 父 Bold Ruler → Nasrullah (米)
+    "Bold Hour": "nasrullah",                                 # 父 Bold Ruler → Nasrullah (米)
+    "Damascus": "teddy",                                      # → Sword Dancer → Sunglow → Sun Again → Sun Teddy → Teddy (米)
+    "Private Account": "teddy",                               # 父 Damascus (米。→ Sun Teddy → Teddy)
+    "Cutlass": "teddy",                                       # 父 Damascus (米。→ Sun Teddy → Teddy)
+    "カウアイキング": "native", "Kauai King": "native",         # 父 Native Dancer (米ダービー/プリークネス)
+    "ノノアルコ": "nearctic", "Nonoalco": "nearctic",           # 父 Nearctic (仏 2000 ギニー。ND 非経由の欧州 Nearctic 枝)
+    "Understanding": "teddy", "アンダースタンディング": "teddy",  # → Promised Land → Palestinian → Sun Again → Sun Teddy → Teddy (米)
     # マンノウォー系は上で定義済 (ヴェンチア 等)
     # 注: なお確度の低い/真に不明な系統は依然 unknown (グレー)。誤答よりも
     # 「その他」が誠実。ダノンレジェンド (父 Macho Uno → Holy Bull → Great Above 系)
@@ -806,6 +819,13 @@ COUNTRY_OVERRIDE: dict[str, str] = {
     "セルカーク": "eur", "Selkirk": "eur",
     "トランポリーノ": "eur", "Trempolino": "eur",
     "アークティックターン": "eur", "Arctic Tern": "eur",
+    # teddy 系のうち Sun Teddy 米国枝 → 米国型 (teddy 既定=eur の例外)。
+    "Damascus": "usa",           # Sword Dancer → Sun Teddy → Teddy (米 Horse of the Year)
+    "Private Account": "usa",    # 父 Damascus (米)
+    "Cutlass": "usa",            # 父 Damascus (米)
+    # nearctic 系のうち仏 Nearctic 枝 → 欧州型 (nearctic 既定=usa の例外)。
+    "ノノアルコ": "eur", "Nonoalco": "eur",  # 父 Nearctic (仏 2000 ギニー、ND 非経由の欧州枝)
+    "Understanding": "usa", "アンダースタンディング": "usa",  # teddy 系 Sun Teddy 米国枝 (Damascus と同枝)
     # 英語名の併記 (3 代血統は海外祖先を英語で格納。カナ側 override と国別を一致させ、
     # 表記で日/米/欧が割れないようにする — 2026-07-06 profitability/prediction-logic)。
     # (Mill Reef は neverbend line に移設済で既定 eur。override 撤去)
