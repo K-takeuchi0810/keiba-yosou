@@ -55,3 +55,4 @@ web/dist/
 data/backtest/*_records.json
 !docs/index.html
 !docs/.nojekyll
+!docs/.pages-deploy-trigger
