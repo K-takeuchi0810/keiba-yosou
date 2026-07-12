@@ -1,0 +1,30 @@
+# 予想 HTML (docs/index.html) を GitHub Pages へデプロイする。
+# auto_predict が docs/index.html を commit+push → 本 workflow が Pages に反映。
+# ★要設定 (1回のみ): Settings → Pages → Build and deployment → Source = "GitHub Actions"
+name: Deploy predictions to Pages
+on:
+  push:
+    branches: [main, claude/feature-bias-validation-yl5key]
+    paths: ["docs/**"]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deployment
+        uses: actions/deploy-pages@v4
