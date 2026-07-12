@@ -1207,24 +1207,16 @@ def compute_features(
                     final3f_values.append(int(p["final_3f"]))
                 if p.get("finish_time") and pdist:
                     time_per_100_values.append(float(p["finish_time"]) / float(pdist) * 100.0)
-                # cache key に馬番を含める: relative_race_metrics は past_run の
-                # 馬番に固有の値 (time_diff/順位) を返すため、同一過去レースを走った
-                # 別の出走馬が feature_cache (レース内共有) 経由で 1 頭目の値に汚染
-                # される cross-horse バグを防ぐ (2026-07-06 検証監査で検出。rules.py の
-                # 上がり順位スコア・LGBM 特徴にも波及していた)。馬番はレース内で一意
-                # なので (レース識別 + 馬番) で past_run を一意に決定できる。
+                # cache キーに馬番 (horse_num) を含める。relative_race_metrics は「その馬の」
+                # レース内相対値を返すため、同一過去レースを走った 2 頭が feature_cache
+                # (レース内共有) 経由で 1 頭目の値に汚染される cross-horse バグを防ぐ
+                # (2026-07-02 忠実性監査 fe55779 + 2026-07-06 検証監査で独立に検出。
+                # merge 衝突で二重化していたのを統合)。馬番はレース内で一意。
                 rel_diff, rel_rank = _cached(
                     cache,
                     ("relative_race_metrics", p.get("race_year"), p.get("race_month_day"),
                      p.get("track_code"), p.get("kaiji"), p.get("nichiji"), p.get("race_num"),
                      p.get("horse_num")),
-                # キーには馬識別 (horse_num) が必須。relative_race_metrics は「その馬の」
-                # レース内相対値を返すため、過去に対戦した 2 頭が同じ過去レースを共有すると
-                # 馬識別なしでは先勝ちの値を使い回す (2026-07-02 忠実性監査で発見した
-                # cache 汚染バグ。走査順で dataset の値が変わっていた)。
-                rel_diff, rel_rank = _cached(
-                    cache,
-                    ("relative_race_metrics", p.get("race_year"), p.get("race_month_day"), p.get("track_code"), p.get("kaiji"), p.get("nichiji"), p.get("race_num"), p.get("horse_num")),
                     lambda p=p: relative_race_metrics(conn, p),
                 )
                 if rel_diff is not None:
