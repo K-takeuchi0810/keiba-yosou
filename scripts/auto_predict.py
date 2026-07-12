@@ -107,7 +107,8 @@ def main() -> int:
     _notify(
         f"🏇 **予想生成完了** {d_from[:4]}/{d_from[4:6]}/{d_from[6:]}〜{d_to[4:6]}/{d_to[6:]} "
         f"({n_races}R, {ver})\n"
-        f"📱 予想を見る: {PAGES_URL}\n"
+        f"📱 今すぐ見る(確実): iPhone ファイルApp → iCloud Drive → 競馬予想 → index.html\n"
+        f"🌐 Web版: {PAGES_URL} (GitHub のビルド反映に数分ラグあり)\n"
         f"⚠ 観察専用 (実弾根拠となるエッジは未証明)"
     )
     print("notified.")
