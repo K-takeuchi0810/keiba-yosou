@@ -100,18 +100,28 @@ def main() -> int:
     c = subprocess.run(["git", "commit", "-m",
                         f"predictions: {d_from}-{d_to} published to Pages ({ver})"],
                        cwd=PROJECT_ROOT, capture_output=True, text=True)
+    # Pages は main (デフォルトブランチ) からデプロイされるので main へ push する。
+    # 非 fast-forward なら git が安全に reject → 通知して手動判断 (force はしない)。
+    push_ok = True
     if c.returncode == 0:
-        subprocess.run(["git", "push", "origin", "HEAD"], cwd=PROJECT_ROOT,
+        subprocess.run(["git", "fetch", "origin", "main", "-q"], cwd=PROJECT_ROOT,
                        capture_output=True, text=True)
+        p = subprocess.run(["git", "push", "origin", "HEAD:main"], cwd=PROJECT_ROOT,
+                           capture_output=True, text=True)
+        push_ok = p.returncode == 0
+        if not push_ok:
+            print("WARN: push to main failed:\n", p.stderr[-400:])
 
+    web_line = (f"🌐 Web版: {PAGES_URL} (数分で更新)" if push_ok
+                else f"🌐 Web版: main push 失敗のため未更新 (手動確認要)")
     _notify(
         f"🏇 **予想生成完了** {d_from[:4]}/{d_from[4:6]}/{d_from[6:]}〜{d_to[4:6]}/{d_to[6:]} "
         f"({n_races}R, {ver})\n"
         f"📱 今すぐ見る(確実): iPhone ファイルApp → iCloud Drive → 競馬予想 → index.html\n"
-        f"🌐 Web版: {PAGES_URL} (GitHub のビルド反映に数分ラグあり)\n"
+        f"{web_line}\n"
         f"⚠ 観察専用 (実弾根拠となるエッジは未証明)"
     )
-    print("notified.")
+    print("notified. push_ok=", push_ok)
     return 0
 
 
