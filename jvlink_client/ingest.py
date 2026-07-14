@@ -36,6 +36,7 @@ from db import (
     upsert_offspring_master,
     upsert_payout,
     upsert_race,
+    insert_odds_snapshot,
     upsert_course_info,
     upsert_horse_name_origin,
     upsert_lineage,
@@ -163,11 +164,17 @@ def ingest_file_dispatch(
                 # odds_fetched_at=NULL (信頼) を維持し、リアルタイム snapshot を
                 # 上書きしない (2026-07-03: mtime 刻印で全レースが odds ゲート除外
                 # される事故の再発防止)。
+                _o1 = parse_o1(rec)
+                _is_hist = (dataspec == "RACE")
                 update_win_odds(
-                    conn, parse_o1(rec), fetched_at=fetched_at,
+                    conn, _o1, fetched_at=fetched_at,
                     dataspec=dataspec or "0B31",
-                    historical=(dataspec == "RACE"),
+                    historical=_is_hist,
                 )
+                # F3: リアルタイム O1 (0B31 等) は odds_snapshots に時系列点として追記。
+                # 確定 (RACE=post-race) は PIT 特徴に使わないので時系列には積まない。
+                if not _is_hist:
+                    insert_odds_snapshot(conn, _o1, fetched_at, dataspec or "0B31")
                 o1_count += 1
             elif rec_type == "UM":
                 upsert_horse_master(conn, parse_um(rec))

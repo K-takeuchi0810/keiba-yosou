@@ -67,3 +67,40 @@ def test_insert_odds_snapshot_idempotent():
                               "2026-07-04T09:30:00", "morning")
     assert n1 == n2 == 2
     assert conn.execute("SELECT COUNT(*) FROM odds_snapshots").fetchone()[0] == 2
+
+
+def _o1_record(odds_list) -> bytes:
+    """O1 の固定長レコードを合成 (parse_o1 の byte 位置に合わせる)。"""
+    from jvlink_client.parser import O1_LENGTH
+    buf = bytearray(b" " * O1_LENGTH)
+    def put(pos, s):
+        b = s.encode("cp932"); buf[pos - 1:pos - 1 + len(b)] = b
+    put(1, "O1"); put(3, "1"); put(4, "20260704"); put(12, "2026"); put(16, "0704")
+    put(20, "05"); put(22, "01"); put(24, "01"); put(26, "11")
+    put(28, "00000000"); put(36, "02"); put(38, "02")
+    for i, (hn, odds, pop) in enumerate(odds_list):
+        base = 44 + i * 8
+        put(base, hn.zfill(2)); put(base + 2, str(odds).zfill(4)); put(base + 6, str(pop).zfill(2))
+    return bytes(buf)
+
+
+def test_ingest_realtime_o1_records_timeseries_but_race_does_not(tmp_path):
+    """0B31 (realtime) O1 は odds_snapshots に時系列記録。RACE (確定=post-race) は記録しない。"""
+    from jvlink_client.ingest import ingest_file_dispatch
+    conn = _conn()
+    conn.execute(
+        "INSERT INTO horse_races (race_year,race_month_day,track_code,kaiji,nichiji,race_num,horse_num)"
+        " VALUES ('2026','0704','05','01','01','11','01')")
+    conn.commit()
+    data = _o1_record([("01", 55, 1)]) + b"\r\n"
+
+    p31 = tmp_path / "0B31test.jvd"; p31.write_bytes(data)
+    ingest_file_dispatch(conn, p31, "0B31")
+    assert conn.execute("SELECT COUNT(*) FROM odds_snapshots").fetchone()[0] == 1, \
+        "realtime 0B31 O1 は時系列に積まれる"
+
+    prace = tmp_path / "RACEo1.jvd"; prace.write_bytes(data)
+    before = conn.execute("SELECT COUNT(*) FROM odds_snapshots").fetchone()[0]
+    ingest_file_dispatch(conn, prace, "RACE")
+    assert conn.execute("SELECT COUNT(*) FROM odds_snapshots").fetchone()[0] == before, \
+        "確定 (RACE) O1 は時系列に積まない (post-race)"

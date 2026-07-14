@@ -19,19 +19,21 @@ review≠外部検証 / PIT T−n コード強制) はユーザ合意済み (202
 
 ## 1. フェーズ構成
 
-### F3-a: 計測インフラ (即着手可、~1-2 セッション)
-1. **odds_snapshots テーブル新設** — レース×馬×取得時刻の時系列。
-   PK (race複合キー, horse_num, fetched_at)。horse_races の単一スナップ UPDATE は現行維持
-   (GUI 互換)、INSERT は追加経路。
-2. **raw 0B31 のバックフィル** — ファイル名 `0B31_<racekey>_<epoch>.jvd` から 600 レース分の
-   時系列を odds_snapshots へ復元 (少量だが動作検証・初期分析用)。
-3. **収集 cadence の拡張** — 朝基準スナップ (開催日 9:30 前後に全レース 1 回) を scheduler に追加。
-   既存の T−25〜lead 窓収集はそのまま。→ ドリフト = 朝基準 → T−n の 2 点が全レースで揃う。
-4. **PIT ゲートのコード強制** (制約(4)、review 降格宣言(2)):
-   - 特徴計算が使ってよいスナップ = `fetched_at IS NOT NULL` **かつ** `fetched_at ≤ 発走時刻 − n 分`。
-   - NULL fetched_at (=確定・発走後) を市場特徴に使う経路はコードで遮断 + ガードテスト。
-   - **n の値は config 一元管理** (`PIT_GATE_MINUTES`)、backtest と live で同一値を強制。
-5. **coverage 監視拡張** — 朝基準スナップの取得率を fresh_odds_coverage に追加。
+### F3-a: 計測インフラ — 実装状況 (2026-07-14 更新)
+1. ✅ **odds_snapshots テーブル** — レース×馬×取得時刻の時系列。PK (race複合, horse_num, fetched_at)。
+   db.insert_odds_snapshot (冪等)。horse_races の単一スナップ UPDATE は現行維持。
+2. ✅ **raw 0B31 バックフィル** — scripts/backfill_odds_snapshots.py で 600 レース/35,964 行復元済。
+3. ✅ **時系列の自動記録** — ingest_file_dispatch の O1 分岐で、realtime (0B31 等) O1 を毎回
+   insert_odds_snapshot に追記 (確定=RACE は post-race なので除外)。**fetch_fresh_odds を回すたびに
+   時系列点が自動で貯まる**。dispatch テスト済 (tests/test_pit_gate.py)。
+4. ✅ **PIT ゲートのコード強制** — predictor/pit_gate.py が唯一の入口。fetched_at NULL と T−n 超過を
+   SQL 遮断。config.PIT_GATE_MINUTES=10 単一出典。ガードテスト済。
+5. ⏳ **coverage 監視拡張** — 朝スナップ取得率の集計 (F3-b 蓄積が始まってから調整で十分)。
+6. ⏳ **収集 cadence** (ユーザ操作要): ドリフトには「朝の基準点」+「T−n 直前点」の 2 点が要る。
+   現行 `keiba-fresh-odds` は 09:00-16:40 の 10 分毎 window=25 で **直前点は自動で貯まる**。
+   **朝の基準点**を足すため、開催日 09:30 に 1 回だけ広窓で流す:
+   `schtasks /create /tn "keiba-morning-odds" /tr "...\scripts\fetch_fresh_odds.bat --window 600" /sc daily /st 09:30 /f`
+   (fetch_fresh_odds.bat が --window を引き渡すよう要確認。広窓=その日の全レースを対象化)。
 
 ### F3-b: 蓄積 + 開発 (dev 窓)
 - **dev 窓 = 2026-07-04 〜 封印開始日の前日**。この間の蓄積データで特徴設計・イテレーション自由。
