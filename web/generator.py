@@ -25,7 +25,7 @@ from config import (
     WEB_DIST,
     is_whitelisted_race,
 )
-from db import open_db
+from db import insert_prediction_log, open_db
 from predictor import is_tentative, predict_race
 from predictor.candidates import (
     BUY_CANDIDATE_MAX,
@@ -150,6 +150,7 @@ def build_view_model(
     to_date: str | None = None,
     daily_budget_yen: int | None = None,
     ignore_odds_freshness: bool = False,
+    log_predictions: bool = False,
 ) -> dict:
     """DB → テンプレートに渡す dict 構造。
 
@@ -157,6 +158,18 @@ def build_view_model(
     ここでは表示対象を直近 ±14 日に絞り、HTML を実用サイズに保つ。
     """
     from datetime import datetime, timedelta
+
+    # 予想ロギング用の発行時刻・モデル版 (log_predictions 時のみ使用、バッチで固定)
+    _PRED_LOG_GENERATED_AT = datetime.now().isoformat(timespec="seconds")
+    _PRED_LOG_MODEL_VER = ""
+    _PRED_LOG_CALIB_VER = ""
+    if log_predictions:
+        try:
+            _vs = _build_version_snapshot()
+            _PRED_LOG_MODEL_VER = _vs.get("lgbm_rule_version", "") or ""
+            _PRED_LOG_CALIB_VER = _vs.get("calibrator_rule_version", "") or ""
+        except Exception:  # noqa: BLE001
+            pass
 
     today = datetime.now().date()
     from_d = from_date or (today - timedelta(days=14)).strftime("%Y%m%d")
@@ -238,6 +251,32 @@ def build_view_model(
             preds = predict_race(raws, conn=conn, race=race_dict, cache=feature_cache)
             mark_by_num = {p.horse_num: p for p in preds}
             tentative_by_race[key] = is_tentative(preds)
+            # F4 答え合わせ: 発行時点の予想を prediction_log に追記 (opt-in)。
+            # 失敗しても HTML 生成は止めない。odds/人気は発行時点の raws から。
+            if log_predictions:
+                try:
+                    odds_by_num = {
+                        h.get("horse_num"): (h.get("win_odds"), h.get("win_popularity"))
+                        for h in raws
+                    }
+                    log_rows = [
+                        {
+                            "horse_num": p.horse_num, "mark": p.mark, "rank": p.rank,
+                            "score": p.score, "win_probability": p.win_probability,
+                            "raw_blended_probability": p.raw_blended_probability,
+                            "win_odds": odds_by_num.get(p.horse_num, (None, None))[0],
+                            "win_popularity": odds_by_num.get(p.horse_num, (None, None))[1],
+                            "confidence": getattr(p, "confidence", ""),
+                        }
+                        for p in preds
+                    ]
+                    insert_prediction_log(
+                        conn, race_dict, log_rows, _PRED_LOG_GENERATED_AT,
+                        model_version=_PRED_LOG_MODEL_VER,
+                        calibrator_version=_PRED_LOG_CALIB_VER,
+                    )
+                except Exception as _e:  # noqa: BLE001
+                    logger.warning("prediction_log 追記に失敗 (生成は継続): %s", _e)
             # 表示は馬番順
             raws_sorted = sorted(raws, key=lambda x: int(x.get("horse_num") or "99"))
             horses_by_race[key] = [
@@ -538,6 +577,7 @@ def render(
     to_date: str | None = None,
     daily_budget_yen: int | None = None,
     ignore_odds_freshness: bool = False,
+    log_predictions: bool = False,
 ) -> Path:
     env = Environment(
         loader=FileSystemLoader(str(TEMPLATES)),
@@ -549,6 +589,7 @@ def render(
         to_date=to_date,
         daily_budget_yen=daily_budget_yen,
         ignore_odds_freshness=ignore_odds_freshness,
+        log_predictions=log_predictions,
     ))
 
     out = output_path or (WEB_DIST / "index.html")
@@ -685,6 +726,8 @@ if __name__ == "__main__":
         help="--ignore-odds-freshness と publish を併用するセーフティを明示的に解除する "
              "(検証 HTML を意図的に iCloud に出すときだけ使う)",
     )
+    ap.add_argument("--log-predictions", action="store_true",
+                    help="発行時点の予想を prediction_log テーブルに追記 (答え合わせ用)")
     ap.add_argument("--json", action="store_true",
                     help="結果を JSON で stdout に 1 行出力")
     args = ap.parse_args()
@@ -707,6 +750,7 @@ if __name__ == "__main__":
         to_date=args.to_date,
         daily_budget_yen=args.daily_budget_yen,
         ignore_odds_freshness=args.ignore_odds_freshness,
+        log_predictions=args.log_predictions,
     )
     published = None
     if publish_decision:

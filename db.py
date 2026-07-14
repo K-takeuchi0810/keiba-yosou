@@ -631,6 +631,46 @@ def insert_odds_snapshot(
     return len(rows)
 
 
+def insert_prediction_log(
+    conn: sqlite3.Connection,
+    race: dict,
+    rows: list[dict],
+    generated_at: str,
+    model_version: str = "",
+    calibrator_version: str = "",
+) -> int:
+    """発行時点の予想を prediction_log に追記 (答え合わせ用、append-only)。
+
+    rows は 1 馬 1 dict:
+      {horse_num, mark, rank, score, win_probability, raw_blended_probability,
+       win_odds, win_popularity, confidence}
+    同一 (generated_at, レース, 馬番) は INSERT OR REPLACE。戻り値は行数。
+    """
+    payload = [
+        (
+            generated_at,
+            race.get("race_year"), race.get("race_month_day"), race.get("track_code"),
+            race.get("kaiji"), race.get("nichiji"), race.get("race_num"),
+            r.get("horse_num"), r.get("mark") or "", r.get("rank"), r.get("score"),
+            r.get("win_probability"), r.get("raw_blended_probability"),
+            r.get("win_odds"), r.get("win_popularity"), r.get("confidence") or "",
+            model_version, calibrator_version,
+        )
+        for r in rows
+    ]
+    if not payload:
+        return 0
+    conn.executemany(
+        "INSERT OR REPLACE INTO prediction_log "
+        "(generated_at, race_year, race_month_day, track_code, kaiji, nichiji, race_num, "
+        " horse_num, mark, rank, score, win_probability, raw_blended_probability, "
+        " win_odds, win_popularity, confidence, model_version, calibrator_version) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        payload,
+    )
+    return len(payload)
+
+
 def upsert_win5(conn: sqlite3.Connection, wf: Win5) -> int:
     """WF (WIN5) のヘッダ + 払戻を upsert。戻り値は払戻行数。"""
     conn.execute(

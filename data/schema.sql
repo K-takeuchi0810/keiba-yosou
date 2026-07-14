@@ -616,3 +616,34 @@ CREATE TABLE IF NOT EXISTS odds_snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_odds_snapshots_race
     ON odds_snapshots (race_year, race_month_day, track_code, kaiji, nichiji, race_num);
+
+-- F4/答え合わせ: 予想の発行時点スナップショット (append-only, 2026-07-15)。
+-- 生成 (web.generator --log-predictions) のたびに、その時点の各馬の予想
+-- (mark/確率/発行時オッズ/モデル版) を記録する。後で confirmed_order/payouts と
+-- JOIN して live 的中率・回収率を答え合わせできる (scripts/prediction_accuracy.py)。
+-- generated_at を PK に含めるので、同一レースを異なる時刻に再生成すると別スナップ
+-- として追記される (予想がオッズ確定でどう動いたかも残る)。
+CREATE TABLE IF NOT EXISTS prediction_log (
+    generated_at            TEXT NOT NULL,   -- 発行時刻 ISO8601 (生成バッチ単位)
+    race_year               TEXT NOT NULL,
+    race_month_day          TEXT NOT NULL,
+    track_code              TEXT NOT NULL,
+    kaiji                   TEXT NOT NULL,
+    nichiji                 TEXT NOT NULL,
+    race_num                TEXT NOT NULL,
+    horse_num               TEXT NOT NULL,
+    mark                    TEXT,            -- ◎○▲△☆ or ''
+    rank                    INTEGER,
+    score                   REAL,
+    win_probability         REAL,            -- calibrator/blend 後
+    raw_blended_probability REAL,            -- blend 前
+    win_odds                INTEGER,         -- 発行時点の単勝オッズ (0.1倍単位)
+    win_popularity          INTEGER,         -- 発行時点の人気
+    confidence              TEXT,
+    model_version           TEXT,            -- lgbm rule_version
+    calibrator_version      TEXT,
+    PRIMARY KEY (generated_at, race_year, race_month_day, track_code, kaiji, nichiji, race_num, horse_num)
+);
+
+CREATE INDEX IF NOT EXISTS idx_prediction_log_race
+    ON prediction_log (race_year, race_month_day, track_code, kaiji, nichiji, race_num);

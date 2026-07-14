@@ -73,7 +73,8 @@ def main() -> int:
     if args.dry_run:
         return 0
 
-    r = subprocess.run([PY, "-m", "web.generator", "--from", d_from, "--to", d_to],
+    r = subprocess.run([PY, "-m", "web.generator", "--from", d_from, "--to", d_to,
+                        "--log-predictions"],
                        capture_output=True, text=True, cwd=PROJECT_ROOT)
     if r.returncode != 0:
         _notify(f"⚠ 予想生成に失敗 ({d_from}-{d_to})。ログ確認要。")
