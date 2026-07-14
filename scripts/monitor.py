@@ -29,6 +29,11 @@ from scripts.backtest import horses_for_race, list_races
 logger = logging.getLogger(__name__)
 
 DEGRADATION_THRESHOLD = 0.20  # baseline Brier 比 +20% で警告
+# LGBM v6 は gain の ~67% が mining (JRA-VAN DataMining) 由来の単一ソース依存
+# (2026-07-03 prediction-logic 監査)。供給が細ると該当レースで弱い特徴に fallback し
+# 静かに劣化する。2025 全年は 100%、2026 上期は 79.7% と既に低下傾向。
+# 直近窓の mining カバレッジがこれを割ったら警告 (供給劣化 / ingest 漏れの早期検知)。
+MINING_COVERAGE_MIN = 0.85
 
 # 採用時に凍結する baseline (本番 pipeline と同一コードパスで計測した
 # backtest の calibration.brier_score)。--freeze-baseline で更新する。
@@ -116,6 +121,45 @@ def measure_recent_brier(days: int) -> dict:
     }
 
 
+_JRA_TRACKS = ("01", "02", "03", "04", "05", "06", "07", "08", "09", "10")
+
+
+def measure_mining_coverage(days: int) -> dict:
+    """直近 days 日の JRA 確定レースで mining 予想が付いている馬の割合。
+
+    v6 の gain 67% を占める mining が欠けると静かに劣化するため監視する。
+    """
+    today = datetime.now().date()
+    from_date = (today - timedelta(days=days)).strftime("%Y%m%d")
+    to_date = today.strftime("%Y%m%d")
+    ph = ",".join("?" * len(_JRA_TRACKS))
+    with open_db() as conn:
+        row = conn.execute(
+            f"""
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN EXISTS(
+                       SELECT 1 FROM mining_predictions mp
+                        WHERE mp.race_year=hr.race_year AND mp.race_month_day=hr.race_month_day
+                          AND mp.track_code=hr.track_code AND mp.kaiji=hr.kaiji
+                          AND mp.nichiji=hr.nichiji AND mp.race_num=hr.race_num
+                          AND mp.horse_num=hr.horse_num
+                   ) THEN 1 ELSE 0 END) AS with_mining
+              FROM horse_races hr
+             WHERE hr.track_code IN ({ph})
+               AND hr.confirmed_order > 0
+               AND (hr.race_year || hr.race_month_day) BETWEEN ? AND ?
+            """,
+            (*_JRA_TRACKS, from_date, to_date),
+        ).fetchone()
+    total = row["total"] or 0
+    with_mining = row["with_mining"] or 0
+    return {
+        "from_date": from_date, "to_date": to_date,
+        "n_horses": total, "n_with_mining": with_mining,
+        "coverage": (with_mining / total) if total else None,
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=30,
@@ -130,6 +174,8 @@ def main() -> int:
                          "(本番 pipeline の最終 win_probability) で測るのが要点 — "
                          "backtest JSON の calibration.brier は raw_blended ベースで"
                          "経路が異なるため使わない")
+    ap.add_argument("--mining-threshold", type=float, default=MINING_COVERAGE_MIN,
+                    help=f"mining カバレッジの警告下限 (既定 {MINING_COVERAGE_MIN})")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
@@ -164,6 +210,9 @@ def main() -> int:
         print(f"WARN: no recent records ({recent['from_date']}-{recent['to_date']})", file=sys.stderr)
         return 1
     drift = (recent["brier_score"] - base_b) / base_b if base_b else 0
+    mining = measure_mining_coverage(args.days)
+    mining_cov = mining["coverage"]
+    mining_alert = mining_cov is not None and mining_cov < args.mining_threshold
     payload = {
         "checked_at": datetime.now().isoformat(timespec="seconds"),
         "baseline_source": src,
@@ -174,10 +223,26 @@ def main() -> int:
         "recent_logloss": recent["log_loss"],
         "drift_rate": round(drift, 4),
         "threshold": args.threshold,
-        "alert": drift > args.threshold,
+        "brier_alert": drift > args.threshold,
+        "mining_coverage": round(mining_cov, 4) if mining_cov is not None else None,
+        "mining_n_horses": mining["n_horses"],
+        "mining_threshold": args.mining_threshold,
+        "mining_alert": mining_alert,
+        # 後方互換: 既存の連携が payload["alert"] を見ているため brier 側を維持しつつ
+        # 総合アラート (どちらか) を alert に集約。
+        "alert": (drift > args.threshold) or mining_alert,
     }
     print(json.dumps(payload, indent=2, ensure_ascii=False))
-    if payload["alert"]:
+    if mining_alert:
+        # mining は供給/ingest 側の問題であり再訓練では直らないので retrain は kick しない。
+        print(
+            f"⚠ mining coverage {mining_cov*100:.1f}% < {args.mining_threshold*100:.0f}% "
+            f"on {mining['n_horses']} recent JRA horses ({mining['from_date']}-{mining['to_date']}). "
+            f"LGBM v6 は gain 67% が mining 依存。供給劣化 or ingest 漏れを確認 "
+            f"(MING dataspec fetch / mining_predictions 取込)。",
+            file=sys.stderr,
+        )
+    if payload["brier_alert"]:
         print(
             f"⚠ Brier drift {drift*100:+.1f}% above baseline {base_b:.4f} → "
             f"{recent['brier_score']:.4f} on {recent['n_records']} recent records",
@@ -197,8 +262,8 @@ def main() -> int:
             ]
             print(" ".join(cmd), file=sys.stderr)
             subprocess.run(cmd, check=False)
-        return 1
-    return 0
+    # brier drift か mining 劣化のどちらかで非ゼロ終了 (週次タスクの exit code 監視用)。
+    return 1 if payload["alert"] else 0
 
 
 if __name__ == "__main__":
