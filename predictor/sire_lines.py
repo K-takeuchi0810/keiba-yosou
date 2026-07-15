@@ -109,7 +109,7 @@ LINE_COLOR: dict[str, str] = {
 # 2026-07-05 fable 監査で約 12 件の事実誤りを是正 (ドゥラメンテ=父キンカメ等)。
 LINE_BY_SIRE: dict[str, str] = {
     # --- サンデーサイレンス系 (父が SS 直仔 or SS 系) ---
-    "サンデーサイレンス": "sunday",
+    "サンデーサイレンス": "sunday", "Sunday Silence": "sunday",  # 英名は UM 3代血統で登場 (実DB検証で 176 産駒 unknown 化していた漏れを是正)
     "ディープインパクト": "sunday",
     "ハーツクライ": "sunday",
     "ステイゴールド": "sunday",
@@ -651,10 +651,57 @@ LINE_BY_SIRE: dict[str, str] = {
     "Best Turn": "turnto",                                    # 父 Turn-to (米)
     "The Minstrel": "northern",                               # 父 Northern Dancer (英ダービー/KG。欧州)
     "Thatching": "hyperion",                                  # → Thatch → Forli → Aristophanes → Hyperion (愛スプリンター)
+    # --- 実 DB 洗い出し 第3バッチ (--since-year 2023 で近年出走馬に絞った unknown 上位) ---
+    # (現代の現役〜近年活躍の主要母父。父系 founder まで確度が高いもののみ)
+    # northern (ND 系。北米発展枝は下の COUNTRY_OVERRIDE で usa 指定):
+    "Frankel": "northern",                                    # → Galileo → Sadler's Wells → ND (欧州最強マイラー)
+    "Orpen": "northern",                                      # → Lure → Danzig → ND
+    "Lure": "northern",                                       # → Danzig → ND (米国マイラー)
+    "Medaglia d'Oro": "northern",                             # → El Prado → Sadler's Wells → ND (米国発展。アポストロフィ変種は _normalize で吸収)
+    "Awesome Again": "northern",                              # → Deputy Minister → Vice Regent → ND (北米)
+    "Dixieland Band": "northern",                             # → Northern Dancer 直仔 (北米)
+    "Dixie Union": "northern",                                # → Dixieland Band → ND (北米)
+    "The Prime Minister": "northern",                         # → Deputy Minister → Vice Regent → ND (北米)
+    "Toccet": "northern",                                     # → Awesome Again → Deputy Minister → ND (北米)
+    "Hard Spun": "northern",                                  # → Danzig → ND (米国産・米国ダート供用)
+    # mrprospector (既定 usa):
+    "Fusaichi Pegasus": "mrprospector",                       # 父 Mr. Prospector 直仔
+    "Grindstone": "mrprospector",                             # → Unbridled → Fappiano → Mr. Prospector
+    "Quiet American": "mrprospector",                         # → Fappiano → Mr. Prospector
+    "Not For Love": "mrprospector",                           # 父 Mr. Prospector 直仔
+    "Rossini": "mrprospector",                                # → Miswaki → Mr. Prospector
+    "Medicean": "mrprospector",                               # → Machiavellian → Mr. Prospector
+    "Lycius": "mrprospector",                                 # 父 Mr. Prospector 直仔
+    # neverbend (既定 eur):
+    "Mark of Esteem": "neverbend",                            # → Darshaan → Shirley Heights → Mill Reef → Never Bend
     # マンノウォー系は上で定義済 (ヴェンチア 等)
     # 注: なお確度の低い/真に不明な系統は依然 unknown (グレー)。誤答よりも
     # 「その他」が誠実。ダノンレジェンド (父 Macho Uno → Holy Bull → Great Above 系)
     # 等は上記いずれにも該当しないため unknown のまま。
+    # --- 日本主要 sire の英名 alias (2026-07-16 code-quality 監査 SS-176 型再発防止) ---
+    # Sunday Silence 英名エントリ欠落で 176 産駒が unknown 化していた事故と同型リスク:
+    # 日本産 sire でも海外重賞馬の血統木として英名で 3代血統 (UM 由来) に格納される場合が
+    # あり、kana のみだと silent unknown 化する。主要 founder クラスを網羅して英名対を収載。
+    # 国別は全て line 既定に合致 (sunday=jpn, kingmambo=usa, roberto=eur 等) のため
+    # COUNTRY_OVERRIDE 追加不要。汎用ガード test_founder_class_bilingual_aliases で守る。
+    # サンデー系 (sunday, jpn)
+    "Deep Impact": "sunday", "Stay Gold": "sunday", "Orfevre": "sunday",
+    "Gold Ship": "sunday", "Daiwa Major": "sunday", "Agnes Tachyon": "sunday",
+    "Manhattan Cafe": "sunday", "Gold Allure": "sunday", "Kizuna": "sunday",
+    "Kitasan Black": "sunday", "Satono Diamond": "sunday", "Contrail": "sunday",
+    "Real Impact": "sunday", "Neo Universe": "sunday", "Victoire Pisa": "sunday",
+    "Black Tide": "sunday", "Fuji Kiseki": "sunday", "Silver State": "sunday",
+    "Suave Richard": "sunday", "Isla Bonita": "sunday", "Just a Way": "sunday",
+    "Hearts Cry": "sunday",
+    # キングマンボ系 (kingmambo, usa)
+    "King Kamehameha": "kingmambo", "Lord Kanaloa": "kingmambo",
+    "Rulership": "kingmambo", "Duramente": "kingmambo",
+    # ロベルト系 (roberto, eur)
+    "Epiphaneia": "roberto", "Maurice": "roberto", "Symboli Kris S": "roberto",
+    # ターントゥ系 (turnto, usa)
+    "Taiki Shuttle": "turnto",
+    # ストームキャット系 (storm, usa)
+    "Henny Hughes": "storm",
 }
 
 # 父系遡上の始祖 (breeding_horses を遡って当たったらこの系統)。
@@ -826,6 +873,10 @@ COUNTRY_OVERRIDE: dict[str, str] = {
     # mrprospector 系のうち Gone West 欧州チャンピオン枝 → 欧州型 (mrprospector 既定=usa の例外)。
     "ザフォニック": "eur", "Zafonic": "eur",
     "ザミンダー": "eur", "Zamindar": "eur",
+    # 実 DB 洗い出し 第3バッチの追加 (2026-07-08 prediction-logic 監査反映):
+    # Medicean/Lycius は mrprospector 系だが欧州 (英/愛) 発展枝 → 欧州型 (Zafonic/Zamindar と対称)。
+    "Medicean": "eur",           # 英 Cheveley Park Stud 供用、Eclipse S. 勝ち。産駒欧州偏重
+    "Lycius": "eur",             # 愛 Kildangan Stud 供用、Middle Park S. 勝ち。産駒欧州
     # native 系のうち Sharpen Up/Sea-Bird 欧州枝 → 欧州型 (native 既定=usa の例外)。
     "シャープンアップ": "eur", "Sharpen Up": "eur",
     "ダイエシス": "eur", "Diesis": "eur",
@@ -836,6 +887,16 @@ COUNTRY_OVERRIDE: dict[str, str] = {
     "Damascus": "usa",           # Sword Dancer → Sun Teddy → Teddy (米 Horse of the Year)
     "Private Account": "usa",    # 父 Damascus (米)
     "Cutlass": "usa",            # 父 Damascus (米)
+    # 実 DB 洗い出し 第3バッチ: northern 米国発展枝 (Deputy Minister/Danzig US 系) → 米国型
+    # (既存クロフネ/フレンチデピュティ/ゴーストザッパー等と同枝の一貫扱い)。
+    "Awesome Again": "usa",       # Deputy Minister 系
+    "Dixieland Band": "usa",      # 米国 Northern Dancer 発展枝
+    "Dixie Union": "usa",         # 父 Dixieland Band (米国)
+    "The Prime Minister": "usa",  # Deputy Minister 系
+    "Toccet": "usa",              # Awesome Again → Deputy Minister
+    "Hard Spun": "usa",           # Danzig 米国残留枝 (米国産・米国ダート)
+    "Medaglia d'Oro": "usa",      # El Prado 米国発展枝 (Sadler's Wells 系だが米国産・米国供用)
+    "Lure": "usa",                # Danzig 米国マイラー
     # nearctic 系のうち仏 Nearctic 枝 → 欧州型 (nearctic 既定=usa の例外)。
     "ノノアルコ": "eur", "Nonoalco": "eur",  # 父 Nearctic (英 2000 ギニー(仏調教)、ND 非経由の欧州枝)
     "Understanding": "usa", "アンダースタンディング": "usa",  # teddy 系 Sun Teddy 米国枝 (Damascus と同枝)

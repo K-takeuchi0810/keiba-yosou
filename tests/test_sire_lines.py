@@ -156,6 +156,50 @@ def test_country_override_keys_exist_in_sire_dict():
     assert set(sl.COUNTRY_OVERRIDE) <= set(sl.LINE_BY_SIRE)
 
 
+def test_founder_class_bilingual_aliases_2026_07_16():
+    """日本主要 founder クラス sire は kana + 英名の両方が LINE_BY_SIRE に登録されている
+    (2026-07-16 code-quality 監査: Sunday Silence 英名エントリ欠落で 176 産駒 unknown 化した
+    バグの class-wide 再発防止)。JV-Data の UM 3 代血統は海外血統馬で英名格納があるため、
+    kana のみでは silent unknown 化する。以下の主要 founder クラスに漏れがあれば fail-fast。"""
+    # (英名, kana) ペア。主要 sunday/kingmambo/roberto/turnto/storm の代表 sire を網羅。
+    # Sunday Silence 型の SILENT unknown 事故を構造的に防ぐ最小網。
+    pairs = [
+        # サンデー系
+        ("Sunday Silence", "サンデーサイレンス"),
+        ("Deep Impact", "ディープインパクト"),
+        ("Stay Gold", "ステイゴールド"),
+        ("Orfevre", "オルフェーヴル"),
+        ("Gold Ship", "ゴールドシップ"),
+        ("Daiwa Major", "ダイワメジャー"),
+        ("Manhattan Cafe", "マンハッタンカフェ"),
+        ("Kizuna", "キズナ"),
+        ("Kitasan Black", "キタサンブラック"),
+        ("Contrail", "コントレイル"),
+        ("Black Tide", "ブラックタイド"),
+        ("Fuji Kiseki", "フジキセキ"),
+        ("Hearts Cry", "ハーツクライ"),
+        ("Just a Way", "ジャスタウェイ"),
+        # キングマンボ系
+        ("King Kamehameha", "キングカメハメハ"),
+        ("Lord Kanaloa", "ロードカナロア"),
+        ("Rulership", "ルーラーシップ"),
+        ("Duramente", "ドゥラメンテ"),
+        # ロベルト系
+        ("Epiphaneia", "エピファネイア"),
+        ("Maurice", "モーリス"),
+        # ターントゥ系
+        ("Taiki Shuttle", "タイキシャトル"),
+        # ストームキャット系
+        ("Henny Hughes", "ヘニーヒューズ"),
+    ]
+    for en, ja in pairs:
+        en_line = sl.classify_sire(en)
+        ja_line = sl.classify_sire(ja)
+        assert en_line != "unknown", f"英名 {en!r} が unknown。LINE_BY_SIRE への追加漏れ (SS-176 型)"
+        assert ja_line != "unknown", f"kana {ja!r} が unknown"
+        assert en_line == ja_line, f"{en} と {ja} の line 不一致: {en_line} vs {ja_line}"
+
+
 def test_every_line_has_founder_stop_point():
     """LINE_BY_SIRE に現れる全 line_key は FOUNDERS の停止点にも存在する
     (2026-07-08 code-quality 監査の変更失敗モード対策)。新 line を追加したのに
@@ -653,6 +697,52 @@ def test_batch_unknown_csv_top_sires_round2_2026_07_08():
         "Best Turn": ("turnto", "usa"),          # 父 Turn-to
         "The Minstrel": ("northern", "eur"),     # 父 Northern Dancer (欧州)
         "Thatching": ("hyperion", "eur"),        # → Thatch → Forli → Aristophanes → Hyperion
+    }
+    for name, (line, country) in cases.items():
+        k = sl.classify_sire(name)
+        assert k == line, f"{name}: {k} != {line}"
+        assert sl.classify_country(name, k) == country, name
+        assert sl.line_label_short(k) != "その他", name
+
+
+def test_sunday_silence_english_alias_2026_07_08():
+    """『Sunday Silence』英名の LINE_BY_SIRE 登録漏れバグの regression。
+    実 DB (--since-year 2023) で 176 産駒が unknown 化していた。カナ「サンデーサイレンス」
+    は既存だが 3 代血統では英名で格納されるため両側必要。"""
+    assert sl.classify_sire("Sunday Silence") == "sunday"
+    assert sl.classify_country("Sunday Silence", "sunday") == "jpn"
+    # カナ側は不変 (既存)
+    assert sl.classify_sire("サンデーサイレンス") == "sunday"
+
+
+def test_batch_unknown_csv_recent_2026_07_08():
+    """実 DB 洗い出し 第3バッチ (--since-year 2023 で近年出走馬に絞った unknown 上位)。
+    現代の現役〜近年活躍の主要母父。父系 founder まで確度高いもののみ。"""
+    cases = {
+        # northern デフォルト eur
+        "Frankel": ("northern", "eur"),               # Galileo → Sadler's Wells
+        "Orpen": ("northern", "eur"),                 # Lure → Danzig
+        # northern 米国発展枝 → COUNTRY_OVERRIDE usa
+        "Medaglia d'Oro": ("northern", "usa"),        # El Prado → Sadler's Wells (米国供用。アポストロフィ変種は _normalize が吸収)
+        "Awesome Again": ("northern", "usa"),         # Deputy Minister
+        "Dixieland Band": ("northern", "usa"),        # ND 米国発展
+        "Dixie Union": ("northern", "usa"),           # 父 Dixieland Band
+        "The Prime Minister": ("northern", "usa"),    # Deputy Minister
+        "Toccet": ("northern", "usa"),                # Awesome Again → Deputy Minister
+        "Hard Spun": ("northern", "usa"),             # Danzig 米国残留枝
+        "Lure": ("northern", "usa"),                  # Danzig 米国マイラー
+        # mrprospector デフォルト usa
+        "Fusaichi Pegasus": ("mrprospector", "usa"),
+        "Grindstone": ("mrprospector", "usa"),        # Unbridled → Fappiano → Mr. Prospector
+        "Quiet American": ("mrprospector", "usa"),    # Fappiano → Mr. Prospector
+        "Not For Love": ("mrprospector", "usa"),      # Mr. Prospector 直仔
+        "Rossini": ("mrprospector", "usa"),           # Miswaki → Mr. Prospector
+        # Medicean/Lycius は英/愛供用の欧州発展枝 → eur (Zafonic/Zamindar と対称。
+        # 2026-07-08 prediction-logic 監査 (a) 指摘反映)
+        "Medicean": ("mrprospector", "eur"),          # Machiavellian → Mr. Prospector (英 Eclipse S.)
+        "Lycius": ("mrprospector", "eur"),            # Mr. Prospector 直仔 (愛 Middle Park S.)
+        # neverbend デフォルト eur
+        "Mark of Esteem": ("neverbend", "eur"),       # Darshaan → Shirley Heights → Mill Reef → Never Bend
     }
     for name, (line, country) in cases.items():
         k = sl.classify_sire(name)
