@@ -678,6 +678,30 @@ LINE_BY_SIRE: dict[str, str] = {
     # 注: なお確度の低い/真に不明な系統は依然 unknown (グレー)。誤答よりも
     # 「その他」が誠実。ダノンレジェンド (父 Macho Uno → Holy Bull → Great Above 系)
     # 等は上記いずれにも該当しないため unknown のまま。
+    # --- 日本主要 sire の英名 alias (2026-07-16 code-quality 監査 SS-176 型再発防止) ---
+    # Sunday Silence 英名エントリ欠落で 176 産駒が unknown 化していた事故と同型リスク:
+    # 日本産 sire でも海外重賞馬の血統木として英名で 3代血統 (UM 由来) に格納される場合が
+    # あり、kana のみだと silent unknown 化する。主要 founder クラスを網羅して英名対を収載。
+    # 国別は全て line 既定に合致 (sunday=jpn, kingmambo=usa, roberto=eur 等) のため
+    # COUNTRY_OVERRIDE 追加不要。汎用ガード test_founder_class_bilingual_aliases で守る。
+    # サンデー系 (sunday, jpn)
+    "Deep Impact": "sunday", "Stay Gold": "sunday", "Orfevre": "sunday",
+    "Gold Ship": "sunday", "Daiwa Major": "sunday", "Agnes Tachyon": "sunday",
+    "Manhattan Cafe": "sunday", "Gold Allure": "sunday", "Kizuna": "sunday",
+    "Kitasan Black": "sunday", "Satono Diamond": "sunday", "Contrail": "sunday",
+    "Real Impact": "sunday", "Neo Universe": "sunday", "Victoire Pisa": "sunday",
+    "Black Tide": "sunday", "Fuji Kiseki": "sunday", "Silver State": "sunday",
+    "Suave Richard": "sunday", "Isla Bonita": "sunday", "Just a Way": "sunday",
+    "Hearts Cry": "sunday",
+    # キングマンボ系 (kingmambo, usa)
+    "King Kamehameha": "kingmambo", "Lord Kanaloa": "kingmambo",
+    "Rulership": "kingmambo", "Duramente": "kingmambo",
+    # ロベルト系 (roberto, eur)
+    "Epiphaneia": "roberto", "Maurice": "roberto", "Symboli Kris S": "roberto",
+    # ターントゥ系 (turnto, usa)
+    "Taiki Shuttle": "turnto",
+    # ストームキャット系 (storm, usa)
+    "Henny Hughes": "storm",
 }
 
 # 父系遡上の始祖 (breeding_horses を遡って当たったらこの系統)。

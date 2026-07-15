@@ -156,6 +156,50 @@ def test_country_override_keys_exist_in_sire_dict():
     assert set(sl.COUNTRY_OVERRIDE) <= set(sl.LINE_BY_SIRE)
 
 
+def test_founder_class_bilingual_aliases_2026_07_16():
+    """日本主要 founder クラス sire は kana + 英名の両方が LINE_BY_SIRE に登録されている
+    (2026-07-16 code-quality 監査: Sunday Silence 英名エントリ欠落で 176 産駒 unknown 化した
+    バグの class-wide 再発防止)。JV-Data の UM 3 代血統は海外血統馬で英名格納があるため、
+    kana のみでは silent unknown 化する。以下の主要 founder クラスに漏れがあれば fail-fast。"""
+    # (英名, kana) ペア。主要 sunday/kingmambo/roberto/turnto/storm の代表 sire を網羅。
+    # Sunday Silence 型の SILENT unknown 事故を構造的に防ぐ最小網。
+    pairs = [
+        # サンデー系
+        ("Sunday Silence", "サンデーサイレンス"),
+        ("Deep Impact", "ディープインパクト"),
+        ("Stay Gold", "ステイゴールド"),
+        ("Orfevre", "オルフェーヴル"),
+        ("Gold Ship", "ゴールドシップ"),
+        ("Daiwa Major", "ダイワメジャー"),
+        ("Manhattan Cafe", "マンハッタンカフェ"),
+        ("Kizuna", "キズナ"),
+        ("Kitasan Black", "キタサンブラック"),
+        ("Contrail", "コントレイル"),
+        ("Black Tide", "ブラックタイド"),
+        ("Fuji Kiseki", "フジキセキ"),
+        ("Hearts Cry", "ハーツクライ"),
+        ("Just a Way", "ジャスタウェイ"),
+        # キングマンボ系
+        ("King Kamehameha", "キングカメハメハ"),
+        ("Lord Kanaloa", "ロードカナロア"),
+        ("Rulership", "ルーラーシップ"),
+        ("Duramente", "ドゥラメンテ"),
+        # ロベルト系
+        ("Epiphaneia", "エピファネイア"),
+        ("Maurice", "モーリス"),
+        # ターントゥ系
+        ("Taiki Shuttle", "タイキシャトル"),
+        # ストームキャット系
+        ("Henny Hughes", "ヘニーヒューズ"),
+    ]
+    for en, ja in pairs:
+        en_line = sl.classify_sire(en)
+        ja_line = sl.classify_sire(ja)
+        assert en_line != "unknown", f"英名 {en!r} が unknown。LINE_BY_SIRE への追加漏れ (SS-176 型)"
+        assert ja_line != "unknown", f"kana {ja!r} が unknown"
+        assert en_line == ja_line, f"{en} と {ja} の line 不一致: {en_line} vs {ja_line}"
+
+
 def test_every_line_has_founder_stop_point():
     """LINE_BY_SIRE に現れる全 line_key は FOUNDERS の停止点にも存在する
     (2026-07-08 code-quality 監査の変更失敗モード対策)。新 line を追加したのに
