@@ -77,7 +77,8 @@ def _file_sha256(path: Path) -> str:
 
 def _prediction_date_from_html(path: Path) -> str | None:
     """Extract the first rendered race date without loading the whole HTML."""
-    pattern = re.compile(br'race-(\d{4})-(\d{2})-(\d{2})-')
+    # 実テンプレートの anchor id は race-{yyyymmdd}-{track}-{num} 形式 (index.html.j2)
+    pattern = re.compile(br'race-(\d{4})(\d{2})(\d{2})-')
     scanned = b""
     with path.open("rb") as source:
         while len(scanned) < 512 * 1024:

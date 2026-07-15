@@ -119,7 +119,7 @@ def test_publish_to_icloud_passes_clean_html(tmp_path, monkeypatch):
     web_dist = tmp_path / "dist"
     web_dist.mkdir()
     (web_dist / "index.html").write_text(
-        '<!DOCTYPE html><html><body><details id="race-2026-07-12-05-1">'
+        '<!DOCTYPE html><html><body><details id="race-20260712-05-1">'
         '<h1>通常モード</h1></details></body></html>',
         encoding="utf-8",
     )
