@@ -78,6 +78,11 @@ def main() -> int:
                          "(例: --since-year 2023)。現出馬表で実際に目立つ『その他』に絞る。"
                          "全期間集計では歴史的な母母父が大量に混じるため。")
     args = ap.parse_args()
+    # --since-year は 4 桁西暦のみ許可。race_year は "YYYY" 固定長で字句比較するため、
+    # 3 桁以下だと "23" >= "2023" が字句上 True になり黙って全期間扱いに倒れる (data-pipeline
+    # 監査 D3)。範囲外は fail-fast で弾く。
+    if args.since_year is not None and not (1900 <= args.since_year <= 2100):
+        ap.error(f"--since-year は 4 桁西暦 (1900-2100) で指定してください: {args.since_year}")
 
     # 読み取り専用で開く (診断は観察系。init_db の書込み migration を走らせて
     #  GUI/ingest とロック競合させない — 2026-07-06 data-pipeline 指摘)。
