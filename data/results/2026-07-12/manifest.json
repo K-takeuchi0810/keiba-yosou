@@ -1,0 +1,35 @@
+{
+  "date": "20260712",
+  "generated_at": "2026-07-15T23:30:24",
+  "source_html": "data\\results\\2026-07-12\\predictions_source_20260712_git2642e8c.html",
+  "source_html_sha256": "d5863b8b0739c7ae0bad86bf2110387f365ce7ae56e7ffa94248a56fb5e18d8a",
+  "version_meta": {
+    "calibrator": "isotonic (p26-lgbm-v6-calibfit-2025_isotonic, 2026-07-03)",
+    "lgbm": "lgbm-v6-rel-draw-clean-tuned-fixed (2026-07-02)",
+    "git_sha": "f9d9f65"
+  },
+  "builder_git_sha": "2a5ae4d485267fa252927772849c8eb0d21f0268",
+  "builder_git_dirty": false,
+  "supersedes_manifest_sha256": "10e707661bf0c81e058cde187a660b7be445e19255524856af32cecb3cc676b4",
+  "warnings": {
+    "excluded_placeholder_rows": 0,
+    "null_odds_fetched_at_rows": 137
+  },
+  "counts": {
+    "html_races_parsed": 36,
+    "html_horses_parsed": 470,
+    "html_top_picks_parsed": 180,
+    "predictions": 470,
+    "final_odds": 470,
+    "race_results": 470,
+    "payouts": 36,
+    "evaluation_summary": 470
+  },
+  "csv_sha256": {
+    "predictions.csv": "6b0a6987c98f7e10b27a0dda9b3d6fc22bbffda7cd11a2914bf4fe380c5cdc6c",
+    "final_odds.csv": "8e43ba3dbf56eb926f8beea20ee23fa231d2574fb4360e0f614647e7b291de44",
+    "race_results.csv": "d01e3929ff77c9b4968ab33615d75865f86cf6e66b639b63177ae4b7cf5c4dce",
+    "payouts.csv": "95ec0e713966c602feba9e8a5f7057d5cf08b23371db0ff9455229db70382116",
+    "evaluation_summary.csv": "f0035156bf275612cbc7c6978877c783c37d913b6c2e90285d3ba743b8edb1c7"
+  }
+}
