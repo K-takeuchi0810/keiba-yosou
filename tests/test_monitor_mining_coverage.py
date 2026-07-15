@@ -82,3 +82,15 @@ def test_mining_coverage_none_when_empty(patched_db):
     from scripts.monitor import measure_mining_coverage
     r = measure_mining_coverage(days=30)
     assert r["n_horses"] == 0 and r["coverage"] is None
+
+
+def test_placeholder_canary_warns_and_exits_one(patched_db, monkeypatch, capsys):
+    from scripts import monitor
+
+    y, md = _recent_ymd(0)
+    _add_horse(patched_db, y, md, "11", "00", confirmed=0)
+    patched_db.commit()
+    monkeypatch.setattr("sys.argv", ["monitor"])
+
+    assert monitor.main() == 1
+    assert "WARNING: horse_num='00' invariant violated (1 rows)" in capsys.readouterr().err

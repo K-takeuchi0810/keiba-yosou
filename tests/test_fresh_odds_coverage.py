@@ -6,6 +6,7 @@ JSONL を読んで集計し、ok_rate や eligible 累計を CLI 出力する。
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 import scripts.fresh_odds_coverage as mod
 
@@ -118,11 +119,57 @@ def test_find_run_gaps_detects_only_intervals_over_15_minutes():
         {"run_at": "2026-07-12T09:30:03"},
     ]
 
-    gaps = mod._find_run_gaps(rows)
+    gaps = mod._find_run_gaps(rows, now=datetime(2026, 7, 12, 9, 30))
     assert len(gaps) == 1
     assert gaps[0][0].strftime("%H:%M") == "09:10"
     assert gaps[0][1].strftime("%H:%M") == "09:30"
     assert gaps[0][2] == 20
+
+
+def test_find_run_gaps_detects_missing_morning_edge():
+    rows = [
+        {"target_date": "20260712", "run_at": "2026-07-12T09:20:00"},
+        {"target_date": "20260712", "run_at": "2026-07-12T16:40:00"},
+    ]
+    gaps = mod._find_run_gaps(rows)
+    assert (gaps[0][0].strftime("%H:%M"), gaps[0][1].strftime("%H:%M"), gaps[0][2]) == (
+        "09:00", "09:20", 20
+    )
+
+
+def test_find_run_gaps_detects_missing_evening_edge():
+    rows = [
+        {"target_date": "20260712", "run_at": "2026-07-12T09:00:00"},
+        {"target_date": "20260712", "run_at": "2026-07-12T16:20:00"},
+    ]
+    gaps = mod._find_run_gaps(rows)
+    assert (gaps[-1][0].strftime("%H:%M"), gaps[-1][1].strftime("%H:%M"), gaps[-1][2]) == (
+        "16:20", "16:40", 20
+    )
+
+
+def test_main_warns_when_open_day_has_zero_runs(monkeypatch, tmp_path, capsys):
+    p = tmp_path / "empty.jsonl"
+    p.write_text("", encoding="utf-8")
+    monkeypatch.setattr(mod, "_load_open_dates", lambda *_: {"20260712"})
+    monkeypatch.setattr(
+        "sys.argv",
+        ["fresh_odds_coverage.py", "--path", str(p), "--date", "20260712", "--check-gaps"],
+    )
+    assert mod.main() == 1
+    assert "WARNING: all runs missing 20260712" in capsys.readouterr().out
+
+
+def test_main_does_not_warn_for_non_open_day(monkeypatch, tmp_path, capsys):
+    p = tmp_path / "empty.jsonl"
+    p.write_text("", encoding="utf-8")
+    monkeypatch.setattr(mod, "_load_open_dates", lambda *_: set())
+    monkeypatch.setattr(
+        "sys.argv",
+        ["fresh_odds_coverage.py", "--path", str(p), "--date", "20260713", "--check-gaps"],
+    )
+    assert mod.main() == 0
+    assert "WARNING:" not in capsys.readouterr().out
 
 
 def test_main_check_gaps_warns_and_returns_one(monkeypatch, tmp_path, capsys):
@@ -135,6 +182,7 @@ def test_main_check_gaps_warns_and_returns_one(monkeypatch, tmp_path, capsys):
         "sys.argv",
         ["fresh_odds_coverage.py", "--path", str(p), "--date", "20260712", "--check-gaps"],
     )
+    monkeypatch.setattr(mod, "_load_open_dates", lambda *_: {"20260712"})
 
     assert mod.main() == 1
     assert "WARNING: gap 11:50->14:00 (130m)" in capsys.readouterr().out

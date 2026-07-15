@@ -33,6 +33,8 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from db import open_db
+
 
 COVERAGE_LOG_PATH = Path(__file__).resolve().parent.parent / "data" / "logs" / "fresh_odds_coverage.jsonl"
 GAP_WINDOW_START = (9, 0)
@@ -73,7 +75,8 @@ def _group_by_date(records: list[dict]) -> dict[str, list[dict]]:
 
 
 def _find_run_gaps(
-    date_records: list[dict], threshold_minutes: int = GAP_THRESHOLD_MINUTES
+    date_records: list[dict], threshold_minutes: int = GAP_THRESHOLD_MINUTES,
+    *, target_date: str | None = None, now: datetime | None = None,
 ) -> list[tuple[datetime, datetime, int]]:
     run_times: list[datetime] = []
     for record in date_records:
@@ -89,6 +92,31 @@ def _find_run_gaps(
             run_times.append(run_at)
     run_times.sort()
 
+    date_key = target_date
+    if not date_key and date_records:
+        date_key = date_records[0].get("target_date")
+    if not date_key and run_times:
+        date_key = run_times[0].strftime("%Y%m%d")
+    if not date_key:
+        return []
+
+    day = datetime.strptime(date_key, "%Y%m%d")
+    tzinfo = run_times[0].tzinfo if run_times else None
+    window_start = day.replace(
+        hour=GAP_WINDOW_START[0], minute=GAP_WINDOW_START[1], tzinfo=tzinfo
+    )
+    window_end = day.replace(
+        hour=GAP_WINDOW_END[0], minute=GAP_WINDOW_END[1], tzinfo=tzinfo
+    )
+    current = now or datetime.now(tz=tzinfo)
+    if current.date() == day.date():
+        window_end = min(window_end, current.replace(second=0, microsecond=0))
+    elif current.date() < day.date():
+        return []
+
+    # Window boundaries are virtual runs so missing first/last fetches are visible.
+    run_times = [window_start, *run_times, window_end]
+
     gaps: list[tuple[datetime, datetime, int]] = []
     threshold_seconds = threshold_minutes * 60
     for previous, current in zip(run_times, run_times[1:]):
@@ -96,6 +124,35 @@ def _find_run_gaps(
         if seconds > threshold_seconds:
             gaps.append((previous, current, int(seconds // 60)))
     return gaps
+
+
+def _requested_date_range(
+    records: list[dict], *, last_days: int | None, target_date: str | None
+) -> tuple[str, str] | None:
+    if target_date:
+        return target_date, target_date
+    if last_days is not None:
+        return (
+            (datetime.now() - timedelta(days=last_days)).strftime("%Y%m%d"),
+            datetime.now().strftime("%Y%m%d"),
+        )
+    dates = sorted(r.get("target_date") for r in records if r.get("target_date"))
+    return (dates[0], dates[-1]) if dates else None
+
+
+def _load_open_dates(start_date: str, end_date: str) -> set[str]:
+    """Return JRA race dates so a fetcher that emitted zero logs is still detected."""
+    with open_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT race_year || race_month_day AS race_date
+              FROM races
+             WHERE track_code BETWEEN '01' AND '10'
+               AND (race_year || race_month_day) BETWEEN ? AND ?
+            """,
+            (start_date, end_date),
+        ).fetchall()
+    return {str(row[0]) for row in rows}
 
 
 def _aggregate(date_records: list[dict]) -> dict:
@@ -190,25 +247,45 @@ def main() -> int:
     ap.add_argument("--path", default=None, help="coverage JSONL のパス (デフォルト data/logs/fresh_odds_coverage.jsonl)")
     ap.add_argument(
         "--check-gaps", action="store_true",
-        help="9:00〜16:40の隣接run間隔が15分超なら警告してexit 1",
+        help="開催日の9:00〜16:40でrun間隔が15分超なら警告してexit 1",
     )
     args = ap.parse_args()
     path = Path(args.path) if args.path else COVERAGE_LOG_PATH
     records = _load_records(path)
-    if not records:
+    if not records and not args.check_gaps:
         print(f"(no coverage records at {path})")
         return 0
     filtered = _filter_records(records, last_days=args.last, target_date=args.date)
     grouped = _group_by_date(filtered)
+    gap_grouped = grouped
+    if args.check_gaps:
+        requested = _requested_date_range(
+            records, last_days=args.last, target_date=args.date
+        )
+        if requested:
+            open_dates = _load_open_dates(*requested)
+            # Coverage logs also contain non-race-day scheduler heartbeats. They
+            # must stay in the normal report but are outside the gap canary.
+            gap_grouped = {
+                open_date: grouped.get(open_date, [])
+                for open_date in sorted(open_dates)
+            }
     _print_report(grouped)
     if args.check_gaps:
         found_gap = False
-        for _date, date_records in grouped.items():
-            for previous, current, minutes in _find_run_gaps(date_records):
+        for date, date_records in gap_grouped.items():
+            gaps = _find_run_gaps(date_records, target_date=date)
+            for previous, current, minutes in gaps:
                 found_gap = True
-                print(
-                    f"WARNING: gap {previous:%H:%M}->{current:%H:%M} ({minutes}m)"
-                )
+                if not any(record.get("run_at") for record in date_records):
+                    print(
+                        f"WARNING: all runs missing {date} "
+                        f"({previous:%H:%M}->{current:%H:%M}, {minutes}m)"
+                    )
+                else:
+                    print(
+                        f"WARNING: gap {previous:%H:%M}->{current:%H:%M} ({minutes}m)"
+                    )
         if found_gap:
             return 1
     return 0

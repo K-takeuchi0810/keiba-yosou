@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
 import sys
 from datetime import datetime
@@ -22,10 +23,11 @@ from config import (
     BET_KELLY_MODE,
     BUY_FILTER_DEFAULT,
     ICLOUD_PUBLISH_DIR,
+    PROJECT_ROOT,
     WEB_DIST,
     is_whitelisted_race,
 )
-from db import insert_prediction_log, open_db
+from db import SQL_VALID_HORSE_NUM, insert_prediction_log, is_valid_horse_num, open_db
 from predictor import is_tentative, predict_race
 from predictor.candidates import (
     BUY_CANDIDATE_MAX,
@@ -51,6 +53,7 @@ from web.codes import (
 )
 
 TEMPLATES = Path(__file__).resolve().parent / "templates"
+PREDICTION_ARCHIVE_ROOT = PROJECT_ROOT / "data" / "results"
 
 # 買い目フィルタの既定値は `config.BUY_FILTER_DEFAULT` が唯一の出典。
 # 既存コード (gui / backtest 等) が `BET_MIN_*` を import している関係で、
@@ -70,6 +73,54 @@ def _file_sha256(path: Path) -> str:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _prediction_date_from_html(path: Path) -> str | None:
+    """Extract the first rendered race date without loading the whole HTML."""
+    # 実テンプレートの anchor id は race-{yyyymmdd}-{track}-{num} 形式 (index.html.j2)
+    pattern = re.compile(br'race-(\d{4})(\d{2})(\d{2})-')
+    scanned = b""
+    with path.open("rb") as source:
+        while len(scanned) < 512 * 1024:
+            chunk = source.read(64 * 1024)
+            if not chunk:
+                break
+            scanned += chunk
+            match = pattern.search(scanned)
+            if match:
+                return b"-".join(match.groups()).decode("ascii")
+    return None
+
+
+def _archive_prediction_html(
+    source: Path, published_at: datetime, target_date: str | None = None
+) -> Path:
+    normalized = None
+    if target_date:
+        raw = target_date.replace("-", "")
+        if len(raw) == 8 and raw.isdigit():
+            normalized = f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"
+    normalized = normalized or _prediction_date_from_html(source)
+    if not normalized:
+        normalized = published_at.strftime("%Y-%m-%d")
+        logger.warning(
+            "予想HTMLから対象開催日を取得できないため、公開日 %s を使用します。",
+            normalized,
+        )
+
+    git_sha = str(_build_version_snapshot().get("git_sha") or "unknown")
+    git_sha = re.sub(r"[^0-9A-Za-z_-]", "", git_sha) or "unknown"
+    destination_dir = PREDICTION_ARCHIVE_ROOT / normalized
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    destination = destination_dir / (
+        f"predictions_source_{normalized.replace('-', '')}_"
+        f"{published_at:%H%M%S}_git{git_sha}.html"
+    )
+    if destination.exists():
+        logger.warning("予想HTMLアーカイブは既存のため上書きしません: %s", destination)
+        return destination
+    shutil.copy2(source, destination)
+    return destination
 
 
 def _prune_old_files(
@@ -190,9 +241,10 @@ def build_view_model(
             """
             SELECT * FROM horse_races
             WHERE (race_year || race_month_day) BETWEEN ? AND ?
+              AND {SQL_VALID_HORSE_NUM}
             ORDER BY race_year, race_month_day, track_code, race_num,
                      CAST(horse_num AS INTEGER)
-            """,
+            """.format(SQL_VALID_HORSE_NUM=SQL_VALID_HORSE_NUM),
             (from_y + from_md, to_y + to_md),
         ).fetchall()
         payout_rows = conn.execute(
@@ -244,7 +296,7 @@ def build_view_model(
             # スコアリングしてしまうため、ここで弾く。
             raws = [
                 h for h in raws
-                if (h.get("horse_num") or "").strip() not in ("", "00")
+                if is_valid_horse_num(h.get("horse_num"))
             ]
             if not raws:
                 continue
@@ -614,7 +666,9 @@ class StalePublishRefused(RuntimeError):
     """
 
 
-def publish_to_icloud(allow_stale: bool = False) -> Path:
+def publish_to_icloud(
+    allow_stale: bool = False, target_date: str | None = None
+) -> Path:
     """生成済み web/dist/index.html を iCloud Drive 公開ディレクトリにコピー。
 
     allow_stale=False (デフォルト) で index.html に verification-banner が含まれて
@@ -662,6 +716,7 @@ def publish_to_icloud(allow_stale: bool = False) -> Path:
     snapshot = snapshot_dir / f"index_{stamp}.html"
     shutil.copy2(dst, snapshot)
     os.utime(snapshot, None)
+    archive = _archive_prediction_html(src, published_at, target_date)
 
     digest = _file_sha256(dst)
     size = dst.stat().st_size
@@ -678,6 +733,7 @@ def publish_to_icloud(allow_stale: bool = False) -> Path:
         "source_index_mtime": source_mtime,
         "source_sha256": src_digest,
         "source_bytes": src_stat.st_size,
+        "repository_archive": str(archive),
     }
     (ICLOUD_PUBLISH_DIR / "_sync_status.json").write_text(
         json.dumps(status, ensure_ascii=False, indent=2) + "\n",
@@ -755,7 +811,10 @@ if __name__ == "__main__":
     published = None
     if publish_decision:
         try:
-            published = publish_to_icloud(allow_stale=args.allow_stale_publish)
+            published = publish_to_icloud(
+                allow_stale=args.allow_stale_publish,
+                target_date=args.from_date,
+            )
         except FileNotFoundError as e:
             print(f"publish skipped: {e}", file=sys.stderr)
         except StalePublishRefused as e:

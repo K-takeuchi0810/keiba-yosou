@@ -334,7 +334,7 @@ def git_provenance() -> tuple[str, bool]:
         capture_output=True, text=True,
     ).stdout.strip()
     status = subprocess.run(
-        ["git", "status", "--porcelain", "--untracked-files=no"],
+        ["git", "status", "--porcelain", "--", ".", ":!data/results"],
         cwd=ROOT, check=True, capture_output=True, text=True,
     ).stdout.strip()
     return sha, bool(status)
@@ -345,6 +345,50 @@ def normalize_horse_num(value: object) -> str | None:
     if not text:
         return None
     return text.lstrip("0") or None
+
+
+def race_num_of(race_num: int | str | None) -> str:
+    return f"{int(race_num) if race_num is not None else 0:02d}"
+
+
+def count_post_start_stamped_rows(
+    horse_rows: list[dict], race_rows: list[dict], date: str
+) -> int:
+    """Count odds timestamps later than the corresponding DB race start.
+
+    Rows whose race start is unavailable or malformed remain unclassified; JV-Data
+    normally supplies ``races.start_time`` as HHMM.
+    """
+    starts: dict[tuple[str, str, str, str], str] = {}
+    for race in race_rows:
+        raw = "".join(ch for ch in str(race.get("start_time") or "") if ch.isdigit())
+        if len(raw) == 3:
+            raw = f"0{raw}"
+        if len(raw) == 4:
+            starts[(
+                str(race.get("track_code") or ""), str(race.get("kaiji") or ""),
+                str(race.get("nichiji") or ""), str(race.get("race_num") or ""),
+            )] = raw
+
+    count = 0
+    for horse in horse_rows:
+        raw_stamp = horse.get("odds_fetched_at")
+        start_hhmm = starts.get((
+            str(horse.get("track_code") or ""), str(horse.get("kaiji") or ""),
+            str(horse.get("nichiji") or ""), str(horse.get("race_num") or ""),
+        ))
+        if not raw_stamp or not start_hhmm:
+            continue
+        try:
+            stamped_at = datetime.fromisoformat(str(raw_stamp).replace("Z", "+00:00"))
+            race_start = datetime.strptime(
+                f"{date}{start_hhmm}", "%Y%m%d%H%M"
+            ).replace(tzinfo=stamped_at.tzinfo)
+        except (TypeError, ValueError):
+            continue
+        if stamped_at > race_start:
+            count += 1
+    return count
 
 
 def validate_output_quality(
@@ -447,7 +491,7 @@ def main() -> int:
     cur = conn.execute("""
         SELECT race_year, race_month_day, track_code, kaiji, nichiji, race_num,
                race_name, distance, track_type_code, grade_code, starter_count,
-               turf_condition, dirt_condition, weather_code
+               turf_condition, dirt_condition, weather_code, start_time
           FROM races
          WHERE race_year = ? AND race_month_day = ?
          ORDER BY track_code, race_num
@@ -457,9 +501,6 @@ def main() -> int:
     print(f"db: races={len(race_rows)}, horse_races={len(horse_rows)}, payouts={len(payout_rows)}")
 
     # 3. race_id を組む helper
-    def race_num_of(race_num: int | str | None) -> str:
-        return f"{int(race_num) if race_num is not None else 0:02d}"
-
     def race_id_of(track_code: str, race_num: int | str) -> str:
         return f"{date}-{track_code}-{race_num_of(race_num)}"
 
@@ -657,6 +698,12 @@ def main() -> int:
             "excluded_placeholder_rows": excluded_placeholder_rows,
             "null_odds_fetched_at_rows": sum(
                 not h.get("odds_fetched_at") for h in horse_rows
+            ),
+            "post_start_stamped_rows": count_post_start_stamped_rows(
+                horse_rows, race_rows, date
+            ),
+            "morning_popularity_populated_rows": sum(
+                p.get("morning_popularity") not in (None, "") for p in predictions
             ),
         },
         "counts": {

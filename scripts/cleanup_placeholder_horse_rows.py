@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 from config import DB_PATH
+from db import SQL_VALID_HORSE_NUM
 
 
 RACE_KEY = (
@@ -24,7 +25,7 @@ def inspect_placeholders(conn: sqlite3.Connection) -> tuple[int, list[sqlite3.Ro
         "SELECT COUNT(*) FROM horse_races WHERE horse_num='00'"
     ).fetchone()[0]
     violations = conn.execute(
-        """
+        f"""
         SELECT h.race_year, h.race_month_day, h.track_code,
                h.kaiji, h.nichiji, h.race_num,
                h.confirmed_order, h.win_odds, h.odds_fetched_at
@@ -42,9 +43,7 @@ def inspect_placeholders(conn: sqlite3.Connection) -> tuple[int, list[sqlite3.Ro
                        AND resolved.kaiji=h.kaiji
                        AND resolved.nichiji=h.nichiji
                        AND resolved.race_num=h.race_num
-                       AND resolved.horse_num IS NOT NULL
-                       AND TRIM(resolved.horse_num) != ''
-                       AND resolved.horse_num != '00'
+                       AND {SQL_VALID_HORSE_NUM}
                 )
            )
          ORDER BY h.race_year, h.race_month_day, h.track_code, h.race_num

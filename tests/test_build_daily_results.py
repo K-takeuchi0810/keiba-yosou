@@ -7,9 +7,6 @@ from pathlib import Path
 
 from scripts import build_daily_results
 
-_SQLITE_CONNECT = sqlite3.connect
-
-
 def _html_fragment(
     *,
     horse_name_html: str = "テストホース",
@@ -34,7 +31,10 @@ def _run_main(
     html_text: str | None = None,
     expected_rc: int = 0,
 ) -> Path:
-    conn = _SQLITE_CONNECT(":memory:")
+    db_path = tmp_path / "daily_results.sqlite3"
+    if db_path.exists():
+        db_path.unlink()
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.executescript(
         """
@@ -57,7 +57,8 @@ def _run_main(
           race_year TEXT, race_month_day TEXT, track_code TEXT, kaiji TEXT,
           nichiji TEXT, race_num TEXT, race_name TEXT, distance INTEGER,
           track_type_code TEXT, grade_code TEXT, starter_count INTEGER,
-          turf_condition TEXT, dirt_condition TEXT, weather_code TEXT
+          turf_condition TEXT, dirt_condition TEXT, weather_code TEXT,
+          start_time TEXT
         );
         """
     )
@@ -75,15 +76,15 @@ def _run_main(
         (*common, "01", 500, "01", 200, None, None, "00", 0, None, None, None, None),
     )
     conn.execute(
-        "INSERT INTO races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (*common, "テスト競走", 1200, "24", "", 1, "", "1", "1"),
+        "INSERT INTO races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (*common, "テスト競走", 1200, "24", "", 1, "", "1", "1", "1100"),
     )
     conn.commit()
+    conn.close()
 
     html_path = tmp_path / "predictions.html"
     html_path.write_text(html_text or _html_fragment(), encoding="utf-8")
     output_dir = tmp_path / "out"
-    monkeypatch.setattr(build_daily_results.sqlite3, "connect", lambda _path: conn)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -91,7 +92,7 @@ def _run_main(
             "build_daily_results",
             "--date", "20260712",
             "--html", str(html_path),
-            "--db", ":memory:",
+            "--db", str(db_path),
             "--output-dir", str(output_dir),
         ],
     )
@@ -192,8 +193,31 @@ def test_manifest_records_builder_provenance_and_superseded_hash(tmp_path, monke
     assert first["warnings"] == {
         "excluded_placeholder_rows": 1,
         "null_odds_fetched_at_rows": 0,
+        "post_start_stamped_rows": 0,
+        "morning_popularity_populated_rows": 1,
     }
 
     _run_main(tmp_path, monkeypatch)
     second = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert second["supersedes_manifest_sha256"] == hashlib.sha256(first_bytes).hexdigest()
+
+
+def test_race_num_of_is_directly_testable():
+    assert build_daily_results.race_num_of(1) == "01"
+    assert build_daily_results.race_num_of("12") == "12"
+
+
+def test_post_start_stamped_rows_counts_only_late_odds():
+    races = [{
+        "track_code": "02", "kaiji": "01", "nichiji": "01",
+        "race_num": "1", "start_time": "1100",
+    }]
+    horses = [
+        {"track_code": "02", "kaiji": "01", "nichiji": "01", "race_num": "1",
+         "odds_fetched_at": "2026-07-12T10:59:00"},
+        {"track_code": "02", "kaiji": "01", "nichiji": "01", "race_num": "1",
+         "odds_fetched_at": "2026-07-12T11:01:00"},
+    ]
+    assert build_daily_results.count_post_start_stamped_rows(
+        horses, races, "20260712"
+    ) == 1

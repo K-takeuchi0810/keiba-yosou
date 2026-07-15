@@ -186,3 +186,19 @@ def test_resolved_se_removes_same_race_placeholder():
         assert [r[0] for r in rows] == ["01"]
     finally:
         conn.close()
+
+
+def test_placeholder_is_rejected_after_resolved_se():
+    conn = _memory_db()
+    try:
+        db.upsert_horse_race(conn, _horse_race_info(horse_num="01"))
+        db.upsert_horse_race(
+            conn,
+            _horse_race_info(horse_num="00", horse_name="枠順未確定"),
+        )
+        rows = conn.execute(
+            "SELECT horse_num FROM horse_races ORDER BY horse_num"
+        ).fetchall()
+        assert [r[0] for r in rows] == ["01"]
+    finally:
+        conn.close()

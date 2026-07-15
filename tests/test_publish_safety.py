@@ -15,6 +15,12 @@ from web.publish_safety import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _archive_root(tmp_path, monkeypatch):
+    from web import generator
+    monkeypatch.setattr(generator, "PREDICTION_ARCHIVE_ROOT", tmp_path / "results")
+
+
 def test_normal_mode_publish_true_returns_unchanged():
     decision, warn = assert_safe_to_publish(
         ignore_odds_freshness=False, publish=True, allow_stale=False
@@ -113,7 +119,8 @@ def test_publish_to_icloud_passes_clean_html(tmp_path, monkeypatch):
     web_dist = tmp_path / "dist"
     web_dist.mkdir()
     (web_dist / "index.html").write_text(
-        '<!DOCTYPE html><html><body><h1>通常モード</h1></body></html>',
+        '<!DOCTYPE html><html><body><details id="race-20260712-05-1">'
+        '<h1>通常モード</h1></details></body></html>',
         encoding="utf-8",
     )
     icloud = tmp_path / "icloud"
@@ -122,6 +129,11 @@ def test_publish_to_icloud_passes_clean_html(tmp_path, monkeypatch):
 
     out = generator.publish_to_icloud()
     assert out.exists()
+    archives = list((tmp_path / "results" / "2026-07-12").glob(
+        "predictions_source_20260712_*_git*.html"
+    ))
+    assert len(archives) == 1
+    assert archives[0].read_bytes() == (web_dist / "index.html").read_bytes()
 
 
 def test_verification_banner_marker_matches_template_output():
