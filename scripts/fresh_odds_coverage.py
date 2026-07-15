@@ -35,6 +35,9 @@ from pathlib import Path
 
 
 COVERAGE_LOG_PATH = Path(__file__).resolve().parent.parent / "data" / "logs" / "fresh_odds_coverage.jsonl"
+GAP_WINDOW_START = (9, 0)
+GAP_WINDOW_END = (16, 40)
+GAP_THRESHOLD_MINUTES = 15
 
 
 def _load_records(path: Path) -> list[dict]:
@@ -67,6 +70,32 @@ def _group_by_date(records: list[dict]) -> dict[str, list[dict]]:
     for r in records:
         grouped[r.get("target_date") or "?"].append(r)
     return dict(sorted(grouped.items()))
+
+
+def _find_run_gaps(
+    date_records: list[dict], threshold_minutes: int = GAP_THRESHOLD_MINUTES
+) -> list[tuple[datetime, datetime, int]]:
+    run_times: list[datetime] = []
+    for record in date_records:
+        raw = record.get("run_at")
+        if not raw:
+            continue
+        try:
+            run_at = datetime.fromisoformat(raw)
+        except (TypeError, ValueError):
+            continue
+        hhmm = (run_at.hour, run_at.minute)
+        if GAP_WINDOW_START <= hhmm <= GAP_WINDOW_END:
+            run_times.append(run_at)
+    run_times.sort()
+
+    gaps: list[tuple[datetime, datetime, int]] = []
+    threshold_seconds = threshold_minutes * 60
+    for previous, current in zip(run_times, run_times[1:]):
+        seconds = (current - previous).total_seconds()
+        if seconds > threshold_seconds:
+            gaps.append((previous, current, int(seconds // 60)))
+    return gaps
 
 
 def _aggregate(date_records: list[dict]) -> dict:
@@ -159,6 +188,10 @@ def main() -> int:
     ap.add_argument("--last", type=int, default=None, help="直近 N 日分のみ集計")
     ap.add_argument("--date", default=None, help="特定の target_date (YYYYMMDD) のみ")
     ap.add_argument("--path", default=None, help="coverage JSONL のパス (デフォルト data/logs/fresh_odds_coverage.jsonl)")
+    ap.add_argument(
+        "--check-gaps", action="store_true",
+        help="9:00〜16:40の隣接run間隔が15分超なら警告してexit 1",
+    )
     args = ap.parse_args()
     path = Path(args.path) if args.path else COVERAGE_LOG_PATH
     records = _load_records(path)
@@ -168,6 +201,16 @@ def main() -> int:
     filtered = _filter_records(records, last_days=args.last, target_date=args.date)
     grouped = _group_by_date(filtered)
     _print_report(grouped)
+    if args.check_gaps:
+        found_gap = False
+        for _date, date_records in grouped.items():
+            for previous, current, minutes in _find_run_gaps(date_records):
+                found_gap = True
+                print(
+                    f"WARNING: gap {previous:%H:%M}->{current:%H:%M} ({minutes}m)"
+                )
+        if found_gap:
+            return 1
     return 0
 
 
