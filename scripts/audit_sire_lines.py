@@ -73,6 +73,10 @@ def main() -> int:
     ap.add_argument("--dump-unknown", default=None,
                     help="「その他」になる全種牡馬を産駒数順 CSV で書き出すパス "
                          "(例: --dump-unknown data/unknown_sires.csv)。全件洗い出し用。")
+    ap.add_argument("--since-year", type=int, default=None,
+                    help="指定年以降に出走した馬に登場する種牡馬だけを対象にする "
+                         "(例: --since-year 2023)。現出馬表で実際に目立つ『その他』に絞る。"
+                         "全期間集計では歴史的な母母父が大量に混じるため。")
     args = ap.parse_args()
 
     # 読み取り専用で開く (診断は観察系。init_db の書込み migration を走らせて
@@ -82,6 +86,27 @@ def main() -> int:
         if n_hn == 0:
             print("breeding_horses が空です (BLOD 未取込)。突合には HN レコードの取り込みが必要。")
             return 1
+
+        # --since-year: 指定年以降に出走した馬 (horse_races.race_year) に絞る。
+        # horse_masters を「その馬が近年走ったか」で filter し、現出馬表で実際に出る
+        # 種牡馬だけを対象にする。全期間集計は数十年前の母母父を大量に含み過大評価になる。
+        recent_where, recent_params = "", ()
+        if args.since_year is not None:
+            try:
+                n_recent = conn.execute(
+                    "SELECT COUNT(DISTINCT blood_register_num) FROM horse_races "
+                    "WHERE race_year >= ?", (str(args.since_year),)).fetchone()[0]
+            except sqlite3.OperationalError as e:
+                print(f"--since-year 使用不可 (horse_races 参照失敗: {e})。全期間で続行します。")
+                n_recent = None
+            if n_recent is not None:
+                # 集計対象 horse_masters を「近年出走馬」に限定する副問い合わせ。
+                recent_where = (" AND blood_register_num IN "
+                                "(SELECT DISTINCT blood_register_num FROM horse_races "
+                                "WHERE race_year >= ?)")
+                recent_params = (str(args.since_year),)
+                print(f"[--since-year {args.since_year}] {args.since_year} 年以降に出走した "
+                      f"{n_recent} 頭に登場する種牡馬に絞って集計します。\n")
 
         # 父・母父・父母父・母母父の 4 世代を「種牡馬の出現」として集計 (weight=産駒頭数)。
         # gen3 (父母父/母母父) は海外祖先の英語名が多く、英語名辞書の効果測定の主対象
@@ -103,8 +128,9 @@ def main() -> int:
             try:
                 rows = conn.execute(
                     f"SELECT {col_name} AS nm, {col_num} AS bn, COUNT(*) AS c "
-                    f"FROM horse_masters WHERE nm IS NOT NULL AND nm != '' "
-                    f"GROUP BY nm, bn").fetchall()
+                    f"FROM horse_masters WHERE nm IS NOT NULL AND nm != ''"
+                    f"{recent_where} "
+                    f"GROUP BY nm, bn", recent_params).fetchall()
             except sqlite3.OperationalError as e:  # 旧スキーマの列欠如等は skip して続行
                 print(f"skip {col_name}: {e}")
                 continue
