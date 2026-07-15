@@ -160,6 +160,14 @@ def measure_mining_coverage(days: int) -> dict:
     }
 
 
+def count_placeholder_horse_rows() -> int:
+    """枠順確定前 placeholder の予期しない残存数を返す。"""
+    with open_db() as conn:
+        return int(conn.execute(
+            "SELECT COUNT(*) FROM horse_races WHERE horse_num='00'"
+        ).fetchone()[0])
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=30,
@@ -199,6 +207,14 @@ def main() -> int:
         print(f"baseline frozen: brier={m['brier_score']:.4f} "
               f"(n={m['n_records']}, {m['from_date']}-{m['to_date']})")
         return 0
+
+    placeholder_count = count_placeholder_horse_rows()
+    if placeholder_count:
+        print(
+            f"WARNING: horse_num='00' invariant violated ({placeholder_count} rows)",
+            file=sys.stderr,
+        )
+        return 1
 
     baseline = _read_baseline_brier()
     if not baseline:

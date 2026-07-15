@@ -50,6 +50,12 @@ SQL_VALID_HORSE_NUM = (
 )
 
 
+def is_valid_horse_num(value: object) -> bool:
+    """Return whether a Python horse number matches SQL_VALID_HORSE_NUM."""
+    text = str(value or "").strip()
+    return bool(text) and text != "00"
+
+
 def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path)
@@ -212,6 +218,22 @@ def upsert_race(conn: sqlite3.Connection, ra: RaceInfo) -> None:
 
 def upsert_horse_race(conn: sqlite3.Connection, se: HorseRaceInfo) -> None:
     row = _se_to_row(se)
+    horse_num = str(row.get("horse_num") or "").strip()
+    if horse_num == "00":
+        # 古い枠順未確定 SE の逆順リプレイで、確定済みレースへ
+        # placeholder が復活するのを入口で防ぐ。
+        existing = conn.execute(
+            f"""
+            SELECT 1 FROM horse_races
+             WHERE race_year=:race_year AND race_month_day=:race_month_day
+               AND track_code=:track_code AND kaiji=:kaiji AND nichiji=:nichiji
+               AND race_num=:race_num AND {SQL_VALID_HORSE_NUM}
+             LIMIT 1
+            """,
+            row,
+        ).fetchone()
+        if existing is not None:
+            return
     cols = list(row.keys())
     placeholders = ",".join(f":{c}" for c in cols)
     update_exprs = []
@@ -230,8 +252,7 @@ def upsert_horse_race(conn: sqlite3.Connection, se: HorseRaceInfo) -> None:
         f"DO UPDATE SET {','.join(update_exprs)}"
     )
     conn.execute(sql, row)
-    horse_num = str(row.get("horse_num") or "").strip()
-    if horse_num and horse_num != "00":
+    if is_valid_horse_num(horse_num):
         # 枠順確定後の正規SEを同じトランザクションで取り込んだ時点で、
         # 同一レースに残る枠順未確定 horse_num='00' 行を冪等に除去する。
         conn.execute(
