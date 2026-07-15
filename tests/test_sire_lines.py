@@ -693,8 +693,10 @@ def test_batch_unknown_csv_recent_2026_07_08():
         "Quiet American": ("mrprospector", "usa"),    # Fappiano → Mr. Prospector
         "Not For Love": ("mrprospector", "usa"),      # Mr. Prospector 直仔
         "Rossini": ("mrprospector", "usa"),           # Miswaki → Mr. Prospector
-        "Medicean": ("mrprospector", "usa"),          # Machiavellian → Mr. Prospector
-        "Lycius": ("mrprospector", "usa"),            # Mr. Prospector 直仔
+        # Medicean/Lycius は英/愛供用の欧州発展枝 → eur (Zafonic/Zamindar と対称。
+        # 2026-07-08 prediction-logic 監査 (a) 指摘反映)
+        "Medicean": ("mrprospector", "eur"),          # Machiavellian → Mr. Prospector (英 Eclipse S.)
+        "Lycius": ("mrprospector", "eur"),            # Mr. Prospector 直仔 (愛 Middle Park S.)
         # neverbend デフォルト eur
         "Mark of Esteem": ("neverbend", "eur"),       # Darshaan → Shirley Heights → Mill Reef → Never Bend
     }

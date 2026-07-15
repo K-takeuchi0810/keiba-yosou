@@ -849,6 +849,10 @@ COUNTRY_OVERRIDE: dict[str, str] = {
     # mrprospector 系のうち Gone West 欧州チャンピオン枝 → 欧州型 (mrprospector 既定=usa の例外)。
     "ザフォニック": "eur", "Zafonic": "eur",
     "ザミンダー": "eur", "Zamindar": "eur",
+    # 実 DB 洗い出し 第3バッチの追加 (2026-07-08 prediction-logic 監査反映):
+    # Medicean/Lycius は mrprospector 系だが欧州 (英/愛) 発展枝 → 欧州型 (Zafonic/Zamindar と対称)。
+    "Medicean": "eur",           # 英 Cheveley Park Stud 供用、Eclipse S. 勝ち。産駒欧州偏重
+    "Lycius": "eur",             # 愛 Kildangan Stud 供用、Middle Park S. 勝ち。産駒欧州
     # native 系のうち Sharpen Up/Sea-Bird 欧州枝 → 欧州型 (native 既定=usa の例外)。
     "シャープンアップ": "eur", "Sharpen Up": "eur",
     "ダイエシス": "eur", "Diesis": "eur",
