@@ -661,6 +661,50 @@ def test_batch_unknown_csv_top_sires_round2_2026_07_08():
         assert sl.line_label_short(k) != "その他", name
 
 
+def test_sunday_silence_english_alias_2026_07_08():
+    """『Sunday Silence』英名の LINE_BY_SIRE 登録漏れバグの regression。
+    実 DB (--since-year 2023) で 176 産駒が unknown 化していた。カナ「サンデーサイレンス」
+    は既存だが 3 代血統では英名で格納されるため両側必要。"""
+    assert sl.classify_sire("Sunday Silence") == "sunday"
+    assert sl.classify_country("Sunday Silence", "sunday") == "jpn"
+    # カナ側は不変 (既存)
+    assert sl.classify_sire("サンデーサイレンス") == "sunday"
+
+
+def test_batch_unknown_csv_recent_2026_07_08():
+    """実 DB 洗い出し 第3バッチ (--since-year 2023 で近年出走馬に絞った unknown 上位)。
+    現代の現役〜近年活躍の主要母父。父系 founder まで確度高いもののみ。"""
+    cases = {
+        # northern デフォルト eur
+        "Frankel": ("northern", "eur"),               # Galileo → Sadler's Wells
+        "Orpen": ("northern", "eur"),                 # Lure → Danzig
+        # northern 米国発展枝 → COUNTRY_OVERRIDE usa
+        "Medaglia d'Oro": ("northern", "usa"),        # El Prado → Sadler's Wells (米国供用。アポストロフィ変種は _normalize が吸収)
+        "Awesome Again": ("northern", "usa"),         # Deputy Minister
+        "Dixieland Band": ("northern", "usa"),        # ND 米国発展
+        "Dixie Union": ("northern", "usa"),           # 父 Dixieland Band
+        "The Prime Minister": ("northern", "usa"),    # Deputy Minister
+        "Toccet": ("northern", "usa"),                # Awesome Again → Deputy Minister
+        "Hard Spun": ("northern", "usa"),             # Danzig 米国残留枝
+        "Lure": ("northern", "usa"),                  # Danzig 米国マイラー
+        # mrprospector デフォルト usa
+        "Fusaichi Pegasus": ("mrprospector", "usa"),
+        "Grindstone": ("mrprospector", "usa"),        # Unbridled → Fappiano → Mr. Prospector
+        "Quiet American": ("mrprospector", "usa"),    # Fappiano → Mr. Prospector
+        "Not For Love": ("mrprospector", "usa"),      # Mr. Prospector 直仔
+        "Rossini": ("mrprospector", "usa"),           # Miswaki → Mr. Prospector
+        "Medicean": ("mrprospector", "usa"),          # Machiavellian → Mr. Prospector
+        "Lycius": ("mrprospector", "usa"),            # Mr. Prospector 直仔
+        # neverbend デフォルト eur
+        "Mark of Esteem": ("neverbend", "eur"),       # Darshaan → Shirley Heights → Mill Reef → Never Bend
+    }
+    for name, (line, country) in cases.items():
+        k = sl.classify_sire(name)
+        assert k == line, f"{name}: {k} != {line}"
+        assert sl.classify_country(name, k) == country, name
+        assert sl.line_label_short(k) != "その他", name
+
+
 def test_unknown_without_conn():
     assert sl.classify_sire("架空種牡馬XYZ") == "unknown"
     assert sl.classify_sire(None) == "unknown"
