@@ -1,28 +1,35 @@
 {
   "date": "20260621",
-  "generated_at": "2026-06-21T20:58:20",
-  "source_html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-06-21\\predictions_source_20260621_1023.html",
+  "generated_at": "2026-07-15T23:30:25",
+  "source_html": "data\\results\\2026-06-21\\predictions_source_20260621_1023.html",
   "source_html_sha256": "2e951809b07322559abf4168e12b772bae74c4a1655c9ce89f0687d1d0b4355c",
   "version_meta": {
     "calibrator": "isotonic (p21_records_2025_isotonic, 2026-06-13)",
     "lgbm": "lgbm-v5-tier23 (2026-05-16)",
     "git_sha": "2df45f6"
   },
+  "builder_git_sha": "2a5ae4d485267fa252927772849c8eb0d21f0268",
+  "builder_git_dirty": false,
+  "supersedes_manifest_sha256": "69f61c73dc67df1ff0d32949f7387a357b8b48f4dfc4fbcf71de2e23f0a242b4",
+  "warnings": {
+    "excluded_placeholder_rows": 0,
+    "null_odds_fetched_at_rows": 0
+  },
   "counts": {
     "html_races_parsed": 36,
     "html_horses_parsed": 501,
     "html_top_picks_parsed": 180,
     "predictions": 501,
-    "final_odds": 537,
-    "race_results": 537,
+    "final_odds": 501,
+    "race_results": 501,
     "payouts": 36,
     "evaluation_summary": 501
   },
   "csv_sha256": {
-    "predictions.csv": "9a5cb4d26ecad9c37ca208cf50ee407210f7f270971dd3ced52ec60c2811b9b1",
-    "final_odds.csv": "fe529b6ced09420d03b505cbac1cf2b0de64a79adfb053fc399930ecd7f521c8",
-    "race_results.csv": "e37b0fad0b6a64b489f49afa556a67573895d15902c19ec2a86397c50e76e30c",
-    "payouts.csv": "356b2315eaa2409f5a68473ac77dcc387fb282f95967bd3d0ce97e263d957ec1",
-    "evaluation_summary.csv": "c600a1309d4b0b7a4679aba1f86b89c691b4c5a093f6c28fab7e4b59db42f460"
+    "predictions.csv": "8c879aa067cc2dd17ea21bbb252d7c57ffed8487709e083bd732a1cd404641d1",
+    "final_odds.csv": "e5e89e609d7d2941e6caa155a42060ce10c016f90dbc6fa41eeb7cccbbfbc1f4",
+    "race_results.csv": "4c3bdb7c7b0dfd4fbc784b09dfafad425f87d1ffabbc48b2ca7d2b898bcfd981",
+    "payouts.csv": "692c2a368283e3f14e53bdce67a67a54f909bd19e3ea02dc53daccc232bdeaf9",
+    "evaluation_summary.csv": "6f737424c65861bc480a624ed3b2a3ba87d1bbc115a8456b5b8a612f0b457e28"
   }
 }

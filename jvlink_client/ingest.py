@@ -154,7 +154,10 @@ def ingest_file_dispatch(
                 upsert_race(conn, parse_ra(rec))
                 ra_count += 1
             elif rec_type == "SE":
-                upsert_horse_race(conn, parse_se(rec))
+                se = parse_se(rec)
+                # upsert_horse_race が正規馬番の到着後、同一トランザクション内で
+                # 枠順未確定 horse_num='00' プレースホルダを冪等に掃除する。
+                upsert_horse_race(conn, se)
                 se_count += 1
             elif rec_type == "HR":
                 upsert_payout(conn, parse_hr(rec))

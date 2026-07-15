@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 logger = logging.getLogger(__name__)
 
-from db import open_db
+from db import SQL_VALID_HORSE_NUM, open_db
 from predictor.calibration import (
     calibration_report,
     fit_bin_calibrator,
@@ -578,13 +578,11 @@ def horses_for_race(conn, race: dict) -> list[dict]:
     return [
         dict(r)
         for r in conn.execute(
-            """
+            f"""
             SELECT * FROM horse_races
             WHERE race_year=? AND race_month_day=? AND track_code=?
               AND kaiji=? AND nichiji=? AND race_num=?
-              AND horse_num IS NOT NULL
-              AND TRIM(horse_num) != ''
-              AND horse_num != '00'
+              AND {SQL_VALID_HORSE_NUM}
             ORDER BY CAST(horse_num AS INTEGER)
             """,
             (

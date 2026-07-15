@@ -166,3 +166,23 @@ def test_result_upsert_does_not_clear_existing_mining_or_odds():
         }
     finally:
         conn.close()
+
+
+def test_resolved_se_removes_same_race_placeholder():
+    conn = _memory_db()
+    try:
+        db.upsert_horse_race(
+            conn,
+            _horse_race_info(horse_num="00", horse_name="枠順未確定"),
+        )
+        assert conn.execute(
+            "SELECT COUNT(*) FROM horse_races WHERE horse_num='00'"
+        ).fetchone()[0] == 1
+
+        db.upsert_horse_race(conn, _horse_race_info(horse_num="01"))
+        rows = conn.execute(
+            "SELECT horse_num FROM horse_races ORDER BY horse_num"
+        ).fetchall()
+        assert [r[0] for r in rows] == ["01"]
+    finally:
+        conn.close()

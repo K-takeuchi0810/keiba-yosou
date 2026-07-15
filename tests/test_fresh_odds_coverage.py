@@ -109,3 +109,47 @@ def test_main_prints_report_with_aggregate(monkeypatch, tmp_path, capsys):
     assert "TimeoutError" in out
     # Plan Step 4 参考表示
     assert "Plan Step 4 参考" in out
+
+
+def test_find_run_gaps_detects_only_intervals_over_15_minutes():
+    rows = [
+        {"run_at": "2026-07-12T09:00:03"},
+        {"run_at": "2026-07-12T09:10:03"},
+        {"run_at": "2026-07-12T09:30:03"},
+    ]
+
+    gaps = mod._find_run_gaps(rows)
+    assert len(gaps) == 1
+    assert gaps[0][0].strftime("%H:%M") == "09:10"
+    assert gaps[0][1].strftime("%H:%M") == "09:30"
+    assert gaps[0][2] == 20
+
+
+def test_main_check_gaps_warns_and_returns_one(monkeypatch, tmp_path, capsys):
+    p = tmp_path / "cov.jsonl"
+    _write_jsonl(p, [
+        {"target_date": "20260712", "run_at": "2026-07-12T11:50:03"},
+        {"target_date": "20260712", "run_at": "2026-07-12T14:00:03"},
+    ])
+    monkeypatch.setattr(
+        "sys.argv",
+        ["fresh_odds_coverage.py", "--path", str(p), "--date", "20260712", "--check-gaps"],
+    )
+
+    assert mod.main() == 1
+    assert "WARNING: gap 11:50->14:00 (130m)" in capsys.readouterr().out
+
+
+def test_main_gap_check_is_opt_in(monkeypatch, tmp_path, capsys):
+    p = tmp_path / "cov.jsonl"
+    _write_jsonl(p, [
+        {"target_date": "20260712", "run_at": "2026-07-12T11:50:03"},
+        {"target_date": "20260712", "run_at": "2026-07-12T14:00:03"},
+    ])
+    monkeypatch.setattr(
+        "sys.argv",
+        ["fresh_odds_coverage.py", "--path", str(p), "--date", "20260712"],
+    )
+
+    assert mod.main() == 0
+    assert "WARNING: gap" not in capsys.readouterr().out

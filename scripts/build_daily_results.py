@@ -34,10 +34,13 @@ import hashlib
 import json
 import re
 import sqlite3
+import subprocess
 import sys
 from datetime import datetime
 from html.parser import HTMLParser
 from pathlib import Path
+
+from db import SQL_VALID_HORSE_NUM
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -72,6 +75,8 @@ class IndexHtmlParser(HTMLParser):
         self._current_td_class: str | None = None
         self._current_td_title: str | None = None
         self._td_buf: list[str] = []
+        self._current_td_span_class: str | None = None
+        self._td_span_buf: list[str] = []
         self._in_pick_line = False
         self._current_pick: dict | None = None
         self._current_pick_span_class: str | None = None
@@ -129,6 +134,14 @@ class IndexHtmlParser(HTMLParser):
         elif tag == "span" and self._in_pick_line:
             self._current_pick_span_class = " ".join(cls)
             self._pick_span_buf = []
+        elif (
+            tag == "span"
+            and self._in_horse_row
+            and self._current_td_class is not None
+            and "pick-reason" in cls
+        ):
+            self._current_td_span_class = " ".join(cls)
+            self._td_span_buf = []
         elif tag == "table" and "entries" in cls:
             self._in_entries_tbody = False  # will flip in tbody
         elif tag == "thead":
@@ -185,17 +198,13 @@ class IndexHtmlParser(HTMLParser):
             elif "col-trainer" in cls:
                 pass
             else:
-                # オッズ列: 数字 + "<br><span class='pick-reason'>N人気</span>"
-                # 上記処理は handle_data + span end で吸収済
+                # オッズは td 直下テキストのみ。人気は pick-reason span で別途読む。
                 m_odds = re.match(r"^\s*([\d.]+)", buf)
                 if m_odds:
                     try:
                         self._current_horse["odds"] = float(m_odds.group(1))
                     except ValueError:
                         pass
-                m_pop = re.search(r"(\d+)人気", buf)
-                if m_pop:
-                    self._current_horse["popularity"] = int(m_pop.group(1))
             self._current_td_class = None
             self._current_td_title = None
             self._td_buf = []
@@ -208,6 +217,14 @@ class IndexHtmlParser(HTMLParser):
             self._in_entries_tbody = False
         elif tag == "thead":
             self._in_entries_thead = False
+        elif tag == "span" and self._current_td_span_class is not None:
+            buf = "".join(self._td_span_buf).strip()
+            if "pick-reason" in self._current_td_span_class:
+                m_pop = re.search(r"(\d+)人気", buf)
+                if m_pop:
+                    self._current_horse["popularity"] = int(m_pop.group(1))
+            self._current_td_span_class = None
+            self._td_span_buf = []
         elif tag == "span" and self._in_pick_line:
             buf = "".join(self._pick_span_buf).strip()
             sc = self._current_pick_span_class or ""
@@ -262,6 +279,8 @@ class IndexHtmlParser(HTMLParser):
             txt = data.strip()
             if txt and not self._current_race.get("start_time"):
                 self._current_race["start_time"] = txt
+        elif self._in_horse_row and self._current_td_span_class is not None:
+            self._td_span_buf.append(data)
         elif self._in_horse_row and self._current_td_class is not None:
             self._td_buf.append(data)
         elif self._in_pick_line and self._current_pick_span_class is not None:
@@ -309,6 +328,52 @@ def write_csv(path: Path, columns: list[str], rows: list[dict]) -> None:
             w.writerow({c: r.get(c) for c in columns})
 
 
+def git_provenance() -> tuple[str, bool]:
+    sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip()
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=no"],
+        cwd=ROOT, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    return sha, bool(status)
+
+
+def normalize_horse_num(value: object) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    return text.lstrip("0") or None
+
+
+def validate_output_quality(
+    predictions: list[dict], *horse_row_groups: list[dict]
+) -> list[str]:
+    errors: list[str] = []
+    bad_popularity = [
+        r for r in predictions
+        if r.get("morning_popularity") not in (None, "")
+        and not 1 <= int(r["morning_popularity"]) <= 18
+    ]
+    if bad_popularity:
+        errors.append(
+            f"morning_popularity outside 1..18: {len(bad_popularity)} rows"
+        )
+
+    invalid_horse_rows = 0
+    for rows in (predictions, *horse_row_groups):
+        for row in rows:
+            num = str(row.get("horse_num") or "").strip()
+            if not num or not num.lstrip("0"):
+                invalid_horse_rows += 1
+    if invalid_horse_rows:
+        errors.append(
+            f"invalid horse_num ('00'/empty/None): {invalid_horse_rows} rows"
+        )
+    return errors
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--date", required=True, help="YYYYMMDD")
@@ -326,6 +391,12 @@ def main() -> int:
 
     output_dir = Path(args.output_dir) if args.output_dir else (ROOT / "data" / "results" / f"{date[:4]}-{date[4:6]}-{date[6:8]}")
     output_dir.mkdir(parents=True, exist_ok=True)
+    old_manifest_path = output_dir / "manifest.json"
+    supersedes_manifest_sha256 = (
+        sha256_of(old_manifest_path) if old_manifest_path.exists() else None
+    )
+    # trackedな出力CSVを自分で更新した結果をdirty扱いしないよう、書出し前に固定する。
+    builder_git_sha, builder_git_dirty = git_provenance()
 
     if args.html:
         html_path = Path(args.html)
@@ -347,12 +418,18 @@ def main() -> int:
     # 2. DB から最終 odds / 着順 / payouts を取る
     conn = sqlite3.connect(args.db)
     conn.row_factory = sqlite3.Row
-    cur = conn.execute("""
+    excluded_placeholder_rows = conn.execute(
+        "SELECT COUNT(*) FROM horse_races "
+        "WHERE race_year=? AND race_month_day=? AND horse_num='00'",
+        (date[:4], date[4:8]),
+    ).fetchone()[0]
+    cur = conn.execute(f"""
         SELECT race_year, race_month_day, track_code, kaiji, nichiji, race_num,
                horse_num, horse_name, win_odds, win_popularity, confirmed_order,
                odds_fetched_at
-          FROM horse_races
+         FROM horse_races
          WHERE race_year = ? AND race_month_day = ?
+           AND {SQL_VALID_HORSE_NUM}
          ORDER BY track_code, race_num, horse_num
     """, (date[:4], date[4:8]))
     horse_rows = [dict(r) for r in cur.fetchall()]
@@ -380,9 +457,11 @@ def main() -> int:
     print(f"db: races={len(race_rows)}, horse_races={len(horse_rows)}, payouts={len(payout_rows)}")
 
     # 3. race_id を組む helper
+    def race_num_of(race_num: int | str | None) -> str:
+        return f"{int(race_num) if race_num is not None else 0:02d}"
+
     def race_id_of(track_code: str, race_num: int | str) -> str:
-        rn = int(race_num) if race_num is not None else 0
-        return f"{date}-{track_code}-{rn:02d}"
+        return f"{date}-{track_code}-{race_num_of(race_num)}"
 
     # ---- predictions.csv (HTML 由来) ----
     predictions: list[dict] = []
@@ -400,7 +479,7 @@ def main() -> int:
             predictions.append({
                 "race_id": rid,
                 "track_code": tc,
-                "race_num": rn,
+                "race_num": race_num_of(rn),
                 "horse_num": num,
                 "horse_name": h.get("name"),
                 "mark": mark,
@@ -414,12 +493,6 @@ def main() -> int:
                 "bet_candidate": (tp["bet_candidate"] if tp else False),
             })
 
-    write_csv(output_dir / "predictions.csv", [
-        "race_id", "track_code", "race_num", "horse_num", "horse_name",
-        "mark", "model_rank_by_mark", "morning_odds", "morning_popularity",
-        "rationale", "win_probability", "expected_value", "confidence", "bet_candidate",
-    ], predictions)
-
     # ---- final_odds.csv (DB 由来、確定 win_odds = 最終オッズ) ----
     final_odds: list[dict] = []
     for h in horse_rows:
@@ -430,18 +503,13 @@ def main() -> int:
         final_odds.append({
             "race_id": rid,
             "track_code": h["track_code"],
-            "race_num": h["race_num"],
-            "horse_num": h["horse_num"].lstrip("0") if h.get("horse_num") else None,
+            "race_num": race_num_of(h["race_num"]),
+            "horse_num": normalize_horse_num(h.get("horse_num")),
             "horse_name": h.get("horse_name"),
             "final_odds": odds_dec,
             "final_popularity": h.get("win_popularity"),
             "odds_fetched_at": h.get("odds_fetched_at"),
         })
-
-    write_csv(output_dir / "final_odds.csv", [
-        "race_id", "track_code", "race_num", "horse_num", "horse_name",
-        "final_odds", "final_popularity", "odds_fetched_at",
-    ], final_odds)
 
     # ---- race_results.csv (DB 由来、confirmed_order) ----
     race_results: list[dict] = []
@@ -450,16 +518,11 @@ def main() -> int:
         race_results.append({
             "race_id": rid,
             "track_code": h["track_code"],
-            "race_num": h["race_num"],
-            "horse_num": h["horse_num"].lstrip("0") if h.get("horse_num") else None,
+            "race_num": race_num_of(h["race_num"]),
+            "horse_num": normalize_horse_num(h.get("horse_num")),
             "horse_name": h.get("horse_name"),
             "confirmed_order": h.get("confirmed_order") or 0,
         })
-
-    write_csv(output_dir / "race_results.csv", [
-        "race_id", "track_code", "race_num", "horse_num", "horse_name",
-        "confirmed_order",
-    ], race_results)
 
     # ---- payouts.csv (DB 由来、単勝 + 複勝) ----
     payouts: list[dict] = []
@@ -468,23 +531,16 @@ def main() -> int:
         payouts.append({
             "race_id": rid,
             "track_code": p["track_code"],
-            "race_num": p["race_num"],
-            "tan_horse_num1": p.get("tan_horse_num1"),
+            "race_num": race_num_of(p["race_num"]),
+            "tan_horse_num1": normalize_horse_num(p.get("tan_horse_num1")),
             "tan_payout1": p.get("tan_payout1"),
-            "fuku_horse_num1": p.get("fuku_horse_num1"),
+            "fuku_horse_num1": normalize_horse_num(p.get("fuku_horse_num1")),
             "fuku_payout1": p.get("fuku_payout1"),
-            "fuku_horse_num2": p.get("fuku_horse_num2"),
+            "fuku_horse_num2": normalize_horse_num(p.get("fuku_horse_num2")),
             "fuku_payout2": p.get("fuku_payout2"),
-            "fuku_horse_num3": p.get("fuku_horse_num3"),
+            "fuku_horse_num3": normalize_horse_num(p.get("fuku_horse_num3")),
             "fuku_payout3": p.get("fuku_payout3"),
         })
-
-    write_csv(output_dir / "payouts.csv", [
-        "race_id", "track_code", "race_num",
-        "tan_horse_num1", "tan_payout1",
-        "fuku_horse_num1", "fuku_payout1", "fuku_horse_num2", "fuku_payout2",
-        "fuku_horse_num3", "fuku_payout3",
-    ], payouts)
 
     # ---- evaluation_summary.csv (統合表) ----
     # build helpers
@@ -550,6 +606,34 @@ def main() -> int:
             "profit_loss_yen_100unit": profit,
         })
 
+    quality_errors = validate_output_quality(
+        predictions, final_odds, race_results, eval_rows
+    )
+    if quality_errors:
+        for error in quality_errors:
+            print(f"QUALITY GATE FAILED: {error}", file=sys.stderr)
+        return 1
+
+    # 品質ゲート通過後にだけCSVを固定する。
+    write_csv(output_dir / "predictions.csv", [
+        "race_id", "track_code", "race_num", "horse_num", "horse_name",
+        "mark", "model_rank_by_mark", "morning_odds", "morning_popularity",
+        "rationale", "win_probability", "expected_value", "confidence", "bet_candidate",
+    ], predictions)
+    write_csv(output_dir / "final_odds.csv", [
+        "race_id", "track_code", "race_num", "horse_num", "horse_name",
+        "final_odds", "final_popularity", "odds_fetched_at",
+    ], final_odds)
+    write_csv(output_dir / "race_results.csv", [
+        "race_id", "track_code", "race_num", "horse_num", "horse_name",
+        "confirmed_order",
+    ], race_results)
+    write_csv(output_dir / "payouts.csv", [
+        "race_id", "track_code", "race_num",
+        "tan_horse_num1", "tan_payout1",
+        "fuku_horse_num1", "fuku_payout1", "fuku_horse_num2", "fuku_payout2",
+        "fuku_horse_num3", "fuku_payout3",
+    ], payouts)
     write_csv(output_dir / "evaluation_summary.csv", [
         "race_id", "track_code", "race_num", "race_name", "distance", "starter_count",
         "horse_num", "horse_name", "mark", "model_rank_by_mark",
@@ -566,6 +650,15 @@ def main() -> int:
         "source_html": str(html_path),
         "source_html_sha256": html_sha,
         "version_meta": meta,
+        "builder_git_sha": builder_git_sha,
+        "builder_git_dirty": builder_git_dirty,
+        "supersedes_manifest_sha256": supersedes_manifest_sha256,
+        "warnings": {
+            "excluded_placeholder_rows": excluded_placeholder_rows,
+            "null_odds_fetched_at_rows": sum(
+                not h.get("odds_fetched_at") for h in horse_rows
+            ),
+        },
         "counts": {
             "html_races_parsed": len(races),
             "html_horses_parsed": sum(len(r["horses"]) for r in races),

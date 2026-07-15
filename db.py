@@ -45,6 +45,9 @@ from jvlink_client.parser import (
 )
 
 SCHEMA_PATH = PROJECT_ROOT / "data" / "schema.sql"
+SQL_VALID_HORSE_NUM = (
+    "horse_num IS NOT NULL AND TRIM(horse_num) != '' AND horse_num != '00'"
+)
 
 
 def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:
@@ -227,6 +230,19 @@ def upsert_horse_race(conn: sqlite3.Connection, se: HorseRaceInfo) -> None:
         f"DO UPDATE SET {','.join(update_exprs)}"
     )
     conn.execute(sql, row)
+    horse_num = str(row.get("horse_num") or "").strip()
+    if horse_num and horse_num != "00":
+        # 枠順確定後の正規SEを同じトランザクションで取り込んだ時点で、
+        # 同一レースに残る枠順未確定 horse_num='00' 行を冪等に除去する。
+        conn.execute(
+            """
+            DELETE FROM horse_races
+             WHERE race_year=:race_year AND race_month_day=:race_month_day
+               AND track_code=:track_code AND kaiji=:kaiji AND nichiji=:nichiji
+               AND race_num=:race_num AND horse_num='00'
+            """,
+            row,
+        )
 
 
 def _hr_to_row(hr: Payout) -> dict:

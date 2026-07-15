@@ -26,7 +26,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from db import open_db
+from db import SQL_VALID_HORSE_NUM, open_db
 
 KEY = ("race_year", "race_month_day", "track_code", "kaiji", "nichiji", "race_num")
 
@@ -92,7 +92,7 @@ def main() -> int:
                 "leg_quality_code,final_3f,mining_predicted_order,horse_weight,"
                 "weight_change_diff,age,sex_code FROM horse_races "
                 "WHERE race_year=? AND race_month_day=? AND track_code=? AND kaiji=? "
-                "AND nichiji=? AND race_num=? AND TRIM(horse_num) NOT IN ('','00')",
+                f"AND nichiji=? AND race_num=? AND {SQL_VALID_HORSE_NUM}",
                 k,
             ).fetchall()
             horses_by_key[k] = [dict(r) for r in rows]
