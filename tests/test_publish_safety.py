@@ -134,6 +134,55 @@ def test_publish_to_icloud_passes_clean_html(tmp_path, monkeypatch):
     ))
     assert len(archives) == 1
     assert archives[0].read_bytes() == (web_dist / "index.html").read_bytes()
+    status = __import__("json").loads(
+        (icloud / "_sync_status.json").read_text(encoding="utf-8")
+    )
+    assert status["repository_archive"] == str(archives[0])
+    assert status["repository_archive_sha256"] == status["source_sha256"]
+
+
+def test_archive_atomic_copy_removes_partial_file_on_failure(tmp_path, monkeypatch):
+    from datetime import datetime
+    from web import generator
+
+    source = tmp_path / "index.html"
+    source.write_text('<details id="race-20260712-05-1">ok</details>', encoding="utf-8")
+    monkeypatch.setattr(generator, "PREDICTION_ARCHIVE_ROOT", tmp_path / "results")
+    monkeypatch.setattr(generator, "_build_version_snapshot", lambda: {"git_sha": "abc123"})
+
+    def fail_mid_copy(_source, temporary):
+        temporary.write_bytes(b"partial")
+        raise OSError("disk full")
+
+    monkeypatch.setattr(generator.shutil, "copy2", fail_mid_copy)
+    with pytest.raises(OSError):
+        generator._archive_prediction_html(source, datetime(2026, 7, 12, 10, 0))
+    assert not list((tmp_path / "results").rglob("*.html"))
+    assert not list((tmp_path / "results").rglob("*.tmp"))
+
+
+def test_publish_continues_when_repository_archive_fails(tmp_path, monkeypatch, caplog):
+    from web import generator
+
+    web_dist = tmp_path / "dist"
+    web_dist.mkdir()
+    (web_dist / "index.html").write_text("<html>clean</html>", encoding="utf-8")
+    icloud = tmp_path / "icloud"
+    monkeypatch.setattr(generator, "WEB_DIST", web_dist)
+    monkeypatch.setattr(generator, "ICLOUD_PUBLISH_DIR", icloud)
+    monkeypatch.setattr(
+        generator, "_archive_prediction_html",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("archive offline")),
+    )
+
+    out = generator.publish_to_icloud()
+    status = __import__("json").loads(
+        (icloud / "_sync_status.json").read_text(encoding="utf-8")
+    )
+    assert out.exists()
+    assert status["repository_archive"] is None
+    assert status["repository_archive_sha256"] is None
+    assert "repository prediction archive failed" in caplog.text
 
 
 def test_verification_banner_marker_matches_template_output():

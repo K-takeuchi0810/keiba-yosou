@@ -45,15 +45,46 @@ from jvlink_client.parser import (
 )
 
 SCHEMA_PATH = PROJECT_ROOT / "data" / "schema.sql"
-SQL_VALID_HORSE_NUM = (
-    "horse_num IS NOT NULL AND TRIM(horse_num) != '' AND horse_num != '00'"
-)
+def sql_valid_horse_num(column: str = "horse_num") -> str:
+    """Return the canonical SQL predicate for a qualified horse_num column."""
+    return (
+        f"{column} IS NOT NULL AND TRIM({column}) != '' AND {column} != '00'"
+    )
+
+
+SQL_VALID_HORSE_NUM = sql_valid_horse_num()
 
 
 def is_valid_horse_num(value: object) -> bool:
     """Return whether a Python horse number matches SQL_VALID_HORSE_NUM."""
     text = str(value or "").strip()
     return bool(text) and text != "00"
+
+
+def sql_invalid_horse_num(column: str = "horse_num") -> str:
+    """SQL inverse of sql_valid_horse_num, including NULL explicitly."""
+    return f"NOT COALESCE(({sql_valid_horse_num(column)}), 0)"
+
+
+def count_horse_num_violations(conn: sqlite3.Connection) -> int:
+    """Count invalid horse numbers coexisting with resolved rows in one race."""
+    return int(conn.execute(
+        f"""
+        SELECT COUNT(*)
+          FROM horse_races invalid
+         WHERE {sql_invalid_horse_num('invalid.horse_num')}
+           AND EXISTS (
+                SELECT 1 FROM horse_races resolved
+                 WHERE resolved.race_year=invalid.race_year
+                   AND resolved.race_month_day=invalid.race_month_day
+                   AND resolved.track_code=invalid.track_code
+                   AND resolved.kaiji=invalid.kaiji
+                   AND resolved.nichiji=invalid.nichiji
+                   AND resolved.race_num=invalid.race_num
+                   AND {sql_valid_horse_num('resolved.horse_num')}
+           )
+        """
+    ).fetchone()[0])
 
 
 def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:

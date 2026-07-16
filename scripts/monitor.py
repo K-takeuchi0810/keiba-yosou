@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import PROJECT_ROOT
-from db import open_db
+from db import count_horse_num_violations, open_db, open_db_readonly
 from predictor.calibration import calibration_report
 from predictor.rules import predict_race
 from scripts.backtest import horses_for_race, list_races
@@ -161,11 +161,9 @@ def measure_mining_coverage(days: int) -> dict:
 
 
 def count_placeholder_horse_rows() -> int:
-    """枠順確定前 placeholder の予期しない残存数を返す。"""
-    with open_db() as conn:
-        return int(conn.execute(
-            "SELECT COUNT(*) FROM horse_races WHERE horse_num='00'"
-        ).fetchone()[0])
+    """正規馬番と同一レースに共存する無効馬番行の件数を返す。"""
+    with open_db_readonly() as conn:
+        return count_horse_num_violations(conn)
 
 
 def main() -> int:
@@ -209,12 +207,13 @@ def main() -> int:
         return 0
 
     placeholder_count = count_placeholder_horse_rows()
+    placeholder_alert = placeholder_count > 0
     if placeholder_count:
         print(
-            f"WARNING: horse_num='00' invariant violated ({placeholder_count} rows)",
+            f"WARNING: horse_num invariant violated ({placeholder_count} rows)\n"
+            "-> run: python -m scripts.cleanup_placeholder_horse_rows --dry-run",
             file=sys.stderr,
         )
-        return 1
 
     baseline = _read_baseline_brier()
     if not baseline:
@@ -244,9 +243,11 @@ def main() -> int:
         "mining_n_horses": mining["n_horses"],
         "mining_threshold": args.mining_threshold,
         "mining_alert": mining_alert,
+        "horse_num_violation_count": placeholder_count,
+        "horse_num_alert": placeholder_alert,
         # 後方互換: 既存の連携が payload["alert"] を見ているため brier 側を維持しつつ
         # 総合アラート (どちらか) を alert に集約。
-        "alert": (drift > args.threshold) or mining_alert,
+        "alert": (drift > args.threshold) or mining_alert or placeholder_alert,
     }
     print(json.dumps(payload, indent=2, ensure_ascii=False))
     if mining_alert:
@@ -278,7 +279,7 @@ def main() -> int:
             ]
             print(" ".join(cmd), file=sys.stderr)
             subprocess.run(cmd, check=False)
-    # brier drift か mining 劣化のどちらかで非ゼロ終了 (週次タスクの exit code 監視用)。
+    # 各検査を完走し、いずれかの劣化で非ゼロ終了 (週次タスクの exit code 監視用)。
     return 1 if payload["alert"] else 0
 
 

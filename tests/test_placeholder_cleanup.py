@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+import db
 from config import DB_PATH
 from scripts import cleanup_placeholder_horse_rows as cleanup
 
@@ -76,12 +77,12 @@ def test_cleanup_aborts_when_placeholder_is_not_safe(tmp_path, monkeypatch, caps
         ).fetchone()[0] == 1
 
 
-def test_live_database_has_no_placeholder_horse_rows():
+def test_live_database_has_no_placeholder_violations():
+    # 枠順確定前の単独 '00' 行は正当な過渡状態 (確定時に ingest が掃除する) なので
+    # raw count ではなく「正規馬番行と共存する不正行」= violation の不在を検証する。
+    # monitor.py のカナリアと同じ db.count_horse_num_violations に述語を一元化。
     db_path = Path(DB_PATH)
     if not db_path.exists():
         pytest.skip("data/keiba.db is not available")
     with sqlite3.connect(db_path) as conn:
-        count = conn.execute(
-            "SELECT COUNT(*) FROM horse_races WHERE horse_num='00'"
-        ).fetchone()[0]
-    assert count == 0
+        assert db.count_horse_num_violations(conn) == 0
