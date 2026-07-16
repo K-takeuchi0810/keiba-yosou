@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import sys
+from datetime import date as _dt_date, timedelta as _timedelta
 from pathlib import Path
 
 import pytest
@@ -144,11 +145,11 @@ def test_dry_run_flag_overrides_execute(tmp_path, monkeypatch, capsys):
         ).fetchone()[0] == 1
 
 
-def _insert_solo_placeholder(path: Path, month_day: str) -> None:
+def _insert_solo_placeholder(path: Path, year: str, month_day: str) -> None:
     with sqlite3.connect(path) as conn:
         conn.execute(
             "INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?,?,?)",
-            ("2026", month_day, "05", "01", "01", "01", "00", 0, 0, None),
+            (year, month_day, "05", "01", "01", "01", "00", 0, 0, None),
         )
 
 
@@ -159,7 +160,9 @@ def test_future_solo_placeholder_is_not_violation_and_survives_execute(
     # violation として abort させず、--execute でも削除しない
     db_path = tmp_path / "keiba.db"
     _make_db(db_path)  # 2026-07-12 に coexist '00' 1 行 (削除対象)
-    _insert_solo_placeholder(db_path, "1231")  # 遠い未来日の単独 '00'
+    # main() は実時計を使うため、実行日に依存しない「常に未来」の日付を動的生成する
+    future = _dt_date.today() + _timedelta(days=400)
+    _insert_solo_placeholder(db_path, f"{future.year}", f"{future:%m%d}")
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         total, violations = cleanup.inspect_placeholders(conn, today="20260716")
@@ -174,14 +177,14 @@ def test_future_solo_placeholder_is_not_violation_and_survives_execute(
         rows = conn.execute(
             "SELECT race_month_day FROM horse_races WHERE horse_num='00'"
         ).fetchall()
-    assert [r[0] for r in rows] == ["1231"]
+    assert [r[0] for r in rows] == [f"{future:%m%d}"]
 
 
 def test_past_solo_placeholder_is_violation_requiring_manual_judgment(tmp_path):
     # 過去日の単独 '00' は取込欠落の疑い: 自動削除せず violation として報告する
     db_path = tmp_path / "keiba.db"
     _make_db(db_path)
-    _insert_solo_placeholder(db_path, "0501")  # 過去日の単独 '00'
+    _insert_solo_placeholder(db_path, "2026", "0501")  # 過去日の単独 '00'
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         total, violations = cleanup.inspect_placeholders(conn, today="20260716")
