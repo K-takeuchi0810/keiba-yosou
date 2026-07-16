@@ -77,7 +77,7 @@ def _run_main(
     )
     conn.execute(
         "INSERT INTO races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (*common, "テスト競走", 1200, "24", "", 1, "", "1", "1", "1100"),
+        (*common, "テスト競走", 1200, "24", "", 18, "", "1", "1", "1100"),
     )
     conn.commit()
     conn.close()
@@ -178,7 +178,7 @@ def test_quality_gate_rejects_out_of_range_popularity(tmp_path, monkeypatch, cap
         expected_rc=1,
     )
 
-    assert "morning_popularity outside 1..18: 1 rows" in capsys.readouterr().err
+    assert "morning_popularity outside 1..starter_count" in capsys.readouterr().err
     assert not (output_dir / "predictions.csv").exists()
 
 
@@ -191,9 +191,11 @@ def test_manifest_records_builder_provenance_and_superseded_hash(tmp_path, monke
     assert isinstance(first["builder_git_dirty"], bool)
     assert first["supersedes_manifest_sha256"] is None
     assert first["warnings"] == {
+        "schema": 2,
         "excluded_placeholder_rows": 1,
         "null_odds_fetched_at_rows": 0,
         "post_start_stamped_rows": 0,
+        "post_start_unclassified_rows": 0,
         "morning_popularity_populated_rows": 1,
     }
 
@@ -221,3 +223,29 @@ def test_post_start_stamped_rows_counts_only_late_odds():
     assert build_daily_results.count_post_start_stamped_rows(
         horses, races, "20260712"
     ) == 1
+
+
+def test_post_start_unclassified_counts_missing_or_invalid_start():
+    horses = [
+        {"track_code": "02", "kaiji": "01", "nichiji": "01", "race_num": "1",
+         "odds_fetched_at": "2026-07-12T10:59:00"},
+        {"track_code": "02", "kaiji": "01", "nichiji": "01", "race_num": "2",
+         "odds_fetched_at": "2026-07-12T10:59:00"},
+    ]
+    races = [{
+        "track_code": "02", "kaiji": "01", "nichiji": "01",
+        "race_num": "1", "start_time": "bad",
+    }]
+    assert build_daily_results.classify_post_start_rows(
+        horses, races, "20260712"
+    ) == (0, 2)
+
+
+def test_popularity_quality_gate_uses_starter_count():
+    errors = build_daily_results.validate_output_quality(
+        [{"race_id": "R1", "horse_num": "1", "morning_popularity": 3}],
+        starter_count_by_race={"R1": 2},
+    )
+    assert errors == [
+        "morning_popularity outside 1..starter_count (fallback 18): 1 rows"
+    ]

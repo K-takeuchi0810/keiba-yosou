@@ -351,13 +351,13 @@ def race_num_of(race_num: int | str | None) -> str:
     return f"{int(race_num) if race_num is not None else 0:02d}"
 
 
-def count_post_start_stamped_rows(
+def classify_post_start_rows(
     horse_rows: list[dict], race_rows: list[dict], date: str
-) -> int:
-    """Count odds timestamps later than the corresponding DB race start.
+) -> tuple[int, int]:
+    """Return (post-start, unclassified) odds timestamp row counts.
 
-    Rows whose race start is unavailable or malformed remain unclassified; JV-Data
-    normally supplies ``races.start_time`` as HHMM.
+    Null odds timestamps are counted by a separate warning. A non-null timestamp
+    is unclassified when its race start or timestamp cannot be parsed.
     """
     starts: dict[tuple[str, str, str, str], str] = {}
     for race in race_rows:
@@ -370,14 +370,18 @@ def count_post_start_stamped_rows(
                 str(race.get("nichiji") or ""), str(race.get("race_num") or ""),
             )] = raw
 
-    count = 0
+    post_start = 0
+    unclassified = 0
     for horse in horse_rows:
         raw_stamp = horse.get("odds_fetched_at")
         start_hhmm = starts.get((
             str(horse.get("track_code") or ""), str(horse.get("kaiji") or ""),
             str(horse.get("nichiji") or ""), str(horse.get("race_num") or ""),
         ))
-        if not raw_stamp or not start_hhmm:
+        if not raw_stamp:
+            continue
+        if not start_hhmm:
+            unclassified += 1
             continue
         try:
             stamped_at = datetime.fromisoformat(str(raw_stamp).replace("Z", "+00:00"))
@@ -385,24 +389,36 @@ def count_post_start_stamped_rows(
                 f"{date}{start_hhmm}", "%Y%m%d%H%M"
             ).replace(tzinfo=stamped_at.tzinfo)
         except (TypeError, ValueError):
+            unclassified += 1
             continue
         if stamped_at > race_start:
-            count += 1
-    return count
+            post_start += 1
+    return post_start, unclassified
+
+
+def count_post_start_stamped_rows(
+    horse_rows: list[dict], race_rows: list[dict], date: str
+) -> int:
+    return classify_post_start_rows(horse_rows, race_rows, date)[0]
 
 
 def validate_output_quality(
-    predictions: list[dict], *horse_row_groups: list[dict]
+    predictions: list[dict], *horse_row_groups: list[dict],
+    starter_count_by_race: dict[str, int] | None = None,
 ) -> list[str]:
     errors: list[str] = []
+    starter_count_by_race = starter_count_by_race or {}
     bad_popularity = [
         r for r in predictions
         if r.get("morning_popularity") not in (None, "")
-        and not 1 <= int(r["morning_popularity"]) <= 18
+        and not 1 <= int(r["morning_popularity"]) <= (
+            int(starter_count_by_race.get(r.get("race_id")) or 18)
+        )
     ]
     if bad_popularity:
         errors.append(
-            f"morning_popularity outside 1..18: {len(bad_popularity)} rows"
+            "morning_popularity outside 1..starter_count "
+            f"(fallback 18): {len(bad_popularity)} rows"
         )
 
     invalid_horse_rows = 0
@@ -648,7 +664,11 @@ def main() -> int:
         })
 
     quality_errors = validate_output_quality(
-        predictions, final_odds, race_results, eval_rows
+        predictions, final_odds, race_results, eval_rows,
+        starter_count_by_race={
+            race_id: int(race.get("starter_count") or 18)
+            for race_id, race in race_info.items()
+        },
     )
     if quality_errors:
         for error in quality_errors:
@@ -695,6 +715,7 @@ def main() -> int:
         "builder_git_dirty": builder_git_dirty,
         "supersedes_manifest_sha256": supersedes_manifest_sha256,
         "warnings": {
+            "schema": 2,
             "excluded_placeholder_rows": excluded_placeholder_rows,
             "null_odds_fetched_at_rows": sum(
                 not h.get("odds_fetched_at") for h in horse_rows
@@ -702,6 +723,9 @@ def main() -> int:
             "post_start_stamped_rows": count_post_start_stamped_rows(
                 horse_rows, race_rows, date
             ),
+            "post_start_unclassified_rows": classify_post_start_rows(
+                horse_rows, race_rows, date
+            )[1],
             "morning_popularity_populated_rows": sum(
                 p.get("morning_popularity") not in (None, "") for p in predictions
             ),

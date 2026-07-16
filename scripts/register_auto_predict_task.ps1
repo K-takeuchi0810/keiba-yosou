@@ -31,7 +31,8 @@ $settings = New-ScheduledTaskSettingsSet `
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
     -Settings $settings `
-    -Description "F4 daily: fetch_full+fetch_mining(32bit) then auto_predict(64bit) -> Pages/Discord" | Out-Null
+    -Description "F4 daily: fetch+mining -> gap check -> auto_predict -> Pages/Discord" | Out-Null
 Write-Host "registered: $TaskName (daily $StartTime)"
-Write-Host "  chain: fetch_full(32bit) -> fetch_mining(32bit) -> auto_predict(64bit) -> main push -> Pages/Discord"
+Write-Host "  chain: fetch_full(32bit) -> fetch_mining(32bit) -> gap check -> auto_predict(64bit)"
+Write-Host "  exit bits: 1=fresh odds gap, 2=prediction failure"
 Write-Host "manual test: Start-ScheduledTask -TaskName $TaskName"

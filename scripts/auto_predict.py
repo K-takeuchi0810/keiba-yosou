@@ -14,21 +14,35 @@ import argparse
 import json
 import subprocess
 import sys
-import urllib.request
 from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import DB_PATH, PROJECT_ROOT  # noqa: E402
+from scripts.notify_discord import notify_discord  # noqa: E402
 import sqlite3  # noqa: E402
 
-WEBHOOK_FILE = PROJECT_ROOT / "data" / "discord_webhook.txt"
 MARKER = PROJECT_ROOT / "docs" / "predictions_latest.md"
 # GitHub Pages 公開先 (docs/index.html を main /docs から配信)。スマホでレンダリング表示。
 PAGES_HTML = PROJECT_ROOT / "docs" / "index.html"
 GENERATED_HTML = PROJECT_ROOT / "web" / "dist" / "index.html"
 PAGES_URL = "https://k-takeuchi0810.github.io/keiba-yosou/"
 PY = str(PROJECT_ROOT / ".venv64" / "Scripts" / "python.exe")
+
+
+def _stage_publish_artifacts(target_date: str) -> list[Path]:
+    archive_dir = (
+        PROJECT_ROOT / "data" / "results" /
+        f"{target_date[:4]}-{target_date[4:6]}-{target_date[6:]}"
+    )
+    paths = [PAGES_HTML, PAGES_HTML.parent / ".nojekyll", MARKER]
+    paths.extend(sorted(archive_dir.glob("predictions_source_*.html")))
+    subprocess.run(
+        ["git", "add", *(str(path) for path in paths)],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    return paths
 
 
 def _race_days(conn, days: list[str]) -> list[tuple[str, int]]:
@@ -43,15 +57,9 @@ def _race_days(conn, days: list[str]) -> list[tuple[str, int]]:
     return out
 
 
-def _notify(text: str) -> None:
-    url = WEBHOOK_FILE.read_text(encoding="utf-8").strip()
-    req = urllib.request.Request(
-        url, data=json.dumps({"content": text}).encode("utf-8"),
-        # User-Agent 無しの urllib 既定値は Cloudflare に 403 で弾かれる
-        headers={"Content-Type": "application/json", "User-Agent": "keiba-yosou-bot/1.0"},
-        method="POST",
-    )
-    urllib.request.urlopen(req, timeout=15).read()
+def _notify(text: str) -> bool:
+    """Compatibility wrapper around the shared best-effort notifier."""
+    return notify_discord(text)
 
 
 def main() -> int:
@@ -96,8 +104,7 @@ def main() -> int:
         f"- 生成時刻: {datetime.now().isoformat(timespec='seconds')}\n"
         f"- モデル: {ver}\n- 閲覧: {PAGES_URL} (GitHub Pages) / iCloud Drive index.html\n",
         encoding="utf-8")
-    subprocess.run(["git", "add", str(PAGES_HTML), str(PAGES_HTML.parent / ".nojekyll"),
-                    str(MARKER)], cwd=PROJECT_ROOT, check=True)
+    _stage_publish_artifacts(d_from)
     c = subprocess.run(["git", "commit", "-m",
                         f"predictions: {d_from}-{d_to} published to Pages ({ver})"],
                        cwd=PROJECT_ROOT, capture_output=True, text=True)

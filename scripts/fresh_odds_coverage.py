@@ -33,7 +33,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from db import open_db
+from db import open_db_readonly
 
 
 COVERAGE_LOG_PATH = Path(__file__).resolve().parent.parent / "data" / "logs" / "fresh_odds_coverage.jsonl"
@@ -140,9 +140,11 @@ def _requested_date_range(
     return (dates[0], dates[-1]) if dates else None
 
 
-def _load_open_dates(start_date: str, end_date: str) -> set[str]:
+def _load_open_dates(
+    start_date: str, end_date: str, coverage_records: list[dict] | None = None
+) -> set[str]:
     """Return JRA race dates so a fetcher that emitted zero logs is still detected."""
-    with open_db() as conn:
+    with open_db_readonly() as conn:
         rows = conn.execute(
             """
             SELECT DISTINCT race_year || race_month_day AS race_date
@@ -152,7 +154,14 @@ def _load_open_dates(start_date: str, end_date: str) -> set[str]:
             """,
             (start_date, end_date),
         ).fetchall()
-    return {str(row[0]) for row in rows}
+    dates = {str(row[0]) for row in rows}
+    # If morning race ingestion failed, races may be empty even though an earlier
+    # coverage heartbeat had eligible races. Treat that as an open-day signal.
+    for record in coverage_records or []:
+        date = str(record.get("target_date") or "")
+        if start_date <= date <= end_date and int(record.get("eligible_races") or 0) > 0:
+            dates.add(date)
+    return dates
 
 
 def _aggregate(date_records: list[dict]) -> dict:
@@ -263,7 +272,7 @@ def main() -> int:
             records, last_days=args.last, target_date=args.date
         )
         if requested:
-            open_dates = _load_open_dates(*requested)
+            open_dates = _load_open_dates(*requested, records)
             # Coverage logs also contain non-race-day scheduler heartbeats. They
             # must stay in the normal report but are outside the gap canary.
             gap_grouped = {
@@ -279,12 +288,13 @@ def main() -> int:
                 found_gap = True
                 if not any(record.get("run_at") for record in date_records):
                     print(
-                        f"WARNING: all runs missing {date} "
+                        f"WARNING: all runs missing {date[:4]}-{date[4:6]}-{date[6:]} "
                         f"({previous:%H:%M}->{current:%H:%M}, {minutes}m)"
                     )
                 else:
                     print(
-                        f"WARNING: gap {previous:%H:%M}->{current:%H:%M} ({minutes}m)"
+                        f"WARNING: gap {date[:4]}-{date[4:6]}-{date[6:]} "
+                        f"{previous:%H:%M}->{current:%H:%M} ({minutes}m)"
                     )
         if found_gap:
             return 1

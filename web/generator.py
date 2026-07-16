@@ -117,9 +117,21 @@ def _archive_prediction_html(
         f"{published_at:%H%M%S}_git{git_sha}.html"
     )
     if destination.exists():
+        if _file_sha256(destination) != _file_sha256(source):
+            raise RuntimeError(f"archive collision with different content: {destination}")
         logger.warning("予想HTMLアーカイブは既存のため上書きしません: %s", destination)
         return destination
-    shutil.copy2(source, destination)
+    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+    try:
+        shutil.copy2(source, temporary)
+        if _file_sha256(temporary) != _file_sha256(source):
+            raise RuntimeError(f"archive sha256 mismatch: {destination}")
+        os.replace(temporary, destination)
+    finally:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
     return destination
 
 
@@ -716,7 +728,13 @@ def publish_to_icloud(
     snapshot = snapshot_dir / f"index_{stamp}.html"
     shutil.copy2(dst, snapshot)
     os.utime(snapshot, None)
-    archive = _archive_prediction_html(src, published_at, target_date)
+    archive = None
+    archive_digest = None
+    try:
+        archive = _archive_prediction_html(src, published_at, target_date)
+        archive_digest = _file_sha256(archive)
+    except Exception:  # noqa: BLE001 - publishing must survive archive I/O failure
+        logger.error("repository prediction archive failed", exc_info=True)
 
     digest = _file_sha256(dst)
     size = dst.stat().st_size
@@ -733,7 +751,8 @@ def publish_to_icloud(
         "source_index_mtime": source_mtime,
         "source_sha256": src_digest,
         "source_bytes": src_stat.st_size,
-        "repository_archive": str(archive),
+        "repository_archive": str(archive) if archive else None,
+        "repository_archive_sha256": archive_digest,
     }
     (ICLOUD_PUBLISH_DIR / "_sync_status.json").write_text(
         json.dumps(status, ensure_ascii=False, indent=2) + "\n",

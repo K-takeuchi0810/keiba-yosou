@@ -157,7 +157,7 @@ def test_main_warns_when_open_day_has_zero_runs(monkeypatch, tmp_path, capsys):
         ["fresh_odds_coverage.py", "--path", str(p), "--date", "20260712", "--check-gaps"],
     )
     assert mod.main() == 1
-    assert "WARNING: all runs missing 20260712" in capsys.readouterr().out
+    assert "WARNING: all runs missing 2026-07-12" in capsys.readouterr().out
 
 
 def test_main_does_not_warn_for_non_open_day(monkeypatch, tmp_path, capsys):
@@ -170,6 +170,28 @@ def test_main_does_not_warn_for_non_open_day(monkeypatch, tmp_path, capsys):
     )
     assert mod.main() == 0
     assert "WARNING:" not in capsys.readouterr().out
+
+
+def test_eligible_coverage_record_is_open_day_fallback(monkeypatch):
+    import sqlite3
+    from contextlib import contextmanager
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE races (race_year TEXT, race_month_day TEXT, track_code TEXT)"
+    )
+
+    @contextmanager
+    def readonly(*_args, **_kwargs):
+        yield conn
+
+    monkeypatch.setattr(mod, "open_db_readonly", readonly)
+    dates = mod._load_open_dates(
+        "20260712", "20260712",
+        [{"target_date": "20260712", "eligible_races": 1}],
+    )
+    assert dates == {"20260712"}
+    conn.close()
 
 
 def test_main_check_gaps_warns_and_returns_one(monkeypatch, tmp_path, capsys):
@@ -185,7 +207,7 @@ def test_main_check_gaps_warns_and_returns_one(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(mod, "_load_open_dates", lambda *_: {"20260712"})
 
     assert mod.main() == 1
-    assert "WARNING: gap 11:50->14:00 (130m)" in capsys.readouterr().out
+    assert "WARNING: gap 2026-07-12 11:50->14:00 (130m)" in capsys.readouterr().out
 
 
 def test_main_gap_check_is_opt_in(monkeypatch, tmp_path, capsys):

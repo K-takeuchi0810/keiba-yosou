@@ -77,6 +77,7 @@ def main() -> int:
     ap.add_argument("--db", type=Path, default=Path(DB_PATH))
     ap.add_argument("--backup", type=Path, default=None)
     ap.add_argument("--execute", action="store_true", help="バックアップ後に削除を実行")
+    ap.add_argument("--dry-run", action="store_true", help="明示的にdry-runを選択 (既定動作)")
     args = ap.parse_args()
 
     db_path = args.db.resolve()
