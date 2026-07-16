@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 from config import DB_PATH
-from db import SQL_VALID_HORSE_NUM
+from db import SQL_VALID_HORSE_NUM, sql_invalid_horse_num
 
 
 RACE_KEY = (
@@ -22,17 +22,18 @@ RACE_KEY = (
 
 def inspect_placeholders(conn: sqlite3.Connection) -> tuple[int, list[sqlite3.Row]]:
     total = conn.execute(
-        "SELECT COUNT(*) FROM horse_races WHERE horse_num='00'"
+        f"SELECT COUNT(*) FROM horse_races WHERE {sql_invalid_horse_num()}"
     ).fetchone()[0]
     violations = conn.execute(
         f"""
         SELECT h.race_year, h.race_month_day, h.track_code,
                h.kaiji, h.nichiji, h.race_num,
-               h.confirmed_order, h.win_odds, h.odds_fetched_at
+               h.horse_num, h.confirmed_order, h.win_odds, h.odds_fetched_at
           FROM horse_races h
-         WHERE h.horse_num='00'
+         WHERE {sql_invalid_horse_num('h.horse_num')}
            AND (
-                h.confirmed_order IS NULL OR h.confirmed_order != 0
+                COALESCE(h.horse_num, '') != '00'
+             OR h.confirmed_order IS NULL OR h.confirmed_order != 0
              OR h.win_odds IS NULL OR h.win_odds != 0
              OR h.odds_fetched_at IS NOT NULL
              OR NOT EXISTS (
@@ -79,6 +80,8 @@ def main() -> int:
     ap.add_argument("--execute", action="store_true", help="バックアップ後に削除を実行")
     ap.add_argument("--dry-run", action="store_true", help="明示的にdry-runを選択 (既定動作)")
     args = ap.parse_args()
+    if args.dry_run or not args.execute:
+        print("dry-run mode (default): inspect only; no rows will be deleted")
 
     db_path = args.db.resolve()
     backup_path = (
@@ -97,8 +100,15 @@ def main() -> int:
     if violations:
         for row in violations[:20]:
             key = "-".join(str(row[k]) for k in RACE_KEY)
+            horse_num = row["horse_num"]
+            action = (
+                "manual judgment required"
+                if horse_num != "00"
+                else "unsafe placeholder"
+            )
             print(
-                f"VIOLATION {key}: confirmed_order={row['confirmed_order']} "
+                f"VIOLATION {key}: horse_num={horse_num!r} ({action}) "
+                f"confirmed_order={row['confirmed_order']} "
                 f"win_odds={row['win_odds']} odds_fetched_at={row['odds_fetched_at']!r}",
                 file=sys.stderr,
             )

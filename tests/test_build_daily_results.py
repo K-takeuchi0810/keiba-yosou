@@ -30,6 +30,8 @@ def _run_main(
     *,
     html_text: str | None = None,
     expected_rc: int = 0,
+    starter_count: int = 18,
+    registered_count: int = 18,
 ) -> Path:
     db_path = tmp_path / "daily_results.sqlite3"
     if db_path.exists():
@@ -56,7 +58,8 @@ def _run_main(
         CREATE TABLE races (
           race_year TEXT, race_month_day TEXT, track_code TEXT, kaiji TEXT,
           nichiji TEXT, race_num TEXT, race_name TEXT, distance INTEGER,
-          track_type_code TEXT, grade_code TEXT, starter_count INTEGER,
+          track_type_code TEXT, grade_code TEXT, registered_count INTEGER,
+          starter_count INTEGER,
           turf_condition TEXT, dirt_condition TEXT, weather_code TEXT,
           start_time TEXT
         );
@@ -76,8 +79,11 @@ def _run_main(
         (*common, "01", 500, "01", 200, None, None, "00", 0, None, None, None, None),
     )
     conn.execute(
-        "INSERT INTO races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (*common, "テスト競走", 1200, "24", "", 18, "", "1", "1", "1100"),
+        "INSERT INTO races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            *common, "テスト競走", 1200, "24", "",
+            registered_count, starter_count, "", "1", "1", "1100",
+        ),
     )
     conn.commit()
     conn.close()
@@ -112,6 +118,24 @@ def test_entries_odds_and_popularity_are_parsed_separately():
     horse = parser.races[0]["horses"][0]
     assert horse["odds"] == 22.9
     assert horse["popularity"] == 6
+
+
+def test_entries_data_attributes_take_priority_over_display_text():
+    parser = build_daily_results.IndexHtmlParser()
+    parser.feed(
+        _html_fragment(
+            odds_html=(
+                '<span class="pick-reason">18人気</span>'
+            )
+        ).replace(
+            "<td><span",
+            '<td class="col-odds" data-odds="7.5" data-popularity="3"><span',
+        )
+    )
+
+    horse = parser.races[0]["horses"][0]
+    assert horse["odds"] == 7.5
+    assert horse["popularity"] == 3
 
 
 def test_horse_name_nested_span_does_not_insert_space():
@@ -178,7 +202,7 @@ def test_quality_gate_rejects_out_of_range_popularity(tmp_path, monkeypatch, cap
         expected_rc=1,
     )
 
-    assert "morning_popularity outside 1..starter_count" in capsys.readouterr().err
+    assert "morning_popularity outside registered/starter limit" in capsys.readouterr().err
     assert not (output_dir / "predictions.csv").exists()
 
 
@@ -241,11 +265,27 @@ def test_post_start_unclassified_counts_missing_or_invalid_start():
     ) == (0, 2)
 
 
-def test_popularity_quality_gate_uses_starter_count():
+def test_popularity_quality_gate_allows_withdrawal_gap(tmp_path, monkeypatch):
+    output_dir = _run_main(
+        tmp_path,
+        monkeypatch,
+        html_text=_html_fragment(
+            odds_html='7.7<br><span class="pick-reason">14人気</span>'
+        ),
+        starter_count=13,
+        registered_count=14,
+    )
+    assert (output_dir / "predictions.csv").exists()
+
+
+def test_popularity_quality_gate_rejects_true_abnormality():
     errors = build_daily_results.validate_output_quality(
-        [{"race_id": "R1", "horse_num": "1", "morning_popularity": 3}],
-        starter_count_by_race={"R1": 2},
+        [{"race_id": "R1", "horse_num": "1", "morning_popularity": 20}],
+        popularity_limit_by_race={
+            "R1": (14, "max(starter_count=13, registered_count=14)")
+        },
     )
     assert errors == [
-        "morning_popularity outside 1..starter_count (fallback 18): 1 rows"
+        "morning_popularity outside registered/starter limit: 1 rows; "
+        "R1 limit=14 (max(starter_count=13, registered_count=14))"
     ]

@@ -11,6 +11,7 @@ from __future__ import annotations
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import asdict
+from datetime import date
 from datetime import datetime
 from pathlib import Path
 
@@ -66,14 +67,21 @@ def sql_invalid_horse_num(column: str = "horse_num") -> str:
     return f"NOT COALESCE(({sql_valid_horse_num(column)}), 0)"
 
 
-def count_horse_num_violations(conn: sqlite3.Connection) -> int:
-    """Count invalid horse numbers coexisting with resolved rows in one race."""
-    return int(conn.execute(
+def horse_num_violation_counts(
+    conn: sqlite3.Connection, today: str | None = None
+) -> dict[str, int]:
+    """Count invalid horse numbers by violation reason.
+
+    Invalid rows are violations when they coexist with a resolved horse number,
+    or when their race date is already before ``today``. The latter restores
+    detection for abandoned all-placeholder races without flagging future
+    pre-draw entries.
+    """
+    today = today or date.today().strftime("%Y%m%d")
+    row = conn.execute(
         f"""
-        SELECT COUNT(*)
-          FROM horse_races invalid
-         WHERE {sql_invalid_horse_num('invalid.horse_num')}
-           AND EXISTS (
+        SELECT
+            SUM(CASE WHEN EXISTS (
                 SELECT 1 FROM horse_races resolved
                  WHERE resolved.race_year=invalid.race_year
                    AND resolved.race_month_day=invalid.race_month_day
@@ -82,9 +90,37 @@ def count_horse_num_violations(conn: sqlite3.Connection) -> int:
                    AND resolved.nichiji=invalid.nichiji
                    AND resolved.race_num=invalid.race_num
                    AND {sql_valid_horse_num('resolved.horse_num')}
-           )
+            ) THEN 1 ELSE 0 END) AS coexist,
+            SUM(CASE WHEN NOT EXISTS (
+                SELECT 1 FROM horse_races resolved
+                 WHERE resolved.race_year=invalid.race_year
+                   AND resolved.race_month_day=invalid.race_month_day
+                   AND resolved.track_code=invalid.track_code
+                   AND resolved.kaiji=invalid.kaiji
+                   AND resolved.nichiji=invalid.nichiji
+                   AND resolved.race_num=invalid.race_num
+                   AND {sql_valid_horse_num('resolved.horse_num')}
+            ) AND (invalid.race_year || invalid.race_month_day) < ?
+            THEN 1 ELSE 0 END) AS past_only
+          FROM horse_races invalid
+         WHERE {sql_invalid_horse_num('invalid.horse_num')}
         """
-    ).fetchone()[0])
+        ,
+        (today,),
+    ).fetchone()
+    coexist = int(row[0] or 0)
+    past_only = int(row[1] or 0)
+    return {
+        "coexist": coexist,
+        "past_only": past_only,
+        "total": coexist + past_only,
+    }
+
+
+def count_horse_num_violations(
+    conn: sqlite3.Connection, today: str | None = None
+) -> int:
+    return horse_num_violation_counts(conn, today=today)["total"]
 
 
 def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:

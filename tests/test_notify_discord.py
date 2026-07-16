@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import http.client
+
 from scripts import notify_discord as mod
 
 
@@ -20,6 +22,19 @@ def test_notification_failure_is_best_effort(tmp_path, monkeypatch, capsys):
     webhook.write_text("https://example.invalid/hook", encoding="utf-8")
     monkeypatch.setattr(
         mod, "_post_webhook", lambda *_: (_ for _ in ()).throw(OSError("offline"))
+    )
+
+    assert mod.notify_discord("WARN: test", webhook) is False
+    assert "Discord notification failed" in capsys.readouterr().err
+
+
+def test_http_exception_is_best_effort(tmp_path, monkeypatch, capsys):
+    webhook = tmp_path / "webhook.txt"
+    webhook.write_text("https://example.invalid/hook", encoding="utf-8")
+    monkeypatch.setattr(
+        mod,
+        "_post_webhook",
+        lambda *_: (_ for _ in ()).throw(http.client.HTTPException("bad response")),
     )
 
     assert mod.notify_discord("WARN: test", webhook) is False

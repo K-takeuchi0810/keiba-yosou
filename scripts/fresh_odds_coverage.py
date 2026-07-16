@@ -42,6 +42,17 @@ GAP_WINDOW_END = (16, 40)
 GAP_THRESHOLD_MINUTES = 15
 
 
+def _notify_warnings(warnings: list[str]) -> None:
+    """Send detailed gap warnings without changing the monitor exit code."""
+    try:
+        from scripts.notify_discord import notify_discord
+
+        for warning in warnings:
+            notify_discord(warning)
+    except Exception as exc:  # noqa: BLE001 - monitoring must remain best effort
+        print(f"WARN: fresh odds notification failed: {exc}", file=sys.stderr)
+
+
 def _load_records(path: Path) -> list[dict]:
     if not path.exists():
         return []
@@ -258,6 +269,10 @@ def main() -> int:
         "--check-gaps", action="store_true",
         help="開催日の9:00〜16:40でrun間隔が15分超なら警告してexit 1",
     )
+    ap.add_argument(
+        "--notify", action="store_true",
+        help="gap警告の詳細をDiscordへbest-effort送信",
+    )
     args = ap.parse_args()
     path = Path(args.path) if args.path else COVERAGE_LOG_PATH
     records = _load_records(path)
@@ -282,21 +297,26 @@ def main() -> int:
     _print_report(grouped)
     if args.check_gaps:
         found_gap = False
+        warnings = []
         for date, date_records in gap_grouped.items():
             gaps = _find_run_gaps(date_records, target_date=date)
             for previous, current, minutes in gaps:
                 found_gap = True
                 if not any(record.get("run_at") for record in date_records):
-                    print(
+                    warning = (
                         f"WARNING: all runs missing {date[:4]}-{date[4:6]}-{date[6:]} "
                         f"({previous:%H:%M}->{current:%H:%M}, {minutes}m)"
                     )
                 else:
-                    print(
+                    warning = (
                         f"WARNING: gap {date[:4]}-{date[4:6]}-{date[6:]} "
                         f"{previous:%H:%M}->{current:%H:%M} ({minutes}m)"
                     )
+                print(warning)
+                warnings.append(warning)
         if found_gap:
+            if args.notify:
+                _notify_warnings(warnings)
             return 1
     return 0
 

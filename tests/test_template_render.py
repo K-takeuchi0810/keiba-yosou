@@ -167,6 +167,19 @@ def _render(context: dict) -> str:
     return env.get_template("index.html.j2").render(**context)
 
 
+def test_odds_data_attributes_match_index_html_parser_contract(context):
+    from scripts.build_daily_results import IndexHtmlParser
+
+    html = _render(context)
+    parser = IndexHtmlParser()
+    parser.feed(html)
+
+    horse = parser.races[0]["horses"][0]
+    assert 'class="col-odds" data-odds="4.2" data-popularity="1"' in html
+    assert horse["odds"] == 4.2
+    assert horse["popularity"] == 1
+
+
 def test_candidate_picks_uses_three_to_five_window():
     from predictor.candidates import (
         mark_single_race_buy_pick,

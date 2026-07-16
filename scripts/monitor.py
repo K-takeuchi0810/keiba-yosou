@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import PROJECT_ROOT
-from db import count_horse_num_violations, open_db, open_db_readonly
+from db import horse_num_violation_counts, open_db_readonly
 from predictor.calibration import calibration_report
 from predictor.rules import predict_race
 from scripts.backtest import horses_for_race, list_races
@@ -88,7 +88,7 @@ def measure_recent_brier(days: int) -> dict:
     from_date = (today - timedelta(days=days)).strftime("%Y%m%d")
     to_date = today.strftime("%Y%m%d")
     records: list[dict] = []
-    with open_db() as conn:
+    with open_db_readonly() as conn:
         races = list_races(conn, from_date, to_date, jra_only=True)
         cache: dict = {}
         for race in races:
@@ -133,7 +133,7 @@ def measure_mining_coverage(days: int) -> dict:
     from_date = (today - timedelta(days=days)).strftime("%Y%m%d")
     to_date = today.strftime("%Y%m%d")
     ph = ",".join("?" * len(_JRA_TRACKS))
-    with open_db() as conn:
+    with open_db_readonly() as conn:
         row = conn.execute(
             f"""
             SELECT COUNT(*) AS total,
@@ -160,10 +160,14 @@ def measure_mining_coverage(days: int) -> dict:
     }
 
 
-def count_placeholder_horse_rows() -> int:
+def placeholder_violation_counts() -> dict[str, int]:
     """正規馬番と同一レースに共存する無効馬番行の件数を返す。"""
     with open_db_readonly() as conn:
-        return count_horse_num_violations(conn)
+        return horse_num_violation_counts(conn)
+
+
+def count_placeholder_horse_rows() -> int:
+    return placeholder_violation_counts()["total"]
 
 
 def main() -> int:
@@ -206,11 +210,14 @@ def main() -> int:
               f"(n={m['n_records']}, {m['from_date']}-{m['to_date']})")
         return 0
 
-    placeholder_count = count_placeholder_horse_rows()
+    placeholder_counts = placeholder_violation_counts()
+    placeholder_count = placeholder_counts["total"]
     placeholder_alert = placeholder_count > 0
     if placeholder_count:
         print(
-            f"WARNING: horse_num invariant violated ({placeholder_count} rows)\n"
+            f"WARNING: horse_num invariant violated ({placeholder_count} rows: "
+            f"coexist={placeholder_counts['coexist']}, "
+            f"past_only={placeholder_counts['past_only']})\n"
             "-> run: python -m scripts.cleanup_placeholder_horse_rows --dry-run",
             file=sys.stderr,
         )

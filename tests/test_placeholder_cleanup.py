@@ -77,6 +77,45 @@ def test_cleanup_aborts_when_placeholder_is_not_safe(tmp_path, monkeypatch, caps
         ).fetchone()[0] == 1
 
 
+def test_inspect_reports_null_and_empty_without_deleting_them(
+    tmp_path, monkeypatch, capsys
+):
+    db_path = tmp_path / "invalid.db"
+    _make_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        common = ("2026", "0712", "02", "01", "01", "01")
+        conn.execute(
+            "INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (*common, None, 0, 0, None),
+        )
+        conn.execute(
+            "INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (*common, "", 0, 0, None),
+        )
+
+    monkeypatch.setattr(
+        sys, "argv", ["cleanup", "--db", str(db_path), "--execute"]
+    )
+    assert cleanup.main() == 1
+    err = capsys.readouterr().err
+    assert "horse_num=None (manual judgment required)" in err
+    assert "horse_num='' (manual judgment required)" in err
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM horse_races WHERE horse_num IS NULL OR horse_num=''"
+        ).fetchone()[0] == 2
+
+
+def test_delete_statement_remains_limited_to_00(tmp_path):
+    db_path = tmp_path / "delete-scope.db"
+    _make_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("DELETE FROM horse_races WHERE horse_num='00'")
+        assert conn.execute(
+            "SELECT COUNT(*) FROM horse_races WHERE horse_num='01'"
+        ).fetchone()[0] == 1
+
+
 def test_live_database_has_no_placeholder_violations():
     # 枠順確定前の単独 '00' 行は正当な過渡状態 (確定時に ingest が掃除する) なので
     # raw count ではなく「正規馬番行と共存する不正行」= violation の不在を検証する。

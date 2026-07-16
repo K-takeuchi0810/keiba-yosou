@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -34,7 +33,7 @@ def notify_discord(text: str, webhook_file: Path = WEBHOOK_FILE) -> bool:
         if not url:
             raise ValueError("webhook is empty")
         _post_webhook(url, text)
-    except (OSError, ValueError, urllib.error.URLError) as exc:
+    except Exception as exc:  # noqa: BLE001 - notification is always best effort
         print(f"WARN: Discord notification failed: {exc}", file=sys.stderr)
         return False
     return True

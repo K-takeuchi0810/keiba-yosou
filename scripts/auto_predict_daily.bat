@@ -18,10 +18,9 @@ echo [%date% %time%] fetch_mining (32-bit) start
 if errorlevel 1 echo [WARN] fetch_mining failed, continue
 
 echo [%date% %time%] fresh_odds_coverage start
-.venv64\Scripts\python.exe -m scripts.fresh_odds_coverage --last 1 --check-gaps
+.venv64\Scripts\python.exe -m scripts.fresh_odds_coverage --last 1 --check-gaps --notify
 set GAPCODE=%errorlevel%
 if %GAPCODE% NEQ 0 echo [WARN] fresh odds fetch gap detected, continue
-if %GAPCODE% NEQ 0 .venv64\Scripts\python.exe -m scripts.notify_discord --message "WARN: previous-day odds fetch gap detected (see %LOGFILE%)"
 
 echo [%date% %time%] auto_predict (64-bit) start
 .venv64\Scripts\python.exe -m scripts.auto_predict

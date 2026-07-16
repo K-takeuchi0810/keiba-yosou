@@ -721,7 +721,7 @@
             <td class="mark-cell" {% if h.rationale %}title="{{ h.rationale }}"{% endif %}>{{ h.mark }}</td>
             <td class="horse-num waku-{{ h.waku }}">{{ h.num }}</td>
             <td class="horse-name">{{ h.name }}</td>
-            <td>{% if h.odds %}{{ "%.1f"|format(h.odds) }}{% endif %}{% if h.popularity %}<br><span class="pick-reason">{{ h.popularity }}人気</span>{% endif %}</td>
+            <td class="col-odds"{% if h.odds %} data-odds="{{ h.odds }}"{% endif %}{% if h.popularity %} data-popularity="{{ h.popularity }}"{% endif %}>{% if h.odds %}{{ "%.1f"|format(h.odds) }}{% endif %}{% if h.popularity %}<br><span class="pick-reason">{{ h.popularity }}人気</span>{% endif %}</td>
             <td class="col-sex">{{ h.sex }}{{ h.age }}</td>
             <td class="num col-burden">{{ h.burden }}</td>
             <td>{{ h.jockey }}</td>
