@@ -174,6 +174,10 @@ def test_publish_continues_when_repository_archive_fails(tmp_path, monkeypatch, 
         generator, "_archive_prediction_html",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("archive offline")),
     )
+    notifications = []
+    monkeypatch.setattr(
+        generator, "_notify_archive_failure", notifications.append
+    )
 
     out = generator.publish_to_icloud()
     status = __import__("json").loads(
@@ -183,6 +187,9 @@ def test_publish_continues_when_repository_archive_fails(tmp_path, monkeypatch, 
     assert status["repository_archive"] is None
     assert status["repository_archive_sha256"] is None
     assert "repository prediction archive failed" in caplog.text
+    assert notifications == [
+        "WARN: repository prediction archive failed; iCloud publish continued"
+    ]
 
 
 def test_verification_banner_marker_matches_template_output():

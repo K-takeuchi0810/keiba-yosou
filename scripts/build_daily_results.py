@@ -74,6 +74,8 @@ class IndexHtmlParser(HTMLParser):
         self._current_horse: dict | None = None
         self._current_td_class: str | None = None
         self._current_td_title: str | None = None
+        self._current_td_has_data_odds = False
+        self._current_td_has_data_popularity = False
         self._td_buf: list[str] = []
         self._current_td_span_class: str | None = None
         self._td_span_buf: list[str] = []
@@ -158,7 +160,22 @@ class IndexHtmlParser(HTMLParser):
         elif tag == "td" and self._in_horse_row:
             self._current_td_class = " ".join(cls)
             self._current_td_title = self._attr(attrs, "title")
+            data_odds = self._attr(attrs, "data-odds")
+            data_popularity = self._attr(attrs, "data-popularity")
+            self._current_td_has_data_odds = data_odds is not None
+            self._current_td_has_data_popularity = data_popularity is not None
             self._td_buf = []
+            if "col-odds" in cls:
+                if data_odds is not None:
+                    try:
+                        self._current_horse["odds"] = float(data_odds)
+                    except ValueError:
+                        pass
+                if data_popularity is not None:
+                    try:
+                        self._current_horse["popularity"] = int(data_popularity)
+                    except ValueError:
+                        pass
             if "mark-cell" in cls and self._current_td_title:
                 self._current_horse["rationale"] = self._current_td_title
             if "horse-num" in cls:
@@ -197,7 +214,7 @@ class IndexHtmlParser(HTMLParser):
                 pass
             elif "col-trainer" in cls:
                 pass
-            else:
+            elif not self._current_td_has_data_odds:
                 # オッズは td 直下テキストのみ。人気は pick-reason span で別途読む。
                 m_odds = re.match(r"^\s*([\d.]+)", buf)
                 if m_odds:
@@ -207,6 +224,8 @@ class IndexHtmlParser(HTMLParser):
                         pass
             self._current_td_class = None
             self._current_td_title = None
+            self._current_td_has_data_odds = False
+            self._current_td_has_data_popularity = False
             self._td_buf = []
         elif tag == "tr" and self._in_horse_row:
             if self._current_horse and self._current_horse.get("num"):
@@ -219,7 +238,10 @@ class IndexHtmlParser(HTMLParser):
             self._in_entries_thead = False
         elif tag == "span" and self._current_td_span_class is not None:
             buf = "".join(self._td_span_buf).strip()
-            if "pick-reason" in self._current_td_span_class:
+            if (
+                "pick-reason" in self._current_td_span_class
+                and not self._current_td_has_data_popularity
+            ):
                 m_pop = re.search(r"(\d+)人気", buf)
                 if m_pop:
                     self._current_horse["popularity"] = int(m_pop.group(1))
@@ -404,21 +426,28 @@ def count_post_start_stamped_rows(
 
 def validate_output_quality(
     predictions: list[dict], *horse_row_groups: list[dict],
-    starter_count_by_race: dict[str, int] | None = None,
+    popularity_limit_by_race: dict[str, tuple[int, str]] | None = None,
 ) -> list[str]:
     errors: list[str] = []
-    starter_count_by_race = starter_count_by_race or {}
-    bad_popularity = [
-        r for r in predictions
-        if r.get("morning_popularity") not in (None, "")
-        and not 1 <= int(r["morning_popularity"]) <= (
-            int(starter_count_by_race.get(r.get("race_id")) or 18)
+    popularity_limit_by_race = popularity_limit_by_race or {}
+    bad_popularity: list[tuple[dict, int, str]] = []
+    for row in predictions:
+        popularity = row.get("morning_popularity")
+        if popularity in (None, ""):
+            continue
+        limit, reason = popularity_limit_by_race.get(
+            row.get("race_id"), (18, "fallback=18")
         )
-    ]
+        if not 1 <= int(popularity) <= limit:
+            bad_popularity.append((row, limit, reason))
     if bad_popularity:
+        details = ", ".join(
+            f"{row.get('race_id')} limit={limit} ({reason})"
+            for row, limit, reason in bad_popularity[:5]
+        )
         errors.append(
-            "morning_popularity outside 1..starter_count "
-            f"(fallback 18): {len(bad_popularity)} rows"
+            "morning_popularity outside registered/starter limit: "
+            f"{len(bad_popularity)} rows; {details}"
         )
 
     invalid_horse_rows = 0
@@ -506,7 +535,8 @@ def main() -> int:
     payout_rows = [dict(r) for r in cur.fetchall()]
     cur = conn.execute("""
         SELECT race_year, race_month_day, track_code, kaiji, nichiji, race_num,
-               race_name, distance, track_type_code, grade_code, starter_count,
+               race_name, distance, track_type_code, grade_code,
+               registered_count, starter_count,
                turf_condition, dirt_condition, weather_code, start_time
           FROM races
          WHERE race_year = ? AND race_month_day = ?
@@ -665,8 +695,19 @@ def main() -> int:
 
     quality_errors = validate_output_quality(
         predictions, final_odds, race_results, eval_rows,
-        starter_count_by_race={
-            race_id: int(race.get("starter_count") or 18)
+        popularity_limit_by_race={
+            race_id: (
+                max(
+                    int(race.get("starter_count") or 0),
+                    int(race.get("registered_count") or 0),
+                ) or 18,
+                (
+                    f"max(starter_count={race.get('starter_count')}, "
+                    f"registered_count={race.get('registered_count')})"
+                    if race.get("starter_count") or race.get("registered_count")
+                    else "fallback=18"
+                ),
+            )
             for race_id, race in race_info.items()
         },
     )

@@ -37,5 +37,5 @@ echo === %date% %time% Weekly Monitor End (exit %EXITCODE%) ===
 if %MONCODE% NEQ 0 echo ACTION 1: suspend buying by setting whitelist_tracks=[]
 if %MONCODE% NEQ 0 echo ACTION 2: run scripts.filter_sweep --recent-3fold
 if %MONCODE% NEQ 0 echo ACTION 3: if needed, retrain with scripts.train_lgbm
-if %EXITCODE% NEQ 0 .venv64\Scripts\python.exe -m scripts.notify_discord --message "WARN: weekly monitor alert (exit %EXITCODE%; see %LOGFILE%)"
+if %EXITCODE% NEQ 0 .venv64\Scripts\python.exe -m scripts.notify_discord --message "WARN: weekly monitor alert (monitor=%MONCODE% pytest=%TESTCODE% gap=%GAPCODE%; see %LOGFILE%)"
 exit /b %EXITCODE%

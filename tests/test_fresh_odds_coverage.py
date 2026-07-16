@@ -210,6 +210,28 @@ def test_main_check_gaps_warns_and_returns_one(monkeypatch, tmp_path, capsys):
     assert "WARNING: gap 2026-07-12 11:50->14:00 (130m)" in capsys.readouterr().out
 
 
+def test_main_notify_includes_detailed_gap_warning(monkeypatch, tmp_path):
+    p = tmp_path / "cov.jsonl"
+    _write_jsonl(p, [
+        {"target_date": "20260712", "run_at": "2026-07-12T11:50:03"},
+        {"target_date": "20260712", "run_at": "2026-07-12T14:00:03"},
+    ])
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "fresh_odds_coverage.py", "--path", str(p), "--date", "20260712",
+            "--check-gaps", "--notify",
+        ],
+    )
+    monkeypatch.setattr(mod, "_load_open_dates", lambda *_: {"20260712"})
+    notifications = []
+    monkeypatch.setattr(mod, "_notify_warnings", notifications.extend)
+
+    assert mod.main() == 1
+    assert "WARNING: gap 2026-07-12 11:50->14:00 (130m)" in notifications
+    assert all(message.startswith("WARNING: gap 2026-07-12 ") for message in notifications)
+
+
 def test_main_gap_check_is_opt_in(monkeypatch, tmp_path, capsys):
     p = tmp_path / "cov.jsonl"
     _write_jsonl(p, [

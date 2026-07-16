@@ -18,7 +18,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import DB_PATH, PROJECT_ROOT  # noqa: E402
+from config import DB_PATH, ICLOUD_PUBLISH_DIR, PROJECT_ROOT  # noqa: E402
 from scripts.notify_discord import notify_discord  # noqa: E402
 import sqlite3  # noqa: E402
 
@@ -30,13 +30,29 @@ PAGES_URL = "https://k-takeuchi0810.github.io/keiba-yosou/"
 PY = str(PROJECT_ROOT / ".venv64" / "Scripts" / "python.exe")
 
 
-def _stage_publish_artifacts(target_date: str) -> list[Path]:
+def _stage_publish_artifacts(
+    target_date: str, sync_status_path: Path | None = None
+) -> list[Path]:
     archive_dir = (
         PROJECT_ROOT / "data" / "results" /
         f"{target_date[:4]}-{target_date[4:6]}-{target_date[6:]}"
     )
     paths = [PAGES_HTML, PAGES_HTML.parent / ".nojekyll", MARKER]
-    paths.extend(sorted(archive_dir.glob("predictions_source_*.html")))
+    status_path = sync_status_path or ICLOUD_PUBLISH_DIR / "_sync_status.json"
+    archive = None
+    try:
+        status = json.loads(status_path.read_text(encoding="utf-8"))
+        raw_archive = status.get("repository_archive")
+        if raw_archive:
+            candidate = Path(raw_archive)
+            if candidate.is_file():
+                archive = candidate
+    except (OSError, TypeError, ValueError):
+        pass
+    if archive is not None:
+        paths.append(archive)
+    else:
+        paths.extend(sorted(archive_dir.glob("predictions_source_*.html")))
     subprocess.run(
         ["git", "add", *(str(path) for path in paths)],
         cwd=PROJECT_ROOT,

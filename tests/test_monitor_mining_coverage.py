@@ -28,7 +28,6 @@ def patched_db(monkeypatch):
         yield conn  # close しない (テスト内で再利用)
 
     import scripts.monitor as mon
-    monkeypatch.setattr(mon, "open_db", _open_db)
     monkeypatch.setattr(mon, "open_db_readonly", _open_db)
     return conn
 
@@ -93,6 +92,20 @@ def test_placeholder_canary_ignores_unresolved_transition(patched_db):
     assert count_placeholder_horse_rows() == 0
 
 
+def test_past_unresolved_placeholder_is_violation(patched_db):
+    from db import count_horse_num_violations
+    _add_horse(patched_db, "2026", "0715", "11", "00", confirmed=0)
+    patched_db.commit()
+    assert count_horse_num_violations(patched_db, today="20260716") == 1
+
+
+def test_future_unresolved_placeholder_is_not_violation(patched_db):
+    from db import count_horse_num_violations
+    _add_horse(patched_db, "2026", "0718", "11", "00", confirmed=0)
+    patched_db.commit()
+    assert count_horse_num_violations(patched_db, today="20260716") == 0
+
+
 def test_placeholder_canary_flags_coexistence(patched_db):
     from scripts.monitor import count_placeholder_horse_rows
     y, md = _recent_ymd(0)
@@ -153,5 +166,5 @@ def test_placeholder_alert_does_not_mask_brier_check(
     assert monitor.main() == 1
     assert calls == ["brier"]
     err = capsys.readouterr().err
-    assert "WARNING: horse_num invariant violated (1 rows)" in err
+    assert "WARNING: horse_num invariant violated (1 rows: coexist=1, past_only=0)" in err
     assert "cleanup_placeholder_horse_rows --dry-run" in err

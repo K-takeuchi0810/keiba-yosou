@@ -55,6 +55,16 @@ from web.codes import (
 TEMPLATES = Path(__file__).resolve().parent / "templates"
 PREDICTION_ARCHIVE_ROOT = PROJECT_ROOT / "data" / "results"
 
+
+def _notify_archive_failure(message: str) -> None:
+    """Report archive failures without allowing alerting to break publishing."""
+    try:
+        from scripts.notify_discord import notify_discord
+
+        notify_discord(message)
+    except Exception:  # noqa: BLE001 - publishing must remain best effort
+        logger.error("repository archive failure notification failed", exc_info=True)
+
 # 買い目フィルタの既定値は `config.BUY_FILTER_DEFAULT` が唯一の出典。
 # 既存コード (gui / backtest 等) が `BET_MIN_*` を import している関係で、
 # シンボル名はそのまま残し、実体を config からたどる薄いシムにしている。
@@ -735,6 +745,9 @@ def publish_to_icloud(
         archive_digest = _file_sha256(archive)
     except Exception:  # noqa: BLE001 - publishing must survive archive I/O failure
         logger.error("repository prediction archive failed", exc_info=True)
+        _notify_archive_failure(
+            "WARN: repository prediction archive failed; iCloud publish continued"
+        )
 
     digest = _file_sha256(dst)
     size = dst.stat().st_size

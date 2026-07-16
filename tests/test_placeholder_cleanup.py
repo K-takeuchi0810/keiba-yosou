@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import sys
+from datetime import date as _dt_date, timedelta as _timedelta
 from pathlib import Path
 
 import pytest
@@ -77,6 +78,45 @@ def test_cleanup_aborts_when_placeholder_is_not_safe(tmp_path, monkeypatch, caps
         ).fetchone()[0] == 1
 
 
+def test_inspect_reports_null_and_empty_without_deleting_them(
+    tmp_path, monkeypatch, capsys
+):
+    db_path = tmp_path / "invalid.db"
+    _make_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        common = ("2026", "0712", "02", "01", "01", "01")
+        conn.execute(
+            "INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (*common, None, 0, 0, None),
+        )
+        conn.execute(
+            "INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (*common, "", 0, 0, None),
+        )
+
+    monkeypatch.setattr(
+        sys, "argv", ["cleanup", "--db", str(db_path), "--execute"]
+    )
+    assert cleanup.main() == 1
+    err = capsys.readouterr().err
+    assert "horse_num=None (manual judgment required)" in err
+    assert "horse_num='' (manual judgment required)" in err
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM horse_races WHERE horse_num IS NULL OR horse_num=''"
+        ).fetchone()[0] == 2
+
+
+def test_delete_statement_remains_limited_to_00(tmp_path):
+    db_path = tmp_path / "delete-scope.db"
+    _make_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("DELETE FROM horse_races WHERE horse_num='00'")
+        assert conn.execute(
+            "SELECT COUNT(*) FROM horse_races WHERE horse_num='01'"
+        ).fetchone()[0] == 1
+
+
 def test_live_database_has_no_placeholder_violations():
     # 枠順確定前の単独 '00' 行は正当な過渡状態 (確定時に ingest が掃除する) なので
     # raw count ではなく「正規馬番行と共存する不正行」= violation の不在を検証する。
@@ -86,3 +126,68 @@ def test_live_database_has_no_placeholder_violations():
         pytest.skip("data/keiba.db is not available")
     with sqlite3.connect(db_path) as conn:
         assert db.count_horse_num_violations(conn) == 0
+
+
+def test_dry_run_flag_overrides_execute(tmp_path, monkeypatch, capsys):
+    # 「no rows will be deleted」と印字した以上、--execute が併用されても削除しない
+    db_path = tmp_path / "keiba.db"
+    _make_db(db_path)
+    monkeypatch.setattr(
+        sys, "argv", ["cleanup", "--db", str(db_path), "--dry-run", "--execute"]
+    )
+    assert cleanup.main() == 0
+    out = capsys.readouterr().out
+    assert "no rows will be deleted" in out
+    assert "DRY-RUN safe to delete: 1 rows" in out
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM horse_races WHERE horse_num='00'"
+        ).fetchone()[0] == 1
+
+
+def _insert_solo_placeholder(path: Path, year: str, month_day: str) -> None:
+    with sqlite3.connect(path) as conn:
+        conn.execute(
+            "INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (year, month_day, "05", "01", "01", "01", "00", 0, 0, None),
+        )
+
+
+def test_future_solo_placeholder_is_not_violation_and_survives_execute(
+    tmp_path, monkeypatch, capsys
+):
+    # 未来日の単独 '00' は枠順確定前の正当な過渡状態:
+    # violation として abort させず、--execute でも削除しない
+    db_path = tmp_path / "keiba.db"
+    _make_db(db_path)  # 2026-07-12 に coexist '00' 1 行 (削除対象)
+    # main() は実時計を使うため、実行日に依存しない「常に未来」の日付を動的生成する
+    future = _dt_date.today() + _timedelta(days=400)
+    _insert_solo_placeholder(db_path, f"{future.year}", f"{future:%m%d}")
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        total, violations = cleanup.inspect_placeholders(conn, today="20260716")
+        assert total == 2
+        assert violations == []
+        assert cleanup.count_deletable(conn) == 1
+
+    monkeypatch.setattr(sys, "argv", ["cleanup", "--db", str(db_path), "--execute"])
+    assert cleanup.main() == 0
+    assert "future pre-draw kept: 1" in capsys.readouterr().out
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT race_month_day FROM horse_races WHERE horse_num='00'"
+        ).fetchall()
+    assert [r[0] for r in rows] == [f"{future:%m%d}"]
+
+
+def test_past_solo_placeholder_is_violation_requiring_manual_judgment(tmp_path):
+    # 過去日の単独 '00' は取込欠落の疑い: 自動削除せず violation として報告する
+    db_path = tmp_path / "keiba.db"
+    _make_db(db_path)
+    _insert_solo_placeholder(db_path, "2026", "0501")  # 過去日の単独 '00'
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        total, violations = cleanup.inspect_placeholders(conn, today="20260716")
+    assert total == 2
+    assert len(violations) == 1
+    assert violations[0]["race_month_day"] == "0501"
