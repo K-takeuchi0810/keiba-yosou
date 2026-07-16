@@ -1,0 +1,220 @@
+{
+  "rule_version": "p26-lgbm-v6-calibfit-2025",
+  "from_date": "20250101",
+  "to_date": "20251231",
+  "bet_type": "tan",
+  "elapsed_sec": 2.5,
+  "meta": {
+    "calibrator_type": "isotonic",
+    "calibrator_rule_version": "p21_records_2025_isotonic",
+    "calibrator_generated_at": "2026-06-13T03:46:40",
+    "calibrator_trained_from": "20250101",
+    "calibrator_trained_to": "20251231",
+    "calibrator_source_count": 48058,
+    "lgbm_rule_version": "lgbm-v6-rel-draw-clean-tuned-fixed",
+    "lgbm_generated_at": "2026-07-02T22:29:57",
+    "lgbm_trained_from": "20210101",
+    "lgbm_trained_to": "20231231",
+    "lgbm_val_brier": 0.06149391708091079,
+    "git_sha": "dcfba850e0f0b9aac0bc1ae1114a2bf5cfa5eb78",
+    "git_dirty": true,
+    "git_status_short": [
+      "?? predictor/_v5_backup/"
+    ],
+    "env_overrides": {}
+  },
+  "calibration_in_sample": true,
+  "races_total": 3455,
+  "require_confirmed": true,
+  "exclude_untrusted_odds": true,
+  "races_odds_untrusted": 3455,
+  "races_no_horses": 0,
+  "races_no_pick": 0,
+  "races_filtered": 0,
+  "races_tentative_skipped": 0,
+  "races_missing_payouts": 0,
+  "races_bet": 0,
+  "bets_missing_payouts": 0,
+  "filtered_bets_missing_payouts": 0,
+  "hits": 0,
+  "hit_rate": 0,
+  "bet_total": 0,
+  "return_total": 0,
+  "return_rate": 0,
+  "all_bets": 0,
+  "all_hits": 0,
+  "all_hit_rate": 0,
+  "all_return_total": 0,
+  "all_return_rate": 0,
+  "all_hit_rate_ci95": [
+    0.0,
+    0.0
+  ],
+  "all_return_rate_ci95": [
+    0.0,
+    0.0
+  ],
+  "buy_only_bets": 0,
+  "buy_only_hits": 0,
+  "buy_only_hit_rate": 0,
+  "buy_only_return_total": 0,
+  "buy_only_return_rate": 0,
+  "buy_only_bets_missing_payouts": 0,
+  "buy_only_hit_rate_ci95": [
+    0.0,
+    0.0
+  ],
+  "buy_only_return_rate_ci95": [
+    0.0,
+    0.0
+  ],
+  "whitelist_only_bets": 0,
+  "whitelist_only_hits": 0,
+  "whitelist_only_hit_rate": 0,
+  "whitelist_only_return_total": 0,
+  "whitelist_only_return_rate": 0,
+  "whitelist_only_bets_missing_payouts": 0,
+  "whitelist_only_hit_rate_ci95": [
+    0.0,
+    0.0
+  ],
+  "whitelist_only_return_rate_ci95": [
+    0.0,
+    0.0
+  ],
+  "calibration": {
+    "count": 0,
+    "brier_score": null,
+    "log_loss": null,
+    "bins": []
+  },
+  "calibrator": {
+    "type": "bin",
+    "bin_size": 0.05,
+    "min_count": 20,
+    "source_count": 0,
+    "brier_score": null,
+    "log_loss": null,
+    "bins": []
+  },
+  "market_snapshot": {
+    "max_snapshot_age_min": 30.0,
+    "min_field": 12,
+    "scope": "races_with_horses_before_tentative_filter",
+    "config_error": null,
+    "popularity_weights": {
+      "first": 7.0,
+      "second": 4.0,
+      "third": 2.0
+    },
+    "races": 3455,
+    "clean_market_races": 3290,
+    "races_with_fresh_snapshot": 0,
+    "races_with_stale_snapshot": 0,
+    "races_with_unknown_snapshot": 165,
+    "races_with_post_start_snapshot": 3455,
+    "races_with_popularity_bonus_candidate": 0,
+    "horses": 47884,
+    "horses_with_market_odds": 47715,
+    "fresh_horses": 0,
+    "stale_horses": 0,
+    "unknown_horses": 169,
+    "post_start_horses": 47715,
+    "pop1_3_horses": 10365,
+    "popularity_bonus_candidate_horses": 0,
+    "age_tier_horses": {
+      "tier_a_critical": 0,
+      "tier_b_primary": 0,
+      "tier_c_secondary": 0,
+      "tier_d_stale": 0,
+      "tier_unknown": 47884
+    },
+    "age_tier_bonus_candidate_horses": {
+      "tier_a_critical": 0,
+      "tier_b_primary": 0,
+      "tier_c_secondary": 0,
+      "tier_d_stale": 0
+    },
+    "snapshot_age_min": {
+      "count": 0,
+      "min": null,
+      "p50": null,
+      "p90": null,
+      "max": null
+    },
+    "bonus_subset_metrics": {
+      "count": 0,
+      "brier_score": null,
+      "log_loss": null,
+      "bins": [],
+      "actual_win_rate": null,
+      "mean_raw_blended": null,
+      "by_age_tier": {
+        "tier_a_critical": {
+          "count": 0,
+          "brier_score": null,
+          "log_loss": null,
+          "bins": [],
+          "actual_win_rate": null,
+          "mean_raw_blended": null
+        },
+        "tier_b_primary": {
+          "count": 0,
+          "brier_score": null,
+          "log_loss": null,
+          "bins": [],
+          "actual_win_rate": null,
+          "mean_raw_blended": null
+        },
+        "tier_c_secondary": {
+          "count": 0,
+          "brier_score": null,
+          "log_loss": null,
+          "bins": [],
+          "actual_win_rate": null,
+          "mean_raw_blended": null
+        },
+        "tier_d_stale": {
+          "count": 0,
+          "brier_score": null,
+          "log_loss": null,
+          "bins": [],
+          "actual_win_rate": null,
+          "mean_raw_blended": null
+        },
+        "tier_unknown": {
+          "count": 0,
+          "brier_score": null,
+          "log_loss": null,
+          "bins": [],
+          "actual_win_rate": null,
+          "mean_raw_blended": null
+        }
+      }
+    }
+  },
+  "by_confidence": {},
+  "buy_only_by_confidence": {},
+  "filters": {
+    "min_odds": null,
+    "max_odds": null,
+    "min_popularity": null,
+    "max_popularity": null,
+    "min_distance": null,
+    "max_distance": null
+  },
+  "buy_filter": {
+    "min_odds": null,
+    "max_odds": null,
+    "min_value": null,
+    "min_ev": null,
+    "min_kelly": null,
+    "max_predicted_p": 0.4,
+    "min_popularity": 1,
+    "max_popularity": 3,
+    "exclude_confidence": []
+  },
+  "by_track": {},
+  "by_class": {},
+  "by_bucket": {}
+}
