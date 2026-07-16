@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import sqlite3
 import sys
+from datetime import date
 from pathlib import Path
 
 from config import DB_PATH
@@ -19,8 +20,28 @@ RACE_KEY = (
     "kaiji", "nichiji", "race_num",
 )
 
+# 状態の分類 (db.horse_num_violation_counts / monitor カナリアと同じ日付規律):
+#   未来日の単独 '00'      = 枠順確定前の正当な過渡状態 → violation 扱いせず削除もしない
+#   正規行と共存する '00'  = 冪等削除の失敗残骸        → 唯一の自動削除対象
+#   過去日の単独 '00'      = 取込欠落の疑い            → violation (再取得が正解の可能性が
+#                            あるため自動削除せず manual judgment で abort)
+def _coexist_exists(outer: str) -> str:
+    return f"""EXISTS (
+    SELECT 1 FROM horse_races resolved
+     WHERE resolved.race_year={outer}.race_year
+       AND resolved.race_month_day={outer}.race_month_day
+       AND resolved.track_code={outer}.track_code
+       AND resolved.kaiji={outer}.kaiji
+       AND resolved.nichiji={outer}.nichiji
+       AND resolved.race_num={outer}.race_num
+       AND {SQL_VALID_HORSE_NUM.replace('horse_num', 'resolved.horse_num')}
+)"""
 
-def inspect_placeholders(conn: sqlite3.Connection) -> tuple[int, list[sqlite3.Row]]:
+
+def inspect_placeholders(
+    conn: sqlite3.Connection, today: str | None = None
+) -> tuple[int, list[sqlite3.Row]]:
+    today = today or date.today().strftime("%Y%m%d")
     total = conn.execute(
         f"SELECT COUNT(*) FROM horse_races WHERE {sql_invalid_horse_num()}"
     ).fetchone()[0]
@@ -36,21 +57,23 @@ def inspect_placeholders(conn: sqlite3.Connection) -> tuple[int, list[sqlite3.Ro
              OR h.confirmed_order IS NULL OR h.confirmed_order != 0
              OR h.win_odds IS NULL OR h.win_odds != 0
              OR h.odds_fetched_at IS NOT NULL
-             OR NOT EXISTS (
-                    SELECT 1 FROM horse_races resolved
-                     WHERE resolved.race_year=h.race_year
-                       AND resolved.race_month_day=h.race_month_day
-                       AND resolved.track_code=h.track_code
-                       AND resolved.kaiji=h.kaiji
-                       AND resolved.nichiji=h.nichiji
-                       AND resolved.race_num=h.race_num
-                       AND {SQL_VALID_HORSE_NUM}
-                )
+             OR (
+                NOT {_coexist_exists('h')}
+                AND (h.race_year || h.race_month_day) < ?
+             )
            )
          ORDER BY h.race_year, h.race_month_day, h.track_code, h.race_num
-        """
+        """,
+        (today,),
     ).fetchall()
     return total, violations
+
+
+def count_deletable(conn: sqlite3.Connection) -> int:
+    return conn.execute(
+        "SELECT COUNT(*) FROM horse_races h "
+        f"WHERE h.horse_num='00' AND {_coexist_exists('h')}"
+    ).fetchone()[0]
 
 
 def create_backup(db_path: Path, backup_path: Path, expected_rows: int) -> None:
@@ -96,7 +119,13 @@ def main() -> int:
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         total, violations = inspect_placeholders(conn)
-    print(f"placeholder rows: {total}; violations: {len(violations)}")
+        deletable = count_deletable(conn)
+    pending = total - deletable
+    print(
+        f"placeholder rows: {total} "
+        f"(deletable: {deletable}, future pre-draw kept: {pending}); "
+        f"violations: {len(violations)}"
+    )
     if violations:
         for row in violations[:20]:
             key = "-".join(str(row[k]) for k in RACE_KEY)
@@ -114,10 +143,11 @@ def main() -> int:
             )
         print("abort: unsafe placeholder rows found; nothing deleted", file=sys.stderr)
         return 1
-    if not args.execute:
-        print(f"DRY-RUN safe to delete: {total} rows")
+    if args.dry_run or not args.execute:
+        # --dry-run は --execute より常に優先する (「削除しない」と印字した以上、削除しない)
+        print(f"DRY-RUN safe to delete: {deletable} rows")
         return 0
-    if total == 0:
+    if deletable == 0:
         print("nothing to delete")
         return 0
 
@@ -132,7 +162,8 @@ def main() -> int:
     try:
         conn.execute("BEGIN IMMEDIATE")
         locked_total, locked_violations = inspect_placeholders(conn)
-        if locked_total != total or locked_violations:
+        locked_deletable = count_deletable(conn)
+        if locked_total != total or locked_deletable != deletable or locked_violations:
             conn.rollback()
             print(
                 "abort: placeholder state changed after backup; nothing deleted",
@@ -140,11 +171,10 @@ def main() -> int:
             )
             return 1
         deleted = conn.execute(
-            "DELETE FROM horse_races WHERE horse_num='00'"
+            "DELETE FROM horse_races WHERE horse_num='00' "
+            f"AND {_coexist_exists('horse_races')}"
         ).rowcount
-        remaining = conn.execute(
-            "SELECT COUNT(*) FROM horse_races WHERE horse_num='00'"
-        ).fetchone()[0]
+        remaining = count_deletable(conn)
         if remaining != 0:
             conn.rollback()
             print(f"abort: verification found {remaining} remaining rows", file=sys.stderr)
@@ -153,7 +183,7 @@ def main() -> int:
     finally:
         conn.close()
 
-    print(f"deleted: {deleted}; remaining: 0")
+    print(f"deleted: {deleted}; future pre-draw kept: {pending}; deletable remaining: 0")
     return 0
 
 
