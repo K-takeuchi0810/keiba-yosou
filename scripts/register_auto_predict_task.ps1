@@ -24,11 +24,10 @@ if ($existing) {
 if ($Unregister) { Write-Host "unregister only: done"; exit 0 }
 
 $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$batScript`""
-# Sunday entries arrive in the Saturday 11:00 batch. The 11:30 rerun includes them.
-# Non-race days are skipped by auto_predict itself; repeated runs are idempotent.
-$triggers = @(
-    (New-ScheduledTaskTrigger -Daily -At $StartTime),
-    (New-ScheduledTaskTrigger -Daily -At $SecondStartTime)
+# Daily at both times. Non-race days are skipped by auto_predict itself.
+$trigger = @(
+    New-ScheduledTaskTrigger -Daily -At $StartTime
+    New-ScheduledTaskTrigger -Daily -At $SecondStartTime
 )
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
@@ -37,7 +36,7 @@ $settings = New-ScheduledTaskSettingsSet `
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers `
     -Settings $settings `
     -Description "F4 daily: fetch+mining -> gap check -> auto_predict -> Pages/Discord" | Out-Null
-Write-Host "registered: $TaskName (daily $StartTime + $SecondStartTime)"
+Write-Host "registered: $TaskName (daily $StartTime and $SecondStartTime)"
 Write-Host "  chain: fetch_full(32bit) -> fetch_mining(32bit) -> gap check -> auto_predict(64bit)"
-Write-Host "  exit bits: 1=fresh odds gap, 2=prediction failure"
+Write-Host "  exit bits: 1=fresh odds gap, 2=prediction failure, 4=fetch_full failure"
 Write-Host "manual test: Start-ScheduledTask -TaskName $TaskName"

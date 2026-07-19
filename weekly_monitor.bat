@@ -10,22 +10,26 @@ exit /b %FINALCODE%
 
 :run
 echo === %date% %time% Weekly Monitor Start ===
+
+.venv64\Scripts\python.exe -m scripts.monitor --days 30 --threshold 0.20
+set MONCODE=%errorlevel%
+.venv64\Scripts\python.exe -m scripts.fresh_odds_coverage --last 7 --check-gaps
+set GAPCODE=%errorlevel%
+
 set TESTCODE=0
 .venv64\Scripts\python.exe -c "import pytest" 2>nul
 if errorlevel 1 goto :pytest_skip
 echo --- pytest tests/ ---
-.venv64\Scripts\python.exe -m pytest tests/ -q
+REM $null=$p.Handle is REQUIRED: PowerShell 5.1 leaves $p.ExitCode null after
+REM WaitForExit(ms) unless the process Handle was touched before it exits, which
+REM would silently turn a red pytest into exit 0 (verified 2026-07-19).
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$p=Start-Process -FilePath '.venv64\Scripts\python.exe' -ArgumentList '-m','pytest','tests/','-q' -NoNewWindow -PassThru; $null=$p.Handle; if(-not $p.WaitForExit(600*1000)){taskkill.exe /PID $p.Id /T /F | Out-Null; exit 124}; exit $p.ExitCode"
 set TESTCODE=%errorlevel%
 goto :pytest_done
 :pytest_skip
 echo --- pytest skip (not installed: pip install -r requirements-dev.txt) ---
 :pytest_done
 if %TESTCODE% NEQ 0 echo WARNING: pytest failed (exit %TESTCODE%).
-
-.venv64\Scripts\python.exe -m scripts.monitor --days 30 --threshold 0.20
-set MONCODE=%errorlevel%
-.venv64\Scripts\python.exe -m scripts.fresh_odds_coverage --last 7 --check-gaps
-set GAPCODE=%errorlevel%
 
 REM Exit bits: 1=monitor, 2=pytest, 4=fresh odds gap.
 set EXITCODE=0
