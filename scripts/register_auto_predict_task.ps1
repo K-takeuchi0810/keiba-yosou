@@ -33,7 +33,7 @@ $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
     -ExecutionTimeLimit (New-TimeSpan -Hours 2)
 
-Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
+Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers `
     -Settings $settings `
     -Description "F4 daily: fetch+mining -> gap check -> auto_predict -> Pages/Discord" | Out-Null
 Write-Host "registered: $TaskName (daily $StartTime and $SecondStartTime)"
