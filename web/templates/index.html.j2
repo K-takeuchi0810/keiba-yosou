@@ -698,7 +698,7 @@
   </section>
   {% endif %}
 {% else %}
-  <section class="no-buy">買い条件 (1-3 番人気 かつ 予測勝率≤40%) を満たす馬がいないため全レース見送り。下の EV・印は観察用で購入推奨ではありません。
+  <section class="no-buy">買い条件 ({{ buy_condition_text }}) を満たす馬がいないため全レース見送り。下の EV・印は観察用で購入推奨ではありません。
   {%- if stale_suppressed %}<br>⚠ うち {{ stale_suppressed }} 件は<strong>オッズ鮮度切れ</strong>のみが理由で除外されています。最新オッズ取得後に再生成すると候補に戻る可能性があります。{% endif %}</section>
 {% endif %}
 {% for day in days %}
@@ -722,7 +722,7 @@
           <div class="head-pick"><span class="mark">{{ tp.mark }}</span>{{ tp.num }} {{ tp.name }}{% if tp.odds %} / {{ "%.1f"|format(tp.odds) }}倍{% endif %}{% if race.tentative %}<span class="head-pick-tent">暫定</span>{% endif %}<span class="head-pick-reason">{{ tp.rationale }}</span></div>
           {% endif %}
         </div>
-        <div class="race-time">{{ race.start_time }}</div>
+        <div class="race-time">{{ race.start_time }}{% if race.odds_time %} <span class="odds-time">オッズ {{ race.odds_time }} 時点</span>{% endif %}</div>
       </summary>
       {% if race.horses %}
         {% if race.top_picks %}

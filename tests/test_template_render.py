@@ -62,6 +62,7 @@ def _race(num: int, has_bet: bool = False) -> dict:
     ]
     return {
         "anchor": f"race-20260613-05-{num}",
+        "odds_time": "10:00" if num == 1 else None,
         "race_num": num,
         "race_name": f"テスト特別{num}",
         "grade": "" if num > 1 else "G3",
@@ -113,6 +114,7 @@ def context() -> dict:
         "buy_count": 1,
         "stale_suppressed": 0,
         "filter_summary": "max_predicted_p≤0.4 / 1-3番人気 / 全場開放",
+        "buy_condition_text": "1-3 番人気 かつ 予測勝率≤40%",
         "days": [_day("2026/06/13", "東京", 1), _day("2026/06/14", "阪神", 0)],
         "buy_candidates": [{
             "anchor": "race-20260613-05-1",
@@ -250,8 +252,44 @@ def test_no_buy_message_when_empty(context):
     context["buy_count"] = 0
     html = _render(context)
     assert 'class="no-buy"' in html
-    assert "買い条件 (1-3 番人気 かつ 予測勝率≤40%)" in html
+    # 買い条件文言は context["buy_condition_text"] (config 由来) からのみ来る
+    assert f"買い条件 ({context['buy_condition_text']})" in html
     assert "下の EV・印は観察用で購入推奨ではありません" in html
+
+
+def test_no_buy_text_is_sourced_from_config():
+    """no-buy 文言が config.BUY_FILTER_DEFAULT から導出され、直書きでないこと。"""
+    from web.generator import _build_buy_condition_text
+    from config import BUY_FILTER_DEFAULT
+
+    text = _build_buy_condition_text()
+    if BUY_FILTER_DEFAULT.get("max_popularity") is not None:
+        assert "番人気" in text
+    if BUY_FILTER_DEFAULT.get("max_predicted_p") is not None:
+        pct = f"{BUY_FILTER_DEFAULT['max_predicted_p'] * 100:.0f}%"
+        assert pct in text
+
+
+def test_race_odds_time_is_visible_text_not_only_title(context):
+    """オッズ取得時刻が可視テキストで出ること (title は iOS で不可視のため)。"""
+    html = _render(context)
+    assert "オッズ 10:00 時点" in html
+
+
+def test_completeness_meta_roundtrips_through_reader(context, tmp_path):
+    """実テンプレート出力を実 reader (_read_completeness_meta) に通す integration test。
+    テンプレートの meta 行 or reader の regex どちらかがドリフトすると、
+    完全性ゲートが無警告で fail-open する変更失敗モードを CI で検出する。
+    """
+    from web.generator import _read_completeness_meta
+
+    context["empty_race_ratio"] = 0.25
+    context["completeness_alert"] = True
+    out = tmp_path / "index.html"
+    out.write_text(_render(context), encoding="utf-8")
+    ratio, alert = _read_completeness_meta(out)
+    assert ratio == 0.25
+    assert alert is True
 
 
 def test_stale_suppressed_notice(context):

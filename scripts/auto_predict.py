@@ -128,13 +128,22 @@ def main() -> int:
     # 非 fast-forward なら git が安全に reject → 通知して手動判断 (force はしない)。
     push_ok = True
     if c.returncode == 0:
-        subprocess.run(["git", "fetch", "origin", "main", "-q"], cwd=PROJECT_ROOT,
-                       capture_output=True, text=True)
-        p = subprocess.run(["git", "push", "origin", "HEAD:main"], cwd=PROJECT_ROOT,
+        # ブランチガード: 共有 checkout が feature ブランチに居るとき、スケジュール実行が
+        # HEAD:main へ push すると未レビュー commit が main へ流入する。main 上でのみ push。
+        branch = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=PROJECT_ROOT,
+            capture_output=True, text=True).stdout.strip()
+        if branch != "main":
+            push_ok = False
+            print(f"WARN: HEAD が main でない ({branch}) ため main への push を中止しました。")
+        else:
+            subprocess.run(["git", "fetch", "origin", "main", "-q"], cwd=PROJECT_ROOT,
                            capture_output=True, text=True)
-        push_ok = p.returncode == 0
-        if not push_ok:
-            print("WARN: push to main failed:\n", p.stderr[-400:])
+            p = subprocess.run(["git", "push", "origin", "HEAD:main"], cwd=PROJECT_ROOT,
+                               capture_output=True, text=True)
+            push_ok = p.returncode == 0
+            if not push_ok:
+                print("WARN: push to main failed:\n", p.stderr[-400:])
 
     web_line = (f"🌐 Web版: {PAGES_URL} (数分で更新)" if push_ok
                 else f"🌐 Web版: main push 失敗のため未更新 (手動確認要)")

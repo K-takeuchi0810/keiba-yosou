@@ -552,8 +552,16 @@ def build_view_model(
                 "_payout_row": payouts_by_race.get(race_key),
                 **race_buy_pick,
             })
+        race_horses = horses_by_race.get(race_key, [])
+        # レース内で最も新しいオッズ取得時刻を可視表示用に集約 (title 属性は iOS で
+        # 不可視のため、スマホでも読める鮮度表示を race-head に出す)。
+        race_odds_time = max(
+            (h.get("odds_fetched_time") for h in race_horses if h.get("odds_fetched_time")),
+            default=None,
+        )
         days[date_key]["races"].append({
             "anchor": anchor,
+            "odds_time": race_odds_time,
             "race_num": r["race_num"],
             "race_name": r["race_name"] or r["race_short10"] or "",
             "grade": grade_name(r["grade_code"] or ""),
@@ -564,7 +572,7 @@ def build_view_model(
             "weather": weather_name(r["weather_code"] or ""),
             "turf_ground": ground_name(r["turf_condition"] or ""),
             "dirt_ground": ground_name(r["dirt_condition"] or ""),
-            "horses": horses_by_race.get(race_key, []),
+            "horses": race_horses,
             "top_picks": top_picks,
             "has_bet": bool(bet_picks),
             "bet_picks": bet_picks,
@@ -655,11 +663,35 @@ def build_view_model(
         "empty_race_ratio": completeness["empty_race_ratio"],
         "completeness_alert": completeness["alert"],
         "filter_summary": filter_summary,
+        "buy_condition_text": _build_buy_condition_text(),
         "stale_suppressed": stale_suppressed,
         "version_info": version_info,
         "portfolio_info": portfolio_info,
         "ignore_odds_freshness": ignore_odds_freshness,
     }
+
+
+def _build_buy_condition_text() -> str:
+    """買い候補の採用条件を人間語で。no-buy セクションの単一出典 (config 由来)。
+
+    テンプレートに文言を直書きすると config.BUY_FILTER_DEFAULT 変更時に開示が嘘に
+    なるため、ここで組み立てて渡す。
+    """
+    spec = BUY_FILTER_DEFAULT
+    conds: list[str] = []
+    min_pop = spec.get("min_popularity")
+    max_pop = spec.get("max_popularity")
+    if min_pop is not None or max_pop is not None:
+        lo = min_pop if min_pop is not None else 1
+        hi = max_pop if max_pop is not None else "-"
+        conds.append(f"{lo}-{hi} 番人気")
+    if spec.get("max_predicted_p") is not None:
+        conds.append(f"予測勝率≤{spec['max_predicted_p'] * 100:.0f}%")
+    if spec.get("min_kelly") is not None:
+        conds.append(f"Kelly≥{spec['min_kelly']}")
+    if spec.get("min_ev") is not None:
+        conds.append(f"EV≥{spec['min_ev']}")
+    return " かつ ".join(conds) if conds else "設定された買い条件"
 
 
 def _build_filter_summary() -> str:
