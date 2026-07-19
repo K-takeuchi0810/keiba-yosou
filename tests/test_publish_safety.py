@@ -192,6 +192,37 @@ def test_publish_continues_when_repository_archive_fails(tmp_path, monkeypatch, 
     ]
 
 
+def test_publish_records_completeness_and_notifies_best_effort(tmp_path, monkeypatch):
+    from web import generator
+
+    web_dist = tmp_path / "dist"
+    web_dist.mkdir()
+    (web_dist / "index.html").write_text(
+        '<!DOCTYPE html><html><head>'
+        '<meta name="empty-race-ratio" content="0.250000">'
+        '<meta name="completeness-alert" content="1">'
+        '</head><body><details id="race-20260719-05-1">ok</details></body></html>',
+        encoding="utf-8",
+    )
+    icloud = tmp_path / "icloud"
+    notifications = []
+    monkeypatch.setattr(generator, "WEB_DIST", web_dist)
+    monkeypatch.setattr(generator, "ICLOUD_PUBLISH_DIR", icloud)
+    monkeypatch.setattr(generator, "_notify_incomplete_output", notifications.append)
+
+    generator.publish_to_icloud()
+    status = __import__("json").loads(
+        (icloud / "_sync_status.json").read_text(encoding="utf-8")
+    )
+
+    assert status["empty_race_ratio"] == 0.25
+    assert status["completeness_alert"] is True
+    assert notifications == [
+        "WARN: prediction output incomplete: empty_race_ratio=25.0% (>20%); "
+        "some near-term races have no entries"
+    ]
+
+
 def test_verification_banner_marker_matches_template_output():
     """VERIFICATION_BANNER_MARKER (publish_safety) と template (index.html.j2)
     の class 名が一致することの integration test。

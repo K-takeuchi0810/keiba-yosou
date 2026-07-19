@@ -25,6 +25,8 @@ def _horse(num: int, mark: str = "") -> dict:
         "name": f"テストホース{num}",
         "odds": 4.2,
         "popularity": num,
+        "odds_fetched_time": "10:05",
+        "is_top_p": False,
         "sex": "牡",
         "age": 3,
         "burden": 57.0,
@@ -104,6 +106,10 @@ def context() -> dict:
     return {
         "generated_at": "2026-06-12 10:00:00",
         "race_count": 4,
+        "predicted_count": 4,
+        "empty_count": 0,
+        "empty_race_ratio": 0.0,
+        "completeness_alert": False,
         "buy_count": 1,
         "stale_suppressed": 0,
         "filter_summary": "max_predicted_p≤0.4 / 1-3番人気 / 全場開放",
@@ -244,6 +250,8 @@ def test_no_buy_message_when_empty(context):
     context["buy_count"] = 0
     html = _render(context)
     assert 'class="no-buy"' in html
+    assert "買い条件 (1-3 番人気 かつ 予測勝率≤40%)" in html
+    assert "下の EV・印は観察用で購入推奨ではありません" in html
 
 
 def test_stale_suppressed_notice(context):
@@ -261,6 +269,48 @@ def test_verification_banner_hidden_by_default(context):
     assert 'class="verification-banner"' not in html
     context["ignore_odds_freshness"] = False
     assert 'class="verification-banner"' not in _render(context)
+
+
+def test_observation_notice_is_always_visible(context):
+    html = _render(context)
+    assert 'class="observation-notice" role="note"' in html
+    assert "OOS 検証で利益エッジは確認されていません" in html
+    assert "回収率 CI 上限 &lt;100%" in html
+
+    context["ignore_odds_freshness"] = True
+    verification_html = _render(context)
+    assert 'class="observation-notice" role="note"' in verification_html
+    assert 'class="verification-banner"' in verification_html
+
+
+def test_model_legend_explains_marks_probability_and_ev(context):
+    html = _render(context)
+    assert "◎○▲△☆ = 総合本命度" in html
+    assert "P = 校正済み勝率 (LGBM v6 ブレンド、別指標)" in html
+    assert "オッズ確定前の P はモデル単独値" in html
+    assert "EV は検証で的中回収と結びつかないと確認済 (2026-06)" in html
+
+
+def test_top_probability_badge_and_visible_favorite_rationale(context):
+    context["days"][0]["races"][0]["horses"][1]["is_top_p"] = True
+    html = _render(context)
+    assert html.count('class="top-p"') == 1
+    assert "最高勝率" in html
+    assert 'class="head-pick-reason"' in html
+    assert "直近3走平均2.0着; 騎手勝率12%" in html
+
+
+def test_meta_completeness_warning_and_odds_freshness(context):
+    context["predicted_count"] = 3
+    context["empty_count"] = 1
+    context["empty_race_ratio"] = 0.25
+    context["completeness_alert"] = True
+    context["days"][0]["races"][0]["horses"][0]["odds"] = 0
+    html = _render(context)
+    assert "予想 3 レース / 出走馬未確定 1" in html
+    assert "一部レースは出走馬未確定 (翌日分は当日朝に反映)" in html
+    assert 'title="取得 10:05"' in html
+    assert "—" in html
 
 
 def test_verification_banner_visible_when_ignore_odds_freshness(context):

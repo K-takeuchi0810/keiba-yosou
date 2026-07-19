@@ -27,7 +27,13 @@ from config import (
     WEB_DIST,
     is_whitelisted_race,
 )
-from db import SQL_VALID_HORSE_NUM, insert_prediction_log, is_valid_horse_num, open_db
+from db import (
+    SQL_VALID_HORSE_NUM,
+    insert_prediction_log,
+    is_valid_horse_num,
+    open_db,
+    open_db_readonly,
+)
 from predictor import is_tentative, predict_race
 from predictor.candidates import (
     BUY_CANDIDATE_MAX,
@@ -64,6 +70,63 @@ def _notify_archive_failure(message: str) -> None:
         notify_discord(message)
     except Exception:  # noqa: BLE001 - publishing must remain best effort
         logger.error("repository archive failure notification failed", exc_info=True)
+
+
+def _notify_incomplete_output(message: str) -> None:
+    """Report an incomplete near-term page without breaking publication."""
+    try:
+        from scripts.notify_discord import notify_discord
+
+        notify_discord(message)
+    except Exception:  # noqa: BLE001 - publishing must remain best effort
+        logger.error("incomplete output notification failed", exc_info=True)
+
+
+def _top_probability_horse_num(predictions: list) -> str | None:
+    """Return the highest-P horse only when it differs from the marked favorite."""
+    if not predictions:
+        return None
+    top_probability = max(
+        predictions, key=lambda prediction: prediction.win_probability or 0.0
+    )
+    favorite = next(
+        (prediction for prediction in predictions if prediction.mark == "◎"),
+        predictions[0],
+    )
+    if top_probability.horse_num == favorite.horse_num:
+        return None
+    return top_probability.horse_num
+
+
+def _odds_fetched_time(value: object) -> str | None:
+    """Format the latest O1-derived timestamp for compact HTML display."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).strftime("%H:%M")
+    except ValueError:
+        match = re.search(r"(?:T|\s)(\d{2}):(\d{2})", text)
+        return f"{match.group(1)}:{match.group(2)}" if match else None
+
+
+def _read_completeness_meta(source: Path) -> tuple[float, bool]:
+    """Read render completeness metadata embedded near the start of the HTML."""
+    try:
+        head = source.read_text(encoding="utf-8", errors="replace")[:32_000]
+    except OSError:
+        return (0.0, False)
+    ratio_match = re.search(
+        r'<meta name="empty-race-ratio" content="([0-9.]+)">', head
+    )
+    alert_match = re.search(
+        r'<meta name="completeness-alert" content="([01])">', head
+    )
+    try:
+        ratio = float(ratio_match.group(1)) if ratio_match else 0.0
+    except ValueError:
+        ratio = 0.0
+    return (ratio, bool(alert_match and alert_match.group(1) == "1"))
 
 # 買い目フィルタの既定値は `config.BUY_FILTER_DEFAULT` が唯一の出典。
 # 既存コード (gui / backtest 等) が `BET_MIN_*` を import している関係で、
@@ -250,7 +313,7 @@ def build_view_model(
     from_y, from_md = from_d[:4], from_d[4:]
     to_y, to_md = to_d[:4], to_d[4:]
 
-    with open_db() as conn:
+    with open_db_readonly() as conn:
         races = conn.execute(
             """
             SELECT * FROM races
@@ -304,7 +367,8 @@ def build_view_model(
         buy_filter["max_odds_age_min"] = None
     # race_key → race dict のマップ（特徴量計算で必要）
     race_by_key: dict[tuple, dict] = {}
-    with open_db() as conn:
+    connection_context = open_db if log_predictions else open_db_readonly
+    with connection_context() as conn:
         feature_cache: dict = {}
         for r in races:
             k = (r["race_year"], r["race_month_day"], r["track_code"],
@@ -324,6 +388,7 @@ def build_view_model(
                 continue
             preds = predict_race(raws, conn=conn, race=race_dict, cache=feature_cache)
             mark_by_num = {p.horse_num: p for p in preds}
+            top_probability_horse_num = _top_probability_horse_num(preds)
             tentative_by_race[key] = is_tentative(preds)
             # F4 答え合わせ: 発行時点の予想を prediction_log に追記 (opt-in)。
             # 失敗しても HTML 生成は止めない。odds/人気は発行時点の raws から。
@@ -365,8 +430,12 @@ def build_view_model(
                     "trainer": h["trainer_short_name"] or "",
                     "odds": (h["win_odds"] or 0) / 10.0,
                     "popularity": h["win_popularity"] or 0,
+                    "odds_fetched_time": _odds_fetched_time(
+                        h.get("odds_fetched_at")
+                    ),
                     "mark": mark_by_num.get(h["horse_num"]).mark
                         if h["horse_num"] in mark_by_num else "",
+                    "is_top_p": h["horse_num"] == top_probability_horse_num,
                     "rationale": _trim_rationale(
                         mark_by_num.get(h["horse_num"]).rationale
                     ) if h["horse_num"] in mark_by_num else "",
@@ -512,6 +581,14 @@ def build_view_model(
     for d in days.values():
         d["buy_count"] = sum(1 for race in d["races"] if race["has_bet"])
 
+    rendered_days = list(days.values())
+    rendered_races = [race for day in rendered_days for race in day["races"]]
+    empty_count = sum(not race.get("horses") for race in rendered_races)
+    predicted_count = len(rendered_races) - empty_count
+    from web.publish_safety import assess_race_completeness
+
+    completeness = assess_race_completeness(rendered_days, today=today)
+
     # S7-β-2 (2026-05-18): buy_candidates を kelly_fraction 降順でソート。
     # 強いシグナル (Kelly 高) を最上位に表示することでユーザーが最初に目にする
     # 情報の価値を高める。同 Kelly 内は発走時刻昇順。
@@ -572,7 +649,11 @@ def build_view_model(
         "race_count": len(races),
         "buy_count": len(buy_candidates),
         "buy_candidates": buy_candidates,
-        "days": list(days.values()),
+        "days": rendered_days,
+        "predicted_count": predicted_count,
+        "empty_count": empty_count,
+        "empty_race_ratio": completeness["empty_race_ratio"],
+        "completeness_alert": completeness["alert"],
         "filter_summary": filter_summary,
         "stale_suppressed": stale_suppressed,
         "version_info": version_info,
@@ -658,13 +739,14 @@ def render(
         autoescape=select_autoescape(["html", "xml"]),
     )
     tmpl = env.get_template("index.html.j2")
-    html = tmpl.render(**build_view_model(
+    view_model = build_view_model(
         from_date=from_date,
         to_date=to_date,
         daily_budget_yen=daily_budget_yen,
         ignore_odds_freshness=ignore_odds_freshness,
         log_predictions=log_predictions,
-    ))
+    )
+    html = tmpl.render(**view_model)
 
     out = output_path or (WEB_DIST / "index.html")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -721,6 +803,7 @@ def publish_to_icloud(
             )
     src_stat = src.stat()
     src_digest = _file_sha256(src)
+    empty_race_ratio, completeness_alert = _read_completeness_meta(src)
     ICLOUD_PUBLISH_DIR.mkdir(parents=True, exist_ok=True)
     dst = ICLOUD_PUBLISH_DIR / "index.html"
     shutil.copy2(src, dst)
@@ -766,6 +849,8 @@ def publish_to_icloud(
         "source_bytes": src_stat.st_size,
         "repository_archive": str(archive) if archive else None,
         "repository_archive_sha256": archive_digest,
+        "empty_race_ratio": empty_race_ratio,
+        "completeness_alert": completeness_alert,
     }
     (ICLOUD_PUBLISH_DIR / "_sync_status.json").write_text(
         json.dumps(status, ensure_ascii=False, indent=2) + "\n",
@@ -789,6 +874,12 @@ def publish_to_icloud(
         check_text,
         encoding="utf-8",
     )
+    if completeness_alert:
+        _notify_incomplete_output(
+            "WARN: prediction output incomplete: "
+            f"empty_race_ratio={empty_race_ratio:.1%} (>20%); "
+            "some near-term races have no entries"
+        )
     _prune_old_files(snapshot_dir, "index_*.html")
     _prune_old_files(ICLOUD_PUBLISH_DIR, "_sync_check_[0-9]*.txt")
     return dst
