@@ -10,8 +10,10 @@ exit /b %FINALCODE%
 
 :run
 echo [%date% %time%] fetch_full (32-bit) start
-.venv32\Scripts\python.exe -m scripts.fetch_full --since-last
-if errorlevel 1 echo [WARN] fetch_full failed, continue with existing DB
+.venv32\Scripts\python.exe -m scripts.fetch_full
+set FETCHCODE=%errorlevel%
+if %FETCHCODE% NEQ 0 echo [WARN] fetch_full failed (exit %FETCHCODE%), continue with existing DB
+if %FETCHCODE% NEQ 0 .venv64\Scripts\python.exe -m scripts.notify_discord --message "WARN: fetch_full failed (exit %FETCHCODE%); predictions used existing DB (see %LOGFILE%)"
 
 echo [%date% %time%] fetch_mining (32-bit) start
 .venv32\Scripts\python.exe -m scripts.fetch_mining --date today
@@ -26,9 +28,10 @@ echo [%date% %time%] auto_predict (64-bit) start
 .venv64\Scripts\python.exe -m scripts.auto_predict
 set PREDICTCODE=%errorlevel%
 
-REM Exit bits: 1=fresh odds gap, 2=prediction failure.
+REM Exit bits: 1=fresh odds gap, 2=prediction failure, 4=fetch_full failure.
 set EXITCODE=0
 if %GAPCODE% NEQ 0 set /a EXITCODE+=1
 if %PREDICTCODE% NEQ 0 set /a EXITCODE+=2
+if %FETCHCODE% NEQ 0 set /a EXITCODE+=4
 echo [%date% %time%] done exit=%EXITCODE%
 exit /b %EXITCODE%
