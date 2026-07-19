@@ -73,6 +73,9 @@ def test_weekly_monitor_runs_safety_checks_before_isolated_pytest() -> None:
     assert monitor_position < coverage_position < pytest_position
     assert "WaitForExit(600*1000)" in source
     assert "exit 124" in source
+    # PowerShell 5.1: $p.ExitCode is null after WaitForExit(ms) unless the process
+    # Handle was touched first. Without this, a red pytest silently exits 0.
+    assert "$null=$p.Handle" in source
 
 
 def test_auto_predict_task_registers_both_daily_triggers() -> None:
