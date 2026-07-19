@@ -8,6 +8,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#181818" media="(prefers-color-scheme: dark)">
+<meta name="empty-race-ratio" content="{{ '%.6f'|format(empty_race_ratio) }}">
+<meta name="completeness-alert" content="{{ 1 if completeness_alert else 0 }}">
 <title>競馬予想 - {{ generated_at }}</title>
 <style>
   :root {
@@ -126,15 +128,11 @@
     font-weight: 700;
     font-size: 0.82rem;
   }
-  /* アンカー遷移時に sticky ヘッダの下へ着地点が潜らないようオフセット確保。
-     モバイル実測 (375px) でヘッダ 166px (filter-summary 2 行折返し時) が
-     最悪値なので 176px 着地 = ~10px クリアランス */
-  .day-section, details.race { scroll-margin-top: 11rem; }
-  /* 検証モード時は verification-banner (高 ≈ 52px) が sticky header に追加されるため、
-     アンカー着地点が ~28px 食い込む (モバイル監査 2026-06-17 指摘)。
-     body.verification-mode で scroll-margin を 13.5rem (216px) に上げ、被りを解消 */
+  /* 常設 observation-notice を含む sticky header のモバイル高を吸収する。 */
+  .day-section, details.race { scroll-margin-top: 17.5rem; }
+  /* 検証モードは verification-banner の分をさらに確保する。 */
   body.verification-mode .day-section,
-  body.verification-mode details.race { scroll-margin-top: 13.5rem; }
+  body.verification-mode details.race { scroll-margin-top: 21rem; }
   main { padding: 0.5rem; max-width: 720px; margin: 0 auto; }
   .buy-board {
     margin: 0.5rem 0 1rem;
@@ -265,6 +263,38 @@
     font-size: 0.72rem;
     color: var(--fg-mute);
     font-family: ui-monospace, monospace;
+  }
+  .observation-notice,
+  .completeness-warning {
+    margin: 0.4rem 0 0.2rem;
+    padding: 0.5rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+  .observation-notice {
+    background: #fff3cd;
+    color: #4b3800;
+    border: 1px solid #8a6500;
+  }
+  .completeness-warning {
+    background: #ffe4cc;
+    color: #552600;
+    border: 1px solid #a54600;
+  }
+  .model-legend {
+    margin: 0.5rem 0;
+    padding: 0.55rem 0.7rem;
+    background: var(--bg-mute);
+    border-left: 4px solid var(--accent);
+    color: var(--fg-mute);
+    font-size: 0.78rem;
+    line-height: 1.45;
+  }
+  @media (prefers-color-scheme: dark) {
+    .observation-notice { background: #3d3005; color: #fff2b2; border-color: #d4a72c; }
+    .completeness-warning { background: #472000; color: #ffd9b8; border-color: #e57619; }
   }
   /* 検証モード (オッズ鮮度無視) の警告バナー。filter-summary より強いコントラストで
      「これは実弾運用のための買い目ではない」を一目で伝える。WCAG AA 想定で
@@ -504,6 +534,28 @@
     font-size: 0.78rem; color: var(--fg-mute);
     margin-top: 0.05rem; line-height: 1.35;
   }
+  .head-pick-reason {
+    display: block;
+    max-width: 28rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--fg-mute);
+    font-size: 0.72rem;
+    line-height: 1.25;
+  }
+  .top-p {
+    display: inline-block;
+    margin-bottom: 0.15rem;
+    padding: 0.05rem 0.28rem;
+    border-radius: 3px;
+    background: var(--accent-bg);
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  tr.top-probability td:not(.horse-num) { border-top: 1px solid var(--accent); border-bottom: 1px solid var(--accent); }
   .mark { font-weight: 700; color: var(--accent); margin-right: 0.25rem; font-size: 1rem; }
   .top-picks.tentative { background: var(--buy-board-bg); }
   .top-picks.tentative .top-pick { border-left-color: var(--grade); }
@@ -540,10 +592,14 @@
 <header>
   <h1>競馬予想</h1>
   <div class="updated">更新 {{ generated_at }}</div>
-  <div class="meta">全 {{ race_count }} レース / 買い候補 {{ buy_count }} 件</div>
+  <div class="meta">予想 {{ predicted_count }} レース / 出走馬未確定 {{ empty_count }} / 買い候補 {{ buy_count }} 件</div>
   {# S7-β-4: 現在のフィルタ条件を明示。ユーザーが「フィルタが効いていない」を即検知できる #}
   {% if filter_summary %}
   <div class="filter-summary">買い候補フィルタ: {{ filter_summary }}</div>
+  {% endif %}
+  <div class="observation-notice" role="note">⚠ 本ページは観察専用です。OOS 検証で利益エッジは確認されていません (回収率 CI 上限 &lt;100%)。表示中の EV・印は購入推奨ではなく、実際の馬券購入には使用できません。</div>
+  {% if completeness_alert %}
+  <div class="completeness-warning" role="alert">一部レースは出走馬未確定 (翌日分は当日朝に反映)</div>
   {% endif %}
   {% if ignore_odds_freshness | default(false) %}
   <div class="verification-banner" role="alert" aria-label="検証モード警告">
@@ -564,6 +620,11 @@
   {% endif %}
 </header>
 <main>
+<div class="model-legend" role="note">
+  <div>◎○▲△☆ = 総合本命度 (ルール+人気の合成順)。P = 校正済み勝率 (LGBM v6 ブレンド、別指標)。両者は一致しないことがあります。</div>
+  <div>オッズ確定前の P はモデル単独値です。</div>
+  <div>EV は検証で的中回収と結びつかないと確認済 (2026-06)。表示値は観察用です。</div>
+</div>
 {% if buy_candidates %}
   {# S7-β-1: 6 件以上で折りたたみ。Kelly 降順ソート済み (web/generator.py で sort) #}
   {% if buy_count >= 6 %}
@@ -577,7 +638,7 @@
        表示 P/EV/Kelly は未校正の予想確率に基づき、現行モデルは中穴〜大穴の勝率を
        市場の 2-7 倍に過大評価する (reliability gap)。Kelly 表示は是正したが確率
        自体の矯正は Phase B1 待ち。MEMORY「実弾運用を控える」方針と整合。 #}
-    <div class="calib-caveat">⚠ 表示の P / EV / Kelly は<strong>未校正の予想確率</strong>に基づきます。現行モデルは中穴〜大穴の勝率を市場想定の 2〜7 倍に過大評価する傾向があり、実際の期待値はこれより低い見込みです。再訓練 (Phase B1) までは<strong>ロジック観察用</strong>とし、実弾投入は推奨しません。</div>
+    <div class="calib-caveat">⚠ 表示の P は校正済みですが、OOS 検証で利益エッジは確認されていません。EV / Kelly を含め<strong>ロジック観察用</strong>であり、実弾投入には使用できません。</div>
     {# P20 (2026-06-07): 推奨投資率は **開催日ごと** に集計 (bankroll は日単位)。
        多日窓で全件合算すると誤って巨大化するため日別に表示する。 #}
     {% if portfolio_info and portfolio_info.days %}
@@ -637,7 +698,7 @@
   </section>
   {% endif %}
 {% else %}
-  <section class="no-buy">表示中の期間に買い候補はありません。予想印は下に表示していますが、EV/信頼度条件を満たすレースは見送り判定です。
+  <section class="no-buy">買い条件 ({{ buy_condition_text }}) を満たす馬がいないため全レース見送り。下の EV・印は観察用で購入推奨ではありません。
   {%- if stale_suppressed %}<br>⚠ うち {{ stale_suppressed }} 件は<strong>オッズ鮮度切れ</strong>のみが理由で除外されています。最新オッズ取得後に再生成すると候補に戻る可能性があります。{% endif %}</section>
 {% endif %}
 {% for day in days %}
@@ -658,10 +719,10 @@
           {# P22: 閉じたままでも本命が見えるプレビュー行 (全レース開かずにスキャン可能) #}
           {% if race.top_picks %}
           {% set tp = race.top_picks[0] %}
-          <div class="head-pick"><span class="mark">{{ tp.mark }}</span>{{ tp.num }} {{ tp.name }}{% if tp.odds %} / {{ "%.1f"|format(tp.odds) }}倍{% endif %}{% if race.tentative %}<span class="head-pick-tent">暫定</span>{% endif %}</div>
+          <div class="head-pick"><span class="mark">{{ tp.mark }}</span>{{ tp.num }} {{ tp.name }}{% if tp.odds %} / {{ "%.1f"|format(tp.odds) }}倍{% endif %}{% if race.tentative %}<span class="head-pick-tent">暫定</span>{% endif %}<span class="head-pick-reason">{{ tp.rationale }}</span></div>
           {% endif %}
         </div>
-        <div class="race-time">{{ race.start_time }}</div>
+        <div class="race-time">{{ race.start_time }}{% if race.odds_time %} <span class="odds-time">オッズ {{ race.odds_time }} 時点</span>{% endif %}</div>
       </summary>
       {% if race.horses %}
         {% if race.top_picks %}
@@ -717,11 +778,11 @@
         </thead>
         <tbody>
         {% for h in race.horses %}
-          <tr{% if h.mark %} class="marked"{% endif %}>
+          <tr{% if h.mark or h.get("is_top_p") %} class="{% if h.mark %}marked{% endif %}{% if h.mark and h.get('is_top_p') %} {% endif %}{% if h.get('is_top_p') %}top-probability{% endif %}"{% endif %}>
             <td class="mark-cell" {% if h.rationale %}title="{{ h.rationale }}"{% endif %}>{{ h.mark }}</td>
             <td class="horse-num waku-{{ h.waku }}">{{ h.num }}</td>
             <td class="horse-name">{{ h.name }}</td>
-            <td class="col-odds"{% if h.odds %} data-odds="{{ h.odds }}"{% endif %}{% if h.popularity %} data-popularity="{{ h.popularity }}"{% endif %}>{% if h.odds %}{{ "%.1f"|format(h.odds) }}{% endif %}{% if h.popularity %}<br><span class="pick-reason">{{ h.popularity }}人気</span>{% endif %}</td>
+            <td class="col-odds"{% if h.odds %} data-odds="{{ h.odds }}"{% endif %}{% if h.popularity %} data-popularity="{{ h.popularity }}"{% endif %}{% if h.get("odds_fetched_time") %} title="取得 {{ h.odds_fetched_time }}"{% endif %}>{% if h.get("is_top_p") %}<span class="top-p">最高勝率</span><br>{% endif %}{% if h.odds %}{{ "%.1f"|format(h.odds) }}{% else %}—{% endif %}{% if h.popularity %}<br><span class="pick-reason">{{ h.popularity }}人気</span>{% endif %}</td>
             <td class="col-sex">{{ h.sex }}{{ h.age }}</td>
             <td class="num col-burden">{{ h.burden }}</td>
             <td>{{ h.jockey }}</td>
