@@ -7,7 +7,7 @@ set "LOG_PATH=data\logs\fetch_morning_odds.log"
 set "RUN_OUTPUT=%TEMP%\fetch_morning_odds_%RANDOM%_%RANDOM%.tmp"
 set "EXIT_CODE=0"
 
-echo [%DATE% %TIME%] morning odds start window=600 min_lead=0>> "%LOG_PATH%"
+echo [%DATE% %TIME%] morning odds start window=600 min_lead=0 >> "%LOG_PATH%"
 
 if not exist .venv32\Scripts\python.exe (
     echo ERROR: .venv32\Scripts\python.exe not found>> "%LOG_PATH%"
@@ -28,5 +28,5 @@ if errorlevel 1 (
 )
 
 del /q "%RUN_OUTPUT%" >nul 2>&1
-echo [%DATE% %TIME%] morning odds end rc=%EXIT_CODE%>> "%LOG_PATH%"
+echo [%DATE% %TIME%] morning odds end rc=%EXIT_CODE% >> "%LOG_PATH%"
 exit /b %EXIT_CODE%

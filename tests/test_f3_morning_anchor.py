@@ -15,6 +15,8 @@ def test_morning_batch_has_fixed_effective_window_and_32bit_python() -> None:
     assert ".venv32\\Scripts\\python.exe" in source
     assert "--window 600 --min-lead 0" in source
     assert 'findstr /C:"window=0-600min"' in source
+    assert "min_lead=0 >>" in source
+    assert "rc=%EXIT_CODE% >>" in source
     assert "fetch_morning_odds.log" in source
     assert "%*" not in source
 
