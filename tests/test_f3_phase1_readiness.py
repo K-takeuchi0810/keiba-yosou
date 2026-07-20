@@ -79,6 +79,8 @@ def test_analyze_race_requires_two_different_times() -> None:
 
 def test_sealed_window_is_rejected_before_query() -> None:
     _validate_window("20260704", "20260930")
+    with pytest.raises(ValueError, match="must remain fixed"):
+        _validate_window("20260703", "20260930")
     with pytest.raises(ValueError, match="sealed holdout access denied"):
         _validate_window("20260704", "20261001")
 
@@ -89,6 +91,7 @@ def test_summary_uses_races_with_entries_as_rate_denominator() -> None:
         "race_id": "one",
         "race_date": "20260718",
         "post_time_band": "afternoon",
+        "track_scope": "jra_central",
         "n_usable": 2,
         "earliest_lead_min": 90.0,
         "drift_computable": True,
@@ -102,6 +105,8 @@ def test_summary_uses_races_with_entries_as_rate_denominator() -> None:
     assert summary["drift_computable_rate"] == 1.0
     assert daily[0]["total_races"] == 2
     assert daily[0]["races_with_entries"] == 1
+    assert summary["by_track_scope"]["jra_central"]["drift_computable"] == 1
+    assert summary["by_track_scope"]["other"]["races_with_entries"] == 0
 
 
 def test_audit_script_source_is_ascii() -> None:

@@ -10,6 +10,7 @@ import hashlib
 import json
 import math
 import subprocess
+import uuid
 from collections import defaultdict
 from datetime import date, datetime
 from pathlib import Path
@@ -24,8 +25,10 @@ DEV_FROM = "20260704"
 SEALED_START = "20261001"
 NEAR_T10_MAX_LEAD_MIN = 25.0
 PROJECTION_WEEKS = 4
+JRA_TRACK_CODES = frozenset(f"{number:02d}" for number in range(1, 11))
 DEFAULT_OUTPUT = PROJECT_ROOT / "data" / "f3_phase1_readiness" / "dev_odds_coverage.json"
 DEFAULT_REPORT = PROJECT_ROOT / "docs" / "F3_phase1_readiness.md"
+FROZEN_DESIGN = PROJECT_ROOT / "docs" / "F3_MARKET_RESIDUAL_DESIGN.md"
 PRODUCTION_ARTIFACTS = (
     PROJECT_ROOT / "predictor" / "lgbm_model.txt",
     PROJECT_ROOT / "predictor" / "lgbm_features.json",
@@ -41,6 +44,8 @@ def _validate_window(from_date: str, to_date: str) -> None:
         datetime.strptime(value, "%Y%m%d")
     if from_date > to_date:
         raise ValueError("from_date must not be after to_date")
+    if from_date != DEV_FROM:
+        raise ValueError(f"from_date must remain fixed at {DEV_FROM}")
     if to_date >= SEALED_START:
         raise ValueError(f"sealed holdout access denied: to_date must be before {SEALED_START}")
 
@@ -62,9 +67,12 @@ def _artifact_hashes() -> dict[str, str]:
 
 def _atomic_write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(text, encoding="utf-8")
-    temporary.replace(path)
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        temporary.write_text(text, encoding="utf-8")
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _race_id(race: dict) -> str:
@@ -142,6 +150,11 @@ def analyze_race(conn, race: dict) -> dict:
         "race_num": race.get("race_num"),
         "start_time": race.get("start_time"),
         "post_time_band": _post_time_band(race),
+        "track_scope": (
+            "jra_central"
+            if str(race.get("track_code") or "").zfill(2) in JRA_TRACK_CODES
+            else "other"
+        ),
         "n_usable": n_usable,
         "earliest_fetched_at": ordered_times[0] if ordered_times else None,
         "latest_fetched_at": ordered_times[-1] if ordered_times else None,
@@ -210,6 +223,22 @@ def _daily_trend(daily: list[dict]) -> dict:
         "second_half_minus_first_half": round(second - first, 8),
         "linear_slope_rate_per_calendar_week": round(slope_per_week, 8),
         "improving": second > first,
+    }
+
+
+def _scope_summary(measurements: list[dict], scope: str) -> dict:
+    rows = [item for item in measurements if item["track_scope"] == scope]
+    n_usable = sum(item["n_usable"] >= 1 for item in rows)
+    n_drift = sum(item["drift_computable"] for item in rows)
+    n_wide = sum(item["wide_drift"] for item in rows)
+    return {
+        "races_with_entries": len(rows),
+        "races_with_usable": n_usable,
+        "usable_rate": _safe_rate(n_usable, len(rows)),
+        "drift_computable": n_drift,
+        "drift_computable_rate": _safe_rate(n_drift, len(rows)),
+        "wide_drift": n_wide,
+        "wide_drift_rate": _safe_rate(n_wide, len(rows)),
     }
 
 
@@ -288,6 +317,10 @@ def _build_summary(all_races: list[dict], measurements: list[dict]) -> tuple[lis
         "wide_drift_rate": _safe_rate(n_wide, n_entries),
         "earliest_lead_min": _distribution(all_leads),
         "by_post_time_band": bands,
+        "by_track_scope": {
+            "jra_central": _scope_summary(measurements, "jra_central"),
+            "other": _scope_summary(measurements, "other"),
+        },
         "daily_trend": _daily_trend(daily),
         "rough_projection": projection,
     }
@@ -337,9 +370,11 @@ def _latest_dev_date(conn) -> str:
 
 def collect(from_date: str, to_date: str | None = None) -> dict:
     production_before = _artifact_hashes()
+    design_before = _sha256(FROZEN_DESIGN)
     with open_db_readonly() as conn:
         if int(conn.execute("PRAGMA query_only").fetchone()[0]) != 1:
             raise RuntimeError("database connection is not query_only")
+        conn.execute("BEGIN")
         effective_to = to_date or _latest_dev_date(conn)
         _validate_window(from_date, effective_to)
         all_races = _list_races(conn, from_date, effective_to)
@@ -351,8 +386,11 @@ def collect(from_date: str, to_date: str | None = None) -> dict:
 
     daily, summary = _build_summary(all_races, measurements)
     production_after = _artifact_hashes()
+    design_after = _sha256(FROZEN_DESIGN)
     if production_before != production_after:
         raise RuntimeError("production artifacts changed during readiness audit")
+    if design_before != design_after:
+        raise RuntimeError("frozen F3 design changed during readiness audit")
     git_sha = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT, text=True
     ).strip()
@@ -372,11 +410,18 @@ def collect(from_date: str, to_date: str | None = None) -> dict:
             ),
             "near_t10_basis": "existing fresh-odds collection window T-25 through T-10",
         },
-        "database": {"open_mode": "read_only", "pragma_query_only": True},
+        "database": {
+            "open_mode": "read_only",
+            "pragma_query_only": True,
+            "consistent_read_transaction": True,
+        },
         "sealed_holdout_accessed": False,
         "production_artifacts_before": production_before,
         "production_artifacts_after": production_after,
         "production_artifacts_unchanged": True,
+        "frozen_design_sha256_before": design_before,
+        "frozen_design_sha256_after": design_after,
+        "frozen_design_unchanged": True,
         "races": measurements,
         "daily": daily,
         "summary": summary,
@@ -388,6 +433,8 @@ def render_report(payload: dict) -> str:
     bands = summary["by_post_time_band"]
     trend = summary["daily_trend"]
     projection = summary["rough_projection"]
+    jra = summary["by_track_scope"]["jra_central"]
+    other = summary["by_track_scope"]["other"]
 
     def pct(value: float | None) -> str:
         return "n/a" if value is None else f"{value:.1%}"
@@ -418,6 +465,11 @@ def render_report(payload: dict) -> str:
         f"| At least one usable timestamp | {summary['races_with_usable']} | {pct(summary['usable_rate'])} |",
         f"| Drift computable (at least 2 distinct times) | {summary['drift_computable']} | {pct(summary['drift_computable_rate'])} |",
         f"| Wide drift | {summary['wide_drift']} | {pct(summary['wide_drift_rate'])} |",
+        "",
+        f"JRA central scope: {jra['races_with_entries']} races, "
+        f"{jra['drift_computable']} drift-computable ({pct(jra['drift_computable_rate'])}). "
+        f"Other track codes: {other['races_with_entries']} races, "
+        f"{other['drift_computable']} drift-computable ({pct(other['drift_computable_rate'])}).",
         "",
         "Wide drift is a measurement label: earliest lead >= 60 minutes and the latest "
         "eligible point is in the existing T-25 through T-10 collection window.",
