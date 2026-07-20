@@ -118,10 +118,17 @@ def test_paired_outputs_cannot_overwrite_inputs_or_each_other():
         PROJECT_ROOT / "data" / "keiba.db",
         PROJECT_ROOT / "scripts" / "f3_phase0_0_eval.py",
     ):
-        with pytest.raises(ValueError, match="output_dir/paired_oos.json"):
+        with pytest.raises(ValueError, match="data/f3_phase0_0/paired_oos.json"):
             _guard_paired_output_paths(
                 unsafe_json, safe_report, cache, DEFAULT_OUTPUT
             )
+    with pytest.raises(ValueError, match="data/f3_phase0_0/paired_oos.json"):
+        _guard_paired_output_paths(
+            PROJECT_ROOT / "data" / "other" / "paired_oos.json",
+            safe_report,
+            cache,
+            PROJECT_ROOT / "data" / "other",
+        )
     with pytest.raises(ValueError, match="docs/F3_phase0_0b_result.md"):
         _guard_paired_output_paths(
             safe_json,

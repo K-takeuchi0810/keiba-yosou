@@ -718,8 +718,8 @@ def _guard_paired_output_paths(
     for label, path in (("paired_output", output_path), ("paired_report", report_path)):
         if path.resolve() in protected:
             raise ValueError(f"{label} collides with a protected input/artifact: {path}")
-    if output_path.parent.resolve() != output_dir.resolve() or output_path.name != "paired_oos.json":
-        raise ValueError("paired JSON must be output_dir/paired_oos.json")
+    if output_dir.resolve() != DEFAULT_OUTPUT.resolve() or output_path.resolve() != PAIRED_OOS_OUTPUT.resolve():
+        raise ValueError("paired JSON must be data/f3_phase0_0/paired_oos.json")
     if report_path.resolve() != PAIRED_OOS_REPORT.resolve():
         raise ValueError("paired report must be docs/F3_phase0_0b_result.md")
 
