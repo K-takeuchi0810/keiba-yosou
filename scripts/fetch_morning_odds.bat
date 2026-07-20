@@ -8,6 +8,7 @@ set "RUN_OUTPUT=%TEMP%\fetch_morning_odds_%RANDOM%_%RANDOM%.tmp"
 set "EXIT_CODE=0"
 set "LOCK_RETRIES=6"
 set "LOCK_RETRY_SECONDS=30"
+set /a LOCK_RETRY_PINGS=LOCK_RETRY_SECONDS+1
 set "ATTEMPT=0"
 
 echo [%DATE% %TIME%] morning odds start window=600 min_lead=0 >> "%LOG_PATH%"
@@ -27,7 +28,7 @@ findstr /C:"another fetch_fresh_odds run is active" "%RUN_OUTPUT%" >nul
 if not errorlevel 1 (
     if %ATTEMPT% LSS %LOCK_RETRIES% (
         echo WARN: shared lock busy; retry %ATTEMPT%/%LOCK_RETRIES% in %LOCK_RETRY_SECONDS%s >> "%LOG_PATH%"
-        ping 127.0.0.1 -n 31 >nul
+        ping 127.0.0.1 -n %LOCK_RETRY_PINGS% >nul
         goto run_fetch
     )
     echo ERROR: shared lock remained busy after %LOCK_RETRIES% attempts >> "%LOG_PATH%"

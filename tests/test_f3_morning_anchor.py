@@ -21,6 +21,8 @@ def test_morning_batch_has_fixed_effective_window_and_32bit_python() -> None:
     assert "another fetch_fresh_odds run is active" in source
     assert 'set "EXIT_CODE=4"' in source
     assert "LOCK_RETRIES=6" in source
+    assert "LOCK_RETRY_PINGS=LOCK_RETRY_SECONDS+1" in source
+    assert "-n %LOCK_RETRY_PINGS%" in source
     assert "%*" not in source
 
 
