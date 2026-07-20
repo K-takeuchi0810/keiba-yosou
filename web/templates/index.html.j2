@@ -461,7 +461,16 @@
   .badge.dirt  { background: var(--dirt);  color: #fff; }
   .badge.jump  { background: var(--jump);  color: #fff; }
   .badge.grade { background: var(--grade); color: #fff; }
-  .race-time { color: var(--fg-mute); font-size: 0.85rem; white-space: nowrap; }
+  .race-time { color: var(--fg-mute); font-size: 0.85rem; white-space: nowrap; text-align: right; }
+  /* grid 子要素の min-width:auto (=min-content) を解除。head-pick が nowrap で
+     縮まず race-time (auto 列) を画面外へ押し出し、発走時刻が見切れる問題の是正。 */
+  summary.race-head > * { min-width: 0; }
+  /* オッズ取得時刻は発走時刻の下段へ (race-time 列幅を抑え、見切れをさらに防ぐ) */
+  .odds-time { display: block; font-size: 0.72rem; }
+  /* キーボード操作時のフォーカスリング (details/summary は Tab で開閉可能) */
+  summary.race-head:focus-visible,
+  details.buy-board > summary:focus-visible,
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .bet-head { background: var(--grade); color: #fff; border-radius: 3px; padding: 0.05rem 0.35rem; font-size: 0.75rem; font-weight: 700; }
   /* テーブルは横幅が足りないとき横スクロール可能にし、狭画面では
      優先度の低い列 (調教師 / 性齢 / 斤量) を畳む。 */
@@ -766,23 +775,23 @@
       <table class="entries">
         <thead>
           <tr>
-            <th>印</th>
-            <th>馬</th>
-            <th>馬名</th>
-            <th>オッズ</th>
-            <th class="col-sex">性齢</th>
-            <th class="col-burden">斤量</th>
-            <th>騎手</th>
-            <th class="col-trainer">調教師</th>
+            <th scope="col">印</th>
+            <th scope="col">馬</th>
+            <th scope="col">馬名</th>
+            <th scope="col">オッズ</th>
+            <th scope="col" class="col-sex">性齢</th>
+            <th scope="col" class="col-burden">斤量</th>
+            <th scope="col">騎手</th>
+            <th scope="col" class="col-trainer">調教師</th>
           </tr>
         </thead>
         <tbody>
         {% for h in race.horses %}
           <tr{% if h.mark or h.get("is_top_p") %} class="{% if h.mark %}marked{% endif %}{% if h.mark and h.get('is_top_p') %} {% endif %}{% if h.get('is_top_p') %}top-probability{% endif %}"{% endif %}>
-            <td class="mark-cell" {% if h.rationale %}title="{{ h.rationale }}"{% endif %}>{{ h.mark }}</td>
+            <td class="mark-cell"{% if h.rationale %} title="{{ h.rationale }}" aria-label="{{ h.mark }} 根拠: {{ h.rationale }}"{% endif %}>{{ h.mark }}</td>
             <td class="horse-num waku-{{ h.waku }}">{{ h.num }}</td>
             <td class="horse-name">{{ h.name }}</td>
-            <td class="col-odds"{% if h.odds %} data-odds="{{ h.odds }}"{% endif %}{% if h.popularity %} data-popularity="{{ h.popularity }}"{% endif %}{% if h.get("odds_fetched_time") %} title="取得 {{ h.odds_fetched_time }}"{% endif %}>{% if h.get("is_top_p") %}<span class="top-p">最高勝率</span><br>{% endif %}{% if h.odds %}{{ "%.1f"|format(h.odds) }}{% else %}—{% endif %}{% if h.popularity %}<br><span class="pick-reason">{{ h.popularity }}人気</span>{% endif %}</td>
+            <td class="col-odds"{% if h.odds %} data-odds="{{ h.odds }}"{% endif %}{% if h.popularity %} data-popularity="{{ h.popularity }}"{% endif %}{% if h.get("odds_fetched_time") %} title="取得 {{ h.odds_fetched_time }}" aria-label="オッズ取得 {{ h.odds_fetched_time }}"{% endif %}>{% if h.get("is_top_p") %}<span class="top-p">最高勝率</span><br>{% endif %}{% if h.odds %}{{ "%.1f"|format(h.odds) }}{% else %}—{% endif %}{% if h.popularity %}<br><span class="pick-reason">{{ h.popularity }}人気</span>{% endif %}</td>
             <td class="col-sex">{{ h.sex }}{{ h.age }}</td>
             <td class="num col-burden">{{ h.burden }}</td>
             <td>{{ h.jockey }}</td>
