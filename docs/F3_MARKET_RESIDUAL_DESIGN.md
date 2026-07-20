@@ -3,6 +3,10 @@
 エッジ探索の本命フェーズ。設計制約 4 件 (封印ホールドアウト / mining除外 ablation /
 review≠外部検証 / PIT T−n コード強制) はユーザ合意済み (2026-07-03) で本書の前提。
 
+> **rev 1.1 (2026-07-20)**: §4 (Phase 0 ベースライン確定 + 実装契約) を追記。§0–3 (D1/D2/F3-c
+> 判定プロトコル、2026-07-03 確定) は不変で §4 は上書きしない。2026-07-20 の会話 T-15 draft は
+> 本書を正本として supersede (§4.5)。本 rev は tag `f3-design-rev1.1` で凍結。
+
 ## 0. 在庫実測 (2026-07-03) — 設計を規定する事実
 
 | 事実 | 実測値 | 含意 |
@@ -68,3 +72,67 @@ review≠外部検証 / PIT T−n コード強制) はユーザ合意済み (202
 - 収集系が単一障害点 (PC 稼働・scheduler)。朝スナップ欠損日は dev/判定から除外するルールを
   coverage で機械化。
 - mining 依存 67% の監視 (weekly_monitor) は F3 と独立に継続。
+
+## 4. Phase 0 ベースライン確定 + 実装契約 (2026-07-20 追記, rev 1.1)
+
+Phase 0-0 / 0-0b (発走後リーク定量化 + paired OOS。測定のみ・production 不変・封印非接触) の
+結果と、それを受けた Phase 0/1 の実装契約。§0–3 (D1/D2/F3-c) は不変で本節が上書きしない。
+
+### 4.0 「3チャネル遮断 baseline」の確定
+整合レビュー (`docs/F3_design_review_report.md`) が v6 の派生3特徴 (`same_day_bias_score` /
+`leg_quality_available` / `same_day_bias_available`) の発走後 `leg_quality_code` 参照リークを特定。
+paired 定量 (同一 split。両 M2 に**同一 seed 20260720 を注入して再学習交絡を除去**=production v6 の
+訓練 seed と同一という意味ではない。同一 OOS 窓 2026-01-01〜06-14、封印非接触):
+
+- 純リーク寄与 = val AUC **+0.00254** (top-1 差 0)。
+- OOS ROI paired 差 (control−treatment) = **+1.02pt**、日block 95%CI **[-4.67, +6.41]pt**。
+  共通レース basis 差 0 (hit 65戦で pick 一致 + miss はゼロ同士)。
+- **★検出力 caveat: CI 幅 ±5.5pt。3〜6pt 級の経済的に意味ある寄与は検出できていない。
+  「correctness 章クローズ」は事前登録判定 (CI が 0 を含む) の執行であって、寄与ゼロの証明ではない。**
+
+**F3 が超えるべき baseline (=「3チャネル遮断 baseline」)**: val AUC **0.7888**、
+固定OOS (2026-01-01〜06-14) buy_only 回収率 **62.09%** / 日block 95%CI **[48.97%, 76.28%]**。
+**CI 上限 <100% = 現行特徴集合にエッジ無し (再確認)。**
+
+- 脚注1 (残存リーク・命名): treatment には `same_day_gate_bias_score` (#49) と、OOS が blend 0.5 で
+  含む rule 側 `leg_quality_code` 経路が残存。これらは baseline を**上振れ**させる向き = F3 の
+  ハードルとしては**保守的 (安全側)**。ゆえに「完全 de-leaked」ではなく「**3チャネル遮断**」と呼ぶ。
+- 脚注2 (非比較): 旧 70.70% とは母集団・rules SHA 違いの**非paired**。差分をリーク寄与と解釈しない。
+- **TODO (次回 paired 評価の必須要件)**: ledger 永続化 + top-pick 不一致件数の出力。未実装だと
+  basis(b)=0 の事後監査 (miss レースの pick 差) が不能なまま残る。忘れると次も監査不能。
+
+### 4.1 出力スキーマ分離 (`win_probability` 廃止)
+現行 `Prediction.win_probability` は「校正+市場blend+割引後」で確率解釈不能。以下へ分割し内部契約を是正:
+`p_market_no_vig` / `p_rule_raw` / `p_lgbm_raw` / `p_model_calibrated` / `alpha_vs_market` /
+`odds_snapshot` / **`expected_value_net` (= p·odds − 1、net に統一・フィールド名込みで凍結)** /
+`ev_lower_bound`。◎=「最も勝ちそう」、買い推奨=「市場より割安」で役割分離 (同一ランカーに統一しない)。
+
+### 4.2 市場 = log(q) 固定オフセット + x_i の凍結定義
+F3 残差モデルは **η_i = 1·log(p_market_no_vig_i) + β·x_i** (market は係数1固定 offset、学習は β のみ)。
+反証済みの p_rule/p_lgbm 再ロジット結合 (係数を両方 fit) は不採用。
+
+- **x_i の実体 = §1 の F3 特徴ファミリ** (単勝オッズドリフト、rank divergence、overround 変化、
+  資金集中度変化 等の市場マイクロ構造量)。「G-OWN 限定」は課さない (§1 が正本)。
+- **条件A (係数1固定を形骸化させない)**: x_i に **T-10 水準そのもの、および log(q_T10) の単調変換**
+  (オッズ水準・人気順位そのもの等) を入れることを**禁止**。許すのは変化量・相対量・構造量のみ
+  (例: ドリフト = log(q_T10 / q_T60)、rank divergence、overround 変化)。
+  「T-10 スナップショット水準の単調関数は x_i 禁止」を allowlist 規則として凍結。
+- **PIT**: ドリフト計算に使う全スナップショットが `fetched_at ≤ T-10` (D1) であること。
+- mining 分離は D2 判定基準(2) の mining 除外 ablation が担保 (本節は再定義しない)。
+
+### 4.3 CLV 前段ゲート (封印弾の節約)
+封印 OOS (D2) の前に、dev 窓で「選別が終値を平均で上回るか (CLV)」を**必要条件**として測る。
+CLV は戦略でなく診断 (単独では控除率を超えないと deep-research 済) だが、これを通らないモデルは
+封印判定 (F3-c) へ進めない。
+
+### 4.4 fail-closed
+モデル欠損・stale odds・PIT 違反・必須特徴欠損で full 予測を返さず、観察モード or 買い停止し、
+`prediction_mode` / `error_reasons` をログ・UI へ出す。現行の silent rule-only 縮退を廃止。
+G-OWN 純度 (rule-blend の市場再注入) の懸念は**ここ (経路分離) で対処**し、§4.2 の x_i を縛らない。
+
+### 4.5 検定仮説の上書き (条件B) + supersede
+- **H0/H1 の上書き (正本定義)**: 検定対象は「**市場マイクロ構造特徴 x_i が、T-10 静的スナップショット
+  (log(q_T10) offset) を超える情報を持つか**」。2026-07-20 会話 draft の H1「独自特徴が…」は破棄。
+  エッジの性質は「非市場情報のエッジ」ではなく **「市場ダイナミクスの利用によるエッジ」**。
+- **supersede**: 2026-07-20 の T-15 会話 draft (T-15・判定日) は本書 (T-10・D1/D2・F3-c) を正本として
+  supersede。取り込むのは構造 (§4.1–4.4) と H0/H1 (§4.5) のみ。T-15・判定日は破棄 (別ファイルは存在しない)。
