@@ -113,6 +113,22 @@ def test_paired_outputs_cannot_overwrite_inputs_or_each_other():
             _guard_paired_output_paths(
                 protected_input, safe_report, cache, DEFAULT_OUTPUT
             )
+    for unsafe_json in (
+        PROJECT_ROOT / "config.py",
+        PROJECT_ROOT / "data" / "keiba.db",
+        PROJECT_ROOT / "scripts" / "f3_phase0_0_eval.py",
+    ):
+        with pytest.raises(ValueError, match="output_dir/paired_oos.json"):
+            _guard_paired_output_paths(
+                unsafe_json, safe_report, cache, DEFAULT_OUTPUT
+            )
+    with pytest.raises(ValueError, match="docs/F3_phase0_0b_result.md"):
+        _guard_paired_output_paths(
+            safe_json,
+            PROJECT_ROOT / "docs" / "another_report.md",
+            cache,
+            DEFAULT_OUTPUT,
+        )
 
 
 def test_paired_run_rejects_invalid_bootstrap_count_before_oos():

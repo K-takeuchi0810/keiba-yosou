@@ -698,6 +698,8 @@ def _guard_paired_output_paths(
     cache_path: Path,
     output_dir: Path,
 ) -> None:
+    if output_path.resolve() == report_path.resolve():
+        raise ValueError("paired JSON and report paths must differ")
     protected = {
         *(path.resolve() for path in PRODUCTION_ARTIFACTS),
         OOS_REFERENCE_PATH.resolve(),
@@ -713,11 +715,13 @@ def _guard_paired_output_paths(
             output_dir / "blocked_allowlist.json",
         )),
     }
-    if output_path.resolve() == report_path.resolve():
-        raise ValueError("paired JSON and report paths must differ")
     for label, path in (("paired_output", output_path), ("paired_report", report_path)):
         if path.resolve() in protected:
             raise ValueError(f"{label} collides with a protected input/artifact: {path}")
+    if output_path.parent.resolve() != output_dir.resolve() or output_path.name != "paired_oos.json":
+        raise ValueError("paired JSON must be output_dir/paired_oos.json")
+    if report_path.resolve() != PAIRED_OOS_REPORT.resolve():
+        raise ValueError("paired report must be docs/F3_phase0_0b_result.md")
 
 
 def run_paired_oos(
