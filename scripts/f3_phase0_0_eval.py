@@ -81,6 +81,12 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _atomic_write_text(path: Path, text: str) -> None:
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(text, encoding="utf-8")
+    temporary.replace(path)
+
+
 def _artifact_hashes() -> dict[str, str]:
     return {str(p.relative_to(PROJECT_ROOT)): _sha256(p) for p in PRODUCTION_ARTIFACTS}
 
@@ -515,6 +521,8 @@ def _paired_roi_bootstrap(
     seed: int = BOOTSTRAP_SEED,
 ) -> dict:
     """Use one shared day-block resample for both ROI series and their difference."""
+    if samples <= 0:
+        raise ValueError("paired bootstrap samples must be positive")
     if basis not in ("self_selected", "treatment_bet_races", "control_bet_races"):
         raise ValueError(f"unknown paired basis: {basis}")
     days = sorted({row["day"] for row in joined})
@@ -680,7 +688,33 @@ def _write_phase0b_report(payload: dict, path: Path) -> None:
         "",
         "production artifact不変、DB read-only、2026-10-01以降の封印未アクセス。",
     ]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _atomic_write_text(path, "\n".join(lines) + "\n")
+
+
+def _guard_paired_output_paths(
+    output_path: Path,
+    report_path: Path,
+    cache_path: Path,
+    output_dir: Path,
+) -> None:
+    protected = {
+        *(path.resolve() for path in PRODUCTION_ARTIFACTS),
+        cache_path.resolve(),
+        DEFAULT_REPORT.resolve(),
+        *(path.resolve() for path in (
+            output_dir / "metrics.json",
+            output_dir / "m2_control_model.txt",
+            output_dir / "m2_treatment_model.txt",
+            output_dir / "m2_control_features.json",
+            output_dir / "m2_treatment_features.json",
+            output_dir / "blocked_allowlist.json",
+        )),
+    }
+    if output_path.resolve() == report_path.resolve():
+        raise ValueError("paired JSON and report paths must differ")
+    for label, path in (("paired_output", output_path), ("paired_report", report_path)):
+        if path.resolve() in protected:
+            raise ValueError(f"{label} collides with a protected input/artifact: {path}")
 
 
 def run_paired_oos(
@@ -696,6 +730,7 @@ def run_paired_oos(
     output_dir = _require_project_path(output_dir, "output_dir")
     output_path = _require_project_path(output_path, "paired_output")
     report_path = _require_project_path(report_path, "paired_report")
+    _guard_paired_output_paths(output_path, report_path, cache_path, output_dir)
     production_before = _artifact_hashes()
     phase_metrics = json.loads((output_dir / "metrics.json").read_text(encoding="utf-8"))
     rules_sha = str(phase_metrics.get("git_sha") or "")
@@ -824,11 +859,12 @@ def run_paired_oos(
         "production_artifacts_after": production_after,
         "production_artifacts_unchanged": True,
         "sealed_holdout_accessed": False,
+        "evaluator_commit": _git_sha(),
         "evaluator_sha256": _sha256(Path(__file__).resolve()),
     }
-    output_path.write_text(
+    _atomic_write_text(
+        output_path,
         json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
-        encoding="utf-8",
     )
     _write_phase0b_report(payload, report_path)
     return payload

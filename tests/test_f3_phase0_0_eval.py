@@ -11,6 +11,7 @@ from scripts.f3_phase0_0_eval import (
     PROJECT_ROOT,
     _block_bootstrap_roi,
     _guard_cache_race_keys,
+    _guard_paired_output_paths,
     _guard_unsealed,
     _require_project_path,
     _paired_roi_bootstrap,
@@ -86,6 +87,24 @@ def test_paired_bootstrap_uses_one_day_sample_and_zero_diff_for_identical_ledger
     assert result["paired_diff_control_minus_treatment"]["point"] == 0.0
     assert result["paired_diff_control_minus_treatment"]["ci95"] == [0.0, 0.0]
     assert result["paired_diff_control_minus_treatment"]["contains_zero"] is True
+    with pytest.raises(ValueError, match="must be positive"):
+        _paired_roi_bootstrap(joined, basis="self_selected", samples=0, seed=7)
+
+
+def test_paired_outputs_cannot_overwrite_inputs_or_each_other():
+    cache = PROJECT_ROOT / "data" / "lgbm_cache" / "w2021_2023_v6feat_fixed.npz"
+    safe_json = PROJECT_ROOT / "data" / "f3_phase0_0" / "paired_oos.json"
+    safe_report = PROJECT_ROOT / "docs" / "F3_phase0_0b_result.md"
+    _guard_paired_output_paths(safe_json, safe_report, cache, DEFAULT_OUTPUT)
+    with pytest.raises(ValueError, match="protected"):
+        _guard_paired_output_paths(
+            PROJECT_ROOT / "predictor" / "lgbm_model.txt",
+            safe_report,
+            cache,
+            DEFAULT_OUTPUT,
+        )
+    with pytest.raises(ValueError, match="must differ"):
+        _guard_paired_output_paths(safe_json, safe_json, cache, DEFAULT_OUTPUT)
 
 
 def test_saved_pair_reproduces_frozen_validation_auc():
