@@ -65,6 +65,7 @@ OOS_REFERENCE_PATH = (
     / "backtest"
     / "20260628_131245_tan_p25-pop-0-0-0-oos-rerun-filtered.json"
 )
+HISTORICAL_CALIBRATOR_PATH = PROJECT_ROOT / "predictor" / "calibrator.json.bak"
 PRODUCTION_ARTIFACTS = (
     PROJECT_ROOT / "predictor" / "lgbm_model.txt",
     PROJECT_ROOT / "predictor" / "lgbm_features.json",
@@ -309,7 +310,7 @@ def _evaluate_oos(
     import predictor.rules as rules
 
     fixed_filter = dict(reference["buy_filter"])
-    old_calibrator = PROJECT_ROOT / "predictor" / "calibrator.json.bak"
+    old_calibrator = HISTORICAL_CALIBRATOR_PATH
     if not old_calibrator.exists():
         raise FileNotFoundError(
             "historical calibrator predictor/calibrator.json.bak is required for the fixed OOS"
@@ -699,6 +700,8 @@ def _guard_paired_output_paths(
 ) -> None:
     protected = {
         *(path.resolve() for path in PRODUCTION_ARTIFACTS),
+        OOS_REFERENCE_PATH.resolve(),
+        HISTORICAL_CALIBRATOR_PATH.resolve(),
         cache_path.resolve(),
         DEFAULT_REPORT.resolve(),
         *(path.resolve() for path in (
@@ -725,6 +728,8 @@ def run_paired_oos(
     bootstrap_samples: int = BOOTSTRAP_SAMPLES,
 ) -> dict:
     """Run saved treatment then control through the exact Phase 0-0 OOS harness."""
+    if bootstrap_samples <= 0:
+        raise ValueError("bootstrap samples must be positive")
     _guard_unsealed(OOS_FROM, OOS_TO)
     cache_path = _require_project_path(cache_path, "cache")
     output_dir = _require_project_path(output_dir, "output_dir")

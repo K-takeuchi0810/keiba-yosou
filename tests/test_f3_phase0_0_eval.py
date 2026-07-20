@@ -7,6 +7,8 @@ import pytest
 from scripts.f3_phase0_0_eval import (
     BLOCKED_FEATURES,
     DEFAULT_OUTPUT,
+    HISTORICAL_CALIBRATOR_PATH,
+    OOS_REFERENCE_PATH,
     PHASE_METRICS_PATH,
     PROJECT_ROOT,
     _block_bootstrap_roi,
@@ -18,6 +20,7 @@ from scripts.f3_phase0_0_eval import (
     _saved_pair_validation_check,
     _top1_hit_rate,
     _zero_live_channels,
+    run_paired_oos,
 )
 
 
@@ -105,6 +108,16 @@ def test_paired_outputs_cannot_overwrite_inputs_or_each_other():
         )
     with pytest.raises(ValueError, match="must differ"):
         _guard_paired_output_paths(safe_json, safe_json, cache, DEFAULT_OUTPUT)
+    for protected_input in (OOS_REFERENCE_PATH, HISTORICAL_CALIBRATOR_PATH):
+        with pytest.raises(ValueError, match="protected"):
+            _guard_paired_output_paths(
+                protected_input, safe_report, cache, DEFAULT_OUTPUT
+            )
+
+
+def test_paired_run_rejects_invalid_bootstrap_count_before_oos():
+    with pytest.raises(ValueError, match="must be positive"):
+        run_paired_oos(bootstrap_samples=0)
 
 
 def test_saved_pair_reproduces_frozen_validation_auc():
