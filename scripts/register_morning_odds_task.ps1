@@ -19,11 +19,6 @@ if (-not (Test-Path -LiteralPath $batScript)) {
     throw "Morning odds batch file not found: $batScript"
 }
 
-$existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-if ($existing) {
-    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Stop
-}
-
 $action = New-ScheduledTaskAction `
     -Execute "cmd.exe" `
     -Argument "/d /c call `"$batScript`""
@@ -46,6 +41,7 @@ Register-ScheduledTask `
     -Settings $settings `
     -Principal $principal `
     -Description "F3 morning odds anchor, fixed window=600 and min-lead=0" `
+    -Force `
     -ErrorAction Stop | Out-Null
 
 $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction Stop

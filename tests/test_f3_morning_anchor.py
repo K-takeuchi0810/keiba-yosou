@@ -18,6 +18,9 @@ def test_morning_batch_has_fixed_effective_window_and_32bit_python() -> None:
     assert "min_lead=0 >>" in source
     assert "rc=%EXIT_CODE% >>" in source
     assert "fetch_morning_odds.log" in source
+    assert "another fetch_fresh_odds run is active" in source
+    assert 'set "EXIT_CODE=4"' in source
+    assert "LOCK_RETRIES=6" in source
     assert "%*" not in source
 
 
@@ -28,6 +31,8 @@ def test_registration_is_daily_and_bounded() -> None:
     assert "New-ScheduledTaskTrigger -Daily" in source
     assert "ExecutionTimeLimit" in source
     assert "MultipleInstances IgnoreNew" in source
+    assert "-Force" in source
+    assert "Unregister-ScheduledTask" not in source
     assert "fetch_morning_odds.bat" in source
 
 
