@@ -209,6 +209,8 @@ def test_fetch_fresh_odds_writes_coverage_log_jsonl(monkeypatch, tmp_path):
     assert payload["total_records"] == 2
     assert payload["ingested_records"] == {"O1": {"records": 130}}
     assert payload["lock_skipped"] is False
+    # --source 未指定は default "fresh" で刻印される (health check の帰属判定の入力)。
+    assert payload["source"] == "fresh"
 
 
 def test_fetch_fresh_odds_writes_coverage_log_when_no_eligible(monkeypatch, tmp_path):
@@ -228,3 +230,23 @@ def test_fetch_fresh_odds_writes_coverage_log_when_no_eligible(monkeypatch, tmp_
     assert payload["eligible_races"] == 0
     assert payload["fetched_races"] == 0
     assert payload["total_races_in_db"] == 0
+
+
+def test_fetch_fresh_odds_source_tag_flows_to_coverage(monkeypatch, tmp_path):
+    """--source が coverage payload に流れること (health check の帰属判定の前提)。
+
+    payload から source が落ちると health check が untagged 退行し、morning 08:45 が
+    互換窓で通り続けて永久に無警報になる。その回帰を producer 側で固定する。
+    """
+    import json
+    coverage_path = tmp_path / "logs" / "fresh_odds_coverage.jsonl"
+    monkeypatch.setattr(mod, "LOCK_PATH", tmp_path / "fetch_fresh_odds.lock")
+    monkeypatch.setattr(mod, "COVERAGE_LOG_PATH", coverage_path)
+    monkeypatch.setattr(mod, "open_db", lambda: _Conn([]))
+    monkeypatch.setattr(
+        sys, "argv",
+        ["fetch_fresh_odds.py", "--date", "20990101", "--source", "morning"])
+
+    assert mod.main() == 0
+    payload = json.loads(coverage_path.read_text(encoding="utf-8").strip())
+    assert payload["source"] == "morning"

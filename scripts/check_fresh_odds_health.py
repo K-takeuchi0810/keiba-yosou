@@ -137,9 +137,11 @@ def evaluate_coverage(
 ) -> dict:
     """coverage JSONL の今日分エントリを集計。
 
-    混入検出は source ベース: 既知の呼び出し元 (fresh/morning/manual) は正当。未知 source、
-    または source 無し (旧形式) で fresh/morning いずれの稼働窓にも入らない run_at を混入とする。
-    朝の一括取得 (keiba-morning-odds 08:45) を正当扱いすることで、開催日の恒久誤検知を防ぐ。
+    混入検出は source ベース: 未知 source、または source 無し (旧形式) で fresh/morning
+    いずれの稼働窓にも入らない run_at を混入 (FAIL) とする。朝の一括取得
+    (keiba-morning-odds 08:45) を morning 窓で正当扱いし、開催日の恒久誤検知を防ぐ。
+    既知 source (fresh/morning) が想定窓の外に居る場合は混入でなく WARN として
+    source_time_mismatch_examples に記録 (decision 不変)。dry-run 行は判定から除外。
     """
     out: dict = {
         "path": str(coverage_path),
@@ -152,6 +154,9 @@ def evaluate_coverage(
         "skipped_late_races_today": 0,
         "contamination_detected": False,
         "contamination_examples": [],
+        # 既知 source が想定稼働窓の外に居る「自己申告↔時刻の不一致」。混入 (FAIL) では
+        # なく WARN として可視化する (decision は変えない=alert fatigue 再発防止)。
+        "source_time_mismatch_examples": [],
         "post_start_warning": False,
         "ok": False,
         "reason": "",
@@ -170,6 +175,7 @@ def evaluate_coverage(
 
     today_runs = []
     contamination_rows = []
+    mismatch_rows = []
     by_source: dict[str, int] = {}
     try:
         with coverage_path.open("r", encoding="utf-8") as f:
@@ -187,26 +193,43 @@ def evaluate_coverage(
                 today_runs.append(rec)
                 src = rec.get("source")
                 by_source[src or "(untagged)"] = by_source.get(src or "(untagged)", 0) + 1
-                # 混入判定: 「どのジョブが書いたか説明できない行」を混入とみなす。
-                #   source あり → 既知の呼び出し元なら正当 (時刻は問わない)。未知は混入。
-                #   source なし (旧形式) → 従来の時刻窓で判定。ただし朝の一括取得
-                #     (keiba-morning-odds 08:45) は正当な定期ジョブなので除外する。
-                #     これを除外しないと開催日は毎回 FAIL になり、監視が無視される。
-                if src is not None:
-                    if src not in KNOWN_COVERAGE_SOURCES:
-                        contamination_rows.append(
-                            {"lineno": lineno, "run_at": rec.get("run_at"),
-                             "source": src, "why": "unknown_source"})
+                # dry-run はプレビュー (実オッズ取得なし) なので混入/mismatch 判定から除外。
+                if rec.get("dry_run"):
                     continue
                 rt = run_at.time()
                 in_fresh = window_start <= rt <= window_end
                 in_morning = morning_start <= rt <= morning_end
-                if not in_fresh and not in_morning:
+                # 混入判定 (FAIL): 「どのジョブが書いたか説明できない行」。
+                #   未知 source → 混入。
+                #   source なし (旧形式) → fresh/morning いずれの窓にも入らなければ混入。
+                #     朝の一括取得 (keiba-morning-odds 08:45) は morning 窓で救済され、
+                #     開催日の恒久誤検知を防ぐ。
+                if src is not None and src not in KNOWN_COVERAGE_SOURCES:
                     contamination_rows.append(
                         {"lineno": lineno, "run_at": rec.get("run_at"),
-                         "source": None, "why": "untagged_outside_known_windows"})
+                         "source": src, "why": "unknown_source"})
+                    continue
+                if src is None:
+                    if not in_fresh and not in_morning:
+                        contamination_rows.append(
+                            {"lineno": lineno, "run_at": rec.get("run_at"),
+                             "source": None, "why": "untagged_outside_known_windows"})
+                    continue
+                # 既知 source (fresh/morning/manual)。混入ではないが、fresh/morning が
+                # 想定稼働窓の外に居る = 自己申告と時刻の不一致を WARN で可視化する。
+                # 現実の混入ベクタ (pytest が default --source fresh で深夜に書く等) は
+                # ここに現れる。manual は意図的な任意時刻実行なので時刻不問。
+                if src == "fresh" and not in_fresh:
+                    mismatch_rows.append(
+                        {"lineno": lineno, "run_at": rec.get("run_at"),
+                         "source": src, "why": "fresh_outside_window"})
+                elif src == "morning" and not in_morning:
+                    mismatch_rows.append(
+                        {"lineno": lineno, "run_at": rec.get("run_at"),
+                         "source": src, "why": "morning_outside_window"})
         out["runs_today"] = len(today_runs)
         out["runs_today_by_source"] = by_source
+        out["source_time_mismatch_examples"] = mismatch_rows[:5]
     except OSError as e:
         out["reason"] = f"cannot read coverage JSONL: {e}"
         return out
@@ -248,6 +271,12 @@ def evaluate_coverage(
         return out
     out["ok"] = True
     out["reason"] = f"ok_races_today={out['ok_races_today']}"
+    if out["source_time_mismatch_examples"]:
+        out["reason"] += (
+            f" | WARN: {len(out['source_time_mismatch_examples'])} source/time mismatch "
+            f"(known source outside its window; decision unchanged). "
+            f"例: {out['source_time_mismatch_examples'][:2]}"
+        )
     return out
 
 
