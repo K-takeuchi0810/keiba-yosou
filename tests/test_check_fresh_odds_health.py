@@ -142,6 +142,124 @@ def test_coverage_no_today_entries_holds(tmp_path):
     assert "no entries today" in out["reason"]
 
 
+def test_coverage_morning_source_not_contamination(tmp_path):
+    """朝の一括取得 (source=morning, 08:45) を混入と誤検知しないこと。
+
+    keiba-morning-odds が発走直前バッチと同じ JSONL に 08:45 (稼働窓 08:55-16:50 外)
+    で書くため、時刻窓だけで判定すると開催日は毎回 FAIL する。source ベース判定で回避。
+    """
+    p = tmp_path / "coverage.jsonl"
+    _write_coverage(p, [
+        {"run_at": "2026-06-20T08:45:03", "target_date": "20260620",
+         "source": "morning", "eligible_races": 36, "ok_races": 36, "error_races": 0},
+        {"run_at": "2026-06-20T16:20:01", "target_date": "20260620",
+         "source": "fresh", "eligible_races": 2, "ok_races": 2, "error_races": 0},
+    ])
+    out = mod.evaluate_coverage(p, "20260620", time(9, 0))
+    assert out["contamination_detected"] is False
+    assert out["ok"] is True
+    assert out["runs_today_by_source"] == {"morning": 1, "fresh": 1}
+
+
+def test_coverage_unknown_source_is_contamination(tmp_path):
+    """未知の source (例: test 由来の pytest) は混入として検知し続けること。"""
+    p = tmp_path / "coverage.jsonl"
+    _write_coverage(p, [
+        {"run_at": "2026-06-20T10:00:00", "target_date": "20260620",
+         "source": "fresh", "eligible_races": 1, "ok_races": 1, "error_races": 0},
+        {"run_at": "2026-06-20T03:00:00", "target_date": "20260620",
+         "source": "pytest", "eligible_races": 1, "ok_races": 1, "error_races": 0},
+    ])
+    out = mod.evaluate_coverage(p, "20260620", time(9, 0))
+    assert out["contamination_detected"] is True
+    assert out["ok"] is False
+    assert out["contamination_examples"][0]["why"] == "unknown_source"
+
+
+def test_coverage_untagged_outside_windows_is_contamination(tmp_path):
+    """source 無し (旧形式) で fresh/morning いずれの窓にも入らない深夜 run_at は混入。"""
+    p = tmp_path / "coverage.jsonl"
+    _write_coverage(p, [
+        {"run_at": "2026-06-20T10:00:00", "target_date": "20260620",
+         "source": "fresh", "eligible_races": 1, "ok_races": 1, "error_races": 0},
+        {"run_at": "2026-06-20T03:00:00", "target_date": "20260620",
+         "eligible_races": 1, "ok_races": 1, "error_races": 0},
+    ])
+    out = mod.evaluate_coverage(p, "20260620", time(9, 0))
+    assert out["contamination_detected"] is True
+    assert out["contamination_examples"][0]["why"] == "untagged_outside_known_windows"
+
+
+def test_coverage_untagged_in_morning_window_not_contamination(tmp_path):
+    """後方互換: 旧 bat が書いた無タグ morning 行 (08:40-08:54) を混入としないこと。
+
+    untagged の正当帯を morning 窓ぶん拡大した意図的変更点。将来のリファクタで
+    この救済が壊れると開催日の恒久誤検知が復活するため回帰固定する。
+    """
+    p = tmp_path / "coverage.jsonl"
+    _write_coverage(p, [
+        # 旧 bat が書いた無タグ morning 行 (check_after 09:00 より前 = ok 集計外)
+        {"run_at": "2026-06-20T08:47:03", "target_date": "20260620",
+         "eligible_races": 36, "ok_races": 36, "error_races": 0},
+        # 窓内の有効行 (ok=True 成立用)
+        {"run_at": "2026-06-20T09:10:00", "target_date": "20260620",
+         "eligible_races": 5, "ok_races": 5, "error_races": 0},
+    ])
+    out = mod.evaluate_coverage(p, "20260620", time(9, 0))
+    assert out["contamination_detected"] is False  # 08:47 untagged は morning 窓で救済
+    assert out["ok"] is True
+
+
+def test_coverage_known_source_outside_window_is_warn_not_fail(tmp_path):
+    """既知 source (fresh) が窓外 → 混入 (FAIL) でなく source_time_mismatch (WARN)。
+
+    現実の混入ベクタ (pytest が default --source fresh で深夜に書く) を可視化しつつ、
+    decision は不変 (alert fatigue 再発防止)。
+    """
+    p = tmp_path / "coverage.jsonl"
+    _write_coverage(p, [
+        {"run_at": "2026-06-20T10:00:00", "target_date": "20260620",
+         "source": "fresh", "eligible_races": 1, "ok_races": 1, "error_races": 0},
+        {"run_at": "2026-06-20T03:00:00", "target_date": "20260620",
+         "source": "fresh", "eligible_races": 1, "ok_races": 0, "error_races": 0},
+    ])
+    out = mod.evaluate_coverage(p, "20260620", time(9, 0))
+    assert out["contamination_detected"] is False
+    assert out["ok"] is True  # WARN は decision を変えない
+    assert len(out["source_time_mismatch_examples"]) == 1
+    assert out["source_time_mismatch_examples"][0]["why"] == "fresh_outside_window"
+    assert "WARN" in out["reason"]
+
+
+def test_coverage_manual_source_is_time_unrestricted(tmp_path):
+    """source=manual は意図的な任意時刻実行なので時刻不問 (混入も mismatch もなし)。"""
+    p = tmp_path / "coverage.jsonl"
+    _write_coverage(p, [
+        {"run_at": "2026-06-20T10:00:00", "target_date": "20260620",
+         "source": "fresh", "eligible_races": 1, "ok_races": 1, "error_races": 0},
+        {"run_at": "2026-06-20T03:00:00", "target_date": "20260620",
+         "source": "manual", "eligible_races": 1, "ok_races": 0, "error_races": 0},
+    ])
+    out = mod.evaluate_coverage(p, "20260620", time(9, 0))
+    assert out["contamination_detected"] is False
+    assert out["source_time_mismatch_examples"] == []
+
+
+def test_coverage_dry_run_row_excluded_from_detection(tmp_path):
+    """dry-run 行 (プレビュー、実取得なし) は混入/mismatch 判定から除外されること。"""
+    p = tmp_path / "coverage.jsonl"
+    _write_coverage(p, [
+        {"run_at": "2026-06-20T10:00:00", "target_date": "20260620",
+         "source": "fresh", "eligible_races": 1, "ok_races": 1, "error_races": 0},
+        {"run_at": "2026-06-20T17:02:00", "target_date": "20260620",
+         "source": "morning", "dry_run": True,
+         "eligible_races": 6, "ok_races": 0, "error_races": 0},
+    ])
+    out = mod.evaluate_coverage(p, "20260620", time(9, 0))
+    assert out["contamination_detected"] is False
+    assert out["source_time_mismatch_examples"] == []
+
+
 def test_db_no_file(tmp_path):
     out = mod.evaluate_db(tmp_path / "absent.db", "20260620", time(9, 0))
     assert out["reachable"] is False

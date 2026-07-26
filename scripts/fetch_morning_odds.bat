@@ -20,7 +20,9 @@ if not exist .venv32\Scripts\python.exe (
 
 :run_fetch
 set /a ATTEMPT+=1
-.venv32\Scripts\python.exe -u -m scripts.fetch_fresh_odds --window 600 --min-lead 0 > "%RUN_OUTPUT%" 2>&1
+REM --source morning: this batch shares the coverage JSONL with the fresh batch,
+REM so tag its rows as morning to let the health check tell them apart from fresh.
+.venv32\Scripts\python.exe -u -m scripts.fetch_fresh_odds --window 600 --min-lead 0 --source morning > "%RUN_OUTPUT%" 2>&1
 set "PYTHON_RC=%ERRORLEVEL%"
 type "%RUN_OUTPUT%" >> "%LOG_PATH%"
 

@@ -14,6 +14,9 @@ def test_morning_batch_has_fixed_effective_window_and_32bit_python() -> None:
     source = MORNING_BAT.read_text(encoding="ascii")
     assert ".venv32\\Scripts\\python.exe" in source
     assert "--window 600 --min-lead 0" in source
+    # --source morning が消えると morning 行が default fresh で誤刻印され、health check の
+    # runs_today_by_source が黙って嘘をつく (WARN も FAIL も出ない唯一の silent 経路)。
+    assert "--source morning" in source
     assert 'findstr /C:"window=0-600min"' in source
     assert "min_lead=0 >>" in source
     assert "rc=%EXIT_CODE% >>" in source
