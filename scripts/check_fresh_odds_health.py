@@ -44,6 +44,13 @@ EXIT_HOLD = 2
 EXIT_NOT_EVALUABLE = 3
 EXIT_INTERNAL_ERROR = 4
 
+# coverage JSONL に書き込む正当なジョブ (fetch_fresh_odds.py --source)。
+#   fresh   : 発走直前バッチ (keiba-fresh-odds, 10分間隔)
+#   morning : 朝の一括取得 (keiba-morning-odds, 08:45, --window 600)
+#   manual  : 手動実行
+# ここに無い source は「説明できない書き込み」= 混入として FAIL にする。
+KNOWN_COVERAGE_SOURCES = {"fresh", "morning", "manual"}
+
 DECISION_BY_EXIT = {
     EXIT_PASS: "PASS",
     EXIT_FAIL: "FAIL",
@@ -130,14 +137,16 @@ def evaluate_coverage(
 ) -> dict:
     """coverage JSONL の今日分エントリを集計。
 
-    test 由来データ混入の検出: scheduler 稼働窓 (09:00-16:40 想定) 外の run_at は
-    test 由来の疑いありとしてフラグ。
+    混入検出は source ベース: 既知の呼び出し元 (fresh/morning/manual) は正当。未知 source、
+    または source 無し (旧形式) で fresh/morning いずれの稼働窓にも入らない run_at を混入とする。
+    朝の一括取得 (keiba-morning-odds 08:45) を正当扱いすることで、開催日の恒久誤検知を防ぐ。
     """
     out: dict = {
         "path": str(coverage_path),
         "exists": coverage_path.exists(),
         "updated_today_after_check_time": False,
         "runs_today": 0,
+        "runs_today_by_source": {},
         "ok_races_today": 0,
         "error_races_today": 0,
         "skipped_late_races_today": 0,
@@ -153,12 +162,15 @@ def evaluate_coverage(
 
     target_date = datetime.strptime(date_str, "%Y%m%d").date()
     threshold = datetime.combine(target_date, check_after)
-    # 稼働窓 (scheduler の通常稼働時間帯)。±5 分のマージンで弾く。
+    # 発走直前バッチ (keiba-fresh-odds) の稼働窓。±5 分のマージン。
     window_start = time(8, 55)
     window_end = time(16, 50)
+    # 朝の一括取得 (keiba-morning-odds, 08:45) の稼働窓。
+    morning_start, morning_end = time(8, 40), time(8, 59)
 
     today_runs = []
     contamination_rows = []
+    by_source: dict[str, int] = {}
     try:
         with coverage_path.open("r", encoding="utf-8") as f:
             for lineno, line in enumerate(f, 1):
@@ -173,10 +185,28 @@ def evaluate_coverage(
                 if run_at is None or run_at.date() != target_date:
                     continue
                 today_runs.append(rec)
+                src = rec.get("source")
+                by_source[src or "(untagged)"] = by_source.get(src or "(untagged)", 0) + 1
+                # 混入判定: 「どのジョブが書いたか説明できない行」を混入とみなす。
+                #   source あり → 既知の呼び出し元なら正当 (時刻は問わない)。未知は混入。
+                #   source なし (旧形式) → 従来の時刻窓で判定。ただし朝の一括取得
+                #     (keiba-morning-odds 08:45) は正当な定期ジョブなので除外する。
+                #     これを除外しないと開催日は毎回 FAIL になり、監視が無視される。
+                if src is not None:
+                    if src not in KNOWN_COVERAGE_SOURCES:
+                        contamination_rows.append(
+                            {"lineno": lineno, "run_at": rec.get("run_at"),
+                             "source": src, "why": "unknown_source"})
+                    continue
                 rt = run_at.time()
-                if rt < window_start or rt > window_end:
-                    contamination_rows.append({"lineno": lineno, "run_at": rec.get("run_at")})
+                in_fresh = window_start <= rt <= window_end
+                in_morning = morning_start <= rt <= morning_end
+                if not in_fresh and not in_morning:
+                    contamination_rows.append(
+                        {"lineno": lineno, "run_at": rec.get("run_at"),
+                         "source": None, "why": "untagged_outside_known_windows"})
         out["runs_today"] = len(today_runs)
+        out["runs_today_by_source"] = by_source
     except OSError as e:
         out["reason"] = f"cannot read coverage JSONL: {e}"
         return out
@@ -199,8 +229,10 @@ def evaluate_coverage(
     # 判定
     if out["contamination_detected"]:
         out["reason"] = (
-            f"contamination detected: {len(contamination_rows)} entries with "
-            f"run_at outside scheduler window (08:55-16:50). 例: {out['contamination_examples'][:2]}"
+            f"contamination detected: {len(contamination_rows)} entries not attributable "
+            f"to a known job (source not in {sorted(KNOWN_COVERAGE_SOURCES)}, or untagged "
+            f"outside fresh 08:55-16:50 / morning 08:40-08:59). "
+            f"例: {out['contamination_examples'][:2]}"
         )
         return out
     if not out["updated_today_after_check_time"]:

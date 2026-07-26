@@ -123,6 +123,12 @@ def main() -> int:
     )
     ap.add_argument("--dry-run", action="store_true", help="取得せず対象レースだけ表示")
     ap.add_argument("--date", help="YYYYMMDD (default: today)")
+    ap.add_argument(
+        "--source", default="fresh", choices=["fresh", "morning", "manual"],
+        help="coverage JSONL に記録する呼び出し元 (default: fresh)。"
+             "朝の一括取得 (fetch_morning_odds.bat) も同じ JSONL に書くため、"
+             "健全性チェック側が両者を区別できるようにする",
+    )
     args = ap.parse_args()
 
     run_started_at = time.time()
@@ -159,6 +165,9 @@ def main() -> int:
     # 早期 return パスでも 1 行 JSONL を残し「スケジューラ起動した記録」を担保。
     coverage_payload: dict = {
         "run_at": now.strftime("%Y-%m-%dT%H:%M:%S"),
+        # 呼び出し元 (fresh=発走直前バッチ / morning=朝の一括 / manual=手動)。
+        # 同一 JSONL に複数ジョブが書くため、健全性チェックが混入判定で使う。
+        "source": args.source,
         "target_date": target_date,
         "window": args.window,
         "min_lead": args.min_lead,

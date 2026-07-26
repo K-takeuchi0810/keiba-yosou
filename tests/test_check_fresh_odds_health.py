@@ -142,6 +142,54 @@ def test_coverage_no_today_entries_holds(tmp_path):
     assert "no entries today" in out["reason"]
 
 
+def test_coverage_morning_source_not_contamination(tmp_path):
+    """朝の一括取得 (source=morning, 08:45) を混入と誤検知しないこと。
+
+    keiba-morning-odds が発走直前バッチと同じ JSONL に 08:45 (稼働窓 08:55-16:50 外)
+    で書くため、時刻窓だけで判定すると開催日は毎回 FAIL する。source ベース判定で回避。
+    """
+    p = tmp_path / "coverage.jsonl"
+    _write_coverage(p, [
+        {"run_at": "2026-06-20T08:45:03", "target_date": "20260620",
+         "source": "morning", "eligible_races": 36, "ok_races": 36, "error_races": 0},
+        {"run_at": "2026-06-20T16:20:01", "target_date": "20260620",
+         "source": "fresh", "eligible_races": 2, "ok_races": 2, "error_races": 0},
+    ])
+    out = mod.evaluate_coverage(p, "20260620", time(9, 0))
+    assert out["contamination_detected"] is False
+    assert out["ok"] is True
+    assert out["runs_today_by_source"] == {"morning": 1, "fresh": 1}
+
+
+def test_coverage_unknown_source_is_contamination(tmp_path):
+    """未知の source (例: test 由来の pytest) は混入として検知し続けること。"""
+    p = tmp_path / "coverage.jsonl"
+    _write_coverage(p, [
+        {"run_at": "2026-06-20T10:00:00", "target_date": "20260620",
+         "source": "fresh", "eligible_races": 1, "ok_races": 1, "error_races": 0},
+        {"run_at": "2026-06-20T03:00:00", "target_date": "20260620",
+         "source": "pytest", "eligible_races": 1, "ok_races": 1, "error_races": 0},
+    ])
+    out = mod.evaluate_coverage(p, "20260620", time(9, 0))
+    assert out["contamination_detected"] is True
+    assert out["ok"] is False
+    assert out["contamination_examples"][0]["why"] == "unknown_source"
+
+
+def test_coverage_untagged_outside_windows_is_contamination(tmp_path):
+    """source 無し (旧形式) で fresh/morning いずれの窓にも入らない深夜 run_at は混入。"""
+    p = tmp_path / "coverage.jsonl"
+    _write_coverage(p, [
+        {"run_at": "2026-06-20T10:00:00", "target_date": "20260620",
+         "source": "fresh", "eligible_races": 1, "ok_races": 1, "error_races": 0},
+        {"run_at": "2026-06-20T03:00:00", "target_date": "20260620",
+         "eligible_races": 1, "ok_races": 1, "error_races": 0},
+    ])
+    out = mod.evaluate_coverage(p, "20260620", time(9, 0))
+    assert out["contamination_detected"] is True
+    assert out["contamination_examples"][0]["why"] == "untagged_outside_known_windows"
+
+
 def test_db_no_file(tmp_path):
     out = mod.evaluate_db(tmp_path / "absent.db", "20260620", time(9, 0))
     assert out["reachable"] is False
