@@ -1,6 +1,6 @@
 ﻿# Windows Task Scheduler に keiba-fresh-odds (本体) を登録する。
 #
-# 09:00 から 16:40 まで 10 分おきに scripts/fetch_fresh_odds.bat を起動。
+# 09:00 から 19:00 まで 10 分おきに scripts/fetch_fresh_odds.bat を起動 (夏季後ろ倒し対応)。
 #
 # 重要 (2026-06-21 新規):
 #   従来は手動 `schtasks /create /sc minute /sd ... /st ... /et ...` で登録
@@ -16,7 +16,10 @@ param(
     [string]$TaskName = "keiba-fresh-odds",
     [string]$StartTime = "09:00",
     [int]$IntervalMinutes = 10,
-    [int]$DurationMinutes = 460  # 09:00 → 16:40 = 7h40m = 460 分
+    [int]$DurationMinutes = 600  # 09:00 → 19:00 = 10h = 600 分 (2026-07-26 夏季後ろ倒し対応で延長)
+    # 夏季 (猛暑対策) は発走が最遅 18:30 まで後ろ倒しになり、旧 et=16:40 では後半レースの
+    # T-10 点が取れず F3 drift が計算不能だった (F3_morning_anchor_raceday_result.md)。
+    # 19:00 まで延長し、非夏季の夕方は窓内レース無し=空振り (ほぼ無コスト) で吸収する。
 )
 
 $ErrorActionPreference = "Stop"

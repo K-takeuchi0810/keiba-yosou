@@ -167,11 +167,16 @@ def evaluate_coverage(
 
     target_date = datetime.strptime(date_str, "%Y%m%d").date()
     threshold = datetime.combine(target_date, check_after)
-    # 発走直前バッチ (keiba-fresh-odds) の稼働窓。±5 分のマージン。
+    # 発走直前バッチ (keiba-fresh-odds) の稼働窓。register_fresh_odds_task.ps1 の
+    # StartTime 09:00 / DurationMinutes 600 (= 09:00-19:00) に ±マージンで対応。
+    # ★et を ps1 で変えたらここも同期すること (2026-07-26 夏季後ろ倒しで 16:50→19:10)。
     window_start = time(8, 55)
-    window_end = time(16, 50)
+    window_end = time(19, 10)
     # 朝の一括取得 (keiba-morning-odds, 08:45) の稼働窓。
     morning_start, morning_end = time(8, 40), time(8, 59)
+    # reason 文字列が窓と乖離して静かに嘘をつくのを防ぐため、実値から組み立てる。
+    _fresh_win = f"{window_start:%H:%M}-{window_end:%H:%M}"
+    _morning_win = f"{morning_start:%H:%M}-{morning_end:%H:%M}"
 
     today_runs = []
     contamination_rows = []
@@ -254,7 +259,7 @@ def evaluate_coverage(
         out["reason"] = (
             f"contamination detected: {len(contamination_rows)} entries not attributable "
             f"to a known job (source not in {sorted(KNOWN_COVERAGE_SOURCES)}, or untagged "
-            f"outside fresh 08:55-16:50 / morning 08:40-08:59). "
+            f"outside fresh {_fresh_win} / morning {_morning_win}). "
             f"例: {out['contamination_examples'][:2]}"
         )
         return out

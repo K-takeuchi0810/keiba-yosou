@@ -260,6 +260,25 @@ def test_coverage_dry_run_row_excluded_from_detection(tmp_path):
     assert out["source_time_mismatch_examples"] == []
 
 
+def test_coverage_fresh_summer_evening_within_extended_window(tmp_path):
+    """夏季後ろ倒し対応で fresh 窓を 19:10 まで延長。18:00 の fresh 実行は正当 (mismatch でない)、
+    19:30 は窓外 → mismatch WARN。et (register_fresh_odds_task.ps1) と窓終端の同期を固定する。
+    """
+    p = tmp_path / "coverage.jsonl"
+    _write_coverage(p, [
+        {"run_at": "2026-07-25T10:00:00", "target_date": "20260725",
+         "source": "fresh", "eligible_races": 1, "ok_races": 1, "error_races": 0},
+        {"run_at": "2026-07-25T18:00:00", "target_date": "20260725",
+         "source": "fresh", "eligible_races": 1, "ok_races": 1, "error_races": 0},
+        {"run_at": "2026-07-25T19:30:00", "target_date": "20260725",
+         "source": "fresh", "eligible_races": 1, "ok_races": 0, "error_races": 0},
+    ])
+    out = mod.evaluate_coverage(p, "20260725", time(9, 0))
+    assert out["contamination_detected"] is False
+    mm = out["source_time_mismatch_examples"]
+    assert len(mm) == 1 and mm[0]["run_at"] == "2026-07-25T19:30:00"
+
+
 def test_db_no_file(tmp_path):
     out = mod.evaluate_db(tmp_path / "absent.db", "20260620", time(9, 0))
     assert out["reachable"] is False
