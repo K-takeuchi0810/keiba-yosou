@@ -6,6 +6,10 @@ review≠外部検証 / PIT T−n コード強制) はユーザ合意済み (202
 > **rev 1.1 (2026-07-20)**: §4 (Phase 0 ベースライン確定 + 実装契約) を追記。§0–3 (D1/D2/F3-c
 > 判定プロトコル、2026-07-03 確定) は不変で §4 は上書きしない。2026-07-20 の会話 T-15 draft は
 > 本書を正本として supersede (§4.5)。本 rev は tag `f3-design-rev1.1` で凍結。
+>
+> **rev 1.2 (2026-07-26)**: 朝アンカー稼働の確定を反映 (§1-6 修正 + §4.6 追加)。go-live 2026-07-25、
+> drift 系特徴の dev 窓を anchor 稼働日以降に限定する事前登録。§0–5 の凍結決定 (D1/D2/F3-c/§4.1–4.5)
+> は不変。tag `f3-design-rev1.2` で凍結。
 
 ## 0. 在庫実測 (2026-07-03) — 設計を規定する事実
 
@@ -33,11 +37,15 @@ review≠外部検証 / PIT T−n コード強制) はユーザ合意済み (202
 4. ✅ **PIT ゲートのコード強制** — predictor/pit_gate.py が唯一の入口。fetched_at NULL と T−n 超過を
    SQL 遮断。config.PIT_GATE_MINUTES=10 単一出典。ガードテスト済。
 5. ⏳ **coverage 監視拡張** — 朝スナップ取得率の集計 (F3-b 蓄積が始まってから調整で十分)。
-6. ⏳ **収集 cadence** (ユーザ操作要): ドリフトには「朝の基準点」+「T−n 直前点」の 2 点が要る。
-   現行 `keiba-fresh-odds` は 09:00-16:40 の 10 分毎 window=25 で **直前点は自動で貯まる**。
-   **朝の基準点**を足すため、開催日 09:30 に 1 回だけ広窓で流す:
-   `schtasks /create /tn "keiba-morning-odds" /tr "...\scripts\fetch_fresh_odds.bat --window 600" /sc daily /st 09:30 /f`
-   (fetch_fresh_odds.bat が --window を引き渡すよう要確認。広窓=その日の全レースを対象化)。
+6. ✅ **収集 cadence** (2026-07-25 稼働、rev1.2 更新): ドリフトには「朝の基準点」+「T−n 直前点」の
+   2 点が要る。現行 `keiba-fresh-odds` は 09:00-16:40 の 10 分毎 window=25 で **直前点は自動で貯まる**。
+   **朝の基準点**は専用 `keiba-morning-odds` (08:45 daily、`scripts\fetch_morning_odds.bat` =
+   `fetch_fresh_odds.py --window 600 --min-lead 0 --source morning`) で取得。※旧記述の
+   `fetch_fresh_odds.bat --window 600` は bat が引数を引き渡さず無効 (静かな no-op) だったため専用 bat 化。
+   実測 (2026-07-25/26 各開催日 36/36 取得・rc=0): §4.6 参照。
+   - **残る cadence 課題 (暫定、未凍結)**: (a) 1R (発走 09:40) は 08:45 が 54.9 分前で 60 分条件に届かない。
+     (b) 16:40 以降発走の後半レース (例 10R-12R) は fresh 10 分タスクの窓 (〜16:40) 外で T−10 点が取れず
+     drift 不能。→ fresh タスクの et 延長等を次サイクルで検討 (2 開催日では母集団除外を凍結しない)。
 
 ### F3-b: 蓄積 + 開発 (dev 窓)
 - **dev 窓 = 2026-07-04 〜 封印開始日の前日**。この間の蓄積データで特徴設計・イテレーション自由。
@@ -136,3 +144,17 @@ G-OWN 純度 (rule-blend の市場再注入) の懸念は**ここ (経路分離)
   エッジの性質は「非市場情報のエッジ」ではなく **「市場ダイナミクスの利用によるエッジ」**。
 - **supersede**: 2026-07-20 の T-15 会話 draft (T-15・判定日) は本書 (T-10・D1/D2・F3-c) を正本として
   supersede。取り込むのは構造 (§4.1–4.4) と H0/H1 (§4.5) のみ。T-15・判定日は破棄 (別ファイルは存在しない)。
+
+### 4.6 朝アンカー go-live + drift dev 窓の限定 (rev1.2、2026-07-26 追記)
+Phase 1 readiness (dev 窓 07-04〜19) で drift 計算可能は 8.4%・wide_drift=0 (fresh window=25 が発走直前帯
+しか取らないため) と判明 → 専用 `keiba-morning-odds` (08:45 daily) を立ち上げ、2026-07-25 の JRA 開催日で
+実データ捕捉 (結果: `docs/F3_morning_anchor_raceday_result.md`、独立再計算で裏取り済)。
+
+- **go-live 日 = 2026-07-25**。**drift 系特徴の available_at はこの日以降のみ充足**。
+- **事前登録 (凍結)**: **drift 特徴を使うモデルの dev 窓は 2026-07-25 以降に限定**する。2026-07-04〜24 の
+  anchor 稼働前期間との混合は**禁止** (混合すると drift が「計算不能→0埋め」で静かに歪む)。
+- 実測 (go-live 2 開催日、usable_snapshots 経由): 36/36 取得・rc=0、earliest_lead 中央値 ~320 分、
+  wide_drift 80.6% (29/36×2)、dev 窓累計 wide_drift 58/305 (19.0%)・drift_computable 79/305 (25.9%)。
+- **母集団除外規則は未凍結** (§1-6 の暫定欠落パターンは 2 開催日のみ。複数開催の蓄積後に確定)。
+- **Phase 1 モデル構築は drift dev データの蓄積待ち** (go-live 2026-07-25〜、封印開始 10-01 前まで)。
+  現時点で wide_drift は 58 レース (2 日) のみ。7 モデル比較 (§4.2 軸) に足る母集団が貯まってから着手。
