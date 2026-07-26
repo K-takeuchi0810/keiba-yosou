@@ -65,6 +65,15 @@ def test_summary_keys_cover_js():
         f"JS が参照する summary キー {sorted(missing)} が Python 側にない")
 
 
+def test_fail_closed_mode_has_visible_control_panel_contract():
+    assert '"prediction_mode": prediction_mode' in SRC
+    assert '"error_reasons": sorted(error_reasons)' in SRC
+    assert 'id="predictionModeBanner"' in SRC
+    assert "買い候補は作成しません" in SRC
+    assert "is_production_buy_candidate" in SRC
+    assert "proc.returncode not in (0, 8)" in SRC
+
+
 def test_backtest_keys_cover_js():
     start = SRC.index("def _recent_backtest(")
     end = SRC.index("\n    def ", start + 10)

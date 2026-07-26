@@ -51,6 +51,30 @@ def test_init_db_idempotent_on_current_schema():
     init_db(conn)  # 2 回目も落ちない (IF NOT EXISTS + 補修 skip)
 
 
+def test_init_db_adds_fail_closed_columns_without_changing_old_rows():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE prediction_log ("
+        "generated_at TEXT NOT NULL, race_year TEXT NOT NULL, "
+        "race_month_day TEXT NOT NULL, track_code TEXT NOT NULL, "
+        "kaiji TEXT NOT NULL, nichiji TEXT NOT NULL, race_num TEXT NOT NULL, "
+        "horse_num TEXT NOT NULL, PRIMARY KEY (generated_at, race_year, "
+        "race_month_day, track_code, kaiji, nichiji, race_num, horse_num))"
+    )
+    conn.execute(
+        "INSERT INTO prediction_log VALUES "
+        "('2026-07-01T10:00:00','2026','0701','05','01','01','01','01')"
+    )
+
+    init_db(conn)
+
+    row = conn.execute(
+        "SELECT prediction_mode, error_reasons FROM prediction_log"
+    ).fetchone()
+    assert dict(row) == {"prediction_mode": "full", "error_reasons": "[]"}
+
+
 def test_hs_skeleton_does_not_clobber_um_row():
     """HS (骨組み行) が UM フル行を空文字で潰さない (2026-07-05 data-pipeline R2)。
 

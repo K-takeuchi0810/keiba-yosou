@@ -216,6 +216,81 @@ def test_render_succeeds_with_strict_undefined(context):
     assert "<!DOCTYPE html>" in html
 
 
+def test_observation_mode_shows_reason_and_has_no_buy_board(context):
+    context["prediction_mode"] = "observation"
+    context["error_reasons"] = ["E01_MODEL_MISSING"]
+    context["buy_candidates"] = []
+    context["buy_count"] = 0
+
+    html = _render(context)
+
+    assert "観察専用" in html
+    assert "買い候補は作成しません" in html
+    assert "E01_MODEL_MISSING" in html
+    assert '<section class="buy-board">' not in html
+    assert '<table class="entries">' in html
+
+
+def test_blocked_race_shows_reason_without_prediction_table(context):
+    race = context["days"][0]["races"][0]
+    race["prediction_mode"] = "blocked"
+    race["error_reasons"] = ["E04_FEATURES_INCOMPLETE"]
+    context["days"] = [{
+        **context["days"][0],
+        "races": [race],
+        "buy_count": 0,
+    }]
+    context["prediction_mode"] = "blocked"
+    context["error_reasons"] = ["E04_FEATURES_INCOMPLETE"]
+    context["buy_candidates"] = []
+    context["buy_count"] = 0
+
+    html = _render(context)
+
+    assert "予測停止" in html
+    assert "E04_FEATURES_INCOMPLETE" in html
+    assert '<table class="entries">' not in html
+
+
+def test_prediction_status_meta_roundtrips_for_automation(context, tmp_path):
+    from web.generator import read_rendered_prediction_status
+
+    context["prediction_mode"] = "observation"
+    context["error_reasons"] = ["E01_MODEL_MISSING", "E02_STALE_ODDS"]
+    out = tmp_path / "index.html"
+    out.write_text(_render(context), encoding="utf-8")
+
+    assert read_rendered_prediction_status(out) == (
+        "observation",
+        ["E01_MODEL_MISSING", "E02_STALE_ODDS"],
+    )
+
+
+def test_missing_prediction_status_meta_fails_closed(tmp_path):
+    from web.generator import read_rendered_prediction_status
+
+    out = tmp_path / "index.html"
+    out.write_text("<!doctype html><title>incomplete</title>", encoding="utf-8")
+
+    assert read_rendered_prediction_status(out) == (
+        "blocked", ["E04_FEATURES_INCOMPLETE"]
+    )
+
+
+def test_mixed_modes_banner_limits_betting_stop_to_affected_races(context):
+    context["prediction_mode"] = "blocked"
+    context["prediction_mode_counts"] = {
+        "full": 3, "observation": 0, "blocked": 1,
+    }
+    context["error_reasons"] = ["E04_FEATURES_INCOMPLETE"]
+
+    html = _render(context)
+
+    assert "一部レースが予測停止" in html
+    assert "該当レースの買い候補は作成しません" in html
+    assert "fullレースは通常判定です" in html
+
+
 def test_new_sections_present(context):
     html = _render(context)
     # P22: 開催日ナビ (複数開催時のみ) + 買い候補数バッジ

@@ -28,6 +28,31 @@ PAGES_HTML = PROJECT_ROOT / "docs" / "index.html"
 GENERATED_HTML = PROJECT_ROOT / "web" / "dist" / "index.html"
 PAGES_URL = "https://k-takeuchi0810.github.io/keiba-yosou/"
 PY = str(PROJECT_ROOT / ".venv64" / "Scripts" / "python.exe")
+EXIT_GENERATION_FAILURE = 2
+EXIT_MODE_FAILURE = 8
+
+
+def _parse_generation_status(result) -> tuple[str, list[str]]:
+    if result.returncode not in (0, EXIT_MODE_FAILURE):
+        raise RuntimeError(f"generator exit={result.returncode}")
+    try:
+        payload = json.loads(result.stdout.strip().splitlines()[-1])
+    except (IndexError, json.JSONDecodeError) as exc:
+        raise RuntimeError("generator status JSON missing") from exc
+    mode = payload.get("prediction_mode", "blocked")
+    reasons = payload.get("error_reasons")
+    if reasons is None:
+        reasons = ["E04_FEATURES_INCOMPLETE"]
+    from predictor import validate_prediction_status
+    try:
+        validate_prediction_status(mode, reasons)
+    except ValueError as exc:
+        raise RuntimeError("generator status contract invalid") from exc
+    return mode, list(reasons)
+
+
+def _mode_notice(mode: str, reasons: list[str]) -> str:
+    return f"Prediction mode: {mode}; reasons: {','.join(reasons) or '-'}"
 
 
 def _stage_publish_artifacts(
@@ -98,12 +123,15 @@ def main() -> int:
         return 0
 
     r = subprocess.run([PY, "-m", "web.generator", "--from", d_from, "--to", d_to,
-                        "--log-predictions"],
+                        "--log-predictions", "--json"],
                        capture_output=True, text=True, cwd=PROJECT_ROOT)
-    if r.returncode != 0:
+    try:
+        prediction_mode, error_reasons = _parse_generation_status(r)
+    except RuntimeError:
         _notify(f"⚠ 予想生成に失敗 ({d_from}-{d_to})。ログ確認要。")
         print(r.stdout[-500:], r.stderr[-500:])
-        return 1
+        return EXIT_GENERATION_FAILURE
+    mode_exit = EXIT_MODE_FAILURE if prediction_mode != "full" else 0
 
     # 版情報
     meta = json.loads((PROJECT_ROOT / "predictor" / "lgbm_meta.json").read_text(encoding="utf-8"))
@@ -152,10 +180,11 @@ def main() -> int:
         f"({n_races}R, {ver})\n"
         f"📱 今すぐ見る(確実): iPhone ファイルApp → iCloud Drive → 競馬予想 → index.html\n"
         f"{web_line}\n"
-        f"⚠ 観察専用 (実弾根拠となるエッジは未証明)"
+        f"⚠ 観察専用 (実弾根拠となるエッジは未証明)\n"
+        f"{_mode_notice(prediction_mode, error_reasons)}"
     )
     print("notified. push_ok=", push_ok)
-    return 0
+    return mode_exit
 
 
 if __name__ == "__main__":

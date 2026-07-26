@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import BUY_FILTER_DEFAULT, is_whitelisted_race
 from db import open_db
-from predictor.rules import is_tentative, predict_race
+from predictor.rules import is_tentative, predict_race, prediction_status
 from scripts.backtest import horses_for_race, list_races
 from web.codes import track_name
 
@@ -70,9 +70,15 @@ def _is_bet_candidate(pred, horse: dict, tentative: bool, race: dict) -> bool:
     """
     from datetime import datetime
 
-    from predictor.filter import is_buy_candidate
+    from predictor.filter import is_production_buy_candidate
     # CLI 予想はライブ運用なので now を渡してオッズ鮮度も評価する (2026-06-13)
-    return is_buy_candidate(pred, horse, tentative, race=race, now=datetime.now())
+    return is_production_buy_candidate(
+        pred,
+        horse,
+        tentative,
+        race=race,
+        now=datetime.now(),
+    )
 
 
 def latest_race_date(conn) -> str | None:
@@ -100,9 +106,25 @@ def _race_label(race: dict) -> str:
     )
 
 
-def collect_predictions(args) -> list[dict]:
+class PredictionRows(list[dict]):
+    """List-compatible CLI rows plus run-level fail-closed status."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.prediction_mode = "full"
+        self.error_reasons: list[str] = []
+
+    def add_status(self, mode: str, reasons: list[str]) -> None:
+        if mode == "blocked" or (
+            mode == "observation" and self.prediction_mode == "full"
+        ):
+            self.prediction_mode = mode
+        self.error_reasons = sorted(set(self.error_reasons).union(reasons))
+
+
+def collect_predictions(args) -> PredictionRows:
     db_path = args.db
-    rows: list[dict] = []
+    rows = PredictionRows()
     with open_db(db_path) if db_path else open_db() as conn:
         from_date, to_date = pick_dates(conn, args)
         races = list_races(conn, from_date, to_date, jra_only=not args.all_tracks)
@@ -112,6 +134,10 @@ def collect_predictions(args) -> list[dict]:
             if not horses:
                 continue
             preds = predict_race(horses, conn=conn, race=race, cache=feature_cache)
+            mode, reasons = prediction_status(preds)
+            rows.add_status(mode, reasons)
+            if mode == "blocked":
+                continue
             tentative = is_tentative(preds)
             horse_by_num = {h["horse_num"]: h for h in horses}
             for pred in preds[: args.top]:
@@ -150,6 +176,8 @@ def collect_predictions(args) -> list[dict]:
                         "bet_size_yen": bet_size,
                         "bet_size_mode": args.bet_size_mode if is_bet else "",
                         "tentative": tentative,
+                        "prediction_mode": mode,
+                        "error_reasons": reasons,
                         "reason": pred.rationale,
                     }
                 )
@@ -222,6 +250,12 @@ def main() -> int:
     args = ap.parse_args()
 
     rows = collect_predictions(args)
+    if rows.prediction_mode != "full":
+        print(
+            f"prediction_mode={rows.prediction_mode} "
+            f"error_reasons={','.join(rows.error_reasons)}",
+            file=sys.stderr,
+        )
     if args.format == "json":
         print(json.dumps(rows, ensure_ascii=False, indent=2))
     elif args.format == "csv":
@@ -230,7 +264,7 @@ def main() -> int:
         writer.writerows(rows)
     else:
         print_table(rows)
-    return 0
+    return 8 if rows.prediction_mode == "blocked" else 0
 
 
 if __name__ == "__main__":

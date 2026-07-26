@@ -30,7 +30,7 @@ from config import (
 from db import open_db
 from jvlink_client import ALL_DATASPECS, JVLinkClient
 from jvlink_client.ingest import ingest_all
-from predictor import is_tentative, predict_race
+from predictor import is_tentative, predict_race, prediction_status
 from predictor.candidates import (
     BUY_CANDIDATE_MAX,
     mark_single_race_buy_pick,
@@ -140,7 +140,7 @@ def _run_render_in_venv64(from_date: str | None, to_date: str | None,
                     raise
             if on_elapsed is not None:
                 on_elapsed(time.time() - start)
-    if proc.returncode != 0:
+    if proc.returncode not in (0, 8):
         raise RuntimeError(
             f"venv64 render failed (exit {proc.returncode}):\n"
             f"stderr: {stderr[-2000:]}"
@@ -421,10 +421,16 @@ class Api:
         オッズ鮮度 (max_odds_age_min) も 2026-06-13 に集約関数へ統合済み
         (now を渡すとライブ評価)。GUI 独自実装は持たない。
         """
-        from predictor.filter import is_buy_candidate
+        from predictor.filter import is_production_buy_candidate
         spec = filters if filters else None
-        return is_buy_candidate(
-            pred, horse, tentative, race=race, filter_spec=spec, now=datetime.now())
+        return is_production_buy_candidate(
+            pred,
+            horse,
+            tentative,
+            race=race,
+            filter_spec=spec,
+            now=datetime.now(),
+        )
 
     def _odds_age_minutes(self, fetched_at: str | None) -> int | None:
         from predictor.filter import odds_age_minutes
@@ -847,8 +853,18 @@ class Api:
             prediction_items: list[dict] = []
             feature_warning_counts: dict[str, int] = {}
             feature_warning_total = 0
+            prediction_mode = "full"
+            error_reasons: set[str] = set()
             entries = self._predictions_cached(conn, from_date, to_date, races)
             for race, horses, preds, tentative in entries:
+                race_mode, race_reasons = prediction_status(preds)
+                if race_mode == "blocked" or (
+                    race_mode == "observation" and prediction_mode == "full"
+                ):
+                    prediction_mode = race_mode
+                error_reasons.update(race_reasons)
+                if race_mode == "blocked":
+                    continue
                 horse_by_num = {h["horse_num"]: h for h in horses}
                 race_items: list[dict] = []
                 for pred in preds[:BUY_CANDIDATE_MAX]:
@@ -940,8 +956,25 @@ class Api:
             if same_day_missing:
                 rate = round((feature_warning_total - same_day_missing) / feature_warning_total * 100)
                 warnings.append(f"当日傾向 利用率 {rate}% / 朝はデータなし")
-        if not buy_candidates:
+        if not buy_candidates and prediction_mode == "full":
             warnings.append("買い候補なし: EV/信頼度条件を満たすレースは見送り")
+        if prediction_mode != "full":
+            mode_label = "予測停止" if prediction_mode == "blocked" else "観察専用"
+            guidance_by_reason = {
+                "E01_MODEL_MISSING": "モデルを読み込めません。64bit予想生成を再実行してください",
+                "E02_STALE_ODDS": "オッズが古いため、最新オッズを取得して再生成してください",
+                "E03_PIT_VIOLATION": "時刻条件を満たすオッズがないため、買付を停止しました",
+                "E04_FEATURES_INCOMPLETE": "特徴計算が不完全です。データ取得後に再生成してください",
+            }
+            guidance = " / ".join(
+                guidance_by_reason.get(reason, reason)
+                for reason in sorted(error_reasons)
+            )
+            warnings.insert(
+                0,
+                f"{mode_label}: {guidance or '理由を確認してください'} "
+                f"({', '.join(sorted(error_reasons)) or '-'})",
+            )
         # 買い候補ポートフォリオ集計。bankroll は 1 開催日ごとに区切られるため
         # **日単位** で推奨投資率を合算する (多日窓を全合算すると過大化する)。
         # 集計ロジックは web/generator.py と共通の単一出典
@@ -981,6 +1014,8 @@ class Api:
                 "bet_filter": bet_filter,
                 "daily_budget_yen": daily_budget_yen,
                 "ignore_odds_freshness": ignore_odds_freshness,
+                "prediction_mode": prediction_mode,
+                "error_reasons": sorted(error_reasons),
             },
             "buy_candidates": buy_candidates,
             "buy_portfolio": buy_portfolio,
@@ -1372,6 +1407,16 @@ CONTROL_HTML = """<!doctype html>
   }
   /* 更新中はグリッドを淡くして「固まっていない」ことを可視化 */
   .dashboard-grid.loading { opacity: .55; pointer-events: none; }
+  .prediction-mode-banner {
+    grid-column: 1 / -1;
+    border: 2px solid var(--buy);
+    background: var(--buy-bg);
+    color: var(--buy);
+    padding: .65rem .75rem;
+    border-radius: 3px;
+    font-size: .82rem;
+    font-weight: 700;
+  }
   .wide { grid-column: 1 / -1; }
   .span-2 { grid-column: span 2; }
   .metric-row {
@@ -1991,6 +2036,7 @@ CONTROL_HTML = """<!doctype html>
   </div>
   <div id="dashboardPane">
     <div class="dashboard-grid" id="dashGrid">
+      <div id="predictionModeBanner" class="prediction-mode-banner" role="alert" hidden></div>
       <details class="filter-panel">
         <summary>買い目フィルタ <span class="filter-note">__FILTER_BASE_NOTE__</span></summary>
         <div class="filter-controls">
@@ -2260,6 +2306,29 @@ CONTROL_HTML = """<!doctype html>
   function renderDashboard(data) {
     if (!data || !data.ok) return;
     var s = data.summary || {};
+    var modeBanner = byId('predictionModeBanner');
+    if (modeBanner) {
+      if (s.prediction_mode && s.prediction_mode !== 'full') {
+        var reasonHelp = {
+          E01_MODEL_MISSING: 'モデルを読み込めません。64bit予想生成を再実行してください。',
+          E02_STALE_ODDS: 'オッズが古いため、最新オッズを取得して再生成してください。',
+          E03_PIT_VIOLATION: '時刻条件を満たすオッズがないため、買付を停止しました。',
+          E04_FEATURES_INCOMPLETE: '特徴計算が不完全です。データ取得後に再生成してください。'
+        };
+        var reasonCodes = s.error_reasons || [];
+        var reasonText = reasonCodes.map(function (code) {
+          return reasonHelp[code] || code;
+        }).join(' ');
+        var modeLabel = s.prediction_mode === 'blocked' ? '予測停止' : '観察専用';
+        modeBanner.textContent = modeLabel + ' — 買い候補は作成しません。' +
+          (reasonText ? ' ' + reasonText : '') +
+          ' (' + (reasonCodes.join(', ') || '-') + ')';
+        modeBanner.hidden = false;
+      } else {
+        modeBanner.textContent = '';
+        modeBanner.hidden = true;
+      }
+    }
 
     var metaParts = [];
     if (data.from_date) {
@@ -2322,6 +2391,11 @@ CONTROL_HTML = """<!doctype html>
         (bp.any_over_cap ? '<span class="bp-warn">⚠ 上限超過</span>' : '') +
         '</div>';
     }
+    var noBuyText = s.prediction_mode === 'blocked'
+      ? '予測停止中のため、買い候補を作成していません。上の復旧案を確認してください。'
+      : (s.prediction_mode === 'observation'
+        ? '観察専用モードのため、予想は表示しても買い候補は作成しません。'
+        : '買い候補なし。EV/信頼度条件では見送りです。');
     byId('buyList').innerHTML = buys.length ? portfolioHtml + buys.map(function (b) {
       var stakePill = bp.daily_budget_yen ? '<span class="pill buy">' + (Number(b.stake_yen) > 0 ? '買付 ' + esc(yen(b.stake_yen)) : '買付 0円') + '</span>' : '';
       var ticketSummary = (b.recommended_tickets || []).map(function (t) {
@@ -2340,7 +2414,7 @@ CONTROL_HTML = """<!doctype html>
         '<span class="pill">EV ' + esc(b.ev) + '</span>' +
         stakePill +
         '<span class="pill" title="1/4 Kelly + 1点上限cap済みの推奨投資率">推奨 ' + pct2(b.recommended_kelly) + '%</span></div></div>';
-    }).join('') : '<div class="card-empty">買い候補なし。EV/信頼度条件では見送りです。</div>';
+    }).join('') : '<div class="card-empty">' + esc(noBuyText) + '</div>';
 
     var warnings = data.warnings || [];
     byId('warnings').innerHTML = warnings.length ? warnings.map(function (w) { return '<div class="warn-item">' + esc(w) + '</div>'; }).join('') : '<div class="card-empty">注意点はありません。</div>';

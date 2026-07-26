@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import PROJECT_ROOT
 from db import horse_num_violation_counts, open_db_readonly
 from predictor.calibration import calibration_report
-from predictor.rules import predict_race
+from predictor.rules import predict_race, prediction_status
 from scripts.backtest import horses_for_race, list_races
 
 logger = logging.getLogger(__name__)
@@ -88,6 +88,8 @@ def measure_recent_brier(days: int) -> dict:
     from_date = (today - timedelta(days=days)).strftime("%Y%m%d")
     to_date = today.strftime("%Y%m%d")
     records: list[dict] = []
+    mode_counts = {"full": 0, "observation": 0, "blocked": 0}
+    error_reason_counts: dict[str, int] = {}
     with open_db_readonly() as conn:
         races = list_races(conn, from_date, to_date, jra_only=True)
         cache: dict = {}
@@ -102,6 +104,10 @@ def measure_recent_brier(days: int) -> dict:
             except Exception as e:
                 logger.warning("predict_race failed: %s", e)
                 continue
+            mode, reasons = prediction_status(preds)
+            mode_counts[mode] = mode_counts.get(mode, 0) + 1
+            for reason in reasons:
+                error_reason_counts[reason] = error_reason_counts.get(reason, 0) + 1
             horse_by_num = {h.get("horse_num"): h for h in horses}
             for pred in preds:
                 horse = horse_by_num.get(pred.horse_num)
@@ -118,6 +124,8 @@ def measure_recent_brier(days: int) -> dict:
         "n_records": len(records),
         "brier_score": rep.get("brier_score"),
         "log_loss": rep.get("log_loss"),
+        "prediction_modes": mode_counts,
+        "prediction_error_reasons": error_reason_counts,
     }
 
 
@@ -243,6 +251,10 @@ def main() -> int:
         "recent_n": recent["n_records"],
         "recent_brier": recent["brier_score"],
         "recent_logloss": recent["log_loss"],
+        "prediction_modes": recent.get(
+            "prediction_modes", {"full": 0, "observation": 0, "blocked": 0}
+        ),
+        "prediction_error_reasons": recent.get("prediction_error_reasons", {}),
         "drift_rate": round(drift, 4),
         "threshold": args.threshold,
         "brier_alert": drift > args.threshold,

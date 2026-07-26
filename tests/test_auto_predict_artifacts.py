@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
 from scripts import auto_predict
+from types import SimpleNamespace
+
+import pytest
 
 
 def test_stage_publish_artifacts_includes_prediction_archive(tmp_path, monkeypatch):
@@ -65,3 +69,53 @@ def test_stage_publish_artifacts_uses_archive_from_sync_status(tmp_path, monkeyp
 
     assert archive in paths
     assert str(archive) in calls[0][0]
+
+
+def test_generation_status_uses_new_mode_failure_bit_contract():
+    result = SimpleNamespace(
+        returncode=auto_predict.EXIT_MODE_FAILURE,
+        stdout='{"prediction_mode":"blocked","error_reasons":["E04_FEATURES_INCOMPLETE"]}\n',
+    )
+
+    mode, reasons = auto_predict._parse_generation_status(result)
+
+    assert mode == "blocked"
+    assert reasons == ["E04_FEATURES_INCOMPLETE"]
+    assert auto_predict.EXIT_MODE_FAILURE == 8
+    assert auto_predict.EXIT_GENERATION_FAILURE == 2
+    assert "E04_FEATURES_INCOMPLETE" in auto_predict._mode_notice(mode, reasons)
+
+
+def test_generation_status_accepts_full_with_empty_reasons():
+    result = SimpleNamespace(
+        returncode=0,
+        stdout='{"prediction_mode":"full","error_reasons":[]}\n',
+    )
+
+    assert auto_predict._parse_generation_status(result) == ("full", [])
+
+
+def test_daily_batch_preserves_prediction_mode_exit_bit():
+    batch = (
+        Path(__file__).parents[1] / "scripts" / "auto_predict_daily.bat"
+    ).read_text(encoding="utf-8")
+
+    assert "if %PREDICTCODE% EQU 8 (" in batch
+    assert "set /a EXITCODE+=8" in batch
+
+
+def test_generation_status_missing_payload_fails_closed():
+    result = SimpleNamespace(returncode=0, stdout="not-json\n")
+
+    with pytest.raises(RuntimeError, match="status JSON missing"):
+        auto_predict._parse_generation_status(result)
+
+
+def test_generation_status_rejects_mode_reason_conflict():
+    result = SimpleNamespace(
+        returncode=0,
+        stdout='{"prediction_mode":"full","error_reasons":["E04_FEATURES_INCOMPLETE"]}\n',
+    )
+
+    with pytest.raises(RuntimeError, match="status contract invalid"):
+        auto_predict._parse_generation_status(result)

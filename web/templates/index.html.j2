@@ -10,6 +10,8 @@
 <meta name="theme-color" content="#181818" media="(prefers-color-scheme: dark)">
 <meta name="empty-race-ratio" content="{{ '%.6f'|format(empty_race_ratio) }}">
 <meta name="completeness-alert" content="{{ 1 if completeness_alert else 0 }}">
+<meta name="prediction-mode" content="{{ prediction_mode | default('full') }}">
+<meta name="prediction-error-reasons" content="{{ error_reasons | default([]) | join(',') }}">
 <title>競馬予想 - {{ generated_at }}</title>
 <style>
   :root {
@@ -91,6 +93,15 @@
     font-variant-numeric: tabular-nums;
   }
   .meta { color: var(--fg-mute); font-size: 0.8rem; margin-top: 0.25rem; }
+  .prediction-mode-banner {
+    margin-top: 0.5rem; padding: 0.55rem 0.7rem; border: 2px solid var(--grade);
+    border-radius: 6px; background: var(--buy-board-bg); color: var(--buy-board-fg);
+    font-weight: 700; font-size: 0.86rem;
+  }
+  .prediction-blocked {
+    margin: 0.75rem; padding: 0.8rem; border: 2px solid var(--grade);
+    border-radius: 6px; color: var(--buy-board-fg); font-weight: 700;
+  }
   /* 開催日ナビ: 複数開催のとき各セクションへワンタップで飛ぶ。
      横スクロール 1 行に収め、sticky ヘッダの高さ増を最小化 */
   .day-nav {
@@ -629,6 +640,20 @@
   {% endif %}
 </header>
 <main>
+{% if prediction_mode | default("full") != "full" %}
+<div class="prediction-mode-banner" role="alert">
+  {% if prediction_mode_counts | default({}) | length
+        and prediction_mode_counts.get("full", 0) > 0 %}
+  一部レースが{% if prediction_mode == "blocked" %}予測停止{% else %}観察専用{% endif %}
+  — 該当レースの買い候補は作成しません。fullレースは通常判定です。
+  {% else %}
+  {% if prediction_mode == "blocked" %}予測停止{% else %}観察専用{% endif %}
+  — 対象レースの買い候補は作成しません。
+  {% endif %}
+  {% if error_guidance | default([]) %} {{ error_guidance | join(" ") }}{% endif %}
+  {% if error_reasons | default([]) %} ({{ error_reasons | join(", ") }}){% endif %}
+</div>
+{% endif %}
 <div class="model-legend" role="note">
   <div>◎○▲△☆ = 総合本命度 (ルール+人気の合成順)。P = 校正済み勝率 (LGBM v6 ブレンド、別指標)。両者は一致しないことがあります。</div>
   <div>オッズ確定前の P はモデル単独値です。</div>
@@ -726,14 +751,20 @@
             {% if race.has_bet %}<span class="bet-head">買い候補</span>{% endif %}
           </div>
           {# P22: 閉じたままでも本命が見えるプレビュー行 (全レース開かずにスキャン可能) #}
-          {% if race.top_picks %}
+          {% if race.get("prediction_mode", "full") != "blocked" and race.top_picks %}
           {% set tp = race.top_picks[0] %}
           <div class="head-pick"><span class="mark">{{ tp.mark }}</span>{{ tp.num }} {{ tp.name }}{% if tp.odds %} / {{ "%.1f"|format(tp.odds) }}倍{% endif %}{% if race.tentative %}<span class="head-pick-tent">暫定</span>{% endif %}<span class="head-pick-reason">{{ tp.rationale }}</span></div>
           {% endif %}
         </div>
         <div class="race-time">{{ race.start_time }}{% if race.odds_time %} <span class="odds-time">オッズ {{ race.odds_time }} 時点</span>{% endif %}</div>
       </summary>
-      {% if race.horses %}
+      {% if race.get("prediction_mode", "full") == "blocked" %}
+      <div class="prediction-blocked" role="alert">
+        予測停止 — このレースの予想表は表示しません。
+        {{ race.get("error_guidance", []) | join(" ") }}
+        ({{ race.get("error_reasons", []) | join(", ") }})
+      </div>
+      {% elif race.horses %}
         {% if race.top_picks %}
         <div class="top-picks {% if race.tentative %}tentative{% endif %}">
           {% if race.tentative %}<div class="tent-tag-line"><span class="tent-tag">暫定</span> 予想根拠が薄いためマイニング/オッズ確定後に再生成してください</div>{% endif %}

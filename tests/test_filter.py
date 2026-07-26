@@ -13,7 +13,11 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from predictor.filter import is_buy_candidate, odds_age_minutes
+from predictor.filter import (
+    is_buy_candidate,
+    is_production_buy_candidate,
+    odds_age_minutes,
+)
 
 
 @dataclass
@@ -25,6 +29,8 @@ class FakePred:
     expected_value: float = 1.2
     kelly_fraction: float = 0.10
     win_probability: float = 0.20
+    prediction_mode: str = "full"
+    error_reasons: tuple[str, ...] = ()
 
 
 def spec(**over) -> dict:
@@ -56,6 +62,27 @@ NOW = datetime(2026, 6, 13, 10, 0, 0)
 
 def test_passes_with_default_strategy():
     assert is_buy_candidate(FakePred(), horse(), False, filter_spec=spec())
+
+
+def test_prediction_mode_is_enforced_only_when_production_consumer_opts_in():
+    observation = FakePred(prediction_mode="observation")
+    assert is_buy_candidate(observation, horse(), False, filter_spec=spec())
+    assert not is_production_buy_candidate(
+        observation,
+        horse(),
+        False,
+        filter_spec=spec(),
+    )
+    contradictory = FakePred(
+        prediction_mode="full",
+        error_reasons=("E04_FEATURES_INCOMPLETE",),
+    )
+    assert not is_production_buy_candidate(
+        contradictory,
+        horse(),
+        False,
+        filter_spec=spec(),
+    )
 
 
 def test_rank_mark_tentative_gates():

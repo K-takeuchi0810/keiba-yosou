@@ -642,6 +642,8 @@ CREATE TABLE IF NOT EXISTS prediction_log (
     confidence              TEXT,
     model_version           TEXT,            -- lgbm rule_version
     calibrator_version      TEXT,
+    prediction_mode         TEXT NOT NULL DEFAULT 'full',
+    error_reasons           TEXT NOT NULL DEFAULT '[]',
     PRIMARY KEY (generated_at, race_year, race_month_day, track_code, kaiji, nichiji, race_num, horse_num)
 );
 

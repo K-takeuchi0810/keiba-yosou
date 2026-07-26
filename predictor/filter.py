@@ -136,3 +136,28 @@ def is_buy_candidate(
         return False
 
     return True
+
+
+def is_production_buy_candidate(
+    pred: Any,
+    horse: dict,
+    tentative: bool,
+    race: dict | None = None,
+    filter_spec: dict | None = None,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """Production wrapper that enforces fail-closed before normal filters."""
+    if (
+        getattr(pred, "prediction_mode", "full") != "full"
+        or bool(getattr(pred, "error_reasons", []))
+    ):
+        return False
+    return is_buy_candidate(
+        pred,
+        horse,
+        tentative,
+        race=race,
+        filter_spec=filter_spec,
+        now=now,
+    )

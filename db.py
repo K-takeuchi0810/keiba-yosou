@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import asdict
@@ -198,6 +199,8 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(schema)
     _ensure_column(conn, "horse_races", "odds_fetched_at", "TEXT")
     _ensure_column(conn, "horse_races", "odds_dataspec", "TEXT")
+    _ensure_column(conn, "prediction_log", "prediction_mode", "TEXT NOT NULL DEFAULT 'full'")
+    _ensure_column(conn, "prediction_log", "error_reasons", "TEXT NOT NULL DEFAULT '[]'")
     _ensure_column(conn, "training_times", "data_div", "TEXT")
     _ensure_column(conn, "training_times", "data_created", "TEXT")
     # コーナー通過順位 (Phase 4)。既存 DB への後方互換 migration。
@@ -742,6 +745,8 @@ def insert_prediction_log(
     generated_at: str,
     model_version: str = "",
     calibrator_version: str = "",
+    prediction_mode: str = "full",
+    error_reasons: list[str] | None = None,
 ) -> int:
     """発行時点の予想を prediction_log に追記 (答え合わせ用、append-only)。
 
@@ -750,6 +755,14 @@ def insert_prediction_log(
        win_odds, win_popularity, confidence}
     同一 (generated_at, レース, 馬番) は INSERT OR REPLACE。戻り値は行数。
     """
+    from predictor.rules import validate_prediction_status
+
+    validate_prediction_status(prediction_mode, error_reasons or [])
+    reasons_json = json.dumps(error_reasons or [], ensure_ascii=True)
+    effective_rows = rows
+    if prediction_mode == "blocked" and not effective_rows:
+        # A sentinel horse key keeps an empty/blocked run in the append-only ledger.
+        effective_rows = [{"horse_num": ""}]
     payload = [
         (
             generated_at,
@@ -758,9 +771,9 @@ def insert_prediction_log(
             r.get("horse_num"), r.get("mark") or "", r.get("rank"), r.get("score"),
             r.get("win_probability"), r.get("raw_blended_probability"),
             r.get("win_odds"), r.get("win_popularity"), r.get("confidence") or "",
-            model_version, calibrator_version,
+            model_version, calibrator_version, prediction_mode, reasons_json,
         )
-        for r in rows
+        for r in effective_rows
     ]
     if not payload:
         return 0
@@ -768,8 +781,9 @@ def insert_prediction_log(
         "INSERT OR REPLACE INTO prediction_log "
         "(generated_at, race_year, race_month_day, track_code, kaiji, nichiji, race_num, "
         " horse_num, mark, rank, score, win_probability, raw_blended_probability, "
-        " win_odds, win_popularity, confidence, model_version, calibrator_version) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        " win_odds, win_popularity, confidence, model_version, calibrator_version, "
+        " prediction_mode, error_reasons) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         payload,
     )
     return len(payload)

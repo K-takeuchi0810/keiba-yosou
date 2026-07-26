@@ -31,6 +31,50 @@ from .features import compute_features
 logger = logging.getLogger(__name__)
 
 MARKS = ["◎", "○", "▲", "△", "☆"]
+PREDICTION_MODE_FULL = "full"
+PREDICTION_MODE_OBSERVATION = "observation"
+PREDICTION_MODE_BLOCKED = "blocked"
+PREDICTION_MODES = frozenset({
+    PREDICTION_MODE_FULL,
+    PREDICTION_MODE_OBSERVATION,
+    PREDICTION_MODE_BLOCKED,
+})
+
+E01_MODEL_MISSING = "E01_MODEL_MISSING"
+E02_STALE_ODDS = "E02_STALE_ODDS"
+E03_PIT_VIOLATION = "E03_PIT_VIOLATION"
+E04_FEATURES_INCOMPLETE = "E04_FEATURES_INCOMPLETE"
+PREDICTION_ERROR_REASONS = frozenset({
+    E01_MODEL_MISSING,
+    E02_STALE_ODDS,
+    E03_PIT_VIOLATION,
+    E04_FEATURES_INCOMPLETE,
+})
+
+
+def validate_prediction_status(mode: str, reasons) -> None:
+    if mode not in PREDICTION_MODES:
+        raise ValueError(f"unknown prediction mode: {mode}")
+    unknown = set(reasons) - PREDICTION_ERROR_REASONS
+    if unknown:
+        raise ValueError(f"unknown prediction error reasons: {sorted(unknown)}")
+    if mode == PREDICTION_MODE_FULL and reasons:
+        raise ValueError("full prediction mode cannot carry error reasons")
+    if mode != PREDICTION_MODE_FULL and not reasons:
+        raise ValueError(f"{mode} prediction mode requires an error reason")
+    expected_mode = prediction_mode_for_errors(reasons)
+    if mode != expected_mode:
+        raise ValueError(
+            f"prediction mode {mode} conflicts with reasons; expected {expected_mode}"
+        )
+
+
+def prediction_mode_for_errors(reasons) -> str:
+    if E04_FEATURES_INCOMPLETE in reasons:
+        return PREDICTION_MODE_BLOCKED
+    if reasons:
+        return PREDICTION_MODE_OBSERVATION
+    return PREDICTION_MODE_FULL
 
 # スコアリング / 特徴量の変更で raw_blended_probability の分布が変わるたびに bump する。
 # calibrator.json はこの版のスコア分布に対して fit されるため、不一致のまま運用すると
@@ -232,6 +276,127 @@ class Prediction:
     # を raw_blended_probability に切替え、校正位置不整合と確率正規化問題を
     # 同時解消する。
     raw_blended_probability: float = 0.0
+    prediction_mode: str = PREDICTION_MODE_FULL
+    error_reasons: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        validate_prediction_status(self.prediction_mode, self.error_reasons)
+
+
+class PredictionBatch(list[Prediction]):
+    """List-compatible race result carrying status even when blocked and empty."""
+
+    def __init__(
+        self,
+        predictions=(),
+        *,
+        prediction_mode: str = PREDICTION_MODE_FULL,
+        error_reasons: list[str] | tuple[str, ...] = (),
+    ) -> None:
+        validate_prediction_status(prediction_mode, error_reasons)
+        super().__init__(predictions)
+        self.prediction_mode = prediction_mode
+        self.error_reasons = list(dict.fromkeys(error_reasons))
+        self._validate_members(self)
+
+    def _validate_members(self, predictions) -> None:
+        if any(
+            prediction.prediction_mode != self.prediction_mode
+            or prediction.error_reasons != self.error_reasons
+            for prediction in predictions
+        ):
+            raise ValueError("prediction batch status conflicts with member status")
+
+    def append(self, prediction: Prediction) -> None:
+        self._validate_members([prediction])
+        super().append(prediction)
+
+    def extend(self, predictions) -> None:
+        predictions = list(predictions)
+        self._validate_members(predictions)
+        super().extend(predictions)
+
+    def insert(self, index: int, prediction: Prediction) -> None:
+        self._validate_members([prediction])
+        super().insert(index, prediction)
+
+    def __setitem__(self, index, prediction) -> None:
+        if isinstance(index, slice):
+            predictions = list(prediction)
+            self._validate_members(predictions)
+            super().__setitem__(index, predictions)
+        else:
+            self._validate_members([prediction])
+            super().__setitem__(index, prediction)
+
+    def __iadd__(self, predictions):
+        self.extend(predictions)
+        return self
+
+
+def prediction_status(predictions: list[Prediction]) -> tuple[str, list[str]]:
+    """Return the closed status contract for ordinary lists and PredictionBatch."""
+    mode = getattr(predictions, "prediction_mode", None)
+    reasons = getattr(predictions, "error_reasons", None)
+    if (
+        mode == PREDICTION_MODE_FULL
+        and reasons
+    ):
+        return PREDICTION_MODE_BLOCKED, [E04_FEATURES_INCOMPLETE]
+    if mode in PREDICTION_MODES and reasons is not None:
+        if mode != prediction_mode_for_errors(reasons):
+            return PREDICTION_MODE_BLOCKED, [E04_FEATURES_INCOMPLETE]
+        return mode, list(reasons)
+    if predictions:
+        first = predictions[0]
+        mode = getattr(first, "prediction_mode", PREDICTION_MODE_FULL)
+        reasons = getattr(first, "error_reasons", [])
+        if mode == PREDICTION_MODE_FULL and reasons:
+            return PREDICTION_MODE_BLOCKED, [E04_FEATURES_INCOMPLETE]
+        if mode in PREDICTION_MODES:
+            if mode != prediction_mode_for_errors(reasons):
+                return PREDICTION_MODE_BLOCKED, [E04_FEATURES_INCOMPLETE]
+            return mode, list(reasons)
+    return PREDICTION_MODE_FULL, []
+
+
+def _live_odds_errors(horses: list[dict], race: dict) -> list[str]:
+    """Apply the existing PIT and max-age rules without changing their thresholds."""
+    from config import BUY_FILTER_DEFAULT
+    from predictor.filter import odds_age_minutes
+    from predictor.pit_gate import pit_cutoff
+
+    errors: list[str] = []
+    race_date = f"{race.get('race_year', '')}{race.get('race_month_day', '')}"
+    cutoff = pit_cutoff(race_date, str(race.get("start_time") or ""))
+    fetched_values = [h.get("odds_fetched_at") for h in horses]
+    if cutoff is None or not fetched_values or any(
+        not fetched_at or str(fetched_at) > cutoff for fetched_at in fetched_values
+    ):
+        errors.append(E03_PIT_VIOLATION)
+
+    max_age = BUY_FILTER_DEFAULT.get("max_odds_age_min")
+    if max_age is not None:
+        now = datetime.now()
+        ages = [odds_age_minutes(value, now) for value in fetched_values]
+        if any(age is not None and age > int(max_age) for age in ages):
+            errors.append(E02_STALE_ODDS)
+    return errors
+
+
+def _has_blocking_feature_warnings(horses: list[dict]) -> bool:
+    """Treat explicit post-race dependency markers as critical incompleteness.
+
+    The availability warnings are diagnostic and expected before some races;
+    blocking on those would invent a new coverage threshold. In contrast,
+    `post_race:*` is the existing explicit marker that a feature set is not
+    valid at prediction time, so any occurrence blocks production output.
+    """
+    return any(
+        str(warning).startswith("post_race:")
+        for horse in horses
+        for warning in (horse.get("_feature_warnings") or [])
+    )
 
 
 def _market_snapshot_age_min(horse: dict, feat: dict) -> int | None:
@@ -1316,7 +1481,7 @@ def predict_race(
     conn: sqlite3.Connection | None = None,
     race: dict | None = None,
     cache: dict | None = None,
-) -> list[Prediction]:
+) -> PredictionBatch:
     """1 レース分の予想。
 
     conn と race が両方与えられた場合は過去走ベースの本格スコアリング。
@@ -1327,13 +1492,20 @@ def predict_race(
     feature_cache: dict = cache if cache is not None else {}
     leg_counts: dict[str, int] = {}
     precomputed: dict[str, dict] = {}
+    feature_preflight_failed = False
     if use_features:
-        for h in horses:
-            feat = compute_features(conn, h, race, cache=feature_cache)
-            precomputed[h.get("horse_num") or ""] = feat
-            leg = feat.get("leg_code") or ""
-            if leg:
-                leg_counts[leg] = leg_counts.get(leg, 0) + 1
+        try:
+            for h in horses:
+                feat = compute_features(conn, h, race, cache=feature_cache)
+                precomputed[h.get("horse_num") or ""] = feat
+                leg = feat.get("leg_code") or ""
+                if leg:
+                    leg_counts[leg] = leg_counts.get(leg, 0) + 1
+        except Exception:
+            logger.exception("feature preflight failed; prediction blocked")
+            feature_preflight_failed = True
+            precomputed.clear()
+            leg_counts.clear()
     else:
         for h in horses:
             leg = (h.get("leg_quality_code") or "").strip()
@@ -1342,7 +1514,7 @@ def predict_race(
     front_runner_count = leg_counts.get("1", 0) + leg_counts.get("2", 0)
 
     for h in horses:
-        if use_features:
+        if use_features and not feature_preflight_failed:
             feat = precomputed.get(h.get("horse_num") or "") or compute_features(conn, h, race, cache=feature_cache)
             leg = feat.get("leg_code") or ""
             feat["front_runner_count"] = front_runner_count
@@ -1388,20 +1560,42 @@ def predict_race(
 
     confidence, gap, all_tied = _confidence(scored)
     raw_rule_prob = _score_probabilities(scored, confidence)
+    prediction_errors = _live_odds_errors(horses, race) if use_features else []
+    if feature_preflight_failed or (
+        use_features and _has_blocking_feature_warnings(horses)
+    ):
+        prediction_errors.append(E04_FEATURES_INCOMPLETE)
+    prediction_mode = prediction_mode_for_errors(prediction_errors)
     # LightGBM Ensemble: rule prob と LGBM prob を重み blend。
     # LGBM model 不在時は ml_model.predict_lgbm_probs が空 dict を返し、blend は
     # rule prob をそのまま返す。重みは PRED_BLEND_W_RULE 環境変数で上書き可
     # (既定 0.5)。LGBM 信頼度確立後は 0.3 等に下げる。
-    if use_features:
+    if use_features and not feature_preflight_failed:
         try:
-            from predictor.ml_model import blend as _blend, predict_lgbm_probs
-            raw_lgbm_prob = predict_lgbm_probs(
-                horses, race, conn=conn, feature_cache=feature_cache,
+            from predictor.ml_model import (
+                blend as _blend,
+                load_lgbm,
+                predict_lgbm_probs,
             )
-            w_rule = float(os.environ.get("PRED_BLEND_W_RULE", "0.5"))
-            blended = _blend(raw_rule_prob, raw_lgbm_prob, w_rule=w_rule)
-        except Exception as e:
-            logger.warning("LGBM blend failed, falling back to rule-only: %s", e)
+            if load_lgbm() is None:
+                prediction_errors.append(E01_MODEL_MISSING)
+                prediction_mode = prediction_mode_for_errors(prediction_errors)
+                blended = raw_rule_prob
+            else:
+                raw_lgbm_prob = predict_lgbm_probs(
+                    horses, race, conn=conn, feature_cache=feature_cache,
+                )
+                expected_horses = {
+                    str(h.get("horse_num") or "") for h in horses
+                }
+                if set(raw_lgbm_prob) != expected_horses:
+                    raise RuntimeError("LGBM output does not cover every horse")
+                w_rule = float(os.environ.get("PRED_BLEND_W_RULE", "0.5"))
+                blended = _blend(raw_rule_prob, raw_lgbm_prob, w_rule=w_rule)
+        except Exception:
+            logger.exception("LGBM prediction failed; prediction blocked")
+            prediction_errors.append(E04_FEATURES_INCOMPLETE)
+            prediction_mode = prediction_mode_for_errors(prediction_errors)
             blended = raw_rule_prob
     else:
         blended = raw_rule_prob
@@ -1446,9 +1640,15 @@ def predict_race(
                 # P17 A2 c1: LGBM blend 直後 + calibrator 適用前の正規化済み確率。
                 # calibrator fit 入力として使う (race 内 Σ=1)。
                 raw_blended_probability=round(blended.get(horse_num_key, 0.0), 6),
+                prediction_mode=prediction_mode,
+                error_reasons=list(dict.fromkeys(prediction_errors)),
             )
         )
-    return out
+    return PredictionBatch(
+        out,
+        prediction_mode=prediction_mode,
+        error_reasons=list(dict.fromkeys(prediction_errors)),
+    )
 
 
 def is_tentative(predictions: list[Prediction]) -> bool:

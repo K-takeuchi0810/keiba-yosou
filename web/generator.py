@@ -34,14 +34,14 @@ from db import (
     open_db,
     open_db_readonly,
 )
-from predictor import is_tentative, predict_race
+from predictor import is_tentative, predict_race, prediction_status
 from predictor.candidates import (
     BUY_CANDIDATE_MAX,
     mark_single_race_buy_pick,
     select_buy_candidate_picks,
     select_race_buy_pick,
 )
-from predictor.filter import is_buy_candidate
+from predictor.filter import is_production_buy_candidate
 from predictor.portfolio import apply_daily_budget, compute_day_portfolio, sync_actual_stakes
 from predictor.risk import recommended_fraction
 from predictor.tickets import build_recommended_tickets, ticket_stake_yen
@@ -57,6 +57,17 @@ from web.codes import (
     weekday_name,
     burden_weight_kg,
 )
+
+_PREDICTION_ERROR_GUIDANCE = {
+    "E01_MODEL_MISSING": "モデルを読み込めません。64bit予想生成を再実行してください。",
+    "E02_STALE_ODDS": "オッズが古いため、最新オッズを取得して再生成してください。",
+    "E03_PIT_VIOLATION": "時刻条件を満たすオッズがないため、買付を停止しました。",
+    "E04_FEATURES_INCOMPLETE": "特徴計算が不完全です。データ取得後に再生成してください。",
+}
+
+
+def _prediction_error_guidance(reasons: list[str]) -> list[str]:
+    return [_PREDICTION_ERROR_GUIDANCE.get(reason, reason) for reason in reasons]
 
 TEMPLATES = Path(__file__).resolve().parent / "templates"
 PREDICTION_ARCHIVE_ROOT = PROJECT_ROOT / "data" / "results"
@@ -360,6 +371,8 @@ def build_view_model(
     horses_by_race: dict[tuple, list] = {}
     top_picks_by_race: dict[tuple, list] = {}
     tentative_by_race: dict[tuple, bool] = {}
+    prediction_mode_by_race: dict[tuple, str] = {}
+    error_reasons_by_race: dict[tuple, list[str]] = {}
     # オッズ鮮度 (max_odds_age_min) だけで買い候補から落ちた件数
     stale_suppressed = 0
     buy_filter = dict(BUY_FILTER_DEFAULT)
@@ -387,6 +400,9 @@ def build_view_model(
             if not raws:
                 continue
             preds = predict_race(raws, conn=conn, race=race_dict, cache=feature_cache)
+            prediction_mode, error_reasons = prediction_status(preds)
+            prediction_mode_by_race[key] = prediction_mode
+            error_reasons_by_race[key] = error_reasons
             mark_by_num = {p.horse_num: p for p in preds}
             top_probability_horse_num = _top_probability_horse_num(preds)
             tentative_by_race[key] = is_tentative(preds)
@@ -408,11 +424,13 @@ def build_view_model(
                             "confidence": getattr(p, "confidence", ""),
                         }
                         for p in preds
-                    ]
+                    ] if prediction_mode != "blocked" else []
                     insert_prediction_log(
                         conn, race_dict, log_rows, _PRED_LOG_GENERATED_AT,
                         model_version=_PRED_LOG_MODEL_VER,
                         calibrator_version=_PRED_LOG_CALIB_VER,
+                        prediction_mode=prediction_mode,
+                        error_reasons=error_reasons,
                     )
                 except Exception as _e:  # noqa: BLE001
                     logger.warning("prediction_log 追記に失敗 (生成は継続): %s", _e)
@@ -463,7 +481,7 @@ def build_view_model(
                 if horse_for_pred is None:
                     continue
                 tent = tentative_by_race.get(key, False)
-                bet_ok = is_buy_candidate(
+                bet_ok = is_production_buy_candidate(
                     p, horse_for_pred, tent, race=race_dict,
                     filter_spec=buy_filter, now=datetime.now())
                 # 鮮度だけで落ちた候補を数える (now なし評価なら通る場合)。
@@ -472,7 +490,9 @@ def build_view_model(
                 if (
                     not ignore_odds_freshness
                     and not bet_ok
-                    and is_buy_candidate(p, horse_for_pred, tent, race=race_dict)
+                    and is_production_buy_candidate(
+                        p, horse_for_pred, tent, race=race_dict,
+                    )
                 ):
                     stale_suppressed += 1
                 ticket = f"単勝 {p.horse_num.lstrip('0') or '0'}番"
@@ -521,7 +541,11 @@ def build_view_model(
             r["race_year"], r["race_month_day"], r["track_code"],
             r["kaiji"], r["nichiji"], r["race_num"],
         )
-        top_picks = top_picks_by_race.get(race_key, [])
+        race_prediction_mode = prediction_mode_by_race.get(race_key, "full")
+        top_picks = (
+            [] if race_prediction_mode == "blocked"
+            else top_picks_by_race.get(race_key, [])
+        )
         # S7-α-3 (2026-05-18): 二重防御ガード。
         # bet_candidate が True でも kelly_fraction が 0 近傍の馬は HTML
         # 買い候補ボードから除外する。is_buy_candidate 側で kelly_fraction > 0
@@ -581,6 +605,11 @@ def build_view_model(
             "recommended_tickets": [],
             "_payout_row": payouts_by_race.get(race_key),
             "tentative": tentative_by_race.get(race_key, False),
+            "prediction_mode": race_prediction_mode,
+            "error_reasons": error_reasons_by_race.get(race_key, []),
+            "error_guidance": _prediction_error_guidance(
+                error_reasons_by_race.get(race_key, [])
+            ),
         })
 
     # P22-2 (2026-06-12): 開催日ごとの買い候補数。テンプレート 2 箇所
@@ -591,6 +620,21 @@ def build_view_model(
 
     rendered_days = list(days.values())
     rendered_races = [race for day in rendered_days for race in day["races"]]
+    rendered_modes = [race.get("prediction_mode", "full") for race in rendered_races]
+    prediction_mode_counts = {
+        mode: rendered_modes.count(mode)
+        for mode in ("full", "observation", "blocked")
+    }
+    prediction_mode = (
+        "blocked" if "blocked" in rendered_modes
+        else "observation" if "observation" in rendered_modes
+        else "full"
+    )
+    error_reasons = sorted({
+        reason
+        for race in rendered_races
+        for reason in race.get("error_reasons", [])
+    })
     empty_count = sum(not race.get("horses") for race in rendered_races)
     predicted_count = len(rendered_races) - empty_count
     from web.publish_safety import assess_race_completeness
@@ -668,6 +712,10 @@ def build_view_model(
         "version_info": version_info,
         "portfolio_info": portfolio_info,
         "ignore_odds_freshness": ignore_odds_freshness,
+        "prediction_mode": prediction_mode,
+        "error_reasons": error_reasons,
+        "error_guidance": _prediction_error_guidance(error_reasons),
+        "prediction_mode_counts": prediction_mode_counts,
     }
 
 
@@ -792,6 +840,24 @@ def render(
             "index.html が %0.2fMB とサイズ予算 (1.5MB) を超過。対象期間の"
             "短縮や古い開催の間引きを検討してください。", size / 1e6)
     return out
+
+
+def read_rendered_prediction_status(path: Path) -> tuple[str, list[str]]:
+    """Read the run status embedded in generated HTML without a sidecar file."""
+    head = path.read_text(encoding="utf-8")[:8192]
+    mode_match = re.search(
+        r'<meta name="prediction-mode" content="([^"]*)">', head
+    )
+    reasons_match = re.search(
+        r'<meta name="prediction-error-reasons" content="([^"]*)">', head
+    )
+    mode = mode_match.group(1) if mode_match else "blocked"
+    raw_reasons = (
+        reasons_match.group(1).split(",")
+        if reasons_match
+        else ["E04_FEATURES_INCOMPLETE"]
+    )
+    return mode, [reason for reason in raw_reasons if reason]
 
 
 class StalePublishRefused(RuntimeError):
@@ -963,6 +1029,13 @@ if __name__ == "__main__":
         ignore_odds_freshness=args.ignore_odds_freshness,
         log_predictions=args.log_predictions,
     )
+    prediction_mode, error_reasons = read_rendered_prediction_status(p)
+    if prediction_mode != "full":
+        print(
+            f"prediction_mode={prediction_mode} "
+            f"error_reasons={','.join(error_reasons)}",
+            file=sys.stderr,
+        )
     published = None
     if publish_decision:
         try:
@@ -982,8 +1055,12 @@ if __name__ == "__main__":
         print(_json.dumps({
             "rendered": str(p),
             "published": str(published) if published else None,
+            "prediction_mode": prediction_mode,
+            "error_reasons": error_reasons,
         }, ensure_ascii=True))
     else:
         print(f"wrote {p}")
         if published:
             print(f"published {published}")
+    if prediction_mode == "blocked":
+        sys.exit(8)

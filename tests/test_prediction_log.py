@@ -7,6 +7,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from db import SCHEMA_PATH, insert_prediction_log
 
 
@@ -38,10 +40,76 @@ def test_insert_and_readback():
                               model_version="lgbm-v6", calibrator_version="p26")
     assert n == 2
     row = conn.execute(
-        "SELECT mark, win_probability, win_odds, model_version FROM prediction_log "
+        "SELECT mark, win_probability, win_odds, model_version, "
+        "prediction_mode, error_reasons FROM prediction_log "
         "WHERE horse_num='05'").fetchone()
     assert row["mark"] == "◎" and abs(row["win_probability"] - 0.30) < 1e-9
     assert row["win_odds"] == 320 and row["model_version"] == "lgbm-v6"
+    assert row["prediction_mode"] == "full"
+    assert row["error_reasons"] == "[]"
+
+
+def test_observation_status_is_recorded_per_row():
+    conn = _conn()
+    insert_prediction_log(
+        conn,
+        RACE,
+        _rows(),
+        "2026-07-12T09:30:00",
+        prediction_mode="observation",
+        error_reasons=["E01_MODEL_MISSING"],
+    )
+    statuses = conn.execute(
+        "SELECT DISTINCT prediction_mode, error_reasons FROM prediction_log"
+    ).fetchall()
+    assert [(row["prediction_mode"], row["error_reasons"]) for row in statuses] == [
+        ("observation", '["E01_MODEL_MISSING"]')
+    ]
+
+
+def test_blocked_empty_prediction_still_writes_ledger_sentinel():
+    conn = _conn()
+    n = insert_prediction_log(
+        conn,
+        RACE,
+        [],
+        "2026-07-12T09:30:00",
+        prediction_mode="blocked",
+        error_reasons=["E04_FEATURES_INCOMPLETE"],
+    )
+    row = conn.execute(
+        "SELECT horse_num, prediction_mode, error_reasons FROM prediction_log"
+    ).fetchone()
+    assert n == 1
+    assert row["horse_num"] == ""
+    assert row["prediction_mode"] == "blocked"
+    assert row["error_reasons"] == '["E04_FEATURES_INCOMPLETE"]'
+
+
+def test_ledger_rejects_free_text_error_reasons():
+    conn = _conn()
+    with pytest.raises(ValueError, match="unknown prediction error"):
+        insert_prediction_log(
+            conn,
+            RACE,
+            [],
+            "2026-07-12T09:30:00",
+            prediction_mode="blocked",
+            error_reasons=["free text"],
+        )
+
+
+def test_ledger_rejects_mode_reason_severity_conflict():
+    conn = _conn()
+    with pytest.raises(ValueError, match="conflicts with reasons"):
+        insert_prediction_log(
+            conn,
+            RACE,
+            _rows(),
+            "2026-07-12T09:30:00",
+            prediction_mode="observation",
+            error_reasons=["E04_FEATURES_INCOMPLETE"],
+        )
 
 
 def test_append_only_keeps_multiple_generated_at():

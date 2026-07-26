@@ -28,10 +28,15 @@ echo [%date% %time%] auto_predict (64-bit) start
 .venv64\Scripts\python.exe -m scripts.auto_predict
 set PREDICTCODE=%errorlevel%
 
-REM Exit bits: 1=fresh odds gap, 2=prediction failure, 4=fetch_full failure.
+REM Exit bits: 1=fresh odds gap, 2=prediction failure, 4=fetch_full failure,
+REM            8=prediction mode is observation/blocked.
 set EXITCODE=0
 if %GAPCODE% NEQ 0 set /a EXITCODE+=1
-if %PREDICTCODE% NEQ 0 set /a EXITCODE+=2
+if %PREDICTCODE% EQU 8 (
+    set /a EXITCODE+=8
+) else if %PREDICTCODE% NEQ 0 (
+    set /a EXITCODE+=2
+)
 if %FETCHCODE% NEQ 0 set /a EXITCODE+=4
 echo [%date% %time%] done exit=%EXITCODE%
 exit /b %EXITCODE%
