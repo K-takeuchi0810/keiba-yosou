@@ -56,6 +56,12 @@ def sql_valid_horse_num(column: str = "horse_num") -> str:
 
 SQL_VALID_HORSE_NUM = sql_valid_horse_num()
 
+# prediction_log.prediction_mode / error_reasons が導入された時点 (fail-closed 移行)。
+# これ**より前**の generated_at を持つ行の mode は観測されていない (DEFAULT 'full' は
+# 移行の便宜であり事実ではない)。mode 別の集計・答え合わせでは必ずこの境界で切ること。
+# 本番 DB の最終 legacy run = 2026-07-26T11:30:06。
+PREDICTION_MODE_CUTOVER_AT = "2026-07-26T12:00:00"
+
 
 def is_valid_horse_num(value: object) -> bool:
     """Return whether a Python horse number matches SQL_VALID_HORSE_NUM."""
@@ -199,6 +205,11 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(schema)
     _ensure_column(conn, "horse_races", "odds_fetched_at", "TEXT")
     _ensure_column(conn, "horse_races", "odds_dataspec", "TEXT")
+    # ★legacy 行の mode は unverified: DEFAULT 'full' は移行の便宜であって観測事実ではない。
+    # 本番 DB の実測 (2026-07-26) では移行前 2,836 行のうち 59 行が generated_at < レース日で、
+    # 新規則なら確実に E03_PIT_VIOLATION → observation だった。真の mode は事後再構成不能
+    # (odds_fetched_at がその後上書きされるため)。
+    # → mode 別集計をするときは PREDICTION_MODE_CUTOVER_AT より前の行を「無情報」として扱うこと。
     _ensure_column(conn, "prediction_log", "prediction_mode", "TEXT NOT NULL DEFAULT 'full'")
     _ensure_column(conn, "prediction_log", "error_reasons", "TEXT NOT NULL DEFAULT '[]'")
     _ensure_column(conn, "training_times", "data_div", "TEXT")

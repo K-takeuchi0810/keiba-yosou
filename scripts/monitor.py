@@ -88,6 +88,13 @@ def measure_recent_brier(days: int) -> dict:
     from_date = (today - timedelta(days=days)).strftime("%Y%m%d")
     to_date = today.strftime("%Y%m%d")
     records: list[dict] = []
+    # ★このカウンタは「monitor 実行時点で再計算した mode」であり、「実際に配信した run の
+    # mode」ではない。_live_odds_errors は datetime.now() 基準なので、過去レースの odds は
+    # 必ず stale → observation が構造的に飽和 (full=0 が恒常値) し、observation の増加は
+    # 検知できない。**有意な信号は blocked の増加のみ**。
+    # 配信 run の正本は prediction_log.prediction_mode (fail-closed 移行で追加) だが、
+    # 同列は db.PREDICTION_MODE_CUTOVER_AT 以降の行にしか実データが無く、30 日窓が埋まるまで
+    # 集計に使えない。窓が埋まったら再シミュレートでなく ledger 読取りへ切り替えること。
     mode_counts = {"full": 0, "observation": 0, "blocked": 0}
     error_reason_counts: dict[str, int] = {}
     with open_db_readonly() as conn:

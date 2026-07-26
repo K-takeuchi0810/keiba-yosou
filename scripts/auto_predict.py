@@ -131,7 +131,12 @@ def main() -> int:
         _notify(f"⚠ 予想生成に失敗 ({d_from}-{d_to})。ログ確認要。")
         print(r.stdout[-500:], r.stderr[-500:])
         return EXIT_GENERATION_FAILURE
-    mode_exit = EXIT_MODE_FAILURE if prediction_mode != "full" else 0
+    # ★exit bit は blocked のみ。observation は「予想は出たが投資判断に使えない」状態で、
+    # 本プロジェクトは元来 観察専用 (エッジ未証明) であり、かつ土曜 run は翌日曜レースの
+    # オッズが未取得で必ず E03 → observation になる。observation で bit を立てると
+    # 毎週土曜に警報が鳴り、alert fatigue で本当の異常 (blocked) を見逃す。
+    # observation は Discord 本文 (_mode_notice) と HTML/ledger で可視化済み。
+    mode_exit = EXIT_MODE_FAILURE if prediction_mode == "blocked" else 0
 
     # 版情報
     meta = json.loads((PROJECT_ROOT / "predictor" / "lgbm_meta.json").read_text(encoding="utf-8"))

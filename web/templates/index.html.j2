@@ -483,6 +483,11 @@
   details.buy-board > summary:focus-visible,
   a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .bet-head { background: var(--grade); color: #fff; border-radius: 3px; padding: 0.05rem 0.35rem; font-size: 0.75rem; font-weight: 700; }
+  /* 閉状態でも fail-closed 状態が分かる小バッジ。塗り + 白文字で AA 確保 (--grade は
+     dark でも #c0392b 固定=白文字 5.4:1、--fg-mute 塗りは白文字 5.7:1 以上)。 */
+  .mode-tag { border-radius: 3px; padding: 0.05rem 0.35rem; font-size: 0.72rem; font-weight: 700; color: #fff; }
+  .mode-tag.mode-blocked { background: var(--grade); }
+  .mode-tag.mode-observation { background: #6b6b6b; }
   /* テーブルは横幅が足りないとき横スクロール可能にし、狭画面では
      優先度の低い列 (調教師 / 性齢 / 斤量) を畳む。 */
   .entries-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -642,10 +647,14 @@
 <main>
 {% if prediction_mode | default("full") != "full" %}
 <div class="prediction-mode-banner" role="alert">
-  {% if prediction_mode_counts | default({}) | length
-        and prediction_mode_counts.get("full", 0) > 0 %}
-  一部レースが{% if prediction_mode == "blocked" %}予測停止{% else %}観察専用{% endif %}
-  — 該当レースの買い候補は作成しません。fullレースは通常判定です。
+  {#- 混在時にページ先頭の宣言と画面実態が食い違わないよう、常に件数を出す。
+      full=0 かつ observation>0 のケース (実出力で発生) で「予測停止」と断定すると、
+      直下に観察専用レースの予想が並んで矛盾するため。 -#}
+  {% set _mc = prediction_mode_counts | default({}) %}
+  {% if _mc | length %}
+  レース状態: 予測停止 {{ _mc.get("blocked", 0) }} / 観察専用 {{ _mc.get("observation", 0) }}
+  / 通常 {{ _mc.get("full", 0) }}。予測停止レースは予想表を表示せず、観察専用レースは
+  予想を表示しますが買い候補は作成しません。
   {% else %}
   {% if prediction_mode == "blocked" %}予測停止{% else %}観察専用{% endif %}
   — 対象レースの買い候補は作成しません。
@@ -732,7 +741,14 @@
   </section>
   {% endif %}
 {% else %}
+  {%- if prediction_mode | default("full") != "full" %}
+  {#- fail-closed 時に「フィルタ不合格で見送り」と原因を偽らない (実際は買い判定以前で遮断)。 -#}
+  <section class="no-buy">買い候補はありません。予測停止/観察専用のレースでは fail-closed により
+  買い候補を作成せず、通常レースでも買い条件 ({{ buy_condition_text }}) を満たす馬はいませんでした。
+  下の EV・印は観察用で購入推奨ではありません。
+  {%- else %}
   <section class="no-buy">買い条件 ({{ buy_condition_text }}) を満たす馬がいないため全レース見送り。下の EV・印は観察用で購入推奨ではありません。
+  {%- endif %}
   {%- if stale_suppressed %}<br>⚠ うち {{ stale_suppressed }} 件は<strong>オッズ鮮度切れ</strong>のみが理由で除外されています。最新オッズ取得後に再生成すると候補に戻る可能性があります。{% endif %}</section>
 {% endif %}
 {% for day in days %}
@@ -749,6 +765,9 @@
             {% if race.surface %}<span class="badge {{ race.surface_class }}">{{ race.surface }}</span>{% endif %}
             {% if race.distance %}<span class="badge">{{ race.distance }}m</span>{% endif %}
             {% if race.has_bet %}<span class="bet-head">買い候補</span>{% endif %}
+            {#- 閉状態でも状態が分かるようにする (blocked を「出走馬未取得」と見分けられない問題)。 -#}
+            {% if race.get("prediction_mode", "full") == "blocked" %}<span class="mode-tag mode-blocked">停止</span>
+            {% elif race.get("prediction_mode", "full") == "observation" %}<span class="mode-tag mode-observation">観察</span>{% endif %}
           </div>
           {# P22: 閉じたままでも本命が見えるプレビュー行 (全レース開かずにスキャン可能) #}
           {% if race.get("prediction_mode", "full") != "blocked" and race.top_picks %}

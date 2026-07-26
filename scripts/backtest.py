@@ -32,7 +32,7 @@ from predictor.calibration import (
     fit_bin_calibrator,
     fit_isotonic_calibrator,
 )
-from predictor.rules import is_tentative, predict_race
+from predictor.rules import is_tentative, predict_race, prediction_status
 
 
 def _safe_int(value, default: int, errors: list[str], key: str) -> int:
@@ -761,6 +761,7 @@ def run_backtest(
         n_total_races = len(races)
         n_no_horses = 0
         n_odds_untrusted = 0
+        backtest_mode_counts: dict[str, int] = {}
         n_no_pick = 0
         n_filtered = 0
         n_tentative_skipped = 0
@@ -813,6 +814,12 @@ def run_backtest(
                 continue
 
             preds = predict_race(horses, conn=conn, race=race, cache=feature_cache)
+            # backtest は fail-closed を適用しない (歴史データは確定オッズで E02/E03 が
+            # 常時発火するため。凍結ベースライン再現性の維持)。ただし blocked は
+            # 「特徴計算が壊れた」= 従来なら例外で backtest が即死していた事象であり、
+            # 今は rule-only 縮退として静かに集計へ混入しうる。件数だけ観測可能にする。
+            _bt_mode, _ = prediction_status(preds)
+            backtest_mode_counts[_bt_mode] = backtest_mode_counts.get(_bt_mode, 0) + 1
             tentative = is_tentative(preds)
             if skip_tentative and tentative:
                 n_tentative_skipped += 1
@@ -956,6 +963,9 @@ def run_backtest(
         "require_confirmed": True,
         "exclude_untrusted_odds": exclude_untrusted_odds,
         "races_odds_untrusted": n_odds_untrusted,
+        # fail-closed mode の内訳 (backtest は mode を判定に使わないが、blocked>0 は
+        # 特徴計算の破損を意味し、従来は例外で即死していた事象なので観測可能にする)。
+        "prediction_modes": backtest_mode_counts,
         "races_no_horses": n_no_horses,
         "races_no_pick": n_no_pick,
         "races_filtered": n_filtered,

@@ -83,3 +83,43 @@ def test_monitor_reports_mode_breakdown_without_excluding_observation(
     assert result["n_records"] == 1
     assert result["prediction_modes"]["observation"] == 1
     assert result["prediction_error_reasons"] == {"E02_STALE_ODDS": 1}
+
+
+def test_production_consumers_use_fail_closed_wrapper_not_raw_filter():
+    """production 経路が raw is_buy_candidate に戻る回帰を配線レベルで pin する。
+
+    filter.py の二層契約 (production=wrapper / 分析=raw) は docstring だけでは守れない。
+    誰かが production を raw に戻しても、通常系テストは全て green のまま
+    「異常時に買い候補が出る」状態に静かに退行するため、ここで固定する。
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    production_paths = [
+        root / "web" / "generator.py",
+        root / "gui" / "app.py",
+        root / "scripts" / "predict.py",
+    ]
+    for path in production_paths:
+        source = path.read_text(encoding="utf-8")
+        assert "is_production_buy_candidate" in source, (
+            f"{path.name} が fail-closed wrapper を使っていない"
+        )
+        # raw 呼び出しが残っていないこと (import 行・wrapper 名の部分一致は除く)
+        stripped = source.replace("is_production_buy_candidate", "")
+        assert "is_buy_candidate(" not in stripped.replace("_is_buy_candidate(", ""), (
+            f"{path.name} に raw is_buy_candidate( の呼び出しが残っている"
+        )
+
+
+def test_analysis_paths_keep_raw_filter_for_frozen_baseline():
+    """分析系は raw のままであること (fail-closed の遡及適用で凍結ベースラインが壊れる)。"""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    for name in ("backtest.py", "f3_phase0_0_eval.py"):
+        source = (root / "scripts" / name).read_text(encoding="utf-8")
+        assert "is_production_buy_candidate" not in source, (
+            f"{name} に production wrapper が混入している "
+            "(歴史データで E02/E03 が常時発火し bets≈0 になる)"
+        )

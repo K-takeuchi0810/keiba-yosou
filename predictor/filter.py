@@ -8,7 +8,17 @@
 
 各経路でフィルタ項目の漏れが過去 2 回発生 (S5-3 で gui/app.py の min_kelly 漏れ修正、
 S7-α で web/generator.py の min_kelly + max_predicted_p 漏れ修正)。再発を防ぐため、
-全経路が **本モジュールの `is_buy_candidate` を直接 import** する形に統一する。
+全経路が **本モジュールの判定関数を import** する形に統一する。
+
+★二層契約 (F3 §4.4 fail-closed、2026-07-26):
+- **production (web/generator.py / gui/app.py / scripts/predict.py) は
+  `is_production_buy_candidate` を使う**。prediction_mode != "full" または error_reasons が
+  非空なら通常フィルタ以前に False = 異常時に買い候補を出さない。
+- **分析系 (scripts/backtest.py / scripts/f3_phase0_0_eval.py / analyze_*) は raw
+  `is_buy_candidate` を使う**。歴史データは確定オッズ (fetched_at NULL) で E02/E03 が
+  常時発火するため、fail-closed を遡及適用すると bets≈0 になり凍結ベースライン
+  (425 bets / 62.0941%) の再現性が壊れる。この非対称は意図的。
+production 経路が raw に戻る回帰は tests/test_prediction_consumers.py が配線を pin して防ぐ。
 
 判定の出典は `config.BUY_FILTER_DEFAULT` で、これは「アプリ全体で唯一の出典」
 (config.py で BUY_FILTER_DEFAULT の docstring に明記)。

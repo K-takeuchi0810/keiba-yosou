@@ -286,9 +286,44 @@ def test_mixed_modes_banner_limits_betting_stop_to_affected_races(context):
 
     html = _render(context)
 
-    assert "一部レースが予測停止" in html
-    assert "該当レースの買い候補は作成しません" in html
-    assert "fullレースは通常判定です" in html
+    # 件数を常に出す (断定文がページ実態と矛盾しないように)
+    assert "予測停止 1" in html
+    assert "観察専用 0" in html
+    assert "通常 3" in html
+
+
+def test_banner_shows_counts_when_no_full_race(context):
+    """full=0 / observation>0 / blocked>0 の実在ケース (2026-07-26 の実出力)。
+
+    旧実装は full>0 のときだけ「一部レースが〜」を出し、この構成では
+    「予測停止 — 対象レースの買い候補は作成しません」と断定していた。しかし直下には
+    observation レースの予想が並ぶため、ページ先頭の宣言と画面実態が矛盾していた。
+    """
+    context["prediction_mode"] = "blocked"
+    context["prediction_mode_counts"] = {"full": 0, "observation": 29, "blocked": 7}
+    context["error_reasons"] = ["E03_PIT_VIOLATION"]
+
+    html = _render(context)
+
+    assert "予測停止 7" in html
+    assert "観察専用 29" in html
+    assert "通常 0" in html
+    # 観察専用レースの存在を無視した断定をしていないこと
+    assert "予測停止 — 対象レースの買い候補は作成しません" not in html
+
+
+def test_no_buy_text_attributes_fail_closed_not_filter(context):
+    """fail-closed 時に「フィルタ不合格で見送り」と原因を偽らないこと。"""
+    context["buy_candidates"] = []
+    context["buy_count"] = 0
+    context["prediction_mode"] = "observation"
+    context["prediction_mode_counts"] = {"full": 0, "observation": 36, "blocked": 0}
+    context["error_reasons"] = ["E02_STALE_ODDS"]
+
+    html = _render(context)
+
+    assert "fail-closed により" in html
+    assert "を満たす馬がいないため全レース見送り" not in html
 
 
 def test_new_sections_present(context):
