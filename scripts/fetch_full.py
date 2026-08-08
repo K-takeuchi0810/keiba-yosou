@@ -123,10 +123,18 @@ def main() -> int:
     # JVOpen rc=-1 means "no matching data", not an operational failure.
     # RACE has already received the current-week recovery attempt above; other
     # dataspecs (for example HOSE) may normally have no incremental update.
-    summaries = [
-        _empty_summary(str(s.get("dataspec") or "")) if _is_no_data(s) else s
-        for s in summaries
-    ]
+    normalized = []
+    for summary in summaries:
+        dataspec = str(summary.get("dataspec") or "")
+        # A RACE no-data result remains actionable after the option=2 retry.
+        # The retry spans the previous Monday onward, so even on an ordinary
+        # weekday it should contain the preceding weekend's published cards.
+        # Treating this as success can silently recreate an empty race board.
+        if _is_no_data(summary) and dataspec != "RACE":
+            normalized.append(_empty_summary(dataspec))
+        else:
+            normalized.append(summary)
+    summaries = normalized
 
     elapsed = int(time.time() - started)
     print()

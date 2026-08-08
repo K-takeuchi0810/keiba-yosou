@@ -307,3 +307,23 @@ def test_no_data_detection_does_not_match_nearby_error_codes() -> None:
     assert _is_no_data({"error": "JVOpen failed rc=-1 (該当データなし)"})
     for code in (-10, -101, -111, -116):
         assert not _is_no_data({"error": f"JVOpen failed rc={code}"})
+
+
+def test_fetch_full_fails_when_catchup_still_has_no_race(monkeypatch) -> None:
+    from scripts import fetch_full
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def fetch_all(self, **_kwargs):
+            return [{"dataspec": "RACE", "error": "JVOpen failed rc=-1"}]
+
+    monkeypatch.setattr(fetch_full, "JVLinkClient", FakeClient)
+    monkeypatch.setattr(fetch_full, "_current_week_fromtime", lambda: "20260803000000")
+    monkeypatch.setattr(sys, "argv", ["fetch_full", "--dataspecs", "RACE"])
+
+    assert fetch_full.main() == 1
