@@ -83,6 +83,6 @@ def test_auto_predict_task_registers_both_daily_triggers() -> None:
         encoding="ascii"
     )
 
-    assert '[string]$StartTime = "09:30"' in source
-    assert '[string]$SecondStartTime = "11:30"' in source
+    assert '[string]$StartTime = "08:00"' in source
+    assert '[string]$SecondStartTime = "09:00"' in source
     assert source.count("New-ScheduledTaskTrigger -Daily -At") == 2

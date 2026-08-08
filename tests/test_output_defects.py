@@ -79,7 +79,8 @@ def test_auto_predict_task_registers_two_ascii_daily_triggers():
     raw = script_path.read_bytes()
     content = raw.decode("ascii")
 
-    assert '[string]$StartTime = "09:30"' in content
-    assert '[string]$SecondStartTime = "11:30"' in content
+    assert '[string]$StartTime = "08:00"' in content
+    assert '[string]$SecondStartTime = "09:00"' in content
     assert content.count("New-ScheduledTaskTrigger -Daily -At") == 2
-    assert "-Trigger $triggers" in content
+    assert "-Trigger $trigger" in content
+    assert "-Trigger $triggers" not in content
