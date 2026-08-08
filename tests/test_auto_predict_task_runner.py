@@ -223,3 +223,25 @@ def test_fetch_full_returns_nonzero_for_ingest_error(monkeypatch) -> None:
     )
     monkeypatch.setattr(sys, "argv", ["fetch_full", "--dataspecs", "RACE", "--ingest"])
     assert fetch_full.main() == 2
+
+
+def test_fetch_full_returns_nonzero_for_bad_raw_file(monkeypatch) -> None:
+    from scripts import fetch_full
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def fetch_all(self, **_kwargs):
+            return [{
+                "dataspec": "RACE", "files_written": 0, "records_total": 0,
+                "last_timestamp": "20260808090000",
+                "bad_files": ["CORRUPT.jvd"], "filenames": [],
+            }]
+
+    monkeypatch.setattr(fetch_full, "JVLinkClient", FakeClient)
+    monkeypatch.setattr(sys, "argv", ["fetch_full", "--dataspecs", "RACE"])
+    assert fetch_full.main() == 1

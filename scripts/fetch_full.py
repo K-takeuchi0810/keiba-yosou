@@ -82,7 +82,9 @@ def main() -> int:
                 f"bad={len(s.get('bad_files', []))}"
             )
 
-    fetch_errors = [s for s in summaries if "error" in s]
+    # -402/-403 の破損ファイルでは client がその dataspec の読み出しを打ち切る。
+    # raw が一部書けていても当日RACEが欠け得るため、成功終了にしない。
+    fetch_errors = [s for s in summaries if "error" in s or s.get("bad_files")]
     ingest_errors: list[dict] = []
     if args.ingest:
         print()
