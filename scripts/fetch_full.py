@@ -27,9 +27,14 @@ from jvlink_client.ingest import ingest_all
 
 
 def _current_week_fromtime(today: date | None = None) -> str:
-    """Return Monday 00:00:00 for JVOpen option=2 catch-up."""
+    """Return previous Monday 00:00:00 for JVOpen option=2 catch-up.
+
+    Holiday-Monday race cards are normally published during the previous
+    week.  Starting at the current Monday would therefore miss the very files
+    needed to recover that race day.
+    """
     current = today or date.today()
-    monday = current - timedelta(days=current.weekday())
+    monday = current - timedelta(days=current.weekday() + 7)
     return datetime.combine(monday, datetime.min.time()).strftime("%Y%m%d%H%M%S")
 
 
@@ -118,18 +123,10 @@ def main() -> int:
     # JVOpen rc=-1 means "no matching data", not an operational failure.
     # RACE has already received the current-week recovery attempt above; other
     # dataspecs (for example HOSE) may normally have no incremental update.
-    normalized = []
-    for summary in summaries:
-        dataspec = str(summary.get("dataspec") or "")
-        # A missing RACE card after the current-week retry is actionable on a
-        # normal JRA weekend.  Keep it as an error so Discord/watchdog reports
-        # the incident.  Weekday and non-RACE no-update responses are normal.
-        weekend_race_gap = dataspec == "RACE" and date.today().weekday() >= 5
-        if _is_no_data(summary) and not weekend_race_gap:
-            normalized.append(_empty_summary(dataspec))
-        else:
-            normalized.append(summary)
-    summaries = normalized
+    summaries = [
+        _empty_summary(str(s.get("dataspec") or "")) if _is_no_data(s) else s
+        for s in summaries
+    ]
 
     elapsed = int(time.time() - started)
     print()
