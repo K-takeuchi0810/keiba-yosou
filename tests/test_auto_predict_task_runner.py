@@ -28,6 +28,7 @@ def test_watchdog_preserves_child_exit_code(tmp_path: Path) -> None:
             "10",
             "-CommandPath",
             str(fixture),
+            "-SkipNotification",
         ],
         cwd=ROOT,
         check=False,
@@ -54,6 +55,7 @@ def test_watchdog_times_out_and_returns_124(tmp_path: Path) -> None:
             "1",
             "-CommandPath",
             str(fixture),
+            "-SkipNotification",
         ],
         cwd=ROOT,
         check=False,
@@ -61,6 +63,55 @@ def test_watchdog_times_out_and_returns_124(tmp_path: Path) -> None:
     )
     assert got.returncode == 124
     assert time.monotonic() - started < 10
+
+
+def test_watchdog_removes_a_grandchild_process(tmp_path: Path) -> None:
+    pid_file = tmp_path / "grandchild.pid"
+    quoted_pid_file = str(pid_file).replace("'", "''")
+    fixture = tmp_path / "hang-with-grandchild.cmd"
+    fixture.write_text(
+        '@start "" /b powershell.exe -NoLogo -NoProfile -NonInteractive '
+        f'-Command "$PID | Set-Content -LiteralPath \'{quoted_pid_file}\'; '
+        'Start-Sleep -Seconds 30"\r\n'
+        '@ping 127.0.0.1 -n 30 >nul\r\n',
+        encoding="ascii",
+    )
+    got = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(RUNNER),
+            "-TimeoutSeconds",
+            "2",
+            "-CommandPath",
+            str(fixture),
+            "-SkipNotification",
+        ],
+        cwd=ROOT,
+        check=False,
+        timeout=15,
+    )
+    assert got.returncode == 124
+    assert pid_file.exists()
+    child_pid = int(pid_file.read_text(encoding="utf-8").strip())
+    probe = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            f"if (Get-Process -Id {child_pid} -ErrorAction SilentlyContinue) {{ exit 1 }}",
+        ],
+        check=False,
+        timeout=10,
+    )
+    assert probe.returncode == 0
 
 
 def test_watchdog_has_bounded_tree_termination() -> None:
@@ -71,6 +122,8 @@ def test_watchdog_has_bounded_tree_termination() -> None:
     assert "tree still running after termination" in text
     assert "exit 125" in text
     assert "exit 124" in text
+    assert "scripts.notify_discord" in text
+    assert "Send-WatchdogAlert" in text
 
 
 def test_registered_task_uses_watchdog_before_first_race() -> None:
