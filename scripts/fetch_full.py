@@ -16,12 +16,36 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from jvlink_client.client import JVLinkClient
 from jvlink_client.ingest import ingest_all
+
+
+def _current_week_fromtime(today: date | None = None) -> str:
+    """Return Monday 00:00:00 for JVOpen option=2 catch-up."""
+    current = today or date.today()
+    monday = current - timedelta(days=current.weekday())
+    return datetime.combine(monday, datetime.min.time()).strftime("%Y%m%d%H%M%S")
+
+
+def _is_no_data(summary: dict) -> bool:
+    return "rc=-1" in str(summary.get("error") or "")
+
+
+def _empty_summary(dataspec: str) -> dict:
+    return {
+        "dataspec": dataspec,
+        "no_data": True,
+        "files_written": 0,
+        "records_total": 0,
+        "last_timestamp": None,
+        "bad_files": [],
+        "filenames": [],
+    }
 
 
 def main() -> int:
@@ -67,6 +91,45 @@ def main() -> int:
             retry_attempts=args.retries,
         )
 
+        # option=1 can legitimately return rc=-1 when its saved cursor has no
+        # newer files even though the current week's race card is absent from
+        # SQLite.  Retry RACE with option=2 so a missed/stalled morning run can
+        # recover without an operator resetting fetch_state.json.
+        race_no_data = next(
+            (s for s in summaries if s.get("dataspec") == "RACE" and _is_no_data(s)),
+            None,
+        )
+        if args.option == 1 and args.fromtime is None and race_no_data is not None:
+            catchup_from = _current_week_fromtime()
+            print(
+                f"RACE incremental fetch has no data; retry current week from {catchup_from}",
+                flush=True,
+            )
+            catchup = cli.fetch_all(
+                fromtime=catchup_from,
+                option=2,
+                dataspecs=["RACE"],
+                on_progress=on_progress,
+                retry_attempts=args.retries,
+            )
+            summaries = [s for s in summaries if s is not race_no_data] + catchup
+
+    # JVOpen rc=-1 means "no matching data", not an operational failure.
+    # RACE has already received the current-week recovery attempt above; other
+    # dataspecs (for example HOSE) may normally have no incremental update.
+    normalized = []
+    for summary in summaries:
+        dataspec = str(summary.get("dataspec") or "")
+        # A missing RACE card after the current-week retry is actionable on a
+        # normal JRA weekend.  Keep it as an error so Discord/watchdog reports
+        # the incident.  Weekday and non-RACE no-update responses are normal.
+        weekend_race_gap = dataspec == "RACE" and date.today().weekday() >= 5
+        if _is_no_data(summary) and not weekend_race_gap:
+            normalized.append(_empty_summary(dataspec))
+        else:
+            normalized.append(summary)
+    summaries = normalized
+
     elapsed = int(time.time() - started)
     print()
     print(f"=== fetch done in {elapsed}s ({elapsed // 60} min) ===")
@@ -94,7 +157,7 @@ def main() -> int:
                 continue
             dataspec = str(summary.get("dataspec") or "")
             filenames = set(summary.get("filenames") or [])
-            if not dataspec:
+            if not dataspec or summary.get("no_data"):
                 continue
             got = ingest_all(dataspecs=[dataspec], only_files=filenames)
             print(

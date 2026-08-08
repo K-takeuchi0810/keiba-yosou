@@ -245,3 +245,83 @@ def test_fetch_full_returns_nonzero_for_bad_raw_file(monkeypatch) -> None:
     monkeypatch.setattr(fetch_full, "JVLinkClient", FakeClient)
     monkeypatch.setattr(sys, "argv", ["fetch_full", "--dataspecs", "RACE"])
     assert fetch_full.main() == 1
+
+
+def test_fetch_full_recovers_incremental_no_data_with_current_week(monkeypatch) -> None:
+    from datetime import date
+    from scripts import fetch_full
+
+    calls = []
+    ingested = []
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def fetch_all(self, **kwargs):
+            calls.append(kwargs)
+            if kwargs["option"] == 1:
+                return [
+                    {"dataspec": "RACE", "error": "JVOpen failed rc=-1"},
+                    {"dataspec": "HOSE", "error": "JVOpen failed rc=-1"},
+                ]
+            return [{
+                "dataspec": "RACE", "files_written": 1, "records_total": 20,
+                "last_timestamp": "20260807112834", "bad_files": [],
+                "filenames": ["RACE-WEEK.jvd"],
+            }]
+
+    monkeypatch.setattr(fetch_full, "JVLinkClient", FakeClient)
+    monkeypatch.setattr(fetch_full, "_current_week_fromtime", lambda: "20260803000000")
+    monkeypatch.setattr(
+        fetch_full,
+        "ingest_all",
+        lambda **kwargs: ingested.append(kwargs) or {
+            "files_processed": 1, "files_errored": 0, "errors": [],
+            "RA": 1, "SE": 19, "HR": 0,
+        },
+    )
+    monkeypatch.setattr(sys, "argv", ["fetch_full", "--ingest"])
+
+    assert fetch_full.main() == 0
+    assert calls[1]["option"] == 2
+    assert calls[1]["fromtime"] == "20260803000000"
+    assert calls[1]["dataspecs"] == ["RACE"]
+    assert ingested == [{"dataspecs": ["RACE"], "only_files": {"RACE-WEEK.jvd"}}]
+
+
+def test_current_week_fromtime_starts_on_monday() -> None:
+    from datetime import date
+    from scripts.fetch_full import _current_week_fromtime
+
+    assert _current_week_fromtime(date(2026, 8, 8)) == "20260803000000"
+
+
+def test_fetch_full_fails_when_weekend_catchup_still_has_no_race(monkeypatch) -> None:
+    from scripts import fetch_full
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def fetch_all(self, **_kwargs):
+            return [{"dataspec": "RACE", "error": "JVOpen failed rc=-1"}]
+
+    class Saturday:
+        @staticmethod
+        def today():
+            from datetime import date
+            return date(2026, 8, 8)
+
+    monkeypatch.setattr(fetch_full, "JVLinkClient", FakeClient)
+    monkeypatch.setattr(fetch_full, "date", Saturday)
+    monkeypatch.setattr(fetch_full, "_current_week_fromtime", lambda: "20260803000000")
+    monkeypatch.setattr(sys, "argv", ["fetch_full", "--dataspecs", "RACE"])
+
+    assert fetch_full.main() == 1
