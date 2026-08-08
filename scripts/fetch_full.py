@@ -14,6 +14,7 @@ usage:
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import time
 from datetime import date, datetime, timedelta
@@ -33,7 +34,7 @@ def _current_week_fromtime(today: date | None = None) -> str:
 
 
 def _is_no_data(summary: dict) -> bool:
-    return "rc=-1" in str(summary.get("error") or "")
+    return re.search(r"\brc=-1(?!\d)", str(summary.get("error") or "")) is not None
 
 
 def _empty_summary(dataspec: str) -> dict:

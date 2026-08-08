@@ -300,6 +300,14 @@ def test_current_week_fromtime_starts_on_monday() -> None:
     assert _current_week_fromtime(date(2026, 8, 8)) == "20260803000000"
 
 
+def test_no_data_detection_does_not_match_nearby_error_codes() -> None:
+    from scripts.fetch_full import _is_no_data
+
+    assert _is_no_data({"error": "JVOpen failed rc=-1 (該当データなし)"})
+    for code in (-10, -101, -111, -116):
+        assert not _is_no_data({"error": f"JVOpen failed rc={code}"})
+
+
 def test_fetch_full_fails_when_weekend_catchup_still_has_no_race(monkeypatch) -> None:
     from scripts import fetch_full
 
