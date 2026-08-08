@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -137,4 +138,88 @@ def test_registered_task_uses_watchdog_before_first_race() -> None:
 
 def test_daily_fetch_logs_progress_without_buffering() -> None:
     text = DAILY.read_text(encoding="utf-8")
-    assert ".venv32\\Scripts\\python.exe -u -m scripts.fetch_full" in text
+    assert ".venv32\\Scripts\\python.exe -u -m scripts.fetch_full --ingest" in text
+
+
+def test_fetch_full_ingests_only_the_fetched_files(monkeypatch) -> None:
+    from scripts import fetch_full
+
+    summaries = [{
+        "dataspec": "RACE",
+        "files_written": 1,
+        "records_total": 10,
+        "last_timestamp": "20260808090000",
+        "bad_files": [],
+        "filenames": ["RATEST.jvd"],
+    }]
+    calls = []
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def fetch_all(self, **_kwargs):
+            return summaries
+
+    def fake_ingest_all(**kwargs):
+        calls.append(kwargs)
+        return {"files_processed": 1, "files_errored": 0, "errors": [],
+                "RA": 1, "SE": 9, "HR": 0}
+
+    monkeypatch.setattr(fetch_full, "JVLinkClient", FakeClient)
+    monkeypatch.setattr(fetch_full, "ingest_all", fake_ingest_all)
+    monkeypatch.setattr(sys, "argv", ["fetch_full", "--dataspecs", "RACE", "--ingest"])
+    assert fetch_full.main() == 0
+    assert calls == [{"dataspecs": ["RACE"], "only_files": {"RATEST.jvd"}}]
+
+
+def test_fetch_full_returns_nonzero_for_caught_jvlink_error(monkeypatch) -> None:
+    from scripts import fetch_full
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def fetch_all(self, **_kwargs):
+            return [{"dataspec": "RACE", "error": "JVOpen failed"}]
+
+    monkeypatch.setattr(fetch_full, "JVLinkClient", FakeClient)
+    monkeypatch.setattr(sys, "argv", ["fetch_full", "--dataspecs", "RACE", "--ingest"])
+    assert fetch_full.main() == 1
+
+
+def test_fetch_full_returns_nonzero_for_ingest_error(monkeypatch) -> None:
+    from scripts import fetch_full
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def fetch_all(self, **_kwargs):
+            return [{
+                "dataspec": "RACE", "files_written": 1, "records_total": 1,
+                "last_timestamp": "20260808090000", "bad_files": [],
+                "filenames": ["BROKEN.jvd"],
+            }]
+
+    monkeypatch.setattr(fetch_full, "JVLinkClient", FakeClient)
+    monkeypatch.setattr(
+        fetch_full,
+        "ingest_all",
+        lambda **_kwargs: {
+            "files_processed": 0, "files_errored": 1,
+            "errors": [{"file": "BROKEN.jvd", "error": "bad record"}],
+            "RA": 0, "SE": 0, "HR": 0,
+        },
+    )
+    monkeypatch.setattr(sys, "argv", ["fetch_full", "--dataspecs", "RACE", "--ingest"])
+    assert fetch_full.main() == 2

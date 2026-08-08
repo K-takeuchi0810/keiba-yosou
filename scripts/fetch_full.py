@@ -21,6 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from jvlink_client.client import JVLinkClient
+from jvlink_client.ingest import ingest_all
 
 
 def main() -> int:
@@ -40,6 +41,10 @@ def main() -> int:
     ap.add_argument(
         "--retries", type=int, default=None,
         help="JVOpen の通信系エラー(-413等)をリトライする回数",
+    )
+    ap.add_argument(
+        "--ingest", action="store_true",
+        help="取得したファイルを直後にSQLiteへ取り込む（日次運用向け）",
     )
     args = ap.parse_args()
 
@@ -76,6 +81,34 @@ def main() -> int:
                 f"last_ts={s.get('last_timestamp')} "
                 f"bad={len(s.get('bad_files', []))}"
             )
+
+    fetch_errors = [s for s in summaries if "error" in s]
+    ingest_errors: list[dict] = []
+    if args.ingest:
+        print()
+        print("=== ingest fetched files ===")
+        for summary in summaries:
+            if "error" in summary:
+                continue
+            dataspec = str(summary.get("dataspec") or "")
+            filenames = set(summary.get("filenames") or [])
+            if not dataspec:
+                continue
+            got = ingest_all(dataspecs=[dataspec], only_files=filenames)
+            print(
+                f"  {dataspec}: files={got.get('files_processed', 0)} "
+                f"errors={got.get('files_errored', 0)} RA={got.get('RA', 0)} "
+                f"SE={got.get('SE', 0)} HR={got.get('HR', 0)}"
+            )
+            if got.get("files_errored") or got.get("errors"):
+                ingest_errors.append({"dataspec": dataspec, "summary": got})
+
+    if fetch_errors:
+        print(f"fetch failed for {len(fetch_errors)} dataspec(s)", file=sys.stderr)
+        return 1
+    if ingest_errors:
+        print(f"ingest failed for {len(ingest_errors)} dataspec(s)", file=sys.stderr)
+        return 2
 
     return 0
 
