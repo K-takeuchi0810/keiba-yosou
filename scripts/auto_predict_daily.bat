@@ -10,7 +10,7 @@ exit /b %FINALCODE%
 
 :run
 echo [%date% %time%] fetch_full (32-bit) start
-.venv32\Scripts\python.exe -m scripts.fetch_full
+.venv32\Scripts\python.exe -u -m scripts.fetch_full
 set FETCHCODE=%errorlevel%
 if %FETCHCODE% NEQ 0 echo [WARN] fetch_full failed (exit %FETCHCODE%), continue with existing DB
 if %FETCHCODE% NEQ 0 .venv64\Scripts\python.exe -m scripts.notify_discord --message "WARN: fetch_full failed (exit %FETCHCODE%); predictions used existing DB (see %LOGFILE%)"
