@@ -67,6 +67,9 @@ def test_watchdog_has_bounded_tree_termination() -> None:
     text = RUNNER.read_text(encoding="ascii")
     assert "$process.WaitForExit($TimeoutSeconds * 1000)" in text
     assert "taskkill.exe /PID $process.Id /T /F" in text
+    assert "$killExitCode -ne 0 -and -not $process.HasExited" in text
+    assert "tree still running after termination" in text
+    assert "exit 125" in text
     assert "exit 124" in text
 
 

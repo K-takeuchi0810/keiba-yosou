@@ -33,8 +33,19 @@ Write-WatchdogLog "start pid=$($process.Id) timeout_sec=$TimeoutSeconds command=
 
 if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
     Write-WatchdogLog "timeout pid=$($process.Id); terminating process tree"
-    & taskkill.exe /PID $process.Id /T /F | Out-Null
-    $process.WaitForExit(10000) | Out-Null
+    if (-not $process.HasExited) {
+        & taskkill.exe /PID $process.Id /T /F | Out-Null
+        $killExitCode = $LASTEXITCODE
+        if ($killExitCode -ne 0 -and -not $process.HasExited) {
+            Write-WatchdogLog "tree termination failed pid=$($process.Id) taskkill_exit=$killExitCode"
+            exit 125
+        }
+    }
+    if (-not $process.WaitForExit(10000)) {
+        Write-WatchdogLog "tree still running after termination pid=$($process.Id)"
+        exit 125
+    }
+    Write-WatchdogLog "tree terminated pid=$($process.Id)"
     exit 124
 }
 
