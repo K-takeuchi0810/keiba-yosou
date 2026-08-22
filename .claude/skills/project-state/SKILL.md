@@ -16,8 +16,13 @@ description: keiba-yosou プロジェクトの **現状スナップショット*
    sweep 漁り) は幹に従属する場合のみ許可。根拠: 1 番人気ベタ買い 79.0% vs
    ◎ベタ 66.2% (修復後正本 1,932 戦) = 市場と意見を違えると平均で市場が正しい。
 2. **実弾判断は 12 月の封印判定 1 回のみ** (CI 下限 > 100% が唯一の昇格条件)。
-   それまで全出力は観察専用。買い候補フィルタは suspended=True を維持
-   (recent-3fold が robust でも復活は「観察用マーカー」まで)。
+   それまで全出力は観察専用。買い候補フィルタは suspended=True を維持。
+   2026-08-22 の鮮度ゲート付き recent-3fold で形式基準を満たす 2 件
+   (`only_t07_pop_1_3` 88.1%/`only_t07_pop_1_2` 83.3%) が出たが、
+   **サスペンド維持を決定** (docs/DECISION_20260822_RESELECTION.md)。
+   理由: 点推定すら 100% 未達 / 3 fold の 2 つが calibration in-sample /
+   clean OOS fold では 68 件中 100% 超え 0 件 / P12 型の単一場 whitelist 形状。
+   `only_t07_pop_1_3` は **事前登録仮説 H-t07** として封印判定で 1 回だけ検定する。
 3. **棄却済み経路の再訪禁止**: クロスプール直接裁定 / WIN5 / FLB 素朴判別 /
    naive Benter reblend / min_kelly / 通年 sweep 一発採用 / 静的特徴深掘り。
    全て事前宣言基準の artifact 付きで棄却済み (scripts/analyze_cross_pool.py、
@@ -39,8 +44,10 @@ description: keiba-yosou プロジェクトの **現状スナップショット*
    (市場盲目) の乖離をこれで解消する
 2. **印 = P ランカー統一** (◎≠最高 P 39.2% の分裂解消)。paired backtest で
    非劣化を確認してから切替
-3. **calibrator compat 確認** (fresh 比率が設計前提 0.4%→23.9% に激変。
-   必要なら isotonic refit)。持ち越し課題の筆頭
+3. **calibrator compat 確認 + sweep fold 定義の是正** (fresh 比率が設計前提
+   0.4%→23.9% に激変。加えて `--recent-3fold` の fold 2/3 が calibrator 学習期間
+   (2025 通年) と重複 = in-sample。選定 fold を calibrator と disjoint にする
+   3 案は docs/DECISION_20260822_RESELECTION.md §4)。持ち越し課題の筆頭
 4. **残差特徴 v1** (dev 窓 walk-forward のみ): オッズドリフト系 + クロスプール
    整合性特徴 (直接裁定は死んだが説明変数としては未検証) + オッズ分布
    microstructure (エントロピー/集中度)。外部調査 (docs/RESEARCH_AI_PREDICTORS_2026.md)
