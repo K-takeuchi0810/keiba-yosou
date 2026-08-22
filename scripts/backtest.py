@@ -32,6 +32,8 @@ from predictor.calibration import (
     fit_bin_calibrator,
     fit_isotonic_calibrator,
 )
+from config import PIT_GATE_MINUTES  # noqa: E402
+from predictor.pit_market import apply_pit_odds, summarize_coverage
 from predictor.rules import is_tentative, predict_race
 
 
@@ -744,6 +746,7 @@ def run_backtest(
     db_path: str | Path | None = None,
     progress_every: int = 200,
     exclude_untrusted_odds: bool = True,
+    pit_odds: bool = False,
 ) -> dict:
     started = time.time()
     buy_filter = buy_filter_from_generator() if filter_from_config else None
@@ -798,6 +801,7 @@ def run_backtest(
         # 距離バケット別 (sprint/mile/middle/long) ブレイクダウン
         bucket_stats: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
         feature_cache: dict = {}
+        pit_metas: list[dict] = []
 
         for i, race in enumerate(races, 1):
             if progress_every and i % progress_every == 0:
@@ -813,11 +817,22 @@ def run_backtest(
             if not horses:
                 n_no_horses += 1
                 continue
+
+            # 改革 R1-1: PIT モード。市場列を「発走 T−n 分時点で観測可能だった値」に
+            # 差し替えて、live (T−10 判断) と同じ入力で評価する。確定オッズを見た
+            # 従来モードとの差が train-serve skew の実測値そのものになる。
+            # fail-closed なので観測できなかった馬のオッズは None (= 市場情報なし)。
+            if pit_odds:
+                horses, _pit_meta = apply_pit_odds(conn, race, horses)
+                pit_metas.append(_pit_meta)
+
             _add_market_snapshot_race(market_snapshot_stats, race, horses, pop_cfg)
 
             # post-start / stale odds snapshot のレースを EV・filter・回収率から除外。
             # 歴史的な確定オッズ (odds_fetched_at=NULL) は信頼するので対象外。
-            if exclude_untrusted_odds and race_odds_untrusted(
+            # PIT モードでは定義上 post-start が混入しないためゲートは無効化する
+            # (差し替え後の odds_fetched_at は必ず cutoff 以前)。
+            if (not pit_odds) and exclude_untrusted_odds and race_odds_untrusted(
                 horses, race, pop_cfg.get("max_snapshot_age_min")
             ):
                 n_odds_untrusted += 1
@@ -966,6 +981,11 @@ def run_backtest(
         "races_total": n_total_races,
         "require_confirmed": True,
         "exclude_untrusted_odds": exclude_untrusted_odds,
+        # 改革 R1-1: PIT モードの記録。True の run は「T−n 分時点の市場で判断した
+        # 場合」の成績であり、確定オッズを見た従来 run とは別系列として扱う。
+        "pit_odds": pit_odds,
+        "pit_gate_minutes": PIT_GATE_MINUTES if pit_odds else None,
+        "pit_coverage": summarize_coverage(pit_metas) if pit_odds else None,
         "races_odds_untrusted": n_odds_untrusted,
         "races_no_horses": n_no_horses,
         "races_no_pick": n_no_pick,
@@ -1245,6 +1265,15 @@ def main() -> int:
         help="post-start / stale odds snapshot のレース除外を無効化 (既定は除外)。"
              "鮮度ゲートの寄与を ablation で測りたいときだけ使う。",
     )
+    ap.add_argument(
+        "--pit-odds",
+        action="store_true",
+        help="市場列を「発走 T−n 分時点で観測可能だった値」に差し替えて評価する "
+             "(改革 R1-1)。live の T−10 判断と同じ入力になるので、確定オッズを見た "
+             "既定モードとの差が train-serve skew の実測値になる。"
+             "n は config.PIT_GATE_MINUTES。観測できなかった馬は fail-closed で "
+             "オッズ None (市場情報なし)",
+    )
     args = ap.parse_args()
 
     result = run_backtest(
@@ -1262,6 +1291,7 @@ def main() -> int:
         max_distance=args.max_distance,
         db_path=args.db,
         exclude_untrusted_odds=not args.no_odds_gate,
+        pit_odds=args.pit_odds,
     )
     print(format_report(result))
 
