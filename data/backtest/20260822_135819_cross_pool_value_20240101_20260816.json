@@ -1,0 +1,324 @@
+{
+ "from_date": "20240101",
+ "to_date": "20260816",
+ "races_scanned": 9192,
+ "races_evaluated": 9108,
+ "races_used": {
+  "quinella": 9108,
+  "trio": 9108
+ },
+ "skipped": {
+  "no_confirmed": 57,
+  "few_runners": 27,
+  "no_payout_row": 0
+ },
+ "bands": [
+  "[0,0.5)",
+  "[0.5,0.7)",
+  "[0.7,0.85)",
+  "[0.85,1)",
+  "[1,1.15)",
+  "[1.15,1.4)",
+  "[1.4,2)",
+  "[2,inf)"
+ ],
+ "pools": {
+  "quinella": {
+   "ev_bands": [
+    {
+     "band": "[0,0.5)",
+     "bets": 349214,
+     "hits": 870,
+     "hit_rate": 0.002491,
+     "return_rate": 0.4905
+    },
+    {
+     "band": "[0.5,0.7)",
+     "bets": 216162,
+     "hits": 2417,
+     "hit_rate": 0.011181,
+     "return_rate": 0.7136
+    },
+    {
+     "band": "[0.7,0.85)",
+     "bets": 124283,
+     "hits": 2484,
+     "hit_rate": 0.019987,
+     "return_rate": 0.6716
+    },
+    {
+     "band": "[0.85,1)",
+     "bets": 74630,
+     "hits": 2025,
+     "hit_rate": 0.027134,
+     "return_rate": 0.6795
+    },
+    {
+     "band": "[1,1.15)",
+     "bets": 36175,
+     "hits": 880,
+     "hit_rate": 0.024326,
+     "return_rate": 0.6846,
+     "hit_rate_ci95": [
+      0.022788,
+      0.025965
+     ],
+     "return_rate_ci95": [
+      0.5792,
+      0.8026
+     ]
+    },
+    {
+     "band": "[1.15,1.4)",
+     "bets": 22100,
+     "hits": 382,
+     "hit_rate": 0.017285,
+     "return_rate": 0.6317,
+     "hit_rate_ci95": [
+      0.015649,
+      0.019089
+     ],
+     "return_rate_ci95": [
+      0.481,
+      0.8257
+     ]
+    },
+    {
+     "band": "[1.4,2)",
+     "bets": 10334,
+     "hits": 71,
+     "hit_rate": 0.006871,
+     "return_rate": 0.4114,
+     "hit_rate_ci95": [
+      0.005451,
+      0.008657
+     ],
+     "return_rate_ci95": [
+      0.2363,
+      0.6283
+     ]
+    },
+    {
+     "band": "[2,inf)",
+     "bets": 5180,
+     "hits": 2,
+     "hit_rate": 0.000386,
+     "return_rate": 0.2458,
+     "hit_rate_ci95": [
+      0.000106,
+      0.001407
+     ],
+     "return_rate_ci95": [
+      0.0,
+      0.6662
+     ]
+    }
+   ],
+   "harville_calibration": [
+    {
+     "decile": 0,
+     "n": 821728,
+     "mean_predicted": 0.007753,
+     "realized": 0.00805
+    },
+    {
+     "decile": 1,
+     "n": 12679,
+     "mean_predicted": 0.136099,
+     "realized": 0.124537
+    },
+    {
+     "decile": 2,
+     "n": 2702,
+     "mean_predicted": 0.238521,
+     "realized": 0.215396
+    },
+    {
+     "decile": 3,
+     "n": 710,
+     "mean_predicted": 0.339993,
+     "realized": 0.323944
+    },
+    {
+     "decile": 4,
+     "n": 199,
+     "mean_predicted": 0.438061,
+     "realized": 0.497487
+    },
+    {
+     "decile": 5,
+     "n": 48,
+     "mean_predicted": 0.541508,
+     "realized": 0.354167
+    },
+    {
+     "decile": 6,
+     "n": 10,
+     "mean_predicted": 0.643942,
+     "realized": 0.7
+    },
+    {
+     "decile": 7,
+     "n": 2,
+     "mean_predicted": 0.768826,
+     "realized": 1.0
+    }
+   ]
+  },
+  "trio": {
+   "ev_bands": [
+    {
+     "band": "[0,0.5)",
+     "bets": 2481273,
+     "hits": 2185,
+     "hit_rate": 0.000881,
+     "return_rate": 0.4517
+    },
+    {
+     "band": "[0.5,0.7)",
+     "bets": 517427,
+     "hits": 2040,
+     "hit_rate": 0.003943,
+     "return_rate": 0.6158
+    },
+    {
+     "band": "[0.7,0.85)",
+     "bets": 232211,
+     "hits": 1439,
+     "hit_rate": 0.006197,
+     "return_rate": 0.6628
+    },
+    {
+     "band": "[0.85,1)",
+     "bets": 142123,
+     "hits": 1203,
+     "hit_rate": 0.008464,
+     "return_rate": 0.7169
+    },
+    {
+     "band": "[1,1.15)",
+     "bets": 85821,
+     "hits": 978,
+     "hit_rate": 0.011396,
+     "return_rate": 0.6691,
+     "hit_rate_ci95": [
+      0.010707,
+      0.012128
+     ],
+     "return_rate_ci95": [
+      0.5497,
+      0.8005
+     ]
+    },
+    {
+     "band": "[1.15,1.4)",
+     "bets": 70325,
+     "hits": 834,
+     "hit_rate": 0.011859,
+     "return_rate": 0.6645,
+     "hit_rate_ci95": [
+      0.011085,
+      0.012686
+     ],
+     "return_rate_ci95": [
+      0.527,
+      0.8237
+     ]
+    },
+    {
+     "band": "[1.4,2)",
+     "bets": 44713,
+     "hits": 433,
+     "hit_rate": 0.009684,
+     "return_rate": 0.5289,
+     "hit_rate_ci95": [
+      0.008817,
+      0.010635
+     ],
+     "return_rate_ci95": [
+      0.4073,
+      0.6542
+     ]
+    },
+    {
+     "band": "[2,inf)",
+     "bets": 20976,
+     "hits": 23,
+     "hit_rate": 0.001096,
+     "return_rate": 0.2286,
+     "hit_rate_ci95": [
+      0.000731,
+      0.001645
+     ],
+     "return_rate_ci95": [
+      0.0262,
+      0.5058
+     ]
+    }
+   ],
+   "harville_calibration": [
+    {
+     "decile": 0,
+     "n": 3542733,
+     "mean_predicted": 0.001487,
+     "realized": 0.001726
+    },
+    {
+     "decile": 1,
+     "n": 32956,
+     "mean_predicted": 0.04605,
+     "realized": 0.038263
+    },
+    {
+     "decile": 2,
+     "n": 9790,
+     "mean_predicted": 0.080759,
+     "realized": 0.062921
+    },
+    {
+     "decile": 3,
+     "n": 4313,
+     "mean_predicted": 0.114585,
+     "realized": 0.08741
+    },
+    {
+     "decile": 4,
+     "n": 2074,
+     "mean_predicted": 0.148219,
+     "realized": 0.106557
+    },
+    {
+     "decile": 5,
+     "n": 1153,
+     "mean_predicted": 0.181506,
+     "realized": 0.134432
+    },
+    {
+     "decile": 6,
+     "n": 684,
+     "mean_predicted": 0.215407,
+     "realized": 0.138889
+    },
+    {
+     "decile": 7,
+     "n": 405,
+     "mean_predicted": 0.248241,
+     "realized": 0.197531
+    },
+    {
+     "decile": 8,
+     "n": 232,
+     "mean_predicted": 0.282152,
+     "realized": 0.258621
+    },
+    {
+     "decile": 9,
+     "n": 529,
+     "mean_predicted": 0.380625,
+     "realized": 0.294896
+    }
+   ]
+  }
+ },
+ "elapsed_sec": 162.8
+}
