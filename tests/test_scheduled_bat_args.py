@@ -88,3 +88,27 @@ def test_auto_predict_task_registers_three_daily_triggers() -> None:
     assert '[string]$SecondStartTime = "09:00"' in source
     assert '[string]$ThirdStartTime = "11:00"' in source
     assert source.count("New-ScheduledTaskTrigger -Daily -At") == 3
+
+
+def test_predict_t10_bat_uses_dated_log_and_venv64() -> None:
+    """T−10 ランナーの bat が日付別ログと 64bit venv を使うこと (改革 R1-1)。
+
+    日付別ログは 2026-08-16 の 6 日間ハング事故 (単一ログのハンドル占有で
+    以降の全起動が exit 1) の再発防止。JV-Link COM を使わないので 32bit 不要。
+    """
+    source = (ROOT / "scripts" / "predict_t10.bat").read_text(encoding="ascii")
+
+    assert "predict_t10_%STAMP%.log" in source
+    assert ".venv64\Scripts\python.exe" in source
+    assert "-m scripts.predict_t10" in source
+
+
+def test_predict_t10_task_registration_is_idempotent_and_bounded() -> None:
+    """タスク登録が多重起動を抑止し、実行時間上限を持つこと。"""
+    source = (ROOT / "scripts" / "register_predict_t10_task.ps1").read_text(
+        encoding="ascii"
+    )
+
+    assert "-MultipleInstances IgnoreNew" in source, "5 分間隔なので重複起動を抑止する"
+    assert "-ExecutionTimeLimit" in source
+    assert "RepetitionInterval" in source
