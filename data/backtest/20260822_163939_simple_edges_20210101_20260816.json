@@ -1,0 +1,218 @@
+{
+ "meta": {
+  "db_path": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\keiba.db",
+  "git_sha": "9e388fd1e7d88a470e1302d9bcdcd9a15e4623b1",
+  "git_dirty": true
+ },
+ "from_date": "20210101",
+ "to_date": "20260816",
+ "route1_ultra_favorite": {
+  "universe_def": "JRA 01-10 / confirmed / odds_fetched_at IS NULL / win_odds in [10,15]",
+  "overall": {
+   "n": 1374,
+   "wins": 861,
+   "hit_rate": 0.6266,
+   "hit_rate_ci95": [
+    0.6007,
+    0.6518
+   ],
+   "return_rate": 0.855,
+   "return_rate_ci95": [
+    0.8198,
+    0.8899
+   ]
+  },
+  "splits": {
+   "mining_rank1": {
+    "n": 953,
+    "wins": 604,
+    "hit_rate": 0.6338,
+    "hit_rate_ci95": [
+     0.6027,
+     0.6638
+    ],
+    "return_rate": 0.8559,
+    "return_rate_ci95": [
+     0.8114,
+     0.898
+    ]
+   },
+   "mining_rank_gt1": {
+    "n": 421,
+    "wins": 257,
+    "hit_rate": 0.6105,
+    "hit_rate_ci95": [
+     0.5631,
+     0.6558
+    ],
+    "return_rate": 0.853,
+    "return_rate_ci95": [
+     0.7862,
+     0.9145
+    ]
+   },
+   "mining_missing": {
+    "n": 0
+   },
+   "weight_drop_ge10": {
+    "n": 35,
+    "wins": 27,
+    "hit_rate": 0.7714,
+    "hit_rate_ci95": [
+     0.6098,
+     0.8793
+    ],
+    "return_rate": 1.0543,
+    "return_rate_ci95": [
+     0.8629,
+     1.2457
+    ]
+   },
+   "small_field_le10": {
+    "n": 501,
+    "wins": 329,
+    "hit_rate": 0.6567,
+    "hit_rate_ci95": [
+     0.6141,
+     0.6969
+    ],
+    "return_rate": 0.8872,
+    "return_rate_ci95": [
+     0.8335,
+     0.9401
+    ]
+   },
+   "large_field_gt10": {
+    "n": 873,
+    "wins": 532,
+    "hit_rate": 0.6094,
+    "hit_rate_ci95": [
+     0.5766,
+     0.6412
+    ],
+    "return_rate": 0.8365,
+    "return_rate_ci95": [
+     0.7907,
+     0.8816
+    ]
+   },
+   "race_11_12": {
+    "n": 83,
+    "wins": 52,
+    "hit_rate": 0.6265,
+    "hit_rate_ci95": [
+     0.519,
+     0.7228
+    ],
+    "return_rate": 0.8819,
+    "return_rate_ci95": [
+     0.7349,
+     1.0337
+    ]
+   },
+   "race_1_10": {
+    "n": 1291,
+    "wins": 809,
+    "hit_rate": 0.6266,
+    "hit_rate_ci95": [
+     0.5999,
+     0.6526
+    ],
+    "return_rate": 0.8533,
+    "return_rate_ci95": [
+     0.817,
+     0.8876
+    ]
+   }
+  }
+ },
+ "route3_win5": {
+  "n_events": 348,
+  "ev_formula": "0.7 + carryover_initial / (sale_votes*100)",
+  "real_ev_positive_opportunities": 0,
+  "ev_positive_detail": [],
+  "top10_by_ev": [
+   {
+    "date": "2026-0208",
+    "ev": 2.521,
+    "carryover_yen": 539905240,
+    "sales_yen": 296482600,
+    "data_div": "9",
+    "has_payout_row": false
+   },
+   {
+    "date": "2025-1005",
+    "ev": 0.8088,
+    "carryover_yen": 257063660,
+    "sales_yen": 2361770700,
+    "data_div": "7",
+    "has_payout_row": true
+   },
+   {
+    "date": "2026-0215",
+    "ev": 0.7861,
+    "carryover_yen": 539905240,
+    "sales_yen": 6267713700,
+    "data_div": "7",
+    "has_payout_row": true
+   },
+   {
+    "date": "2025-0126",
+    "ev": 0.7853,
+    "carryover_yen": 449023820,
+    "sales_yen": 5266685000,
+    "data_div": "7",
+    "has_payout_row": true
+   },
+   {
+    "date": "2026-0502",
+    "ev": 0.7,
+    "carryover_yen": 0,
+    "sales_yen": 458246700,
+    "data_div": "7",
+    "has_payout_row": true
+   },
+   {
+    "date": "2026-0503",
+    "ev": 0.7,
+    "carryover_yen": 0,
+    "sales_yen": 824352100,
+    "data_div": "7",
+    "has_payout_row": true
+   },
+   {
+    "date": "2026-0509",
+    "ev": 0.7,
+    "carryover_yen": 0,
+    "sales_yen": 498151500,
+    "data_div": "7",
+    "has_payout_row": true
+   },
+   {
+    "date": "2026-0510",
+    "ev": 0.7,
+    "carryover_yen": 0,
+    "sales_yen": 772904200,
+    "data_div": "7",
+    "has_payout_row": true
+   },
+   {
+    "date": "2026-0516",
+    "ev": 0.7,
+    "carryover_yen": 0,
+    "sales_yen": 464392300,
+    "data_div": "7",
+    "has_payout_row": true
+   },
+   {
+    "date": "2026-0517",
+    "ev": 0.7,
+    "carryover_yen": 0,
+    "sales_yen": 772697900,
+    "data_div": "7",
+    "has_payout_row": true
+   }
+  ]
+ },
+ "generated_at": "2026-08-22T16:39:39"
+}

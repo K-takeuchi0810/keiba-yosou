@@ -47,6 +47,32 @@ ROOT = Path(__file__).resolve().parent.parent
 MARK_TO_RANK = {"◎": 1, "○": 2, "▲": 3, "△": 4, "☆": 5}
 
 
+def derive_would_be_candidate(pred: dict) -> bool | None:
+    """サスペンド無視で「フィルタ仕様なら買い候補だったか」を近似再計算する。
+
+    2026-08-22 に買い候補フィルタがサスペンドされ、公開 HTML の bet_candidate は
+    常に False になった。それでもフィルタ仕様 (pop1-3 / p<=0.4 / EV>1) の前向き
+    紙運用記録を絶やさないための **仮想** 判定 (収益性監査の指摘 3 回分)。
+
+    近似である理由: HTML の predictions.csv には top picks 行にしか
+    win_probability / EV が無く、kelly_fraction や whitelist 判定も持たないため、
+    予測器の is_buy_candidate を完全再現できない。ここでは
+      ◎ かつ 朝1-3番人気 かつ win_probability<=0.40 かつ EV>1.0
+    で近似する。win_probability か EV が欠測 (オッズ未確定等) なら None
+    (= 判定不能) を返す。**仮想値であり購入推奨ではない。**
+    """
+    if (pred.get("mark") or "") != "◎":
+        return False
+    pop = pred.get("morning_popularity")
+    if not pop or not (1 <= int(pop) <= 3):
+        return False
+    wp = pred.get("win_probability")
+    ev = pred.get("expected_value")
+    if wp is None or ev is None:
+        return None
+    return bool(wp <= 0.40 and ev > 1.0)
+
+
 class IndexHtmlParser(HTMLParser):
     """朝の予測 HTML を parse して race / horse / top_pick を取り出す state machine。
 
@@ -579,6 +605,9 @@ def main() -> int:
                 "confidence": tp["confidence"] if tp else None,
                 "bet_candidate": (tp["bet_candidate"] if tp else False),
             })
+            predictions[-1]["would_be_candidate"] = derive_would_be_candidate(
+                predictions[-1]
+            )
 
     # ---- final_odds.csv (DB 由来、確定 win_odds = 最終オッズ) ----
     final_odds: list[dict] = []
@@ -687,6 +716,8 @@ def main() -> int:
             "expected_value_morning": ev_morning,
             "confidence": pred.get("confidence"),
             "bet_candidate": pred.get("bet_candidate"),
+            # サスペンド無視の仮想判定 (None=判定不能)。購入推奨ではない。
+            "would_be_candidate": pred.get("would_be_candidate"),
             "confirmed_order": confirmed,
             "win_payout": win_pay,
             "place_payout": place_pay,

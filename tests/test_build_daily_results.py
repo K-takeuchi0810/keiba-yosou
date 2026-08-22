@@ -289,3 +289,21 @@ def test_popularity_quality_gate_rejects_true_abnormality():
         "morning_popularity outside registered/starter limit: 1 rows; "
         "R1 limit=14 (max(starter_count=13, registered_count=14))"
     ]
+
+
+def test_would_be_candidate_derivation():
+    """サスペンド中の仮想買い候補判定 (2026-08-22、収益性監査の指摘)。
+
+    ◎ + 朝1-3人気 + p<=0.40 + EV>1.0 で True。p/EV 欠測は None (判定不能)。
+    """
+    from scripts.build_daily_results import derive_would_be_candidate
+
+    base = {"mark": "◎", "morning_popularity": 2,
+            "win_probability": 0.25, "expected_value": 1.1}
+    assert derive_would_be_candidate(base) is True
+    assert derive_would_be_candidate({**base, "mark": "○"}) is False
+    assert derive_would_be_candidate({**base, "morning_popularity": 5}) is False
+    assert derive_would_be_candidate({**base, "win_probability": 0.45}) is False
+    assert derive_would_be_candidate({**base, "expected_value": 0.9}) is False
+    assert derive_would_be_candidate({**base, "win_probability": None}) is None
+    assert derive_would_be_candidate({**base, "morning_popularity": None}) is False

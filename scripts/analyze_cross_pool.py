@@ -36,6 +36,30 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from db import DB_PATH, SQL_VALID_HORSE_NUM  # noqa: E402
 from predictor.stats import bootstrap_return_rate, wilson_ci  # noqa: E402
 
+
+def _repro_meta(db_path: str | None) -> dict:
+    """再現性メタ (git_sha / dirty / db path / 帯定義)。
+
+    2026-08-22 検証監査指摘: 分析 artifact に git_sha が無いと JSON 単体で
+    再現できない (共通停止条件)。backtest の meta と同じ規約に揃える。
+    """
+    import subprocess
+    meta: dict = {"db_path": str(db_path or DB_PATH),
+                  "pre_declared_bands": [b if b != float("inf") else "inf"
+                                         for b in PRE_DECLARED_BANDS]}
+    try:
+        meta["git_sha"] = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True,
+            cwd=ROOT, check=True).stdout.strip()
+        status = subprocess.run(
+            ["git", "status", "--short"], capture_output=True, text=True,
+            cwd=ROOT, check=True).stdout
+        meta["git_dirty"] = bool(status.strip())
+    except Exception:
+        meta["git_sha"] = None
+        meta["git_dirty"] = None
+    return meta
+
 ROOT = Path(__file__).resolve().parent.parent
 
 # EV 帯 (事前宣言・固定)。境界を後から動かさないこと。
@@ -101,9 +125,12 @@ def run(from_date: str, to_date: str, db_path: str | None = None) -> dict:
         (from_date, to_date),
     ).fetchall()
 
+    # by_race: race_key -> [pay_sum, stake_sum]。bootstrap はレース単位で
+    # 再サンプルする (同一レース内の組合せは強く相関するため、combo 単位の
+    # 再サンプルは CI を過小にする。2026-08-22 検証監査指摘)。
     agg = {
         pool: [
-            {"n": 0, "hits": 0, "ret": 0, "pay_list": [], "stake_list": []}
+            {"n": 0, "hits": 0, "ret": 0, "by_race": {}}
             for _ in range(len(PRE_DECLARED_BANDS) - 1)
         ]
         for pool in POOLS
@@ -191,8 +218,9 @@ def run(from_date: str, to_date: str, db_path: str | None = None) -> dict:
                 if pay:
                     cell["hits"] += 1
                     cell["ret"] += pay
-                cell["pay_list"].append(pay)
-                cell["stake_list"].append(100)
+                rc = cell["by_race"].setdefault(keys, [0, 0])
+                rc[0] += pay
+                rc[1] += 100
                 # calibration: 確率スケールが小さいので粗い等幅ビン
                 d = min(int(prob * 10), 9) if k_size == 2 else min(int(prob * 30), 9)
                 calib[pool][d][0] += 1
@@ -200,6 +228,7 @@ def run(from_date: str, to_date: str, db_path: str | None = None) -> dict:
                 calib[pool][d][2] += 1 if pay else 0
 
     result: dict = {
+        "meta": _repro_meta(db_path),
         "from_date": from_date,
         "to_date": to_date,
         "races_scanned": len(races),
@@ -223,10 +252,13 @@ def run(from_date: str, to_date: str, db_path: str | None = None) -> dict:
             if n and PRE_DECLARED_BANDS[k] >= 1.0:
                 lo, hi = wilson_ci(cell["hits"], n)
                 row["hit_rate_ci95"] = [round(lo, 6), round(hi, 6)]
+                race_pays = [v[0] for v in cell["by_race"].values()]
+                race_stakes = [v[1] for v in cell["by_race"].values()]
                 _, rlo, rhi = bootstrap_return_rate(
-                    cell["pay_list"], cell["stake_list"], n_resample=1000
+                    race_pays, race_stakes, n_resample=1000
                 )
                 row["return_rate_ci95"] = [round(rlo, 4), round(rhi, 4)]
+                row["races_in_band"] = len(race_pays)
             rows.append(row)
         cal_rows = []
         for d, (n, psum, hits) in enumerate(calib[pool]):
