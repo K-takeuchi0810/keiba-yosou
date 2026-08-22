@@ -349,6 +349,37 @@ def upsert_payout(conn: sqlite3.Connection, hr: Payout) -> None:
     conn.execute(sql, row)
 
 
+def _race_start_iso(conn: sqlite3.Connection, o1: O1Odds) -> str | None:
+    """races.start_time から発走時刻を ISO8601 (秒精度) で返す。取れなければ None。
+
+    races 行が無い / start_time が空 / start_time 列自体が無い (旧 schema の
+    テスト DB 等) 場合は None を返し、呼び出し側は「発走時刻不明」として
+    従来どおりの更新を行う。
+    """
+    try:
+        row = conn.execute(
+            """
+            SELECT start_time FROM races
+             WHERE race_year=? AND race_month_day=? AND track_code=?
+               AND kaiji=? AND nichiji=? AND race_num=?
+            """,
+            (o1.year, o1.month_day, o1.track_code, o1.kaiji, o1.nichiji, o1.race_num),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if row is None:
+        return None
+    start = str(row[0] or "").strip().zfill(4)
+    if len(start) < 4 or not start[:4].isdigit():
+        return None
+    md = str(o1.month_day or "").zfill(4)
+    if len(str(o1.year or "")) != 4 or len(md) != 4:
+        return None
+    return (
+        f"{o1.year}-{md[:2]}-{md[2:]}T{start[:2]}:{start[2:4]}:00"
+    )
+
+
 def update_win_odds(
     conn: sqlite3.Connection,
     o1: O1Odds,
@@ -357,6 +388,9 @@ def update_win_odds(
     historical: bool = False,
 ) -> int:
     """O1 単勝オッズを horse_races に反映する。
+
+    発走時刻以降に取得した realtime オッズは自動的に historical 扱いに落とす
+    (odds_fetched_at=NULL)。理由は下の post-start 判定のコメント参照。
 
     historical=True は RACE dataspec 等の **確定オッズ (data_div=5)** 用。
     odds_fetched_at を NULL (= 歴史的確定・信頼) のまま書き、既存の
@@ -374,6 +408,23 @@ def update_win_odds(
         o1.nichiji,
         o1.race_num,
     )
+    if not historical:
+        fetched_at = fetched_at or datetime.now().isoformat(timespec="seconds")
+        # 発走時刻以降に取得した realtime オッズは「確定オッズ相当」として扱い、
+        # odds_fetched_at を刻印しない (historical と同じ経路に落とす)。
+        #
+        # 刻印すると backtest の odds 鮮度ゲート (scripts.backtest.
+        # race_odds_untrusted) がそのレースを post-start 扱いで除外するため、
+        # 発走後に走った ingest が過去のレースを遡って検証母数から蹴り落とす。
+        # 実害: 2026 年 1-6 月の適格レースが 1,568 → 1,177 に縮小 (2026-08-22 検出、
+        # 原因は毎分実行の外部 live ingest と 20:00 の傾向収集バッチ)。
+        # 発走後のオッズは締切後で動かないので確定値と等価であり、NULL 刻印
+        # (= 確定・信頼、ただし PIT 特徴には使用禁止) が正しい意味づけになる。
+        # 既存の pre-start snapshot は上書きしない (historical 側の
+        # `AND odds_fetched_at IS NULL` ガードがそれを保証する)。
+        start_iso = _race_start_iso(conn, o1)
+        if start_iso is not None and fetched_at >= start_iso:
+            historical = True
     if historical:
         for horse_num, odds, popularity in o1.win_odds:
             cur = conn.execute(
@@ -390,7 +441,8 @@ def update_win_odds(
             updated += cur.rowcount
         return updated
 
-    fetched_at = fetched_at or datetime.now().isoformat(timespec="seconds")
+    # fetched_at は上の `if not historical:` で必ず設定済み (historical 分岐は
+    # return するため、ここに到達するのは realtime 経路のみ)。
     for horse_num, odds, popularity in o1.win_odds:
         # 古い snapshot で新しい snapshot を上書きしないためのガード
         # (out-of-order / 再取り込み対策)。既存 odds_fetched_at が NULL

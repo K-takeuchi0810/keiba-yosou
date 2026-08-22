@@ -117,12 +117,26 @@ def test_exclude_confidence():
     assert is_buy_candidate(FakePred(confidence="標準"), horse(), False, filter_spec=s)
 
 
-def test_default_spec_matches_adopted_strategy():
-    """filter_spec=None → config.BUY_FILTER_DEFAULT。採用戦略の主絞りが効くこと。
+def test_default_spec_is_suspended_in_production(monkeypatch):
+    """既定 (config.BUY_FILTER_DEFAULT) はサスペンド中なので買い候補は 0 件。
+
+    2026-08-22: 2026 OOS で絞り込み 53.4% < ◎ベタ 65.3%、新規窓 31.3% < 75.3% と
+    2 期連続で価値破壊が確認され、必須ルール 4 に従い停止した。
+    """
+    monkeypatch.delenv("BET_FILTER_IGNORE_SUSPENSION", raising=False)
+    from config import BUY_FILTER_DEFAULT
+    assert BUY_FILTER_DEFAULT["suspended"] is True
+    assert not is_buy_candidate(FakePred(), horse(win_popularity=3), False)
+
+
+def test_default_spec_matches_adopted_strategy(monkeypatch):
+    """計測モードでの主絞り境界 (pop1-3) を固定する。
 
     2026-06-14 答え合わせ診断で min_kelly 閾値は撤廃 (anti-predictive と確証)、
-    主絞りは market favorite pop1-3 に転換。本テストはその境界を固定する。
+    主絞りは market favorite pop1-3 に転換。サスペンド後も「何をサスペンドして
+    いるのか」を仕様として固定しておく (再選定時の差分の基準になる)。
     """
+    monkeypatch.setenv("BET_FILTER_IGNORE_SUSPENSION", "1")
     from config import BUY_FILTER_DEFAULT
     assert BUY_FILTER_DEFAULT["min_popularity"] == 1
     assert BUY_FILTER_DEFAULT["max_popularity"] == 3
@@ -134,7 +148,7 @@ def test_default_spec_matches_adopted_strategy():
     assert not is_buy_candidate(FakePred(), horse(win_popularity=0), False)
 
 
-def test_filter_summary_tracks_config():
+def test_filter_summary_tracks_config(monkeypatch):
     """_build_filter_summary が BUY_FILTER_DEFAULT に追随すること。
 
     P24 review (code-quality #1) で「戦略変更時に filter 要約文字列が静かに
@@ -143,6 +157,14 @@ def test_filter_summary_tracks_config():
     """
     from config import BUY_FILTER_DEFAULT
     from web.generator import _build_filter_summary
+    # サスペンド中は「条件が書いてあるのに 0 件」の誤読を避けるため、要約自体が
+    # サスペンド表示に切り替わる契約を固定する。
+    monkeypatch.delenv("BET_FILTER_IGNORE_SUSPENSION", raising=False)
+    if BUY_FILTER_DEFAULT.get("suspended"):
+        suspended_summary = _build_filter_summary()
+        assert "サスペンド" in suspended_summary
+    # 以下は仕様側 (再選定の基準) の固定なので計測モードで確認する。
+    monkeypatch.setenv("BET_FILTER_IGNORE_SUSPENSION", "1")
     summary = _build_filter_summary()
     # 人気帯制約が設定されていれば要約に必ず現れる
     if BUY_FILTER_DEFAULT.get("min_popularity") or BUY_FILTER_DEFAULT.get("max_popularity"):
@@ -160,3 +182,67 @@ def test_odds_age_minutes_parsing():
     assert odds_age_minutes((NOW - timedelta(minutes=5)).isoformat(), NOW) == 5
     # 未来の時刻 (時計ずれ) は 0 に丸める
     assert odds_age_minutes((NOW + timedelta(minutes=5)).isoformat(), NOW) == 0
+
+
+def test_suspended_filter_yields_no_buy_candidates(monkeypatch):
+    """サスペンド中は他の条件を満たしても買い候補にならない。
+
+    2026-08-22: pop1-3 フィルタが 2 期連続で ◎ベタ買いを下回ったため
+    (2026 YTD 53.4% vs 65.3%、新規窓 31.3% vs 75.3%) 必須ルール 4 に従い停止。
+    """
+    monkeypatch.delenv("BET_FILTER_IGNORE_SUSPENSION", raising=False)
+    assert is_buy_candidate(
+        FakePred(), horse(win_popularity=2), False,
+        filter_spec=spec(suspended=True, min_popularity=1, max_popularity=3),
+    ) is False
+
+
+def test_suspension_can_be_ignored_for_measurement(monkeypatch):
+    """BET_FILTER_IGNORE_SUSPENSION=1 なら計測目的で従来判定に戻る。"""
+    monkeypatch.setenv("BET_FILTER_IGNORE_SUSPENSION", "1")
+    assert is_buy_candidate(
+        FakePred(), horse(win_popularity=2), False,
+        filter_spec=spec(suspended=True, min_popularity=1, max_popularity=3),
+    ) is True
+
+
+def test_unsuspended_spec_is_unaffected(monkeypatch):
+    """suspended を持たない (= 従来の) spec は挙動が変わらない。"""
+    monkeypatch.delenv("BET_FILTER_IGNORE_SUSPENSION", raising=False)
+    assert is_buy_candidate(FakePred(), horse(), False, filter_spec=spec()) is True
+
+
+def test_backtest_measures_suspended_spec_by_contract():
+    """backtest は計測器なのでサスペンドの影響を受けない、という契約を固定する。
+
+    2026-08-22: config のコメントが「計測は env で」と書いていたのに、backtest の
+    spec には suspended が乗らないため env が no-op という不一致が指摘された
+    (code-quality / validation / prediction-logic の 3 名)。実装側の意図は
+    「backtest は仕様を測り続ける」なので、その契約をテストで固定する。
+    逆方向の事故 (誰かが全キーコピーに直して backtest が無言で 0 bets 化) も
+    ここで検出される。
+    """
+    from scripts.backtest import buy_filter_from_generator
+
+    spec = buy_filter_from_generator()
+    assert "suspended" not in spec, (
+        "backtest 経路にサスペンドを伝播させない契約。変えるなら config.py の"
+        "コメントと env_overrides 記録も同時に直すこと"
+    )
+    # 仕様側 (pop1-3) は生きている = 何をサスペンドしているか計測できる
+    assert spec["min_popularity"] == 1
+    assert spec["max_popularity"] == 3
+
+
+def test_suspension_env_is_tracked_in_backtest_meta():
+    """BET_FILTER_IGNORE_SUSPENSION が backtest の env_overrides 追跡対象であること。
+
+    サスペンド中の計測 run が「override あり」と自己申告しないと、JSON 単体で
+    構成を再現・監査できない (2026-08-22 検証監査の停止条件)。
+    """
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parent.parent / "scripts" / "backtest.py").read_text(
+        encoding="utf-8"
+    )
+    assert '"BET_FILTER_IGNORE_SUSPENSION"' in source

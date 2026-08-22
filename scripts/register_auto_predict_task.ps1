@@ -7,6 +7,11 @@ param(
     [string]$TaskName = "keiba-auto-predict",
     [string]$StartTime = "08:00",
     [string]$SecondStartTime = "09:00",
+    # Third attempt: on 2026-07-25 and 2026-08-01 the entries (SE) were still
+    # missing at 09:30 and only arrived around 11:30, so both earlier runs had
+    # nothing to predict with. auto_predict now refuses to publish an empty page
+    # (exit 2) and needs a later retry to still deliver that day's predictions.
+    [string]$ThirdStartTime = "11:00",
     [switch]$Unregister
 )
 
@@ -31,6 +36,7 @@ $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\wscript.exe
 $trigger = @(
     New-ScheduledTaskTrigger -Daily -At $StartTime
     New-ScheduledTaskTrigger -Daily -At $SecondStartTime
+    New-ScheduledTaskTrigger -Daily -At $ThirdStartTime
 )
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
@@ -39,7 +45,7 @@ $settings = New-ScheduledTaskSettingsSet `
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
     -Settings $settings `
     -Description "F4 daily: fetch+mining -> gap check -> auto_predict -> Pages/Discord" | Out-Null
-Write-Host "registered: $TaskName (daily $StartTime and $SecondStartTime)"
+Write-Host "registered: $TaskName (daily $StartTime, $SecondStartTime and $ThirdStartTime)"
 Write-Host "  watchdog: 1200 sec; timeout kills the complete child process tree"
 Write-Host "  chain: fetch_full(32bit) -> fetch_mining(32bit) -> gap check -> auto_predict(64bit)"
 Write-Host "  exit bits: 1=fresh odds gap, 2=prediction failure, 4=fetch_full failure"

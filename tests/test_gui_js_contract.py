@@ -139,3 +139,28 @@ def test_control_html_js_parses():
         assert r.returncode == 0, f"CONTROL_HTML の JS が構文エラー:\n{r.stderr[:2000]}"
     finally:
         Path(path).unlink(missing_ok=True)
+
+
+def test_gui_discloses_filter_suspension_instead_of_false_reason():
+    """買い候補 0 件の理由を GUI が「条件を満たさず見送り」と偽らないこと。
+
+    2026-08-22: config でフィルタをサスペンドしたのに GUI 側の文言が旧来のまま
+    だと、ユーザは入力欄を動かして 0 件の原因を探し続けることになる
+    (GUI 監査で Nielsen 1 / 9 違反として HOLD 指摘)。web/templates 側と同じ
+    単一出典 (config.buy_filter_suspended) で分岐していることを固定する。
+    """
+    source = (Path(__file__).resolve().parent.parent / "gui" / "app.py").read_text(
+        encoding="utf-8"
+    )
+    # python 側: 0 件警告・検証モード警告・フィルタ注記の 3 箇所で分岐する
+    assert "buy_filter_suspended" in source
+    assert source.count("buy_filter_suspended()") >= 4, (
+        "0件警告 / 検証モード / summary フラグ / フィルタ注記 の 4 経路で "
+        "config を参照しているはず"
+    )
+    assert '"buy_suspended": buy_filter_suspended()' in source
+
+    # JS 側: 空状態がサスペンドを開示する
+    html = _control_html_interpreted()
+    assert "buy_suspended" in html
+    assert "サスペンド中" in html

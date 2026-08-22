@@ -22,8 +22,10 @@ import webview
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import (
     BUY_FILTER_DEFAULT,
+    BUY_FILTER_SUSPENDED_SINCE,
     ICLOUD_PUBLISH_DIR,
     WEB_DIST,
+    buy_filter_suspended,
     ensure_dirs,
     is_whitelisted_race,
 )
@@ -930,7 +932,14 @@ class Api:
         if odds_age is not None and max_age is not None and odds_age > int(max_age):
             warnings.append(f"オッズ鮮度警告: {odds_age}分前 (>{max_age}分) / 買い候補から除外")
         if ignore_odds_freshness:
-            warnings.append("検証モード: オッズ鮮度を無視して買い目を表示")
+            if buy_filter_suspended():
+                warnings.append(
+                    "検証モード: オッズ鮮度は無視するが、買い候補フィルタが"
+                    "サスペンド中のため買い目は 0 件のまま "
+                    "(計測は BET_FILTER_IGNORE_SUSPENSION=1 の backtest で)"
+                )
+            else:
+                warnings.append("検証モード: オッズ鮮度を無視して買い目を表示")
         if feature_warning_total:
             leg_missing = feature_warning_counts.get("leg_quality_unavailable", 0)
             same_day_missing = feature_warning_counts.get("same_day_bias_unavailable", 0)
@@ -941,7 +950,17 @@ class Api:
                 rate = round((feature_warning_total - same_day_missing) / feature_warning_total * 100)
                 warnings.append(f"当日傾向 利用率 {rate}% / 朝はデータなし")
         if not buy_candidates:
-            warnings.append("買い候補なし: EV/信頼度条件を満たすレースは見送り")
+            # サスペンド中に「条件を満たさず見送り」と出すと虚偽表示になる
+            # (2026-08-22 GUI 監査指摘)。web/templates 側と同じ単一出典
+            # (config.buy_filter_suspended) で理由を切り替える。
+            if buy_filter_suspended():
+                warnings.append(
+                    f"買い候補 0 件: フィルタはサスペンド中 ({BUY_FILTER_SUSPENDED_SINCE}〜)。"
+                    "点推定が全検証窓で ◎ベタ買いを下回り便益の証拠が無いため停止しており、"
+                    "再選定 (filter_sweep --recent-3fold) 完了まで購入推奨は出ません"
+                )
+            else:
+                warnings.append("買い候補なし: EV/信頼度条件を満たすレースは見送り")
         # 買い候補ポートフォリオ集計。bankroll は 1 開催日ごとに区切られるため
         # **日単位** で推奨投資率を合算する (多日窓を全合算すると過大化する)。
         # 集計ロジックは web/generator.py と共通の単一出典
@@ -981,6 +1000,9 @@ class Api:
                 "bet_filter": bet_filter,
                 "daily_budget_yen": daily_budget_yen,
                 "ignore_odds_freshness": ignore_odds_freshness,
+                # 買い候補 0 件の理由を JS 側で正しく出すためのフラグ。
+                "buy_suspended": buy_filter_suspended(),
+                "buy_suspended_since": BUY_FILTER_SUSPENDED_SINCE,
             },
             "buy_candidates": buy_candidates,
             "buy_portfolio": buy_portfolio,
@@ -2340,7 +2362,7 @@ CONTROL_HTML = """<!doctype html>
         '<span class="pill">EV ' + esc(b.ev) + '</span>' +
         stakePill +
         '<span class="pill" title="1/4 Kelly + 1点上限cap済みの推奨投資率">推奨 ' + pct2(b.recommended_kelly) + '%</span></div></div>';
-    }).join('') : '<div class="card-empty">買い候補なし。EV/信頼度条件では見送りです。</div>';
+    }).join('') : '<div class="card-empty">' + ((data.summary && data.summary.buy_suspended) ? '買い候補 0 件: フィルタはサスペンド中 (' + esc(data.summary.buy_suspended_since || '') + '〜)。再選定完了まで購入推奨は出ません。' : '買い候補なし。EV/信頼度条件では見送りです。') + '</div>';
 
     var warnings = data.warnings || [];
     byId('warnings').innerHTML = warnings.length ? warnings.map(function (w) { return '<div class="warn-item">' + esc(w) + '</div>'; }).join('') : '<div class="card-empty">注意点はありません。</div>';
@@ -2599,7 +2621,13 @@ def _filter_base_note() -> str:
         parts.append(f"p≤{BUY_FILTER_DEFAULT['max_predicted_p']}")
     if BUY_FILTER_DEFAULT.get("max_odds_age_min") is not None:
         parts.append(f"オッズ鮮度≤{BUY_FILTER_DEFAULT['max_odds_age_min']}分")
-    return "既定: " + " / ".join(parts) if parts else ""
+    note = "既定: " + " / ".join(parts) if parts else ""
+    # サスペンド中は入力欄をいくら動かしても 0 件のままなので、no-op である
+    # ことを入力の直上で開示する (2026-08-22 GUI 監査指摘、Nielsen 1)。
+    if buy_filter_suspended():
+        prefix = "⚠ サスペンド中 (常に 0 件) / "
+        return prefix + note if note else prefix.rstrip(" /")
+    return note
 
 
 def main() -> None:

@@ -20,6 +20,7 @@ import argparse
 import json
 import os
 import sys
+import threading
 import time
 from collections import Counter
 from contextlib import contextmanager
@@ -67,6 +68,46 @@ def single_run_lock(max_age_sec: int = 30 * 60):
             LOCK_PATH.unlink()
         except FileNotFoundError:
             pass
+
+
+EXIT_WATCHDOG = 3
+
+
+def start_watchdog(max_seconds: float) -> None:
+    """max_seconds を超えたらプロセスごと強制終了する監視タイマーを張る。
+
+    2026-08-16 16:20 に本スクリプトの python が JV-Link COM 呼び出しで
+    ハングし、6 日間 (2026-08-22 検出まで) 生存してログファイルのハンドルを
+    保持し続けた。その結果 10 分おきの後続起動が全て `>>` リダイレクトの
+    時点で "another process is using the file" となり exit 1、fresh odds が
+    6 日間ゼロになった (2026-08 の backtest 適格レースが 216 → 32 に激減)。
+
+    COM の応答待ちは Python 側から中断できないため、時間で落とすしかない。
+    `os._exit` を使うのは、ハングしているスレッドが finally / atexit を
+    抱えていても確実に落とすため。既定値は Task Scheduler の起動間隔
+    (10 分) より短くして、次回起動と重ならないようにする。
+    """
+    if max_seconds <= 0:
+        return
+
+    def _kill() -> None:
+        print(
+            f"  FATAL: watchdog timeout after {max_seconds:.0f}s - forcing exit",
+            flush=True,
+        )
+        # 次回起動が stale lock で待たされないよう、落ちる前に外す。ただし
+        # 自分が取得した lock でなければ触らない (lock 取得前にハングした個体が
+        # 他インスタンスの lock を消す競合を避ける。2026-08-22 パイプライン監査指摘)。
+        try:
+            if LOCK_PATH.read_text(encoding="ascii").split()[0] == str(os.getpid()):
+                LOCK_PATH.unlink()
+        except (OSError, IndexError, UnicodeDecodeError, ValueError):
+            pass
+        os._exit(EXIT_WATCHDOG)
+
+    timer = threading.Timer(max_seconds, _kill)
+    timer.daemon = True
+    timer.start()
 
 
 def race_key(race: dict) -> str:
@@ -129,7 +170,17 @@ def main() -> int:
              "朝の一括取得 (fetch_morning_odds.bat) も同じ JSONL に書くため、"
              "健全性チェック側が両者を区別できるようにする",
     )
+    ap.add_argument(
+        "--max-runtime-sec",
+        type=float,
+        default=float(os.environ.get("FRESH_ODDS_MAX_RUNTIME_SEC", "480")),
+        help="この秒数を超えたらプロセスを強制終了する (0 で無効)。"
+             "既定 480 秒は Task Scheduler の 10 分間隔より短くしてある "
+             "(2026-08-16 の 6 日間ハング事故の再発防止)",
+    )
     args = ap.parse_args()
+
+    start_watchdog(args.max_runtime_sec)
 
     run_started_at = time.time()
     now = datetime.now()

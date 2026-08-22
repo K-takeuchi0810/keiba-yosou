@@ -63,6 +63,7 @@ def is_buy_candidate(
         買い候補なら True。
 
     判定順序 (短絡):
+        0. filter_spec["suspended"] (サスペンド中は常に False)
         1. rank == 1 かつ mark あり かつ 非 tentative
         2. オッズ鮮度 (now 指定時のみ)
         3. whitelist (race ありかつ whitelist_mode=True のとき)
@@ -77,6 +78,15 @@ def is_buy_candidate(
         _whitelist_fn = is_whitelisted_race
     else:
         from config import is_whitelisted_race as _whitelist_fn
+
+    # サスペンド (config.BUY_FILTER_DEFAULT["suspended"], 2026-08-22)。
+    # 価値破壊が確認されたフィルタで買い候補を出し続けないための最優先短絡。
+    # 計測目的で評価したいときだけ BET_FILTER_IGNORE_SUSPENSION=1 で無効化する
+    # (理由と実測値は config.py 側のコメント参照)。
+    if filter_spec.get("suspended"):
+        from config import buy_filter_suspended
+        if buy_filter_suspended():
+            return False
 
     # 基本条件: rank=1 + mark あり + 非 tentative
     if tentative or pred.rank != 1 or not pred.mark:

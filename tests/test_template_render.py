@@ -115,6 +115,10 @@ def context() -> dict:
         "stale_suppressed": 0,
         "filter_summary": "max_predicted_p≤0.4 / 1-3番人気 / 全場開放",
         "buy_condition_text": "1-3 番人気 かつ 予測勝率≤40%",
+        # サスペンド中は no-buy セクションの文言が切り替わる (2026-08-22)。
+        # 既定 False = 従来の「条件を満たす馬がいない」表示。
+        "buy_suspended": False,
+        "buy_suspended_since": "2026-08-22",
         "days": [_day("2026/06/13", "東京", 1), _day("2026/06/14", "阪神", 0)],
         "buy_candidates": [{
             "anchor": "race-20260613-05-1",
@@ -255,6 +259,21 @@ def test_no_buy_message_when_empty(context):
     # 買い条件文言は context["buy_condition_text"] (config 由来) からのみ来る
     assert f"買い条件 ({context['buy_condition_text']})" in html
     assert "下の EV・印は観察用で購入推奨ではありません" in html
+
+
+def test_no_buy_message_says_suspended_when_filter_is_suspended(context):
+    """サスペンド中は「条件を満たす馬がいない」ではなく「停止中」と開示する。
+
+    条件が書いてあるのに 0 件、という表示は「今日は該当馬がいなかった」と
+    誤読され、フィルタが止まっている事実が伝わらない (2026-08-22)。
+    """
+    context["buy_candidates"] = []
+    context["buy_count"] = 0
+    context["buy_suspended"] = True
+    html = _render(context)
+    assert 'class="no-buy"' in html
+    assert "サスペンド中" in html
+    assert "買い条件 (" not in html
 
 
 def test_no_buy_text_is_sourced_from_config():

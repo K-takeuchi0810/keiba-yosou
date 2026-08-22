@@ -707,7 +707,7 @@
   </section>
   {% endif %}
 {% else %}
-  <section class="no-buy">買い条件 ({{ buy_condition_text }}) を満たす馬がいないため全レース見送り。下の EV・印は観察用で購入推奨ではありません。
+  <section class="no-buy">{% if buy_suspended %}買い候補は<strong>サスペンド中</strong>です ({{ buy_suspended_since }}〜)。絞り込み ({{ buy_condition_text }}) の回収率が全検証窓で ◎ベタ買いを下回り、便益の証拠が無いため停止しています。再選定が終わるまで 0 件です。下の EV・印は観察用で購入推奨ではありません。{% else %}買い条件 ({{ buy_condition_text }}) を満たす馬がいないため全レース見送り。下の EV・印は観察用で購入推奨ではありません。{% endif %}
   {%- if stale_suppressed %}<br>⚠ うち {{ stale_suppressed }} 件は<strong>オッズ鮮度切れ</strong>のみが理由で除外されています。最新オッズ取得後に再生成すると候補に戻る可能性があります。{% endif %}</section>
 {% endif %}
 {% for day in days %}

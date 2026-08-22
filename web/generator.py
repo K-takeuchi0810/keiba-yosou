@@ -22,6 +22,7 @@ from config import (
     BET_KELLY_MAX_PCT,
     BET_KELLY_MODE,
     BUY_FILTER_DEFAULT,
+    BUY_FILTER_SUSPENDED_SINCE,
     ICLOUD_PUBLISH_DIR,
     PROJECT_ROOT,
     WEB_DIST,
@@ -664,11 +665,21 @@ def build_view_model(
         "completeness_alert": completeness["alert"],
         "filter_summary": filter_summary,
         "buy_condition_text": _build_buy_condition_text(),
+        # 買い候補サスペンド中は「条件を満たす馬がいない」ではなく「停止中」が
+        # 正しい開示なので、no-buy セクションの文言をテンプレート側で切り替える。
+        "buy_suspended": _buy_filter_suspended(),
+        "buy_suspended_since": BUY_FILTER_SUSPENDED_SINCE,
         "stale_suppressed": stale_suppressed,
         "version_info": version_info,
         "portfolio_info": portfolio_info,
         "ignore_odds_freshness": ignore_odds_freshness,
     }
+
+
+def _buy_filter_suspended() -> bool:
+    """買い候補フィルタがサスペンド中か (config 単一出典の薄いラッパ)。"""
+    from config import buy_filter_suspended
+    return buy_filter_suspended()
 
 
 def _build_buy_condition_text() -> str:
@@ -698,6 +709,16 @@ def _build_filter_summary() -> str:
     """BUY_FILTER_DEFAULT の現状を 1 行文字列に。HTML header に表示する。"""
     parts: list[str] = []
     spec = BUY_FILTER_DEFAULT
+    # サスペンド中は条件を並べても意味が無い (常に 0 件) ので、そう表示する。
+    # 「フィルタ条件が書いてあるのに 1 件も出ない」は誤読の温床になるため。
+    if spec.get("suspended"):
+        from config import buy_filter_suspended
+        if buy_filter_suspended():
+            return (
+                f"サスペンド中 ({BUY_FILTER_SUSPENDED_SINCE}〜) / "
+                "点推定が全窓で ◎ベタ買いを下回り便益の証拠が無いため停止 / "
+                "再選定 (filter_sweep --recent-3fold) 完了まで 0 件"
+            )
     if spec.get("min_kelly") is not None:
         parts.append(f"min_kelly≥{spec['min_kelly']}")
     if spec.get("max_predicted_p") is not None:

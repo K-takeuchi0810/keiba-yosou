@@ -245,3 +245,21 @@ def test_main_gap_check_is_opt_in(monkeypatch, tmp_path, capsys):
 
     assert mod.main() == 0
     assert "WARNING: gap" not in capsys.readouterr().out
+
+
+def test_filter_sweep_applies_odds_freshness_gate_by_default():
+    """filter_sweep が backtest と同じオッズ鮮度ゲートを既定で適用すること。
+
+    2026-08-22 検証監査: ゲート無しでは「確定オッズ込みの母数で戦略を選び、朝の
+    生成時点ではその値が無い」train-serve skew のまま採用判断が回る。サスペンド
+    解除の判断器なので、ここが汚れていると再採用そのものが汚染される。
+    """
+    import inspect
+
+    from scripts import filter_sweep
+
+    sig = inspect.signature(filter_sweep.collect_picks)
+    assert sig.parameters["exclude_untrusted_odds"].default is True
+    src = inspect.getsource(filter_sweep.collect_picks)
+    assert "race_odds_untrusted" in src
+    assert "--no-odds-gate" in inspect.getsource(filter_sweep.main)

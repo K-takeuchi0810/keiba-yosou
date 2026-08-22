@@ -23,7 +23,11 @@
 param(
     [string]$Date = "",
     [string]$CheckAfterTime = "09:00",
-    [string]$TaskName = "keiba-fresh-odds"
+    [string]$TaskName = "keiba-fresh-odds",
+    # 同じ decision を鳴らし続けないための間隔 (時間)。0 で毎回通知。
+    [double]$AlertThrottleHours = 3,
+    # 通知だけ止めたいとき (手動実行・検証用)。
+    [switch]$NoNotify
 )
 
 $ErrorActionPreference = "Stop"
@@ -119,6 +123,74 @@ if (Test-Path $latestPath) {
     }
 } else {
     Write-LogLine "WARN: $latestPath not found after python run"
+}
+
+# 4. FAIL/HOLD を誰も見ていない事故の防止 (2026-08-16〜08-22)。
+# fetch_fresh_odds の python がハングしてログファイルを掴み続け、以降の起動が
+# 全て exit 1 になっていた 6 日間、本チェックは FAIL を出し続けていたが通知先が
+# 無く、誰も気づかないまま fresh odds がゼロになった (2026-08 の backtest 適格
+# レースが 216 → 32 に激減)。decision が PASS 以外なら Discord に流し、PASS に
+# 戻ったときは復旧通知を 1 回だけ出す。
+$alertStatePath = Join-Path $runtimeDir "fresh_odds_alert_state.json"
+if ($NoNotify) {
+    Write-LogLine "notify: skipped (-NoNotify)"
+} else {
+    try {
+        $decision = "UNKNOWN"
+        $reason = ""
+        if ($latest) {
+            $decision = [string]$latest.decision
+            $reason = [string]$latest.reason
+        }
+        $prevDecision = ""
+        $lastNotifiedAt = $null
+        if (Test-Path $alertStatePath) {
+            $prevState = Get-Content -Path $alertStatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+            $prevDecision = [string]$prevState.last_decision
+            if ($prevState.last_notified_at) {
+                $lastNotifiedAt = [datetime]$prevState.last_notified_at
+            }
+        }
+
+        $shouldNotify = $false
+        $message = ""
+        if ($decision -ne "PASS") {
+            $throttled = $false
+            if ($decision -eq $prevDecision -and $lastNotifiedAt -ne $null) {
+                $elapsedHours = ((Get-Date) - $lastNotifiedAt).TotalHours
+                if ($elapsedHours -lt $AlertThrottleHours) { $throttled = $true }
+            }
+            if ($throttled) {
+                Write-LogLine "notify: throttled (decision=$decision, within $AlertThrottleHours h)"
+            } else {
+                $shouldNotify = $true
+                $message = ":rotating_light: fresh odds health = $decision (reason=$reason). " +
+                           "date=$Date task=$TaskName log=data/logs/fresh_odds_health_$Date.log"
+            }
+        } elseif ($prevDecision -ne "" -and $prevDecision -ne "PASS") {
+            $shouldNotify = $true
+            $message = ":white_check_mark: fresh odds health recovered: $prevDecision -> PASS (date=$Date)"
+        }
+
+        if ($shouldNotify) {
+            & $venv64 "-m" "scripts.notify_discord" "--message" $message
+            Write-LogLine "notify: sent decision=$decision"
+            $notifiedAt = (Get-Date).ToString("s")
+        } else {
+            if ($lastNotifiedAt -ne $null) {
+                $notifiedAt = $lastNotifiedAt.ToString("s")
+            } else {
+                $notifiedAt = $null
+            }
+        }
+        @{
+            last_decision = $decision
+            last_notified_at = $notifiedAt
+            updated_at = (Get-Date).ToString("s")
+        } | ConvertTo-Json | Out-File -FilePath $alertStatePath -Encoding utf8
+    } catch {
+        Write-LogLine "WARN: notify step failed: $($_.Exception.Message)"
+    }
 }
 
 Write-LogLine "=== check_fresh_odds_health.ps1 done (exit=$exitCode) ==="

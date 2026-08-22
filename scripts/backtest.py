@@ -456,6 +456,7 @@ def snapshot_meta() -> dict:
         "PRED_DISABLE_DISCOUNT", "PRED_DISABLE_LGBM", "PRED_CALIBRATOR_ALPHA",
         "PRED_CALIBRATOR_MIN_COUNT", "V2_GRADE", "V2_DIST", "BET_WHITELIST",
         "PRED_BLEND_MODE", "PRED_DISABLE_BLEND", "PRED_DISABLE_SECOND_BLEND",
+        "BET_FILTER_IGNORE_SUSPENSION",
     }
     env_keys.update(k for k in _os.environ if k.startswith("PRED_W_"))
     overrides = {k: _os.environ[k] for k in env_keys if k in _os.environ}
@@ -468,6 +469,16 @@ def buy_filter_from_generator() -> dict:
 
     出典は `config.BUY_FILTER_DEFAULT` 単一。`min_ev` `min_value` は
     None (= 制約なし) を許容するため、float 変換時に None を温存する。
+
+    **`suspended` は意図的に渡さない** (2026-08-22)。backtest は計測器であり、
+    サスペンド中の仕様が「もし動いていたらどうだったか」を測り続ける必要が
+    あるため。運用経路 (GUI / web.generator) は full spec を渡すので
+    `predictor.filter.is_buy_candidate` の短絡でゼロ件になる。
+    この契約は tests/test_filter.py の契約テストで固定してある。
+
+    キーを増やすときの注意: 本関数は明示キーリストなので、config に足した
+    だけでは backtest に伝播しない。伝播させたいキーは必ずここに追加する
+    (`suspended` は上記の理由で "伝播させない" 側の明示的な選択)。
     """
     from config import BUY_FILTER_DEFAULT
 

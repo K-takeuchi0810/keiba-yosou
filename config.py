@@ -193,7 +193,56 @@ BUY_FILTER_DEFAULT: dict = {
     "whitelist_mode": False,
     "whitelist_grades": [],
     "whitelist_tracks": [],
+    # ----- サスペンド (2026-08-22): 便益の証拠が全窓で不在 -----
+    # 必須ルール 4 (CLAUDE.md) の「収益劣化 → 即サスペンド → 再選定」に基づく。
+    #
+    # 2026 OOS 実測 (data/backtest/20260822_104950_tan_p26-oos-2026ytd-0816-filtered.json、
+    # calibration_in_sample=False):
+    #   - ◎ベタ買い     : 1,460 戦 / 22.5% / 回収 65.3% (CI [57.8%, 72.8%])
+    #   - 本フィルタ適用 :   142 戦 / 12.0% / 回収 53.4% (CI [30.4%, 80.1%])
+    # 新規窓のみ (2026-06-15〜08-16、20260822_093823_...-filtered.json。上の窓の
+    # 部分集合であり独立証拠ではない):
+    #   - ◎ベタ買い     :   325 戦 / 25.5% / 回収 75.3% (CI [59.3%, 95.1%])
+    #   - 本フィルタ適用 :    39 戦 /  7.7% / 回収 31.3% (CI [0%, 71.8%])
+    # 実運用 HTML の答え合わせ (v6 期 12 開催日) でも買い候補 32 戦 68.8% <
+    # ◎ベタ 360 戦 70.2%。
+    #
+    # 統計的な言い方の限界 (2026-08-22 収益性・検証監査の指摘を反映): CI は大きく
+    # 重なるので「絞ると悪化する」ことは **有意には示せていない**。停止の根拠は
+    # 「点推定が全窓でベタ買いを下回り、便益の正の証拠がどこにも無い」こと。
+    # 買い推奨表示には便益の証拠が必要で、有害の証明は不要という非対称性による。
+    # なお採用は 2026-06-14 なので、賞味期限 3 ヶ月には未到達 (約 2.3 ヶ月)。
+    #
+    # True の間 `predictor.filter.is_buy_candidate` は常に False を返し、GUI と
+    # HTML の買い候補はゼロ件になる (誤った推奨表示を止める)。
+    # 計測経路との契約:
+    #   - backtest / filter_sweep は spec を直接組み立てる
+    #     (`scripts.backtest.buy_filter_from_generator` は suspended を渡さない)
+    #     ので、サスペンド中も buy_only 系列の計測は継続する。
+    #   - full spec が渡る経路 (GUI 計測など) でサスペンドを外したいときだけ
+    #     `BET_FILTER_IGNORE_SUSPENSION=1` を使う。backtest では meta.env_overrides
+    #     に記録される。
+    # 解除条件: `scripts.filter_sweep --recent-3fold` (オッズ鮮度ゲート ON、
+    # repair_odds_stamps --apply 済みの DB) で 3 fold すべて robust (点推定 ≥ 80%
+    # かつ CI 下限 ≥ 50%) の戦略を選び直したとき。ただし回収率 CI 下限が 100% を
+    # 超えない限り、再選定しても「観察用」から上げてはならない。
+    "suspended": True,
 }
+
+# サスペンド開始日の単一出典 (HTML / GUI の文言が参照する)。
+BUY_FILTER_SUSPENDED_SINCE = "2026-08-22"
+
+
+def buy_filter_suspended() -> bool:
+    """買い候補フィルタがサスペンド中か。
+
+    `BET_FILTER_IGNORE_SUSPENSION=1` のときは False を返す。これは
+    「サスペンド中の仕様を計測だけしたい」backtest / sweep 用の抜け道で、
+    運用 (GUI / HTML 生成) では使わない。
+    """
+    if os.environ.get("BET_FILTER_IGNORE_SUSPENSION") in ("1", "true", "True"):
+        return False
+    return bool(BUY_FILTER_DEFAULT.get("suspended", False))
 
 
 # ----- 賭金サイジング既定 (2026-06-07 P20: HTML 表示 Kelly 是正) -----

@@ -74,13 +74,20 @@ def test_odds_fetched_time_formats_iso_and_handles_missing_values():
     assert _odds_fetched_time(None) is None
 
 
-def test_auto_predict_task_registers_two_ascii_daily_triggers():
+def test_auto_predict_task_registers_three_ascii_daily_triggers():
+    """08:00 / 09:00 / 11:00 の 3 回起動 (ASCII のみ) を固定する。
+
+    3 本目は 2026-08-22 追加。2026-07-25 / 08-01 は出走馬 (SE) が 09:30 時点でも
+    未取り込みで、11:30 頃にようやく届いた。auto_predict は空ページを publish
+    しなくなった (exit 2) ため、その日の予想を落とさないための遅い再試行が必要。
+    """
     script_path = ROOT / "scripts" / "register_auto_predict_task.ps1"
     raw = script_path.read_bytes()
     content = raw.decode("ascii")
 
     assert '[string]$StartTime = "08:00"' in content
     assert '[string]$SecondStartTime = "09:00"' in content
-    assert content.count("New-ScheduledTaskTrigger -Daily -At") == 2
+    assert '[string]$ThirdStartTime = "11:00"' in content
+    assert content.count("New-ScheduledTaskTrigger -Daily -At") == 3
     assert "-Trigger $trigger" in content
     assert "-Trigger $triggers" not in content

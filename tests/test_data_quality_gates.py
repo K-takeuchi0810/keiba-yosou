@@ -140,3 +140,82 @@ def test_update_win_odds_historical_does_not_clobber_realtime_snapshot():
     row = conn.execute("SELECT win_odds, odds_fetched_at FROM horse_races").fetchone()
     assert row["win_odds"] == 80, "PIT snapshot が確定オッズで潰されない"
     assert row["odds_fetched_at"] == "2026-06-07T12:00:00"
+
+
+def _conn_with_start_time() -> sqlite3.Connection:
+    """races.start_time を持つ schema。post-start 判定のテスト用。
+
+    上の `_conn()` は start_time 列を持たない旧 schema で、
+    `db._race_start_iso` が None を返す (= 発走時刻不明) 経路の回帰も兼ねる。
+    """
+    conn = _conn()
+    conn.execute("ALTER TABLE races ADD COLUMN start_time TEXT")
+    return conn
+
+
+def _add_race_with_start(conn, race_num="01", *, start_time="1230") -> None:
+    _add_race(conn, race_num, confirmed=1)
+    conn.execute(
+        "UPDATE races SET start_time=? WHERE race_num=?", (start_time, race_num)
+    )
+
+
+def test_update_win_odds_post_start_realtime_is_stored_as_confirmed():
+    """発走後に取り込んだ realtime オッズは odds_fetched_at を刻印しない。
+
+    刻印すると backtest の odds 鮮度ゲートが「post-start snapshot あり」として
+    そのレースを検証母数から除外する。発走後に走る ingest (毎分の外部 live
+    取得 / 20:00 傾向収集バッチ) が過去レースを遡って蹴り落とし、2026 年
+    1-6 月の適格レースが 1,568 → 1,135 に縮小した事故の回帰テスト
+    (2026-08-22 検出)。
+    """
+    conn = _conn_with_start_time()
+    _add_race_with_start(conn, "01", start_time="1230")
+    conn.commit()
+
+    n = update_win_odds(
+        conn, _o1([("01", 55, 2)]), fetched_at="2026-06-07T12:31:00", dataspec="0B31"
+    )
+
+    row = conn.execute(
+        "SELECT win_odds, win_popularity, odds_fetched_at, odds_dataspec FROM horse_races"
+    ).fetchone()
+    assert n == 1
+    assert row["win_odds"] == 55, "確定相当の値としてオッズ自体は反映する"
+    assert row["odds_fetched_at"] is None, "発走後 realtime に post-start 刻印をしない"
+    assert row["odds_dataspec"] == "0B31"
+
+
+def test_update_win_odds_post_start_realtime_keeps_pre_start_snapshot():
+    """発走後の取り込みは、発走前 PIT snapshot を上書きしない。"""
+    conn = _conn_with_start_time()
+    _add_race_with_start(conn, "01", start_time="1230")
+    conn.commit()
+
+    update_win_odds(
+        conn, _o1([("01", 80, 3)]), fetched_at="2026-06-07T12:10:00", dataspec="0B31"
+    )
+    n = update_win_odds(
+        conn, _o1([("01", 55, 2)]), fetched_at="2026-06-07T12:45:00", dataspec="0B31"
+    )
+
+    row = conn.execute("SELECT win_odds, odds_fetched_at FROM horse_races").fetchone()
+    assert n == 0
+    assert row["win_odds"] == 80, "発走前 snapshot が発走後の値で潰されない"
+    assert row["odds_fetched_at"] == "2026-06-07T12:10:00"
+
+
+def test_update_win_odds_pre_start_realtime_still_stamps():
+    """発走前 realtime は従来どおり odds_fetched_at を刻印する (PIT 用)。"""
+    conn = _conn_with_start_time()
+    _add_race_with_start(conn, "01", start_time="1230")
+    conn.commit()
+
+    n = update_win_odds(
+        conn, _o1([("01", 70, 2)]), fetched_at="2026-06-07T12:15:00", dataspec="0B31"
+    )
+
+    row = conn.execute("SELECT win_odds, odds_fetched_at FROM horse_races").fetchone()
+    assert n == 1
+    assert row["win_odds"] == 70
+    assert row["odds_fetched_at"] == "2026-06-07T12:15:00"

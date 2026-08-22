@@ -19,7 +19,12 @@ from config import BUY_FILTER_DEFAULT, DATA_PERIODS
 from db import open_db
 from predictor.rules import is_tentative, predict_race
 from predictor.stats import bootstrap_return_rate
-from scripts.backtest import get_payout, horses_for_race, list_races
+from scripts.backtest import (
+    get_payout,
+    horses_for_race,
+    list_races,
+    race_odds_untrusted,
+)
 
 WHITELIST_GRADES = frozenset(BUY_FILTER_DEFAULT["whitelist_grades"])
 WHITELIST_TRACKS = frozenset(BUY_FILTER_DEFAULT["whitelist_tracks"])
@@ -56,14 +61,31 @@ def collect_picks(
     to_date: str,
     skip_tentative: bool = True,
     db_path: str | Path | None = None,
+    exclude_untrusted_odds: bool = True,
 ) -> list[Pick]:
+    """sweep 対象の ◎ を 1 レース 1 件で集める。
+
+    `exclude_untrusted_odds=True` (既定) は backtest と同じオッズ鮮度ゲート
+    (`scripts.backtest.race_odds_untrusted`) を適用し、post-start / stale
+    snapshot のレースを母数から外す。
+
+    2026-08-22 の検証監査指摘: ゲートが無いと「確定オッズ (発走後に判明する値)
+    込みの母数で戦略を選び、朝の生成時点ではその値が無い」という train-serve
+    skew のまま採用判断が回る。フィルタは odds / popularity を条件に使うため、
+    この汚染は選定結果を直接歪める。ablation で外したいときだけ False にする。
+    """
     picks: list[Pick] = []
+    max_age_min = BUY_FILTER_DEFAULT.get("max_odds_age_min")
     with open_db(db_path) if db_path else open_db() as conn:
         races = list_races(conn, from_date, to_date, jra_only=True)
         feature_cache: dict = {}
         for race in races:
             horses = horses_for_race(conn, race)
             if not horses:
+                continue
+            if exclude_untrusted_odds and race_odds_untrusted(
+                horses, race, max_age_min
+            ):
                 continue
             preds = predict_race(horses, conn=conn, race=race, cache=feature_cache)
             if skip_tentative and is_tentative(preds):
@@ -359,6 +381,12 @@ def main() -> int:
              "track / jockey / class composition.",
     )
     ap.add_argument("--db", default=None, help="SQLite DB path")
+    ap.add_argument(
+        "--no-odds-gate",
+        action="store_true",
+        help="post-start / stale odds のレース除外を無効化 (既定は backtest と"
+             "同じく除外)。鮮度ゲートの寄与を ablation で測るときだけ使う",
+    )
     args = ap.parse_args()
 
     started = time.time()
@@ -388,7 +416,8 @@ def main() -> int:
         ]
         period_picks: dict[str, list[Pick]] = {}
         for name, fr, to in periods:
-            period_picks[name] = collect_picks(fr, to, db_path=args.db)
+            period_picks[name] = collect_picks(fr, to, db_path=args.db,
+                                          exclude_untrusted_odds=not args.no_odds_gate)
             print(
                 f"  collected {name} ({fr}-{to}): {len(period_picks[name])} picks",
                 file=sys.stderr,
@@ -444,7 +473,8 @@ def main() -> int:
             to = f"{y}1231"
             if y == test_last_year:
                 to = test_to
-            period_picks_3fold[y] = collect_picks(fr, to, db_path=args.db)
+            period_picks_3fold[y] = collect_picks(fr, to, db_path=args.db,
+                                          exclude_untrusted_odds=not args.no_odds_gate)
             print(
                 f"  collected fold {y} ({fr}-{to}): {len(period_picks_3fold[y])} picks",
                 file=sys.stderr,
@@ -496,7 +526,8 @@ def main() -> int:
         ]
         period_picks_r: dict[str, list[Pick]] = {}
         for name, fr, to in fold_periods:
-            period_picks_r[name] = collect_picks(fr, to, db_path=args.db)
+            period_picks_r[name] = collect_picks(fr, to, db_path=args.db,
+                                          exclude_untrusted_odds=not args.no_odds_gate)
             print(
                 f"  collected fold {name} ({fr}-{to}): {len(period_picks_r[name])} picks",
                 file=sys.stderr,
@@ -593,7 +624,8 @@ def main() -> int:
             to = f"{y}1231"
             if y == test_to[:4]:
                 to = test_to
-            period_picks_t[y] = collect_picks(fr, to, db_path=args.db)
+            period_picks_t[y] = collect_picks(fr, to, db_path=args.db,
+                                          exclude_untrusted_odds=not args.no_odds_gate)
             print(
                 f"  collected fold {y} ({fr}-{to}): {len(period_picks_t[y])} picks",
                 file=sys.stderr,
@@ -637,7 +669,8 @@ def main() -> int:
         # まとめて出力。本番投入 *決定後* に走らせる位置付け。
         fr = DATA_PERIODS["production"]["from"]
         to = DATA_PERIODS["production"]["to"]
-        picks = collect_picks(fr, to, db_path=args.db)
+        picks = collect_picks(fr, to, db_path=args.db,
+                                          exclude_untrusted_odds=not args.no_odds_gate)
         print(f"  collected production/holdout ({fr}-{to}): {len(picks)} picks", file=sys.stderr)
         print("filter,bets,hits,hit_rate,return_rate,profit")
         rows = [(name, summarize(picks, args.bet, spec)) for name, spec in FILTERS]
@@ -661,7 +694,8 @@ def main() -> int:
         for year in range(start_year, end_year + 1):
             from_date = max(args.from_date, f"{year}0101")
             to_date = min(args.to_date, f"{year}1231")
-            picks = collect_picks(from_date, to_date, db_path=args.db)
+            picks = collect_picks(from_date, to_date, db_path=args.db,
+                                  exclude_untrusted_odds=not args.no_odds_gate)
             for name, spec in FILTERS:
                 r = summarize(picks, args.bet, spec)
                 print(
@@ -669,7 +703,8 @@ def main() -> int:
                     f"{r['hit_rate'] * 100:.1f},{r['return_rate'] * 100:.1f},{r['profit']}"
                 )
     else:
-        picks = collect_picks(args.from_date, args.to_date, db_path=args.db)
+        picks = collect_picks(args.from_date, args.to_date, db_path=args.db,
+                         exclude_untrusted_odds=not args.no_odds_gate)
         rows = [(name, summarize(picks, args.bet, spec)) for name, spec in FILTERS]
         rows.sort(key=lambda x: (x[1]["return_rate"], x[1]["bets"]), reverse=True)
         for name, r in rows:

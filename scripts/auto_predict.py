@@ -3,8 +3,9 @@
 条件判定 → web.generator 生成 → docs/predictions/latest.md を commit+push →
 Discord webhook に「commit URL + 閲覧は iCloud」を通知。
 
-生成条件 (自己判断): 今日〜明日に出馬表 (races) が存在すること。無ければ生成せず終了
-(開催前々日以前や平日は静かに skip)。Task Scheduler から毎朝実行される前提。
+生成条件 (自己判断): 今日〜明日に出馬表 (races) が存在し、かつ **直近開催日の
+出走馬が実際に取り込まれている** こと。無ければ生成せず終了 (開催前々日以前や
+平日は静かに skip)。Task Scheduler から毎朝実行される前提。
 
 使い方: .venv64/Scripts/python.exe -m scripts.auto_predict [--dry-run] [--force-notify]
 """
@@ -19,7 +20,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import DB_PATH, ICLOUD_PUBLISH_DIR, PROJECT_ROOT  # noqa: E402
+from db import SQL_VALID_HORSE_NUM  # noqa: E402
 from scripts.notify_discord import notify_discord  # noqa: E402
+import os  # noqa: E402
 import sqlite3  # noqa: E402
 
 MARKER = PROJECT_ROOT / "docs" / "predictions_latest.md"
@@ -73,6 +76,31 @@ def _race_days(conn, days: list[str]) -> list[tuple[str, int]]:
     return out
 
 
+def _entry_coverage(conn, day: str) -> tuple[int, int]:
+    """その日の (出走馬が入っているレース数, レース総数) を返す。
+
+    `races` 行はレース定義 (schedule) が来た時点で作られるため、出走馬 (SE) が
+    未取り込みでも 36 レース分そろって見える。この差を見ずに生成すると
+    「全 36 レース 出走馬未取得」の空ページを publish してしまう
+    (2026-07-25 / 08-01 に実際に発生。v6 期 12 開催日のうち 2 日が空振り)。
+    """
+    total = conn.execute(
+        "SELECT COUNT(*) FROM races WHERE race_year=? AND race_month_day=?",
+        (day[:4], day[4:]),
+    ).fetchone()[0]
+    with_entries = conn.execute(
+        f"""
+        SELECT COUNT(*) FROM (
+            SELECT 1 FROM horse_races
+             WHERE race_year=? AND race_month_day=? AND {SQL_VALID_HORSE_NUM}
+             GROUP BY track_code, kaiji, nichiji, race_num
+        )
+        """,
+        (day[:4], day[4:]),
+    ).fetchone()[0]
+    return with_entries, total
+
+
 def _notify(text: str) -> bool:
     """Compatibility wrapper around the shared best-effort notifier."""
     return notify_discord(text)
@@ -81,7 +109,15 @@ def _notify(text: str) -> bool:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="生成せず対象日のみ表示")
+    ap.add_argument(
+        "--min-entry-coverage",
+        type=float,
+        default=float(os.environ.get("AUTO_PREDICT_MIN_ENTRY_COVERAGE", "0.8")),
+        help="直近開催日で出走馬が入っているレースの最低割合。これを下回ったら "
+             "publish せず exit 2 (既定 0.8)",
+    )
     args = ap.parse_args()
+    min_coverage = args.min_entry_coverage
 
     today = date.today()
     cand = [(today + timedelta(days=i)).strftime("%Y%m%d") for i in (0, 1)]
@@ -94,6 +130,29 @@ def main() -> int:
     d_from, d_to = targets[0][0], targets[-1][0]
     n_races = sum(n for _, n in targets)
     print(f"generate: {d_from}-{d_to} ({n_races} races)")
+
+    # 出走馬取り込みゲート (2026-08-22 追加)。
+    # 直近開催日 (d_from) の出走馬がそろっていなければ publish しない。空ページを
+    # 出すよりも「出さずに通知して次の起動で再試行」のほうが実害が小さい
+    # (2026-07-25 / 08-01 は全 36 レース「出走馬未取得」の 46KB ページを公開して
+    # しまい、その日の予想が丸ごと失われた)。閾値は env で調整可。
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        with_entries, total = _entry_coverage(conn, d_from)
+    finally:
+        conn.close()
+    coverage = (with_entries / total) if total else 0.0
+    print(f"entry coverage {d_from}: {with_entries}/{total} ({coverage:.0%})")
+    if coverage < min_coverage:
+        msg = (
+            f"⚠ 予想生成を中止: {d_from} の出走馬が未取り込み "
+            f"({with_entries}/{total} = {coverage:.0%} < {min_coverage:.0%})。"
+            "次の起動で再試行します (空ページは publish しません)。"
+        )
+        print(msg)
+        if not args.dry_run:
+            _notify(msg)
+        return 2
     if args.dry_run:
         return 0
 

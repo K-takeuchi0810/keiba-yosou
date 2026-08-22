@@ -78,11 +78,13 @@ def test_weekly_monitor_runs_safety_checks_before_isolated_pytest() -> None:
     assert "$null=$p.Handle" in source
 
 
-def test_auto_predict_task_registers_both_daily_triggers() -> None:
+def test_auto_predict_task_registers_three_daily_triggers() -> None:
+    """08:00 / 09:00 / 11:00。3 本目は出走馬が遅れて届く日の救済 (2026-08-22)。"""
     source = (ROOT / "scripts" / "register_auto_predict_task.ps1").read_text(
         encoding="ascii"
     )
 
     assert '[string]$StartTime = "08:00"' in source
     assert '[string]$SecondStartTime = "09:00"' in source
-    assert source.count("New-ScheduledTaskTrigger -Daily -At") == 2
+    assert '[string]$ThirdStartTime = "11:00"' in source
+    assert source.count("New-ScheduledTaskTrigger -Daily -At") == 3
