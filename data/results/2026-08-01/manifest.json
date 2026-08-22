@@ -1,0 +1,39 @@
+{
+  "date": "20260801",
+  "generated_at": "2026-08-22T09:11:45",
+  "source_html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-08-01\\predictions_source_20260801_113005_git935dfae.html",
+  "source_html_sha256": "e87e65cf73c1d510be34e2fac2e4cab325b6f1a16920582a2cda0b2f292aa012",
+  "version_meta": {
+    "calibrator": "isotonic (p26-lgbm-v6-calibfit-2025_isotonic, 2026-07-03)",
+    "lgbm": "lgbm-v6-rel-draw-clean-tuned-fixed (2026-07-02)",
+    "git_sha": "935dfae"
+  },
+  "builder_git_sha": "4ff5c0ff9ad7d7820da407d9ff6839589e918bb2",
+  "builder_git_dirty": true,
+  "supersedes_manifest_sha256": null,
+  "warnings": {
+    "schema": 2,
+    "excluded_placeholder_rows": 0,
+    "null_odds_fetched_at_rows": 0,
+    "post_start_stamped_rows": 0,
+    "post_start_unclassified_rows": 0,
+    "morning_popularity_populated_rows": 0
+  },
+  "counts": {
+    "html_races_parsed": 36,
+    "html_horses_parsed": 0,
+    "html_top_picks_parsed": 0,
+    "predictions": 0,
+    "final_odds": 463,
+    "race_results": 463,
+    "payouts": 36,
+    "evaluation_summary": 0
+  },
+  "csv_sha256": {
+    "predictions.csv": "68d5c05cb69d8fb245c3d156181ec7be0a18042267fc7b2d06b49ad5e01a947d",
+    "final_odds.csv": "76c79dc7472a962b1a58a46da4f950ef5cca6d246e0dfdc954b43543b0857a2b",
+    "race_results.csv": "9ab1f276340601f313c5d4c22b05a3c97bd2cf4ee6c0fead63b9be1955098af7",
+    "payouts.csv": "ea4ab55358f612e34a09171d56f4d676b869c615030a26e03336decb34ecea78",
+    "evaluation_summary.csv": "456c195bafff4e1c0bc9e7ffa8f8ce021974fd23bc65b4c8d21085ceabda8cfc"
+  }
+}
