@@ -377,7 +377,9 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
         if leg in ("1", "2"):
             score += _w("distance.long_front_leg_bonus", 3)
             note = "長距離向き脚質"
-            if not feat.get("leg_quality_available") and feat.get("estimated_leg_code"):
+            # leg_code は常に過去走からの推定 (2026-08-23 PIT 修正)。
+            # 「推定である」ことを常に開示する。
+            if feat.get("estimated_leg_code"):
                 note += f"(推定{feat.get('estimated_leg_samples', 0)}走)"
             reasons.append(note)
 
@@ -569,7 +571,7 @@ def _score_one(horse: dict, feat: dict) -> tuple[float, list[str]]:
     if same_leg_rivals >= 5:
         score += _w("pace.same_leg_many", -2)
         reasons.append("同脚質過多")
-    if leg and not feat.get("leg_quality_available") and feat.get("estimated_leg_code"):
+    if leg and feat.get("estimated_leg_code"):
         reasons.append(f"脚質推定{leg}({feat.get('estimated_leg_samples', 0)}走)")
 
     # 異常区分（取消・除外）。これは「数値ペナルティ」ではなく

@@ -367,8 +367,17 @@ def trainer_winrate(
     return wins / len(rows), len(rows)
 
 
-def same_day_track_bias(conn: sqlite3.Connection, horse: dict, race: dict) -> tuple[bool, int]:
-    leg = (horse.get("leg_quality_code") or "").strip()
+def same_day_track_bias(
+    conn: sqlite3.Connection, horse: dict, race: dict, leg: str = ""
+) -> tuple[bool, int]:
+    """当日の馬場が leg (脚質) に有利かの legacy 判定。
+
+    **leg は呼び出し側から渡す**。以前は `horse["leg_quality_code"]` を直読して
+    いたが、これは当該レースの発走後値で、backtest では埋まり live では空になる
+    train-serve skew の原因だった (2026-08-23 検出、PIT パリティテストで検知)。
+    渡さなければ 0 を返す fail-closed。
+    """
+    leg = (leg or "").strip()
     if not leg or not race.get("start_time"):
         return False, 0
     rows = conn.execute(
@@ -397,8 +406,16 @@ def same_day_track_bias(conn: sqlite3.Connection, horse: dict, race: dict) -> tu
     return hits / len(rows) >= 0.45, len(rows)
 
 
-def same_day_track_bias_detail(conn: sqlite3.Connection, horse: dict, race: dict) -> tuple[int, int, str]:
-    leg = (horse.get("leg_quality_code") or "").strip()
+def same_day_track_bias_detail(
+    conn: sqlite3.Connection, horse: dict, race: dict, leg: str = ""
+) -> tuple[int, int, str]:
+    """当日の馬場傾向による加減点。**leg は呼び出し側から渡す** (上記と同じ理由)。
+
+    設計意図 (同日の前レース結果から馬場傾向を測る) 自体は発走前情報で成立するが、
+    「その馬が今走どう走るか」は発走前には分からないため、過去走からの推定脚質
+    (`estimated_leg_code`) を使う。
+    """
+    leg = (leg or "").strip()
     if not leg or not race.get("start_time"):
         return 0, 0, ""
     family = _surface_family(race.get("track_type_code"))
@@ -1028,14 +1045,19 @@ def compute_features(
         "same_bucket_runs": 0,
         "same_bucket_top3": 0,
         "same_bucket_wins": 0,
-        "leg_code": (horse.get("leg_quality_code") or "").strip(),
-        # raw_leg_code はモデル特徴では**ない** (leg_quality_code は post-race 値で
-        # v6 から除外済)。GUI/HTML の表示・過去走解析用に生値を保持するだけ。
-        # モデルに入れるなら発走前取得可能なことの実証が先 (2026-07-03 監査注記)。
+        # leg_code は **必ず過去走からの推定** (estimated_leg_code) で埋める。
+        # 当該レースの leg_quality_code は発走後値であり、以前はこれを第一候補に
+        # していたため backtest と live で展開シグナル (pace.*) が最大 7 点乖離して
+        # いた (2026-08-23 検出。実測 159 頭中 64% で乖離)。
+        # 発走後値は raw_leg_code に隔離し、表示・過去走解析にのみ使う。
+        "leg_code": "",
         "raw_leg_code": (horse.get("leg_quality_code") or "").strip(),
         "estimated_leg_code": "",
         "estimated_leg_samples": 0,
-        "leg_quality_available": bool((horse.get("leg_quality_code") or "").strip()),
+        # 「推定脚質が得られたか」の意味。以前は「当該レースの発走後脚質があるか」
+        # だったため、訓練時は常に True / 本番は常に False の定数反転特徴だった
+        # (LGBM gain は 0 = 分岐未使用だったので実害は無かったが定義が誤り)。
+        "leg_quality_available": False,
         "same_day_bias_available": False,
         "needs_post_race_data": [],
         "class_level_runs": 0,
@@ -1095,8 +1117,9 @@ def compute_features(
         estimated_leg, estimated_leg_samples = estimate_leg_code(past)
         feat["estimated_leg_code"] = estimated_leg
         feat["estimated_leg_samples"] = estimated_leg_samples
-        if not feat["leg_code"] and estimated_leg:
-            feat["leg_code"] = estimated_leg
+        # 無条件に推定値を採る (発走後値へのフォールバックは作らない)
+        feat["leg_code"] = estimated_leg
+        feat["leg_quality_available"] = bool(estimated_leg)
         recent3 = [p for p in past[:3] if p["confirmed_order"] > 0]
         if recent3:
             finishes = [p["confirmed_order"] for p in recent3]
@@ -1245,8 +1268,10 @@ def compute_features(
         # weight_trend (馬体重トレンド) は過去計算していたが rules.py で
         # 一度も使われていない dead feature だったため P1-1 で削除済み。
         # 復活させるなら過去走の weight_change_sign を取得する経路から作り直し。
-    if not feat["leg_quality_available"] and feat["estimated_leg_code"]:
-        feat["needs_post_race_data"].append("leg_quality_code")
+    # leg_code は常に推定値なので「発走後データ待ち」ではない。推定できなかった
+    # (過去走が無い) ことだけを警告する。
+    if not feat["estimated_leg_code"]:
+        feat["needs_post_race_data"].append("leg_estimate_unavailable")
 
     # OP/重賞時のみ「同格以上の接戦敗」を集計 (高コストなので閾値で守る)
     if feat["current_race_level"] >= 5:
@@ -1301,7 +1326,8 @@ def compute_features(
     feat["trainer_win_rate"] = rate
     feat["trainer_runs"] = n
 
-    leg = (horse.get("leg_quality_code") or "").strip()
+    # cache キーと bias 計算はどちらも **推定脚質** を使う (発走後値は使わない)
+    leg = (feat.get("leg_code") or "").strip()
     race_bias_key = (
         "same_day_bias",
         race.get("race_year"), race.get("race_month_day"), race.get("track_code"),
@@ -1312,12 +1338,12 @@ def compute_features(
     _legacy_bias, legacy_n = _cached(
         cache,
         race_bias_key + ("legacy",),
-        lambda: same_day_track_bias(conn, horse, race),
+        lambda: same_day_track_bias(conn, horse, race, leg),
     )
     score, n, note = _cached(
         cache,
         race_bias_key + ("detail",),
-        lambda: same_day_track_bias_detail(conn, horse, race),
+        lambda: same_day_track_bias_detail(conn, horse, race, leg),
     )
     feat["same_day_bias_score"] = score
     feat["same_day_bias_note"] = note
