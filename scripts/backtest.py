@@ -34,6 +34,7 @@ from predictor.calibration import (
 )
 from config import PIT_GATE_MINUTES  # noqa: E402
 from predictor.pit_market import apply_pit_odds, summarize_coverage
+from predictor.pit_view import mask_post_race
 from predictor.rules import is_tentative, predict_race
 
 
@@ -818,27 +819,33 @@ def run_backtest(
                 n_no_horses += 1
                 continue
 
-            # 改革 R1-1: PIT モード。市場列を「発走 T−n 分時点で観測可能だった値」に
-            # 差し替えて、live (T−10 判断) と同じ入力で評価する。確定オッズを見た
-            # 従来モードとの差が train-serve skew の実測値そのものになる。
-            # fail-closed なので観測できなかった馬のオッズは None (= 市場情報なし)。
+            # 改革 R1-1 / P0: PIT モードでは「予想に見せる情報」と「採点に使う情報」を
+            # 明確に分ける。
+            #   pred_horses = 発走 T−n 分の時点で観測できたものだけ (予想の入力)
+            #   horses      = 結果を含む全情報 (的中・払戻の採点にのみ使う)
+            # オッズは pit_market が T−n 時点に再構成し、着順・脚質・コーナー通過順
+            # 等の発走後列は pit_view がマスクする。後者を入れ忘れていたため
+            # 2026-08-23 まで backtest だけルールスコアが最大 15 点高い状態だった。
             if pit_odds:
-                horses, _pit_meta = apply_pit_odds(conn, race, horses)
+                pred_horses, _pit_meta = apply_pit_odds(conn, race, horses)
+                pred_horses = [mask_post_race(h) for h in pred_horses]
                 pit_metas.append(_pit_meta)
+            else:
+                pred_horses = horses
 
-            _add_market_snapshot_race(market_snapshot_stats, race, horses, pop_cfg)
+            _add_market_snapshot_race(market_snapshot_stats, race, pred_horses, pop_cfg)
 
             # post-start / stale odds snapshot のレースを EV・filter・回収率から除外。
             # 歴史的な確定オッズ (odds_fetched_at=NULL) は信頼するので対象外。
             # PIT モードでは定義上 post-start が混入しないためゲートは無効化する
             # (差し替え後の odds_fetched_at は必ず cutoff 以前)。
             if (not pit_odds) and exclude_untrusted_odds and race_odds_untrusted(
-                horses, race, pop_cfg.get("max_snapshot_age_min")
+                pred_horses, race, pop_cfg.get("max_snapshot_age_min")
             ):
                 n_odds_untrusted += 1
                 continue
 
-            preds = predict_race(horses, conn=conn, race=race, cache=feature_cache)
+            preds = predict_race(pred_horses, conn=conn, race=race, cache=feature_cache)
             tentative = is_tentative(preds)
             if skip_tentative and tentative:
                 n_tentative_skipped += 1
@@ -849,16 +856,20 @@ def run_backtest(
                 n_no_pick += 1
                 continue
 
-            top_horse = next((h for h in horses if h.get("horse_num") == top.horse_num), None)
+            # 判断時点の属性 (オッズ・人気・鮮度) は pred_horses、
+            # 結果 (confirmed_order) は horses から取る。混ぜると採点が壊れる。
+            top_horse = next((h for h in pred_horses if h.get("horse_num") == top.horse_num), None)
             if not top_horse:
                 n_no_pick += 1
                 continue
-            horse_by_num = {h.get("horse_num"): h for h in horses}
-            race_for_bonus = race if race.get("starter_count") else {**race, "starter_count": len(horses)}
+            horse_by_num = {h.get("horse_num"): h for h in pred_horses}
+            result_by_num = {h.get("horse_num"): h for h in horses}
+            race_for_bonus = race if race.get("starter_count") else {**race, "starter_count": len(pred_horses)}
             for pred in preds:
                 horse = horse_by_num.get(pred.horse_num)
                 if not horse:
                     continue
+                result = result_by_num.get(pred.horse_num) or {}
                 # P17 A2 c1 (2026-05-17): calibrator fit 入力を切替え。
                 # 旧: `pred.win_probability` (= investment_probability、
                 #     calibrator + market_blend + odds_discount 適用後、race 内非正規化)
@@ -874,7 +885,7 @@ def run_backtest(
                     {
                         "probability": pred.raw_blended_probability,
                         "investment_probability": pred.win_probability,
-                        "actual": 1 if horse.get("confirmed_order") == 1 else 0,
+                        "actual": 1 if result.get("confirmed_order") == 1 else 0,
                         "confidence": pred.confidence,
                         "bonus_candidate": _horse_bonus_candidate(horse, race_for_bonus, pop_cfg),
                         # 2026-06-17 外部レビュー追記: age tier 別 reliability の
