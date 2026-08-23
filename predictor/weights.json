@@ -170,5 +170,10 @@
     "top3_2plus_bonus": 3,
     "trend_up_bonus": 2,
     "trend_down_penalty": -2
+  },
+  "residual": {
+    "_comment": "改革 R1-2 (2026-08-24): p = 市場確率 × exp(λ×残差) の λ。PRED_BLEND_MODE=residual で有効。答え合わせ 564 戦の実測 λ=+0.040 CI[-0.53,+0.53]、fade 側スロープ +0.19 / boost 側 -0.42 (市場の 2.7 倍以上に評価した 26 戦は全敗) が根拠",
+    "lambda_fade": 0.3,
+    "lambda_boost": 0.0
   }
 }

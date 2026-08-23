@@ -1236,6 +1236,32 @@ def _investment_probability(
             )
             z = max(-60.0, min(60.0, z))
             return max(0.0, min(1.0, 1.0 / (1.0 + math.exp(-z))))
+    # ===== 残差形式 (改革 R1-2、2026-08-24) =====
+    # p = 市場確率 × exp(λ × 残差)、残差 = log(モデル確率 / 市場確率)
+    #   λ=0 → 市場そのまま / λ=1 → モデルそのまま (幾何ブレンド)
+    #
+    # 現行の線形 blend は model_weight 0.62-0.85 とモデル側が支配的だが、
+    # 答え合わせ 564 戦の実測で λ の推定値は **+0.040、95% CI [-0.53, +0.53]**
+    # (16 開催日クラスタ bootstrap)。λ=1 (残差を額面通り信じる) は 95% で棄却され、
+    # λ=0 (市場そのまま) は棄却できない。Brier も市場 0.1468 < モデル 0.1566 で
+    # 市場のほうが正確だった。
+    #
+    # さらに符号で非対称: モデルが市場より **下げる** (fade) 方向は実現スロープ
+    # +0.19 でわずかに情報があり、**上げる** (boost) 方向は -0.42 で逆効果
+    # (市場の 2.7 倍以上に評価した 26 戦は全敗)。よって λ を fade / boost で
+    # 分けて持つ。既定値の根拠は上記実測だが CI は広いので、採用は
+    # paired backtest の非劣化ゲート通過を条件とする。
+    if os.environ.get("PRED_BLEND_MODE", "linear") == "residual" and market_probability > 0:
+        residual = math.log(model_probability / market_probability)
+        if residual < 0:
+            lam = _w("residual.lambda_fade", 0.30)
+        else:
+            lam = _w("residual.lambda_boost", 0.0)
+        blended = market_probability * math.exp(lam * residual)
+        # odds discount は通さない。market_probability は race 内正規化済みで
+        # 控除率が既に落ちており、その上に帯別 discount を掛けると二重割引になる。
+        return max(0.0, min(1.0, blended))
+
     model_weight = {
         "高信頼": _w("model_blend.high", 0.72),
         "標準": _w("model_blend.standard", 0.62),
