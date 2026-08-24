@@ -22,7 +22,7 @@ import os
 import math
 import json
 import sqlite3
-from dataclasses import dataclass, field
+from dataclasses import dataclass, replace, field
 from datetime import datetime
 from pathlib import Path
 
@@ -1476,6 +1476,29 @@ def predict_race(
                 raw_blended_probability=round(blended.get(horse_num_key, 0.0), 6),
             )
         )
+
+    # ===== 印を確率順に付け替える (改革 柱 3、2026-08-24) =====
+    # 既定 (PRED_RANK_BY 未設定 or "score") では従来どおり **ルールスコア順**。
+    #
+    # なぜ切替が必要か: 印はルールスコア順、表示 P は「ルール+LGBM → 校正 →
+    # 市場ブレンド」順で、**別のランカー**になっている。実測で ◎ が最高 P でない
+    # レースが 39.2% (v6 期 360 戦)。この構造のため、確率の作り方 (R1-2 の残差
+    # 形式) をいくら直しても ◎ が変わらず、回収率が一切動かない
+    # (2026-08-24 の λ sweep で 5 設定すべて 70.5% と完全一致して判明)。
+    #
+    # "probability" にすると出力順を win_probability 降順にし、印を付け替える。
+    # λ=0 (市場そのまま) なら ◎ = 市場最上位となり、1 番人気ベタと同じ挙動になる。
+    # confidence / rationale はスコア側の構造を保持する (信頼度はスコア差の
+    # 概念であり、確率順で再計算する意味がないため)。
+    if os.environ.get("PRED_RANK_BY", "score") == "probability" and out:
+        out.sort(key=lambda p: (-(p.win_probability or 0.0),
+                                int(p.horse_num or "99")))
+        reranked: list[Prediction] = []
+        for new_rank, pred in enumerate(out, start=1):
+            mark = "" if all_tied and new_rank > 3 else (
+                MARKS[new_rank - 1] if new_rank <= len(MARKS) else "")
+            reranked.append(replace(pred, rank=new_rank, mark=mark))
+        out = reranked
     return out
 
 

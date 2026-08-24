@@ -803,6 +803,10 @@ def run_backtest(
         bucket_stats: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
         feature_cache: dict = {}
         pit_metas: list[dict] = []
+        # レース単位の賭け記録 (PIT モードのみ)。「市場情報が取れたレースだけ」
+        # 等の事後スライスを、再計算なしで行えるようにする。1,032 行程度なので
+        # JSON に同梱しても軽い。
+        pit_bet_log: list[dict] = []
 
         for i, race in enumerate(races, 1):
             if progress_every and i % progress_every == 0:
@@ -930,6 +934,20 @@ def run_backtest(
                     continue
 
             n_bet += 1
+            if pit_odds:
+                pit_bet_log.append({
+                    "race": (f"{race['race_year']}{race['race_month_day']}"
+                             f"-{race['track_code']}-{race['race_num']}"),
+                    "has_market": bool(_pit_meta.get("has_market")),
+                    "coverage": _pit_meta.get("coverage"),
+                    "pick": top.horse_num,
+                    "odds": (top_horse.get("win_odds") or 0) / 10.0,
+                    "popularity": top_horse.get("win_popularity") or 0,
+                    "confidence": top.confidence,
+                    "payout": payout,
+                    "hit": 1 if payout > 0 else 0,
+                    "buy_only": bool(buy_only_match),
+                })
             if not payout_present:
                 n_filtered_missing_payouts += 1
             total_bet += 100
@@ -997,6 +1015,7 @@ def run_backtest(
         "pit_odds": pit_odds,
         "pit_gate_minutes": PIT_GATE_MINUTES if pit_odds else None,
         "pit_coverage": summarize_coverage(pit_metas) if pit_odds else None,
+        "pit_bet_log": pit_bet_log if pit_odds else None,
         "races_odds_untrusted": n_odds_untrusted,
         "races_no_horses": n_no_horses,
         "races_no_pick": n_no_pick,

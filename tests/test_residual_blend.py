@@ -115,3 +115,57 @@ def test_weights_json_declares_residual_defaults():
         "boost の既定は 0 (実測で boost 方向は逆効果だった)"
     )
     assert 0.0 <= w["residual"]["lambda_fade"] <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# 印を確率順に付け替える機能 (改革 柱 3)
+# ---------------------------------------------------------------------------
+
+def _fake_horses():
+    """オッズだけが違う 3 頭。ルールスコアは過去走が無いので同点になる。"""
+    return [
+        {"horse_num": "01", "win_odds": 100, "win_popularity": 3, "mining_predicted_order": 3},
+        {"horse_num": "02", "win_odds": 20, "win_popularity": 1, "mining_predicted_order": 2},
+        {"horse_num": "03", "win_odds": 50, "win_popularity": 2, "mining_predicted_order": 1},
+    ]
+
+
+def test_rank_by_score_is_the_default(monkeypatch):
+    """PRED_RANK_BY 未設定なら従来どおりスコア順 (挙動を変えない)。"""
+    monkeypatch.delenv("PRED_RANK_BY", raising=False)
+    monkeypatch.delenv("PRED_BLEND_MODE", raising=False)
+    from predictor.rules import predict_race
+
+    preds = predict_race(_fake_horses())
+    # DB 無しのフォールバック経路ではマイニング順位がスコアの主因になる
+    top = next(p for p in preds if p.rank == 1)
+    assert top.horse_num == "03", "mining 1 位がスコア最上位 = 従来挙動"
+
+
+def test_rank_by_probability_reorders_marks(monkeypatch):
+    """PRED_RANK_BY=probability で印が確率順に付け替わること。"""
+    monkeypatch.setenv("PRED_RANK_BY", "probability")
+    from predictor.rules import predict_race
+
+    preds = predict_race(_fake_horses())
+    ranks = sorted(preds, key=lambda p: p.rank)
+    probs = [p.win_probability for p in ranks]
+    assert probs == sorted(probs, reverse=True), "確率の降順に並んでいる"
+    assert ranks[0].mark == "◎" and ranks[1].mark == "○"
+
+
+def test_rank_by_probability_with_lambda_zero_follows_market(monkeypatch):
+    """λ=0 (市場そのまま) なら ◎ は市場最上位 (= 1 番人気) になる。
+
+    これが「オッズに従う」設定の定義。実測で 1 番人気ベタは 79% で、
+    モデル ◎ ベタ 71.5% より良かったので、この挙動が比較の基準線になる。
+    """
+    monkeypatch.setenv("PRED_RANK_BY", "probability")
+    monkeypatch.setenv("PRED_BLEND_MODE", "residual")
+    monkeypatch.setenv("PRED_W_residual_lambda_fade", "0.0")
+    monkeypatch.setenv("PRED_W_residual_lambda_boost", "0.0")
+    from predictor.rules import predict_race
+
+    preds = predict_race(_fake_horses())
+    top = next(p for p in preds if p.rank == 1)
+    assert top.horse_num == "02", "最低オッズ (=1 番人気) が ◎ になる"
