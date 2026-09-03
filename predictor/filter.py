@@ -92,6 +92,15 @@ def is_buy_candidate(
     if tentative or pred.rank != 1 or not pred.mark:
         return False
 
+    # 市場情報が無いレースを買い候補から外す (2026-08-24)。
+    # 実測で 239 戦 / 回収 50.0% (オッズ取得できた 793 戦は 76.7%) と 26.7pt の
+    # 劣化があり、これは本プロジェクトで見つかった最も大きく明確な単一の差。
+    # 「オッズが 1 頭も取れていない」= win_odds が無い状態を判定する。
+    if filter_spec.get("require_market"):
+        odds = horse.get("win_odds")
+        if not odds or odds <= 0:
+            return False
+
     # オッズ鮮度 (ライブ運用時のみ)。古いオッズで計算した EV/Kelly は
     # 現実の市場とずれているため候補にしない (fail-safe)。
     if now is not None:

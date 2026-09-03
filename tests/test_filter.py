@@ -246,3 +246,30 @@ def test_suspension_env_is_tracked_in_backtest_meta():
         encoding="utf-8"
     )
     assert '"BET_FILTER_IGNORE_SUSPENSION"' in source
+
+
+def test_require_market_excludes_races_without_odds(monkeypatch):
+    """市場情報が無い馬を買い候補から外すこと (2026-08-24)。
+
+    実測: 発走 T−n 分にオッズが 1 頭も取れなかった 239 戦は回収 50.0% で、
+    取れた 793 戦の 76.7% に対し 26.7pt 劣化していた。本プロジェクトで
+    見つかった最も大きく明確な単一の差なので、ここを塞ぐ。
+    """
+    monkeypatch.setenv("BET_FILTER_IGNORE_SUSPENSION", "1")
+    sp = spec(require_market=True)
+    # オッズあり → 通る
+    assert is_buy_candidate(FakePred(), horse(win_odds=80), False, filter_spec=sp)
+    # オッズなし (T−n で 1 頭も取れなかった) → 落ちる
+    assert not is_buy_candidate(FakePred(), horse(win_odds=None), False, filter_spec=sp)
+    assert not is_buy_candidate(FakePred(), horse(win_odds=0), False, filter_spec=sp)
+
+
+def test_require_market_off_keeps_old_behaviour(monkeypatch):
+    monkeypatch.setenv("BET_FILTER_IGNORE_SUSPENSION", "1")
+    sp = spec(require_market=False)
+    assert is_buy_candidate(FakePred(), horse(win_odds=None), False, filter_spec=sp)
+
+
+def test_config_default_requires_market():
+    from config import BUY_FILTER_DEFAULT
+    assert BUY_FILTER_DEFAULT["require_market"] is True

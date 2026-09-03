@@ -748,6 +748,7 @@ def run_backtest(
     progress_every: int = 200,
     exclude_untrusted_odds: bool = True,
     pit_odds: bool = False,
+    require_market: bool = False,
 ) -> dict:
     started = time.time()
     buy_filter = buy_filter_from_generator() if filter_from_config else None
@@ -807,6 +808,7 @@ def run_backtest(
         # 等の事後スライスを、再計算なしで行えるようにする。1,032 行程度なので
         # JSON に同梱しても軽い。
         pit_bet_log: list[dict] = []
+        n_no_market = 0
 
         for i, race in enumerate(races, 1):
             if progress_every and i % progress_every == 0:
@@ -834,6 +836,13 @@ def run_backtest(
                 pred_horses, _pit_meta = apply_pit_odds(conn, race, horses)
                 pred_horses = [mask_post_race(h) for h in pred_horses]
                 pit_metas.append(_pit_meta)
+                # 市場情報が 1 頭も取れなかったレースを評価から外す。
+                # 実測 (2026-08-24): 市場なし 239 戦の回収 50.0% に対し
+                # 市場あり 793 戦は 76.7% で 26.7pt の差。予想を出さない判断の
+                # 効果を測るためのフラグ。
+                if require_market and not _pit_meta.get("has_market"):
+                    n_no_market += 1
+                    continue
             else:
                 pred_horses = horses
 
@@ -1016,6 +1025,8 @@ def run_backtest(
         "pit_gate_minutes": PIT_GATE_MINUTES if pit_odds else None,
         "pit_coverage": summarize_coverage(pit_metas) if pit_odds else None,
         "pit_bet_log": pit_bet_log if pit_odds else None,
+        "require_market": require_market,
+        "races_no_market_skipped": n_no_market,
         "races_odds_untrusted": n_odds_untrusted,
         "races_no_horses": n_no_horses,
         "races_no_pick": n_no_pick,
@@ -1296,6 +1307,13 @@ def main() -> int:
              "鮮度ゲートの寄与を ablation で測りたいときだけ使う。",
     )
     ap.add_argument(
+        "--require-market",
+        action="store_true",
+        help="発走 T−n 分の時点で市場情報が 1 頭も取れなかったレースを評価から "
+             "外す (--pit-odds と併用)。実測でこの群は回収 50.0%% と 26.7pt 劣化して "
+             "おり、「情報が無いときに予想を出さない」ことの効果を測るためのフラグ",
+    )
+    ap.add_argument(
         "--pit-odds",
         action="store_true",
         help="市場列を「発走 T−n 分時点で観測可能だった値」に差し替えて評価する "
@@ -1322,6 +1340,7 @@ def main() -> int:
         db_path=args.db,
         exclude_untrusted_odds=not args.no_odds_gate,
         pit_odds=args.pit_odds,
+        require_market=args.require_market,
     )
     print(format_report(result))
 

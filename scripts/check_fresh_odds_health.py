@@ -152,6 +152,11 @@ def evaluate_coverage(
         "ok_races_today": 0,
         "error_races_today": 0,
         "skipped_late_races_today": 0,
+        # 今日 DB に存在するレース数 (fetch_fresh_odds が coverage JSONL に
+        # total_races_in_db として書いている値の最大)。0 なら非開催日で、
+        # 「取得実績ゼロ」は正常な状態になる (2026-09-03 の誤検知対応)。
+        "races_in_db_today": 0,
+        "is_race_day": False,
         "contamination_detected": False,
         "contamination_examples": [],
         # 既知 source が想定稼働窓の外に居る「自己申告↔時刻の不一致」。混入 (FAIL) では
@@ -248,6 +253,9 @@ def evaluate_coverage(
         out["ok_races_today"] = sum(int(r.get("ok_races") or 0) for r in valid)
         out["error_races_today"] = sum(int(r.get("error_races") or 0) for r in valid)
         out["skipped_late_races_today"] = sum(int(r.get("skipped_late_races") or 0) for r in valid)
+        out["races_in_db_today"] = max(
+            (int(r.get("total_races_in_db") or 0) for r in valid), default=0)
+        out["is_race_day"] = out["races_in_db_today"] > 0
 
     # 判定
     if out["contamination_detected"]:
@@ -263,14 +271,22 @@ def evaluate_coverage(
             f"coverage JSONL has no entries today after {threshold.isoformat()}"
         )
         return out
-    if out["ok_races_today"] == 0:
+    if out["is_race_day"] and out["ok_races_today"] == 0:
         out["reason"] = (
-            f"scheduler fired but ok_races_today=0 "
-            f"(errors={out['error_races_today']}, skipped_late={out['skipped_late_races_today']})"
+            f"scheduler fired but ok_races_today=0 on a race day "
+            f"(races_in_db={out['races_in_db_today']}, "
+            f"errors={out['error_races_today']}, skipped_late={out['skipped_late_races_today']})"
         )
         return out
     out["ok"] = True
-    out["reason"] = f"ok_races_today={out['ok_races_today']}"
+    if out["is_race_day"]:
+        out["reason"] = f"ok_races_today={out['ok_races_today']}"
+    else:
+        # 非開催日: 取得対象レースが 0 件なので ok_races_today=0 は正常。
+        # ここを区別していなかったため平日は毎回 HOLD 通知が出ており
+        # (2026-09-03、Discord に届いて判明)、alert fatigue で本物の障害を
+        # 見逃す状態だった。scheduler が動いていること自体は別途検査済み。
+        out["reason"] = "not a race day (races_in_db_today=0); nothing to fetch"
     if out["source_time_mismatch_examples"]:
         out["reason"] += (
             f" | WARN: {len(out['source_time_mismatch_examples'])} source/time mismatch "
@@ -392,6 +408,9 @@ def integrate_decision(
         return "HOLD", f"scheduler not yet fired today ({scheduler.get('reason')})"
     if not coverage.get("updated_today_after_check_time"):
         return "HOLD", f"coverage no fresh entries today ({coverage.get('reason')})"
+    if not coverage.get("is_race_day"):
+        # 非開催日は取得対象が無いので PASS (2026-09-03 の誤検知対応)。
+        return "PASS", "not a race day; scheduler healthy and nothing to fetch"
     if coverage.get("ok_races_today", 0) == 0:
         return "HOLD", coverage.get("reason", "ok_races_today=0")
     if db.get("fresh_horse_rows_since_check_time", 0) == 0:

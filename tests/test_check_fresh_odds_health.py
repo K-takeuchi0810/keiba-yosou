@@ -120,15 +120,38 @@ def test_coverage_ok_within_window(tmp_path):
     assert out["runs_today"] == 2
 
 
-def test_coverage_zero_ok_races_holds(tmp_path):
+def test_coverage_zero_ok_races_on_race_day_holds(tmp_path):
+    """開催日に取得ゼロなら HOLD (本物の障害)。total_races_in_db>0 が開催日の目印。"""
     p = tmp_path / "coverage.jsonl"
     _write_coverage(p, [
         {"run_at": "2026-06-20T09:00:30", "target_date": "20260620",
+         "total_races_in_db": 36,
          "eligible_races": 1, "ok_races": 0, "error_races": 1},
     ])
     out = mod.evaluate_coverage(p, "20260620", time(9, 0))
+    assert out["is_race_day"] is True
     assert out["ok"] is False
     assert "ok_races_today=0" in out["reason"]
+
+
+def test_coverage_zero_ok_races_on_non_race_day_passes(tmp_path):
+    """非開催日は取得ゼロが正常 (2026-09-03 の誤検知対応)。
+
+    平日は total_races_in_db=0 で取得対象が無いのに HOLD 判定になり、
+    Discord に HOLD 通知が出続けていた。alert fatigue で本物の障害を
+    見逃す状態だったので正常扱いに直した。
+    """
+    p = tmp_path / "coverage.jsonl"
+    _write_coverage(p, [
+        {"run_at": "2026-09-03T18:50:02", "target_date": "20260903",
+         "source": "fresh", "total_races_in_db": 0,
+         "eligible_races": 0, "ok_races": 0, "error_races": 0},
+    ])
+    out = mod.evaluate_coverage(p, "20260903", time(9, 0))
+    assert out["is_race_day"] is False
+    assert out["races_in_db_today"] == 0
+    assert out["ok"] is True
+    assert "not a race day" in out["reason"]
 
 
 def test_coverage_no_today_entries_holds(tmp_path):
@@ -364,7 +387,9 @@ def test_integrate_decision_hold_zero_db_rows():
         scheduler={"registered": True, "ran_today_after_check_time": True, "ok": True,
                    "last_task_result": 0, "last_run_time": "2026-06-20T09:00:00"},
         coverage={"exists": True, "contamination_detected": False,
-                  "updated_today_after_check_time": True, "ok_races_today": 5, "ok": True},
+                  "updated_today_after_check_time": True, "ok_races_today": 5, "ok": True,
+                  # 開催日であること (非開催日は取得ゼロが正常なので PASS になる)
+                  "is_race_day": True, "races_in_db_today": 36},
         db={"reachable": True, "fresh_horse_rows_since_check_time": 0, "ok": False,
             "reason": "no fresh rows yet"},
     )

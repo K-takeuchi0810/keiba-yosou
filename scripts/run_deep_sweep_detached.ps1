@@ -14,10 +14,12 @@ $py = Join-Path $repo ".venv64\Scripts\python.exe"
 if (-not (Test-Path $py)) { Write-Error "venv64 not found: $py"; exit 1 }
 
 # name, rank_by, lambda_fade, lambda_boost
+# name, rank_by, lambda_fade, lambda_boost, extra_args
 $runs = @(
-    @("p31-log-fade03", "probability", "0.3", "0.0"),
-    @("p31-log-score",  "score",       "0.0", "0.0")
+    @("p33-live-window-all",     "score", "0.0", "0.0", ""),
+    @("p33-live-window-require", "score", "0.0", "0.0", "--require-market")
 )
+# 2 本目は期間が違う (通年)。下のループで名前を見て切り替える。
 
 $logDir = Join-Path $repo "data\logs"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
@@ -32,7 +34,10 @@ foreach ($r in $runs) {
     $lines += '$env:PRED_W_residual_lambda_boost = "' + $r[3] + '"'
     $lines += '$env:PYTHONIOENCODING = "utf-8"'
     $lines += 'Add-Content -Path "' + $log + '" -Value ("--- ' + $r[0] + ' start " + (Get-Date -Format HH:mm))'
-    $lines += '& "' + $py + '" -m scripts.backtest --from 20260504 --to 20260816 --pit-odds --save --rule-version ' + $r[0] + ' *>> "' + $log + '"'
+    if ($r[0] -like "*live-window*") { $from = "20260718" } else { $from = "20260504" }
+    $extra = ""
+    if ($r.Count -gt 4) { $extra = " " + $r[4] }
+    $lines += '& "' + $py + '" -m scripts.backtest --from ' + $from + ' --to 20260816 --pit-odds' + $extra + ' --save --rule-version ' + $r[0] + ' *>> "' + $log + '"'
 }
 $lines += 'Add-Content -Path "' + $log + '" -Value ("=== all done " + (Get-Date -Format HH:mm))'
 
