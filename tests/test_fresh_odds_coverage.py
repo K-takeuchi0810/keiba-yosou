@@ -112,7 +112,13 @@ def test_main_prints_report_with_aggregate(monkeypatch, tmp_path, capsys):
     assert "Plan Step 4 参考" in out
 
 
-def test_find_run_gaps_detects_only_intervals_over_15_minutes():
+def test_find_run_gaps_ignores_single_missed_run():
+    """1 回飛び (20 分) は通知しない (2026-09-06 閾値見直し)。
+
+    取得は 10 分間隔なので 1 回落ちると必ず 20 分空く。閾値 15 分では
+    開催日ごとに WARNING が Discord に飛び (9/5 は 59 回中 2 回の飛びが
+    全て通知された)、alert fatigue で本物の欠測が埋もれていた。
+    """
     rows = [
         {"run_at": "2026-07-12T09:00:03"},
         {"run_at": "2026-07-12T09:10:03"},
@@ -120,31 +126,40 @@ def test_find_run_gaps_detects_only_intervals_over_15_minutes():
     ]
 
     gaps = mod._find_run_gaps(rows, now=datetime(2026, 7, 12, 9, 30))
+    assert gaps == [], "20 分 (1 回飛び) は許容"
+
+
+def test_find_run_gaps_detects_two_consecutive_misses():
+    """2 回以上連続で飛んだ (30 分以上) なら実害ありとして検出する。"""
+    rows = [
+        {"run_at": "2026-07-12T09:00:03"},
+        {"run_at": "2026-07-12T09:40:03"},
+    ]
+
+    gaps = mod._find_run_gaps(rows, now=datetime(2026, 7, 12, 9, 40))
     assert len(gaps) == 1
-    assert gaps[0][0].strftime("%H:%M") == "09:10"
-    assert gaps[0][1].strftime("%H:%M") == "09:30"
-    assert gaps[0][2] == 20
+    assert gaps[0][2] == 40
 
 
 def test_find_run_gaps_detects_missing_morning_edge():
     rows = [
-        {"target_date": "20260712", "run_at": "2026-07-12T09:20:00"},
+        {"target_date": "20260712", "run_at": "2026-07-12T09:40:00"},
         {"target_date": "20260712", "run_at": "2026-07-12T16:40:00"},
     ]
     gaps = mod._find_run_gaps(rows)
     assert (gaps[0][0].strftime("%H:%M"), gaps[0][1].strftime("%H:%M"), gaps[0][2]) == (
-        "09:00", "09:20", 20
+        "09:00", "09:40", 40
     )
 
 
 def test_find_run_gaps_detects_missing_evening_edge():
     rows = [
         {"target_date": "20260712", "run_at": "2026-07-12T09:00:00"},
-        {"target_date": "20260712", "run_at": "2026-07-12T16:20:00"},
+        {"target_date": "20260712", "run_at": "2026-07-12T16:00:00"},
     ]
     gaps = mod._find_run_gaps(rows)
     assert (gaps[-1][0].strftime("%H:%M"), gaps[-1][1].strftime("%H:%M"), gaps[-1][2]) == (
-        "16:20", "16:40", 20
+        "16:00", "16:40", 40
     )
 
 

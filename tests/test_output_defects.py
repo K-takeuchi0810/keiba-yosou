@@ -34,7 +34,13 @@ def test_top_probability_marker_only_when_it_differs_from_favorite():
     assert _top_probability_horse_num(aligned) is None
 
 
-def test_race_completeness_uses_only_today_and_tomorrow_and_strict_threshold():
+def test_race_completeness_uses_only_today_and_strict_threshold():
+    """完全性アラートは **今日のみ** を見る (2026-09-06 修正)。
+
+    JRA の出馬表は前日確定なので、土曜の朝に日曜分が空なのは正常。
+    翌日分を数えていたため 2 日開催の週末は毎回 empty_race_ratio≈47%
+    (72R 中 34R が空) となり、予想生成のたびに WARN が Discord に飛んでいた。
+    """
     days = [
         {
             "date": "2026/07/19",
@@ -56,10 +62,17 @@ def test_race_completeness_uses_only_today_and_tomorrow_and_strict_threshold():
     ]
 
     result = assess_race_completeness(days, today=date(2026, 7, 19))
-    assert result["total_races"] == 5
-    assert result["empty_races"] == 2
-    assert result["empty_race_ratio"] == 0.4
+    assert result["total_races"] == 4, "今日 (7/19) の 4 レースだけ"
+    assert result["empty_races"] == 1
+    assert result["empty_race_ratio"] == 0.25
     assert result["alert"] is True
+
+    # 翌日 (7/20) が全部空でもアラートにならない = 前日確定の正常状態
+    tomorrow_only_empty = assess_race_completeness(
+        [days[0], days[1]], today=date(2026, 7, 19), threshold=0.30
+    )
+    assert tomorrow_only_empty["total_races"] == 4
+    assert tomorrow_only_empty["alert"] is False
 
     exact_threshold = assess_race_completeness(
         days[:1], today=date(2026, 7, 19), threshold=0.25

@@ -157,6 +157,9 @@ def evaluate_coverage(
         # 「取得実績ゼロ」は正常な状態になる (2026-09-03 の誤検知対応)。
         "races_in_db_today": 0,
         "is_race_day": False,
+        # 取得窓 (発走 25-2 分前) に入ったレースの累計。0 なら「まだ取りに行く
+        # 対象が無い」ので ok_races=0 は正常。
+        "eligible_races_today": 0,
         "contamination_detected": False,
         "contamination_examples": [],
         # 既知 source が想定稼働窓の外に居る「自己申告↔時刻の不一致」。混入 (FAIL) では
@@ -255,6 +258,8 @@ def evaluate_coverage(
         out["skipped_late_races_today"] = sum(int(r.get("skipped_late_races") or 0) for r in valid)
         out["races_in_db_today"] = max(
             (int(r.get("total_races_in_db") or 0) for r in valid), default=0)
+        out["eligible_races_today"] = sum(
+            int(r.get("eligible_races") or 0) for r in valid)
         out["is_race_day"] = out["races_in_db_today"] > 0
 
     # 判定
@@ -272,9 +277,22 @@ def evaluate_coverage(
         )
         return out
     if out["is_race_day"] and out["ok_races_today"] == 0:
+        # 開催日でも「まだ 1 レースも取得窓 (発走 25-2 分前) に入っていない」
+        # 時間帯がある。第 1 レースは 9:50-10:05 発走が多く、9:15 の定期チェック
+        # 時点では eligible_races=0 が正常。これを HOLD にしていたため、開催日は
+        # 毎回「9:15 HOLD → 9:30 PASS」の 2 通が届いていた (2026-09-05/06 実測)。
+        # 取得対象レースが 1 度も現れていない (eligible 累計 0) 間は判定を保留する。
+        if out["eligible_races_today"] == 0:
+            out["ok"] = True
+            out["reason"] = (
+                "race day but no race has entered the fetch window yet "
+                f"(eligible_races_today=0, races_in_db={out['races_in_db_today']})"
+            )
+            return out
         out["reason"] = (
             f"scheduler fired but ok_races_today=0 on a race day "
             f"(races_in_db={out['races_in_db_today']}, "
+            f"eligible={out['eligible_races_today']}, "
             f"errors={out['error_races_today']}, skipped_late={out['skipped_late_races_today']})"
         )
         return out

@@ -44,16 +44,19 @@ def assess_race_completeness(
     today: date | None = None,
     threshold: float = 0.20,
 ) -> dict:
-    """Summarize empty races for today's/tomorrow's meeting days.
+    """Summarize empty races for **today's** meeting day.
 
     Historical races in a wider render window do not affect the publish alert.
     A ratio exactly on the threshold is accepted; only ``> threshold`` alerts.
+
+    翌日分は対象にしない (2026-09-06 修正)。JRA の出馬表は前日に確定するため、
+    土曜の朝に日曜のレースが空なのは**正常**。それを不完全として数えていたので、
+    2 日開催の週末は毎回 empty_race_ratio≈47% (72R 中 34R が空) となり、
+    予想生成のたびに WARN が Discord に飛んでいた。本アラートの目的は
+    「今日の予想が出せていない」ことの検知なので、今日だけを見る。
     """
     base_date = today or date.today()
-    target_dates = {
-        base_date.strftime("%Y%m%d"),
-        (base_date + timedelta(days=1)).strftime("%Y%m%d"),
-    }
+    target_dates = {base_date.strftime("%Y%m%d")}
     relevant_races = []
     for day in days:
         day_key = "".join(ch for ch in str(day.get("date") or "") if ch.isdigit())

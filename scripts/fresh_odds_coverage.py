@@ -39,7 +39,11 @@ from db import open_db_readonly
 COVERAGE_LOG_PATH = Path(__file__).resolve().parent.parent / "data" / "logs" / "fresh_odds_coverage.jsonl"
 GAP_WINDOW_START = (9, 0)
 GAP_WINDOW_END = (16, 40)
-GAP_THRESHOLD_MINUTES = 15
+# 取得は 10 分間隔なので、1 回飛ぶと 20 分空く。閾値 15 分だと 1 回の取りこぼしで
+# 毎回 Discord 通知が飛び、開催日ごとに WARNING が出続けていた (2026-09-05/06 実測。
+# 59 回実行中 2 回だけ 20 分空いたが、その 2 件が全て通知されていた)。
+# 「実害がある欠測」= 2 回以上連続で飛んだ (30 分以上) に閾値を上げる。
+GAP_THRESHOLD_MINUTES = 25
 
 
 def _notify_warnings(warnings: list[str]) -> None:
