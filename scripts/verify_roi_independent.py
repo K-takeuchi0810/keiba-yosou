@@ -16,6 +16,15 @@ backtest.py と意図的に変えている点:
     ◎ の抽出は rank/mark に依存せず「最大 score の馬」を独立に選ぶ
     (印付けロジックのバグを迂回する)
 
+**PIT の扱い (2026-09-06 修正)**: 初版は `mask_post_race` だけを掛けていたが、
+これは着順・脚質等の発走後列を落とすだけで、**市場列 (win_odds) は素通り**
+していた。そのため確定オッズ (発走後に判明する値) で予想する状態になり、
+かつ「市場情報が無いレース」が 1 件も検出されなかった (--require-market が
+無効。2026-09-06 に検算結果の突き合わせで発覚)。
+`predictor.pit_market.apply_pit_odds` を通して発走 T−n 分時点の市場に
+再構成する。これは backtest.py と共有する唯一の予想入力経路で、
+集計・払戻・母数の独立性は保たれる。
+
 usage:
     python -m scripts.verify_roi_independent --from 20260101 --to 20260816
 """
@@ -32,6 +41,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from db import DB_PATH, PROJECT_ROOT, SQL_VALID_HORSE_NUM  # noqa: E402
+from predictor.pit_market import apply_pit_odds  # noqa: E402
 from predictor.pit_view import mask_post_race  # noqa: E402
 from predictor.rules import predict_race  # noqa: E402
 
@@ -109,9 +119,12 @@ def run(from_date: str, to_date: str, db_path: str | None = None,
             skipped_no_horses += 1
             continue
 
-        # 予想入力は発走後列を落とす (backtest と同じ規律、ただし別経路で適用)
-        pred_input = [mask_post_race(h) for h in horses]
-        if require_market and not any((h.get("win_odds") or 0) > 0 for h in pred_input):
+        # 予想入力を発走 T−n 分時点の状態にする:
+        #   1) 市場列を PIT 再構成 (確定オッズを使わない)
+        #   2) 着順・脚質等の発走後列をマスク
+        pit_horses, pit_meta = apply_pit_odds(conn, race, horses)
+        pred_input = [mask_post_race(h) for h in pit_horses]
+        if require_market and not pit_meta.get("has_market"):
             skipped_no_market += 1
             continue
 
