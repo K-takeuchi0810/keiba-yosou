@@ -450,3 +450,62 @@ def test_main_writes_latest_and_history(monkeypatch, tmp_path):
     histories = list(runtime_dir.glob("fresh_odds_health_*.json"))
     # latest + history の少なくとも 2 ファイル
     assert len(histories) >= 2
+
+
+def test_coverage_marks_awaiting_first_window_on_race_day_morning(tmp_path):
+    """開催日の朝イチ (まだどのレースも取得窓に入っていない) を明示する。
+
+    第 1 レースは 9:50-10:05 発走が多く、取得窓 (発走 25-2 分前) に入るのは
+    9:25 以降。9:15 の定期チェックで取得実績が 0 なのは正常な状態。
+    """
+    p = tmp_path / "coverage.jsonl"
+    _write_coverage(p, [
+        {"run_at": "2026-09-13T09:00:03", "target_date": "20260913",
+         "source": "fresh", "total_races_in_db": 24,
+         "eligible_races": 0, "ok_races": 0, "error_races": 0},
+    ])
+    out = mod.evaluate_coverage(p, "20260913", time(9, 0))
+
+    assert out["is_race_day"] is True
+    assert out["awaiting_first_window"] is True
+    assert out["ok"] is True
+
+
+def test_integrate_decision_passes_while_awaiting_first_window():
+    """朝イチの「まだ取得対象なし」で HOLD を鳴らさない (2026-09-13 の誤検知)。
+
+    evaluate_coverage 側は ok=True にしていたのに、integrate_decision が
+    ok_races_today==0 を独立に見て HOLD を返していたため、開催日は毎回
+    「9:15 HOLD → 9:30 recovered PASS」の 2 通が Discord に届いていた。
+    判定を 2 箇所で持っていたのが原因なので、両方をこのテストで固定する。
+    """
+    decision, reason = mod.integrate_decision(
+        scheduler={"registered": True, "ran_today_after_check_time": True, "ok": True,
+                   "last_task_result": 0, "last_run_time": "2026-09-13T09:00:00"},
+        coverage={"exists": True, "contamination_detected": False,
+                  "updated_today_after_check_time": True, "is_race_day": True,
+                  "awaiting_first_window": True, "ok_races_today": 0, "ok": True,
+                  "reason": "race day but no race has entered the fetch window yet"},
+        db={"reachable": True, "fresh_horse_rows_since_check_time": 0, "ok": True},
+    )
+
+    assert decision == "PASS", f"朝イチで HOLD を鳴らしてはいけない ({reason})"
+
+
+def test_integrate_decision_still_holds_when_fetch_window_passed_with_no_success():
+    """取得窓に入ったのに 1 件も取れていないのは本物の障害なので HOLD のまま。
+
+    上の誤検知対応で「開催日の取得ゼロ」を一律 PASS にしてしまうと、
+    本物の取得停止 (2026-08 に 6 日間気づかなかった事故) を見逃す。
+    """
+    decision, _ = mod.integrate_decision(
+        scheduler={"registered": True, "ran_today_after_check_time": True, "ok": True,
+                   "last_task_result": 0, "last_run_time": "2026-09-13T11:00:00"},
+        coverage={"exists": True, "contamination_detected": False,
+                  "updated_today_after_check_time": True, "is_race_day": True,
+                  "awaiting_first_window": False, "ok_races_today": 0, "ok": False,
+                  "reason": "scheduler fired but ok_races_today=0 on a race day"},
+        db={"reachable": True, "fresh_horse_rows_since_check_time": 0, "ok": True},
+    )
+
+    assert decision == "HOLD"
