@@ -32,7 +32,11 @@ from predictor.calibration import (
     fit_bin_calibrator,
     fit_isotonic_calibrator,
 )
-from config import PIT_GATE_MINUTES  # noqa: E402
+from config import (  # noqa: E402
+    PIT_GATE_MINUTES,
+    guard_analysis_window,
+    sealed_notice,
+)
 from predictor.pit_market import apply_pit_odds, summarize_coverage
 from predictor.pit_view import mask_post_race
 from predictor.rules import is_tentative, predict_race
@@ -543,6 +547,8 @@ def list_races(
     min_distance: int | None = None,
     max_distance: int | None = None,
     require_confirmed: bool = False,
+    allow_sealed: bool = False,
+    live: bool = False,
 ) -> list[dict]:
     """jra_only=True なら中央場 (track_code 01-10) のみ。
     地方場と海外は JV-Data の RACE dataspec で払戻が来ないので除外しないと
@@ -554,6 +560,20 @@ def list_races(
     **ライブ予想 (gui/predict/fetch_odds) では未来レースに確定着順が無い
     ため既定 False のまま**。backtest / eval 経路でのみ True を渡すこと。
     """
+    # F3 封印ホールドアウト: 分析は 2026-10-01 以降のデータを見てはいけない
+    # (config.SEALED_FROM)。ここが list_races を通る全分析の単一の関所。
+    # live=True は予想生成側 (今日のレースを引く) の明示的な除外。封印窓の
+    # データを *作る* 側であって *見る* 側ではないので対象外にする。
+    if not live:
+        from_date, to_date, sealed_info = guard_analysis_window(
+            from_date, to_date, allow_sealed=allow_sealed,
+            context="backtest.list_races")
+        notice = sealed_notice(sealed_info)
+        if notice:
+            print(notice, file=sys.stderr)
+        if sealed_info.get("fully_sealed"):
+            return []
+
     sql = """
         SELECT * FROM races
         WHERE (race_year || race_month_day) BETWEEN ? AND ?
@@ -749,8 +769,14 @@ def run_backtest(
     exclude_untrusted_odds: bool = True,
     pit_odds: bool = False,
     require_market: bool = False,
+    allow_sealed: bool = False,
 ) -> dict:
     started = time.time()
+    # 封印窓の打ち切りを **呼び出し側でも** 解決しておく。list_races の中だけで
+    # 打ち切ると、結果 JSON が要求した窓 (例 --to 20261231) を名乗るのに中身は
+    # 09/30 までという食い違いが残り、成果物が自分について嘘をつく。
+    from_date, to_date, sealed_info = guard_analysis_window(
+        from_date, to_date, allow_sealed=allow_sealed, context="backtest.run")
     buy_filter = buy_filter_from_generator() if filter_from_config else None
     pop_cfg = popularity_config()
     market_snapshot_stats = _empty_market_snapshot_stats(pop_cfg)
@@ -768,6 +794,7 @@ def run_backtest(
             conn,
             from_date,
             to_date,
+            allow_sealed=allow_sealed,
             jra_only=jra_only,
             min_distance=min_distance,
             max_distance=max_distance,
@@ -1026,6 +1053,7 @@ def run_backtest(
         "pit_coverage": summarize_coverage(pit_metas) if pit_odds else None,
         "pit_bet_log": pit_bet_log if pit_odds else None,
         "require_market": require_market,
+        "sealed": sealed_info,
         "races_no_market_skipped": n_no_market,
         "races_odds_untrusted": n_odds_untrusted,
         "races_no_horses": n_no_horses,
@@ -1314,6 +1342,11 @@ def main() -> int:
              "おり、「情報が無いときに予想を出さない」ことの効果を測るためのフラグ",
     )
     ap.add_argument(
+        "--allow-sealed", action="store_true",
+        help="F3 封印窓 (2026-10-01〜) も集計対象にする。意図的な封印破りとして"
+             "監査ログに記録される。12 月の一度きりの判定を行うときだけ使う",
+    )
+    ap.add_argument(
         "--pit-odds",
         action="store_true",
         help="市場列を「発走 T−n 分時点で観測可能だった値」に差し替えて評価する "
@@ -1341,6 +1374,7 @@ def main() -> int:
         exclude_untrusted_odds=not args.no_odds_gate,
         pit_odds=args.pit_odds,
         require_market=args.require_market,
+        allow_sealed=args.allow_sealed,
     )
     print(format_report(result))
 

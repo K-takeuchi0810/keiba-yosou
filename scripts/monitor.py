@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from config import PROJECT_ROOT
+from config import PROJECT_ROOT, SEALED_FROM, sealed_window_active
 from db import horse_num_violation_counts, open_db_readonly
 from predictor.calibration import calibration_report
 from predictor.rules import predict_race
@@ -83,10 +83,34 @@ def _read_baseline_brier() -> tuple[str, float] | None:
     return None
 
 
-def measure_recent_brier(days: int) -> dict:
+def _monitor_window(days: int) -> tuple[str, str, bool]:
+    """監視窓 (from, to) を返す。3 つ目は「封印で凍結されているか」。
+
+    F3 封印ホールドアウト (config.SEALED_FROM) が有効なあいだ、直近 days 日は
+    2026-10-01 以降を含みうる。終端をそのまま今日にすると、窓の大半が封印窓に
+    入って「対象 0 件」になり、劣化監視が **黙って空振り** する (週次タスクとして
+    自動実行されるので、空振りに気づけないのが一番危ない)。
+
+    そこで終端を封印開始の前日で止め、そこから days 日さかのぼる。結果として
+    監視は 2026-09-30 までの固定窓で凍結され、毎週同じ数字を返すようになる。
+    これは仕様どおり: ユーザは 2026-09-14 に「厳格に封印する」を選択しており、
+    10 月以降の成績は 12 月の判定まで見ない。凍結していることは呼び出し側が
+    必ず表示する。
+    """
     today = datetime.now().date()
-    from_date = (today - timedelta(days=days)).strftime("%Y%m%d")
-    to_date = today.strftime("%Y%m%d")
+    frozen = False
+    end = today
+    if sealed_window_active():
+        sealed_start = datetime.strptime(SEALED_FROM, "%Y%m%d").date()
+        if end >= sealed_start:
+            end = sealed_start - timedelta(days=1)
+            frozen = True
+    start = end - timedelta(days=days)
+    return start.strftime("%Y%m%d"), end.strftime("%Y%m%d"), frozen
+
+
+def measure_recent_brier(days: int) -> dict:
+    from_date, to_date, frozen = _monitor_window(days)
     records: list[dict] = []
     with open_db_readonly() as conn:
         races = list_races(conn, from_date, to_date, jra_only=True)
@@ -115,6 +139,7 @@ def measure_recent_brier(days: int) -> dict:
     return {
         "from_date": from_date,
         "to_date": to_date,
+        "sealed_frozen": frozen,
         "n_records": len(records),
         "brier_score": rep.get("brier_score"),
         "log_loss": rep.get("log_loss"),
@@ -128,10 +153,18 @@ def measure_mining_coverage(days: int) -> dict:
     """直近 days 日の JRA 確定レースで mining 予想が付いている馬の割合。
 
     v6 の gain 67% を占める mining が欠けると静かに劣化するため監視する。
+
+    **封印中も凍結しない** (2026-09-14): これは「入力データが揃っているか」を
+    数えるだけで、予想が当たったかどうかは一切見ない。確定着順は「そのレースが
+    もう走った」の目印に使っているだけで、成績の評価ではない。
+    封印の趣旨は成績を見ないことなので、ここを止める理由がない。むしろ
+    劣化監視 (Brier) が 3 ヶ月凍結するぶん、結果を見ずに済むこの監視は
+    生かしておく必要がある (入力が壊れれば封印窓のデータ自体が無価値になる)。
     """
     today = datetime.now().date()
     from_date = (today - timedelta(days=days)).strftime("%Y%m%d")
     to_date = today.strftime("%Y%m%d")
+    frozen = False
     ph = ",".join("?" * len(_JRA_TRACKS))
     with open_db_readonly() as conn:
         row = conn.execute(
@@ -154,7 +187,7 @@ def measure_mining_coverage(days: int) -> dict:
     total = row["total"] or 0
     with_mining = row["with_mining"] or 0
     return {
-        "from_date": from_date, "to_date": to_date,
+        "from_date": from_date, "to_date": to_date, "sealed_frozen": frozen,
         "n_horses": total, "n_with_mining": with_mining,
         "coverage": (with_mining / total) if total else None,
     }
@@ -228,6 +261,15 @@ def main() -> int:
         return 2
     src, base_b = baseline
     recent = measure_recent_brier(args.days)
+    if recent.get("sealed_frozen"):
+        # 封印中は窓が 2026-09-30 で止まるので、毎週同じ数字が出る。これを
+        # 「劣化なし」と読むと監視が機能していると誤解するため必ず明示する。
+        print(
+            f"NOTE: F3 封印中 ({SEALED_FROM}〜) のため監視窓を "
+            f"{recent['from_date']}-{recent['to_date']} で凍結しています。"
+            "10 月以降の成績は 12 月の判定まで評価しません。",
+            file=sys.stderr,
+        )
     if recent["brier_score"] is None or recent["n_records"] == 0:
         print(f"WARN: no recent records ({recent['from_date']}-{recent['to_date']})", file=sys.stderr)
         return 1
@@ -240,6 +282,7 @@ def main() -> int:
         "baseline_source": src,
         "baseline_brier": base_b,
         "recent_period": [recent["from_date"], recent["to_date"]],
+        "sealed_frozen": bool(recent.get("sealed_frozen")),
         "recent_n": recent["n_records"],
         "recent_brier": recent["brier_score"],
         "recent_logloss": recent["log_loss"],

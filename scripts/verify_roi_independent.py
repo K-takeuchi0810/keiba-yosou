@@ -40,6 +40,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from config import guard_analysis_window, sealed_notice  # noqa: E402
 from db import DB_PATH, PROJECT_ROOT, SQL_VALID_HORSE_NUM  # noqa: E402
 from predictor.pit_market import apply_pit_odds  # noqa: E402
 from predictor.pit_view import mask_post_race  # noqa: E402
@@ -72,7 +73,17 @@ def independent_payout(conn: sqlite3.Connection, keys: tuple, horse_num: str) ->
 
 
 def run(from_date: str, to_date: str, db_path: str | None = None,
-        require_market: bool = False, limit: int | None = None) -> dict:
+        require_market: bool = False, limit: int | None = None,
+        allow_sealed: bool = False) -> dict:
+    # F3 封印ホールドアウト (config.SEALED_FROM)。母数を独立に SQL で決める
+    # 実装なので list_races の関所を通らない。ここで同じ打ち切りをかける。
+    from_date, to_date, sealed_info = guard_analysis_window(
+        from_date, to_date, allow_sealed=allow_sealed,
+        context="verify_roi_independent")
+    notice = sealed_notice(sealed_info)
+    if notice:
+        print(notice, file=sys.stderr)
+
     conn = sqlite3.connect(f"file:{db_path or DB_PATH}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
 
@@ -159,6 +170,7 @@ def run(from_date: str, to_date: str, db_path: str | None = None,
         "meta": meta,
         "from_date": from_date,
         "to_date": to_date,
+        "sealed": sealed_info,
         "require_market": require_market,
         "races_scanned": n_races,
         "bets": bets,
@@ -183,11 +195,17 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=None,
                     help="先頭 N レースだけ (動作確認用)")
     ap.add_argument("--save", action="store_true")
+    ap.add_argument(
+        "--allow-sealed", action="store_true",
+        help="F3 封印窓 (2026-10-01〜) も対象にする。意図的な封印破りとして"
+             "監査ログに記録される",
+    )
     args = ap.parse_args()
 
     started = datetime.now()
     out = run(args.from_date, args.to_date, db_path=args.db,
-              require_market=args.require_market, limit=args.limit)
+              require_market=args.require_market, limit=args.limit,
+              allow_sealed=args.allow_sealed)
     out["elapsed_sec"] = round((datetime.now() - started).total_seconds(), 1)
     print(json.dumps(out, ensure_ascii=False, indent=1))
 

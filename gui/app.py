@@ -24,10 +24,14 @@ from config import (
     BUY_FILTER_DEFAULT,
     BUY_FILTER_SUSPENDED_SINCE,
     ICLOUD_PUBLISH_DIR,
+    SEALED_FROM,
+    SEALED_UNTIL,
     WEB_DIST,
     buy_filter_suspended,
     ensure_dirs,
+    guard_analysis_window,
     is_whitelisted_race,
+    sealed_window_active,
 )
 from db import open_db
 from jvlink_client import ALL_DATASPECS, JVLinkClient
@@ -438,6 +442,14 @@ class Api:
         # 1 件も入らず全 0 になる (例: 当日 06-07 の「直近3日」は 06-05..06-07 で
         # 確定レースゼロ)。そこで **to_date 以前で最新の確定開催日 (anchor)** を
         # 起点に窓を取り、いつ開いても直近の確定結果が出るようにする。
+        # F3 封印 (2026-10-01〜): 成績の集計は封印窓に入らない。
+        # 起点 (anchor) を先に 09/30 以前へ寄せておかないと、「直近30日
+        # 20261005-20261103 / 216R / 回収率 xx%」のように **期間は 10-11 月なのに
+        # 中身は 9 月の凍結値** という表示になる。件数が出るぶん警告も出ず、
+        # 画面が嘘をつく状態になる (2026-09-14 に実測で再現)。
+        _, to_date, sealed_info = guard_analysis_window(
+            to_date, to_date, context="gui._recent_backtest")
+        sealed_frozen = bool(sealed_info.get("clamped"))
         anchor = conn.execute(
             """
             SELECT MAX(race_year || race_month_day)
@@ -458,11 +470,21 @@ class Api:
             except ValueError:
                 anchor_age_days = None
         anchor_stale = anchor_age_days is not None and anchor_age_days > BT_ANCHOR_STALE_DAYS
+        if sealed_frozen:
+            # 凍結は「確定データが遅れている」のとは別物なので stale 警告は出さない。
+            # 代わりに凍結であることを明示する (混同すると取込障害と誤読される)。
+            anchor_stale = False
         common = {
             "label": label,
             "low_n_note": BT_LOW_N_NOTE,
             "anchor_age_days": anchor_age_days,
             "anchor_stale": anchor_stale,
+            "sealed_frozen": sealed_frozen,
+            "sealed_note": (
+                f"F3 封印中: {SEALED_FROM[4:6]}/{SEALED_FROM[6:]} 以降の成績は "
+                f"12 月の判定まで集計しません。表示は {SEALED_UNTIL[4:6]}/"
+                f"{SEALED_UNTIL[6:]} までの確定成績で凍結しています。"
+            ) if sealed_frozen else "",
         }
         if not anchor:
             return {**common, "races": 0, "wins": 0, "top3": 0, "return_rate": 0, "low_n": True}
@@ -553,6 +575,14 @@ class Api:
         return "外"
 
     def _track_trends(self, conn, from_date: str, to_date: str) -> list[dict]:
+        # F3 封印 (2026-10-01〜): 確定着順を窓で集計するので封印の対象。
+        # 日付入力に 10 月以降を入れると封印窓の傾向 (脚質・枠・馬場) が見えて
+        # しまうため、集計窓を封印手前で打ち切る。運用画面そのもの
+        # (今日のレース・買い候補) は live 扱いで止めない。
+        from_date, to_date, _sealed = guard_analysis_window(
+            from_date, to_date, context="gui._track_trends")
+        if _sealed.get("fully_sealed"):
+            return []
         rows = conn.execute(
             """
             SELECT
@@ -819,7 +849,9 @@ class Api:
         if ignore_odds_freshness:
             bet_filter["max_odds_age_min"] = None
         with open_db() as conn:
-            races = list_races(conn, from_date, to_date, jra_only=True)
+            # live=True: 運用画面 (今日のレース表示・買い候補生成) は封印窓の
+            # 対象外。成績評価である _recent_backtest 側は封印したまま。
+            races = list_races(conn, from_date, to_date, jra_only=True, live=True)
             race_count = len(races)
             horse_count = conn.execute(
                 """
@@ -1048,7 +1080,9 @@ class Api:
             if not from_date or not to_date:
                 row = conn.execute("SELECT MAX(race_year || race_month_day) FROM races").fetchone()
                 from_date = to_date = row[0]
-            races = list_races(conn, from_date, to_date, jra_only=True)
+            # live=True: 運用画面 (今日のレース表示・買い候補生成) は封印窓の
+            # 対象外。成績評価である _recent_backtest 側は封印したまま。
+            races = list_races(conn, from_date, to_date, jra_only=True, live=True)
         self._set_status(f"\u30aa\u30c3\u30ba\u53d6\u5f97\u958b\u59cb: {len(races)}\u30ec\u30fc\u30b9", "fetch_odds", running=True)
         with JVLinkClient() as cli:
             summaries = []
@@ -1579,6 +1613,17 @@ CONTROL_HTML = """<!doctype html>
     font-size: .66rem;
     color: var(--text-mute);
     line-height: 1.35;
+  }
+  /* F3 封印による凍結。「件数不足 (低n)」の灰色とは別物なので見分けが付く
+     見た目にする。取込障害と誤読されると無駄な調査を招く。 */
+  .bt-sealed {
+    color: var(--text);
+    border-left: 3px solid var(--warn, #c08000);
+    padding-left: .4rem;
+  }
+  .bt-sealed-tag {
+    color: var(--warn, #c08000);
+    font-weight: 600;
   }
   #warnings {
     max-height: 9rem;
@@ -2243,6 +2288,7 @@ CONTROL_HTML = """<!doctype html>
     var btPeriod = bt.period ? esc(bt.label) + ' ' + esc(bt.period) : esc(bt.label || '-');
     if (bt.low_n) btPeriod += ' <span class="low-n">' + esc(bt.low_n_note || 'n少 参考値') + '</span>';
     if (bt.anchor_stale) btPeriod += ' <span class="low-n">確定データ' + esc(bt.anchor_age_days) + '日前</span>';
+    if (bt.sealed_frozen) btPeriod += ' <span class="bt-sealed-tag">凍結中</span>';
     byId('backtest').innerHTML = '<div class="seg">' +
       ['3', '7', '30', 'month'].map(function (v) {
         return '<button type="button" data-range="' + esc(v) + '" class="' + (backtestRange === v ? 'active' : '') + '">' + (v === 'month' ? '当月' : v + '日') + '</button>';
@@ -2253,6 +2299,7 @@ CONTROL_HTML = """<!doctype html>
       metric('単勝', valueOr(bt.wins, 0) + '/' + valueOr(bt.races, 0)) +
       metric('3着内', valueOr(bt.top3, 0) + '/' + valueOr(bt.races, 0)) +
       metric('回収率', valueOr(bt.return_rate, 0) + '%') + '</div>' +
+      (bt.sealed_frozen ? '<div class="bt-note bt-sealed">🔒 ' + esc(bt.sealed_note) + '</div>' : '') +
       (bt.note ? '<div class="bt-note">' + esc(bt.note) + '</div>' : '');
     bindBacktestRangeButtons();
   }

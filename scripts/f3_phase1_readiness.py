@@ -16,13 +16,17 @@ from datetime import date, datetime
 from pathlib import Path
 from statistics import median
 
-from config import PIT_GATE_MINUTES, PROJECT_ROOT
+from config import (PIT_GATE_MINUTES, PROJECT_ROOT, SEALED_FROM,
+                    sealed_window_active)
 from db import open_db_readonly
 from predictor.pit_gate import pit_cutoff, usable_snapshots
 
 
 DEV_FROM = "20260704"
-SEALED_START = "20261001"
+# Single source of truth for the sealed-window start is config.SEALED_FROM
+# (consolidated 2026-09-14). It used to be hard-coded here, so the date
+# existed in three places under different names.
+SEALED_START = SEALED_FROM
 NEAR_T10_MAX_LEAD_MIN = 25.0
 PROJECTION_WEEKS = 4
 JRA_TRACK_CODES = frozenset(f"{number:02d}" for number in range(1, 11))
@@ -46,7 +50,10 @@ def _validate_window(from_date: str, to_date: str) -> None:
         raise ValueError("from_date must not be after to_date")
     if from_date != DEV_FROM:
         raise ValueError(f"from_date must remain fixed at {DEV_FROM}")
-    if to_date >= SEALED_START:
+    # Do not refuse once the seal has been lifted (judgment done). This used
+    # to raise unconditionally, so after unsealing in December this script
+    # alone would have stayed blocked forever.
+    if sealed_window_active() and to_date >= SEALED_START:
         raise ValueError(f"sealed holdout access denied: to_date must be before {SEALED_START}")
 
 

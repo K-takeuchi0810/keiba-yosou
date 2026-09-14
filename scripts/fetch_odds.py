@@ -91,7 +91,8 @@ def main() -> int:
             from_date = to_date = row[0]
 
     with open_db() as conn:
-        races = list_races(conn, from_date, to_date, jra_only=True)
+        # live=True: オッズ取得は封印窓の対象外 (データを作る側)。
+        races = list_races(conn, from_date, to_date, jra_only=True, live=True)
 
     print(
         f"fetch_odds date={from_date}-{to_date} races={len(races)} "

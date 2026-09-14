@@ -24,7 +24,7 @@ from typing import Iterator
 
 import numpy as np
 
-from config import PROJECT_ROOT
+from config import PROJECT_ROOT, SEALED_FROM, sealed_window_active
 from db import open_db_readonly
 from predictor import is_tentative, predict_race
 from predictor.filter import is_buy_candidate
@@ -36,7 +36,9 @@ TRAIN_FROM = "20210101"
 TRAIN_TO = "20231231"
 OOS_FROM = "20260101"
 OOS_TO = "20260614"
-SEALED_START = "20261001"
+# 封印開始日は config.SEALED_FROM が単一出典 (2026-09-14 統合)。
+# ここで値を直書きしていたため、封印日が 3 箇所に別名で存在していた。
+SEALED_START = SEALED_FROM
 VAL_FRACTION = 0.20
 FIXED_SEED = 20260720
 BOOTSTRAP_SEED = 20260720
@@ -97,7 +99,9 @@ def _guard_unsealed(from_date: str, to_date: str) -> None:
         raise ValueError("evaluation dates must be YYYYMMDD")
     if from_date > to_date:
         raise ValueError("evaluation from_date must be <= to_date")
-    if from_date >= SEALED_START or to_date >= SEALED_START:
+    # 封印解除後 (判定実施済み) は拒否しない。
+    if sealed_window_active() and (
+            from_date >= SEALED_START or to_date >= SEALED_START):
         raise ValueError(
             f"sealed holdout access denied: requested={from_date}-{to_date}, "
             f"sealed_start={SEALED_START}"

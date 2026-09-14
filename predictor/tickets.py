@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from config import SEALED_FROM, sealed_window_active
 
 BASE_STAKE_YEN = 100
 DEFAULT_PLAN_BUDGET_UNITS = 4
@@ -24,6 +25,19 @@ def display_num(value: Any) -> str:
 
 
 def payout_row_for_race(conn, race: dict) -> dict | None:
+    """そのレースの払戻行を返す。封印窓のレースは返さない。
+
+    ここは「推奨買い目の的中・回収」表示 (GUI ダッシュボードと予想 HTML の両方)
+    の入口。予想の生成自体は封印の対象外だが、**結果の表示は対象**。
+    2026-10-01 以降のレースについて的中や払戻が画面に出ると、それを見た時点で
+    封印が破れる (12 月の判定が「事前に決めた一発勝負」でなくなる)。
+
+    None を返しても予想の生成・表示は止まらない。消えるのは結果の答え合わせ表示だけ。
+    """
+    race_date = f"{race.get('race_year', '')}{race.get('race_month_day', '')}"
+    if (sealed_window_active() and len(race_date) == 8
+            and race_date >= SEALED_FROM):
+        return None
     row = conn.execute(
         """
         SELECT * FROM payouts

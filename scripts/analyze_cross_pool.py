@@ -35,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from db import DB_PATH, SQL_VALID_HORSE_NUM  # noqa: E402
 from predictor.stats import bootstrap_return_rate, wilson_ci  # noqa: E402
+from config import guard_analysis_window, sealed_notice  # noqa: E402
 
 
 def _repro_meta(db_path: str | None) -> dict:
@@ -283,7 +284,15 @@ def main() -> int:
     args = ap.parse_args()
 
     started = datetime.now()
-    result = run(args.from_date, args.to_date, db_path=args.db)
+    # F3 封印ホールドアウト: 2026-10-01 以降の結果を見ない (config.SEALED_FROM)。
+    from_date, to_date, sealed_info = guard_analysis_window(
+        args.from_date, args.to_date, context="analyze_cross_pool")
+    notice = sealed_notice(sealed_info)
+    if notice:
+        print(notice, file=sys.stderr)
+    if sealed_info.get("fully_sealed"):
+        return 0
+    result = run(from_date, to_date, db_path=args.db)
     result["elapsed_sec"] = round((datetime.now() - started).total_seconds(), 1)
 
     for pool, data in result["pools"].items():

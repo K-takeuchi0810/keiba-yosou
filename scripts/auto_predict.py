@@ -20,7 +20,12 @@ from datetime import date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import DB_PATH, ICLOUD_PUBLISH_DIR, PROJECT_ROOT  # noqa: E402
+from config import (  # noqa: E402
+    DB_PATH,
+    ICLOUD_PUBLISH_DIR,
+    PROJECT_ROOT,
+    artifact_drift,
+)
 from db import SQL_VALID_HORSE_NUM  # noqa: E402
 from scripts.notify_discord import notify_discord  # noqa: E402
 import os  # noqa: E402
@@ -186,6 +191,21 @@ def main() -> int:
         if not args.dry_run:
             _notify(msg)
         return 2
+    # F3 封印中はモデルを変えない (2026-09-14)。12 月の判定は「封印窓のあいだ
+    # 同じモデルが予想し続けた」ことを前提にしており、途中で重み・calibrator・
+    # LGBM が変わると封印窓に 2 種類の予想が混ざって判定が成立しなくなる。
+    # 「見ない」ことと同じくらい「変えない」ことが前提なので、生成の前に検査する。
+    drift = artifact_drift()
+    if drift:
+        msg = ("【中止】F3 封印中なのにモデルが変わっています\n"
+               + "\n".join(f"  - {d}" for d in drift)
+               + "\n意図的な差し替えなら config.SEALED_ARTIFACTS を更新し、"
+                 "封印窓を捨てて再開始するか判定を先に行うこと。")
+        print(msg)
+        if not args.dry_run:
+            _notify(msg)
+        return 3
+
     if args.dry_run:
         return 0
 
