@@ -72,6 +72,176 @@ DATA_PERIODS: dict[str, dict[str, str]] = {
     "production": {"from": "20260101", "to": "20261231"},   # 本番 + HOLDOUT
 }
 
+# ---------------------------------------------------------------------------
+# F3 封印ホールドアウト (2026-07-03 ユーザ合意 / docs/F3_MARKET_RESIDUAL_DESIGN.md D2)
+# ---------------------------------------------------------------------------
+# 「エッジがあるか」を一度だけ公正に判定するため、**2026-10-01 以降に蓄積される
+# データは判定まで一切見ない**と事前宣言してある。dev 窓 = 2026-07-04〜09-30。
+# 判定は封印窓が 800 レースに達した時点 (12 月上旬見込み) で **一度だけ**。
+#
+# なぜコードで縛るか: 宣言だけでは守れない。既定の集計窓が全期間 (00000000〜
+# 99999999) のスクリプトや、rolling で「直近 30 日」を見る週次監視が複数あり、
+# 10/01 を過ぎた瞬間に **自動で封印窓を読みに行く**。一度でも中身を見たら、
+# 12 月の判定は「事前に決めた一発勝負」ではなくなる (見た結果に合わせて
+# 仮説を選べてしまうため)。2026-09-14 にユーザが「厳格に封印する」を選択。
+#
+# ここを書き換えるのはプロトコル違反にあたる。判定を実施したら
+# SEALED_JUDGMENT_DONE を True にして封印解除する (そのとき封印窓は次仮説の
+# dev 窓に転用できる)。
+SEALED_FROM: str = "20261001"          # この日以降が封印対象 (閉区間の開始)
+SEALED_UNTIL: str = "20260930"         # 分析が見てよい最終日 (SEALED_FROM の前日)
+SEALED_JUDGMENT_DONE: bool = False     # 判定を実施したら True にして封印解除
+
+# 封印を破った事実を残す監査ログ。--allow-sealed で意図的に覗いた場合に追記する。
+# 判定時にこのファイルが空でなければ、その判定は「一発勝負」として扱えない。
+SEALED_ACCESS_LOG = PROJECT_ROOT / "data" / "runtime" / "sealed_access_log.jsonl"
+
+
+# 封印中に凍結しておくモデル成果物と、その指紋 (2026-09-14 採取)。
+#
+# なぜ要るか: 12 月の判定は「封印窓のあいだ **同じモデル** が予想し続けた」
+# ことを前提にしている。途中で重み・calibrator・LGBM が変われば、封印窓には
+# 2 種類の予想が混ざり、出てきた回収率が「どのモデルの成績か」を言えなくなる。
+# 「見ない」ことと同じくらい「変えない」ことが判定の前提。
+#
+# 判定後 (SEALED_JUDGMENT_DONE=True) は検査しない。封印中に意図的に
+# 差し替えるときは、その時点で封印窓を捨てて再開始する判断とセットで行うこと。
+SEALED_ARTIFACTS: dict[str, str] = {
+    "predictor/weights.json": "6cd05d34a90a2ac4e2758de5e41c321f234276e13ffeeb07f20cf55c452f5dbc",
+    "predictor/calibrator.json": "1cde95e02444f4926527b89eae1d8d70b989111bff31c9016ad29cc36e80db2a",
+    "predictor/lgbm_model.txt": "afa6fe4717991b4fd607815b1249939418e3760eeda0498baa6ef859e9fc4aea",
+    "predictor/lgbm_meta.json": "a46a26200339acc2df04f0a6933e7dd54e690380b44430c38f41a54ac354352a",
+    "predictor/lgbm_features.json": "a62c0a379e891122d1ad1cdbec2d2371ec46581744c15872e3e66ad5f97912bc",
+    "predictor/second_blend.json": "f7380bb331a89d258711f88289fe707a2b4bdc5169a8da03d2a0161fb69b3cea",
+}
+
+
+def artifact_drift() -> list[str]:
+    """凍結対象のモデル成果物が変化していないか調べ、変化したものを返す。
+
+    空リストなら「封印開始時と同じモデル」。封印していない期間は常に空を返す。
+    """
+    import hashlib
+
+    if not sealed_window_active():
+        return []
+    drifted: list[str] = []
+    for rel, want in SEALED_ARTIFACTS.items():
+        path = PROJECT_ROOT / rel
+        if not path.exists():
+            drifted.append(f"{rel} (消失)")
+            continue
+        got = hashlib.sha256(path.read_bytes()).hexdigest()
+        if got != want:
+            drifted.append(f"{rel} ({got[:12]} != {want[:12]})")
+    return drifted
+
+
+def sealed_window_active() -> bool:
+    """封印が有効か (判定未実施のあいだ True)。"""
+    return not SEALED_JUDGMENT_DONE
+
+
+def guard_analysis_window(
+    from_date: str,
+    to_date: str,
+    *,
+    allow_sealed: bool = False,
+    context: str = "",
+) -> tuple[str, str, dict]:
+    """分析の集計窓を封印窓の手前で打ち切る。
+
+    戻り値は (from_date, to_date, info)。info は呼び出し側が結果 JSON の meta に
+    そのまま入れられる形にしてある (「この数字はどこまでのデータで出したか」を
+    成果物自身に残すため)。
+
+    allow_sealed=True は **意図的な封印破り**。窓はそのまま通すが、監査ログに
+    追記する。判定時にこのログを見て、覗きがあったかを確認する。
+
+    予想の生成 (live) はこの関数を通さない。封印窓のデータを *作る* 側であって
+    *見る* 側ではないため。
+    """
+    for label, value in (("from_date", from_date), ("to_date", to_date)):
+        if not (len(value) == 8 and value.isdigit()):
+            # YYYYMMDD 以外を渡されると文字列比較が破綻する。実測: "2026-12-31" は
+            # "-" < "1" のため SEALED_FROM より小さいと判定され、門を素通りした。
+            raise ValueError(
+                f"guard_analysis_window: {label} は YYYYMMDD で渡すこと (got {value!r})")
+    info: dict = {
+        "sealed_from": SEALED_FROM,
+        "sealed_active": sealed_window_active(),
+        "requested_to": to_date,
+        "clamped": False,
+        "allow_sealed": bool(allow_sealed),
+    }
+    if not sealed_window_active() or to_date < SEALED_FROM:
+        return from_date, to_date, info
+
+    if allow_sealed:
+        _log_sealed_access(from_date, to_date, context)
+        info["sealed_access_logged"] = True
+        return from_date, to_date, info
+
+    info["clamped"] = True
+    info["effective_to"] = SEALED_UNTIL
+    info["fully_sealed"] = from_date > SEALED_UNTIL
+    return from_date, SEALED_UNTIL, info
+
+
+class SealedAuditError(RuntimeError):
+    """封印破りを記録できなかった。記録できないなら覗かせない。"""
+
+
+def _log_sealed_access(from_date: str, to_date: str, context: str) -> None:
+    """封印窓を意図的に読んだ事実を追記する。
+
+    **書けなかったら例外を投げて封印破りを止める** (fail-closed)。判定手順は
+    「このログが空なら一発勝負として扱える」と定義しているので、書き込み失敗を
+    握り潰すと「覗いたのにログが空」= 判定の正当性が偽陽性になる。
+    通常運用では追記コストはゼロなので、失敗は異常事態として扱ってよい。
+    """
+    import json
+    from datetime import datetime
+
+    try:
+        SEALED_ACCESS_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with SEALED_ACCESS_LOG.open("a", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "at": datetime.now().isoformat(timespec="seconds"),
+                "from_date": from_date,
+                "to_date": to_date,
+                "context": context,
+            }, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        raise SealedAuditError(
+            f"封印破りを監査ログに記録できませんでした ({SEALED_ACCESS_LOG}): {exc}。"
+            "記録できない状態で封印窓を読むことは許可されていません。"
+        ) from exc
+
+
+def sealed_notice(info: dict) -> str:
+    """guard_analysis_window の結果を人間向け 1 行にする (空文字なら出力不要)。"""
+    if not info.get("sealed_active"):
+        return ""
+    if info.get("allow_sealed") and info.get("sealed_access_logged"):
+        return (
+            f"【注意】封印窓 ({SEALED_FROM}〜) を意図的に読みました。"
+            f"監査ログに記録済み: {SEALED_ACCESS_LOG.name}。"
+            "この結果を 12 月の判定材料にはできません。"
+        )
+    if info.get("fully_sealed"):
+        return (
+            f"【注意】指定された期間は全体が封印窓 ({SEALED_FROM}〜) の中にあります。"
+            "対象データはありません (F3 判定まで参照禁止)。"
+        )
+    if info.get("clamped"):
+        return (
+            f"封印窓のため集計を {SEALED_UNTIL} までに制限しました "
+            f"(指定は {info.get('requested_to')})。"
+        )
+    return ""
+
+
 # コーナー通過順位 (corner_order_*) のバイト位置が実 .jvd で検証済みか。
 # probe_corner_offsets --expect/--ra を実機で緑化したら True に反転する。
 # webapp はこのフラグ 1 箇所で「先行力(暫定)」ラベルの要否を決める (probe 状態と

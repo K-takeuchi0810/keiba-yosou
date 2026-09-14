@@ -18,6 +18,12 @@ data/*
 # 失敗 run の埋葬先 (再発防止のための証跡保全)
 !data/failed_runs/
 !data/failed_runs/**
+
+# F3 封印破りの監査ログ。追跡対象にしないと削除・改竄の痕跡が残らず、
+# 判定時に「空 = 覗いていない」を確かめられない (2026-09-14)。
+!data/runtime/
+data/runtime/*
+!data/runtime/sealed_access_log.jsonl
 # 日次検証 CSV (予測 + 結果 + 払戻 の固定証跡、scripts/build_daily_results.py が生成)
 !data/results/
 !data/results/**

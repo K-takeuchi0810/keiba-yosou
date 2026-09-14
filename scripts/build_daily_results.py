@@ -41,6 +41,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from db import SQL_VALID_HORSE_NUM
+from config import guard_analysis_window, sealed_notice  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -503,6 +504,12 @@ def main() -> int:
     if len(date) != 8 or not date.isdigit():
         print(f"--date は YYYYMMDD 形式: got {date!r}", file=sys.stderr)
         return 2
+    # F3 封印ホールドアウト: 2026-10-01 以降の答え合わせ CSV は作らない。
+    # data/results/ は git 追跡対象なので、作ると封印窓の結果がリポに残る。
+    _, _, sealed_info = guard_analysis_window(date, date, context="build_daily_results")
+    if sealed_info.get("fully_sealed"):
+        print(sealed_notice(sealed_info), file=sys.stderr)
+        return 0
 
     output_dir = Path(args.output_dir) if args.output_dir else (ROOT / "data" / "results" / f"{date[:4]}-{date[4:6]}-{date[6:8]}")
     output_dir.mkdir(parents=True, exist_ok=True)

@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from db import open_db
 from scripts.train_lgbm import CATEGORICAL_MAPS, load_dataset_cache
+from config import guard_analysis_window, sealed_notice  # noqa: E402
 
 PROJECT = Path(__file__).resolve().parent.parent
 
@@ -118,7 +119,15 @@ def main() -> int:
     ap.add_argument("--to", dest="to_date", required=True)
     args = ap.parse_args()
 
-    X, y, groups, cache_feats = load_dataset_cache(Path(args.cache), args.from_date, args.to_date)
+    # F3 封印ホールドアウト: 2026-10-01 以降の結果を見ない (config.SEALED_FROM)。
+    from_date, to_date, sealed_info = guard_analysis_window(
+        args.from_date, args.to_date, context="eval_lgbm_oos")
+    notice = sealed_notice(sealed_info)
+    if notice:
+        print(notice, file=sys.stderr)
+    if sealed_info.get("fully_sealed"):
+        return 0
+    X, y, groups, cache_feats = load_dataset_cache(Path(args.cache), from_date, to_date)
     z = np.load(args.cache, allow_pickle=False)
     race_keys = [str(k) for k in z["race_keys"]]
     print(f"OOS: X={X.shape}, races={len(groups)}", file=sys.stderr)

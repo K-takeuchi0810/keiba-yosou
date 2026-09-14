@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from db import open_db
 from predictor.stats import bootstrap_return_rate
+from config import guard_analysis_window  # noqa: E402
 
 
 FOLD_PERIODS = [
@@ -40,6 +41,13 @@ FOLD_PERIODS = [
 
 
 def collect_oracle_payouts(conn, from_date: str, to_date: str) -> list[tuple[str, int]]:
+    # F3 封印ホールドアウト (config.SEALED_FROM)。現状の呼び出しは FOLD_PERIODS の
+    # 固定窓なので封印に触れないが、窓を変えたときに黙って封印窓を読まないよう
+    # 収集の入口で打ち切っておく。
+    from_date, to_date, _sealed = guard_analysis_window(
+        from_date, to_date, context="oracle_diagnose")
+    if _sealed.get("fully_sealed"):
+        return []
     """Returns [(yyyymm, tan_payout1), ...] for all JRA races in [from, to].
 
     payouts.tan_payout1 is the winning horse's tan payout for a 100-yen bet.

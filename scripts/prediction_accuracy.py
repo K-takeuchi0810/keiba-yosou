@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config import guard_analysis_window, sealed_notice  # noqa: E402
 from db import open_db  # noqa: E402
 
 
@@ -23,7 +24,23 @@ def main() -> int:
     ap.add_argument("--from", dest="from_date", default="00000000")
     ap.add_argument("--to", dest="to_date", default="99999999")
     ap.add_argument("--mark", default="◎", help="集計対象の印 (既定 ◎)")
+    ap.add_argument(
+        "--allow-sealed", action="store_true",
+        help="F3 封印窓 (2026-10-01〜) も集計する。意図的な封印破りとして"
+             "監査ログに記録される。12 月の判定材料には使えなくなる",
+    )
     args = ap.parse_args()
+
+    # F3 封印ホールドアウト。既定の集計窓が全期間 (00000000〜99999999) なので、
+    # 10/01 を過ぎると無引数実行がそのまま封印窓を読みに行く。ここで打ち切る。
+    from_date, to_date, sealed_info = guard_analysis_window(
+        args.from_date, args.to_date, allow_sealed=args.allow_sealed,
+        context="prediction_accuracy")
+    notice = sealed_notice(sealed_info)
+    if notice:
+        print(notice)
+    if sealed_info.get("fully_sealed"):
+        return 0
 
     with open_db() as conn:
         # レース×馬ごとに最新 generated_at のスナップショットのみ採用。
@@ -54,7 +71,7 @@ def main() -> int:
                AND p.nichiji=l.nichiji AND p.race_num=l.race_num
              WHERE l.rn = 1 AND hr.confirmed_order > 0
             """,
-            (args.from_date, args.to_date, args.mark),
+            (from_date, to_date, args.mark),   # 封印窓で打ち切った窓を使う
         ).fetchall()
 
     n = len(rows)
@@ -67,7 +84,9 @@ def main() -> int:
     ret = sum((r["tan_payout1"] or 0) for r in rows
               if r["confirmed_order"] == 1 and r["tan_payout1"])
     staked = n * 100
-    print(f"=== {args.mark} live 答え合わせ ({args.from_date}-{args.to_date}) ===")
+    # 要求した窓ではなく **実際に集計した窓** を出す (封印で打ち切られた場合に
+    # 見出しだけ全期間のままだと、範囲を誤認したまま数字を読むことになる)。
+    print(f"=== {args.mark} live 答え合わせ ({from_date}-{to_date}) ===")
     print(f"  対象レース(確定): {n}")
     print(f"  的中(1着): {wins} = {100*wins/n:.1f}%")
     print(f"  単勝フラット回収率: {100*ret/staked:.1f}% (賭 {staked:,}円 / 戻 {ret:,}円)")

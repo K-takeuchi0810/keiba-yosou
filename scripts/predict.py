@@ -105,7 +105,10 @@ def collect_predictions(args) -> list[dict]:
     rows: list[dict] = []
     with open_db(db_path) if db_path else open_db() as conn:
         from_date, to_date = pick_dates(conn, args)
-        races = list_races(conn, from_date, to_date, jra_only=not args.all_tracks)
+        # live=True: 予想生成は封印窓 (config.SEALED_FROM) の対象外。
+        # 封印窓のデータを *作る* 側であって *見る* 側ではない。
+        races = list_races(conn, from_date, to_date,
+                           jra_only=not args.all_tracks, live=True)
         feature_cache: dict = {}
         for race in races:
             horses = horses_for_race(conn, race)

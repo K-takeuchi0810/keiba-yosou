@@ -38,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from db import DB_PATH  # noqa: E402
 from predictor.stats import bootstrap_return_rate, wilson_ci  # noqa: E402
+from config import guard_analysis_window, sealed_notice  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -160,20 +161,30 @@ def main() -> int:
     ap.add_argument("--save", action="store_true")
     args = ap.parse_args()
 
+    # F3 封印ホールドアウト (config.SEALED_FROM)。既定の --to は封印前だが、
+    # 上書きすると素通りするので門を通す。
+    from_date, to_date, sealed_info = guard_analysis_window(
+        args.from_date, args.to_date, context="analyze_simple_edges")
+    notice = sealed_notice(sealed_info)
+    if notice:
+        print(notice, file=sys.stderr)
+    if sealed_info.get("fully_sealed"):
+        return 0
+
     conn = sqlite3.connect(f"file:{args.db or DB_PATH}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     result = {
         "meta": _repro_meta(args.db),
-        "from_date": args.from_date,
-        "to_date": args.to_date,
-        "route1_ultra_favorite": run_route1(conn, args.from_date, args.to_date),
+        "from_date": from_date,
+        "to_date": to_date,
+        "route1_ultra_favorite": run_route1(conn, from_date, to_date),
         "route3_win5": run_route3(conn),
         "generated_at": datetime.now().isoformat(timespec="seconds"),
     }
     conn.close()
 
     r1 = result["route1_ultra_favorite"]
-    print(f"=== 経路1 超本命帯 ({args.from_date}-{args.to_date}) ===")
+    print(f"=== 経路1 超本命帯 ({from_date}-{to_date}) ===")
     o = r1["overall"]
     print(f"  全体: n={o['n']} 勝率{o['hit_rate']*100:.1f}% 回収{o['return_rate']*100:.1f}% "
           f"CI[{o['return_rate_ci95'][0]*100:.1f},{o['return_rate_ci95'][1]*100:.1f}]")
