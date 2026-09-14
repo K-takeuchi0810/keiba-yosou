@@ -403,6 +403,24 @@ def _subset_metrics_payload(subset: list[dict]) -> dict:
     return base
 
 
+# 挙動を変える環境変数の登録簿。backtest の成果物 meta.env_overrides に
+# 「実行時に設定されていたもの」を記録するために使う。
+#
+# **ここに載っていない環境変数で挙動が変わると、成果物から事後検証できない。**
+# 実際 PRED_RANK_BY (印をルールスコア順に付けるか確率順に付けるか) が未登録で、
+# 同じ期間・同じ設定に見える 2 本の backtest が 4.4pt 違う (p29 70.5% vs
+# p30 74.9%) のに、違いの理由が成果物から読み取れない状態だった (2026-09-14)。
+# tests/test_backtest_meta.py が、予想経路が読む環境変数とこの登録簿を
+# 突き合わせるので、新しい env を足したらここにも登録すること。
+TRACKED_ENV_KEYS: frozenset[str] = frozenset({
+    "PRED_PROB_TEMPERATURE", "PRED_BLEND_W_RULE", "PRED_DISABLE_CALIBRATOR",
+    "PRED_DISABLE_DISCOUNT", "PRED_DISABLE_LGBM", "PRED_CALIBRATOR_ALPHA",
+    "PRED_CALIBRATOR_MIN_COUNT", "V2_GRADE", "V2_DIST", "BET_WHITELIST",
+    "PRED_BLEND_MODE", "PRED_DISABLE_BLEND", "PRED_DISABLE_SECOND_BLEND",
+    "BET_FILTER_IGNORE_SUSPENSION", "PRED_RANK_BY",
+})
+
+
 def snapshot_meta() -> dict:
     """backtest 実行時の calibrator / LGBM / git の version snapshot を返す。
 
@@ -458,13 +476,7 @@ def snapshot_meta() -> dict:
     # 予想経路を無言で変える — temperature/blend は calibrator の前提分布も
     # 崩す — のに実験ログから事後検証できなかった)。設定されたものだけ記録。
     import os as _os
-    env_keys = {
-        "PRED_PROB_TEMPERATURE", "PRED_BLEND_W_RULE", "PRED_DISABLE_CALIBRATOR",
-        "PRED_DISABLE_DISCOUNT", "PRED_DISABLE_LGBM", "PRED_CALIBRATOR_ALPHA",
-        "PRED_CALIBRATOR_MIN_COUNT", "V2_GRADE", "V2_DIST", "BET_WHITELIST",
-        "PRED_BLEND_MODE", "PRED_DISABLE_BLEND", "PRED_DISABLE_SECOND_BLEND",
-        "BET_FILTER_IGNORE_SUSPENSION",
-    }
+    env_keys = set(TRACKED_ENV_KEYS)
     env_keys.update(k for k in _os.environ if k.startswith("PRED_W_"))
     overrides = {k: _os.environ[k] for k in env_keys if k in _os.environ}
     meta["env_overrides"] = overrides  # 空 dict = デフォルト挙動の証明
