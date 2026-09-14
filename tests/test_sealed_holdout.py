@@ -238,6 +238,24 @@ def test_window_must_be_yyyymmdd():
 # モデル凍結 (判定のもう一つの前提)
 # ---------------------------------------------------------------------------
 
+def test_freeze_is_inactive_before_the_seal_starts(monkeypatch):
+    """封印開始日より前はモデルを変えてよいこと。
+
+    開始日までは dev 窓で、そこでモデルを直すのは正常な作業。「判定が未実施なら
+    常に凍結」にしていたため、封印開始前なのに改修がブロックされていた
+    (2026-09-14 に発覚)。凍結は **開始日以降** だけ効く。
+    """
+    monkeypatch.setattr(config, "SEALED_ARTIFACTS",
+                        {"predictor/weights.json": "0" * 64})
+
+    assert config.sealed_window_started("20260914") is False
+    assert config.sealed_window_started("20261005") is True
+    # 実際の今日 (開始前) では検査が働かない
+    if config.sealed_window_started():
+        pytest.skip("封印開始後に実行されている")
+    assert config.artifact_drift() == [], "封印開始前なのに凍結が効いている"
+
+
 def test_model_artifacts_are_unchanged_during_the_seal():
     """封印中はモデルが変わっていないこと。
 
@@ -249,6 +267,8 @@ def test_model_artifacts_are_unchanged_during_the_seal():
     意図的に差し替えたなら config.SEALED_ARTIFACTS を更新すること。ただし
     それは封印窓を捨てて再開始するか、判定を先に行うかの判断とセット。
     """
+    if not config.sealed_window_started():
+        pytest.skip("封印開始前 (dev 窓) なので凍結は効かない")
     drift = config.artifact_drift()
     assert not drift, (
         "封印中にモデル成果物が変わっている:\n  " + "\n  ".join(drift))
@@ -258,6 +278,7 @@ def test_artifact_drift_actually_detects_a_change(tmp_path, monkeypatch):
     """凍結検査が本当に変化を検出すること (検査自体が空振りしていないか)。"""
     monkeypatch.setattr(config, "SEALED_ARTIFACTS",
                         {"predictor/weights.json": "0" * 64})
+    monkeypatch.setattr(config, "SEALED_FROM", "20200101")   # 開始済みに見立てる
     assert config.artifact_drift(), "変化しているのに検出できていない"
 
 
@@ -266,6 +287,7 @@ def test_artifact_freeze_is_not_checked_after_judgment(monkeypatch):
     monkeypatch.setattr(config, "SEALED_JUDGMENT_DONE", True)
     monkeypatch.setattr(config, "SEALED_ARTIFACTS",
                         {"predictor/weights.json": "0" * 64})
+    monkeypatch.setattr(config, "SEALED_FROM", "20200101")
     assert config.artifact_drift() == []
 
 

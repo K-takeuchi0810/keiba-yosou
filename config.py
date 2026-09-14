@@ -116,14 +116,33 @@ SEALED_ARTIFACTS: dict[str, str] = {
 }
 
 
+def sealed_window_started(today: str | None = None) -> bool:
+    """封印窓が **もう始まっているか** (判定未実施 かつ 今日が SEALED_FROM 以降)。
+
+    `sealed_window_active()` (= 判定がまだ) との違いに注意。封印開始日より前は
+    まだ dev 窓なので、モデルの改修は自由でなければならない。
+    """
+    from datetime import date
+
+    if not sealed_window_active():
+        return False
+    now = today or date.today().strftime("%Y%m%d")
+    return now >= SEALED_FROM
+
+
 def artifact_drift() -> list[str]:
     """凍結対象のモデル成果物が変化していないか調べ、変化したものを返す。
 
-    空リストなら「封印開始時と同じモデル」。封印していない期間は常に空を返す。
+    空リストなら「封印開始時と同じモデル」。
+
+    **封印窓が始まる前は常に空を返す**。開始日より前はまだ dev 窓で、モデルを
+    直すのは正常な作業だから。ここを区別せずに「判定が未実施なら常に凍結」と
+    していたため、封印開始前 (dev 窓の残り) にモデルを改修できない状態だった
+    (2026-09-14 に発覚)。
     """
     import hashlib
 
-    if not sealed_window_active():
+    if not sealed_window_started():
         return []
     drifted: list[str] = []
     for rel, want in SEALED_ARTIFACTS.items():
