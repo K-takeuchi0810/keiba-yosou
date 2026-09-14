@@ -156,3 +156,74 @@ def test_main_proceeds_when_entries_are_present(tmp_path, monkeypatch):
 
     assert auto_predict.main() == 0
     assert ran == []
+
+
+def test_generates_today_only_not_tomorrow(tmp_path, monkeypatch):
+    """生成対象は今日のみ (2026-09-13 日別化)。
+
+    以前は今日+明日を 1 ページに出していたが、JRA の出馬表は前日確定なので
+    土曜朝の時点で日曜分は大半が「出走馬未取得」になり、スマホで見ると空レースが
+    並んで当日分が埋もれていた (実測: 前日先出し分は毎回 2R だけ・オッズ欠損 100%
+    で、答え合わせにも使えていない)。翌日分は翌朝の起動で生成されるので
+    取りこぼさない。
+    """
+    from datetime import date, timedelta
+
+    today = date.today().strftime("%Y%m%d")
+    tomorrow = (date.today() + timedelta(days=1)).strftime("%Y%m%d")
+    db = tmp_path / "t.db"
+    # 今日も明日も開催日 (= 一括生成の条件が揃っている状態)
+    _entry_db(db, days_with_entries=(today, tomorrow)).close()
+    monkeypatch.setattr(auto_predict, "DB_PATH", str(db))
+    ran = []
+    monkeypatch.setattr(
+        auto_predict.subprocess, "run",
+        lambda command, **kwargs: ran.append(command),
+    )
+    monkeypatch.setattr("sys.argv", ["auto_predict", "--dry-run"])
+    printed = []
+    monkeypatch.setattr("builtins.print", lambda *a, **k: printed.append(" ".join(map(str, a))))
+
+    assert auto_predict.main() == 0
+
+    line = next(p for p in printed if p.startswith("generate:"))
+    assert today in line, f"今日を対象にする (got: {line})"
+    assert tomorrow not in line, f"翌日分は含めない (got: {line})"
+
+
+def test_completion_message_is_single_day_with_weekday():
+    """Discord 通知は「1 日分 + 曜日」で出す (2026-09-13 日別化)。
+
+    日別化で対象日が常に 1 日になったため、従来の「09/12〜09/13」という
+    範囲表記は同じ日を 2 回書くだけになる。ユーザは Discord の通知だけを見て
+    「どっちの日の予想が出たのか」を判断するので、曜日を必ず添える。
+    """
+    msg = auto_predict._completion_message("20260913", 24, "lgbm-v6", True)
+
+    assert "2026/09/13(日)" in msg, msg
+    assert "(24R, lgbm-v6)" in msg
+    assert "〜" not in msg, f"範囲表記に戻っている: {msg}"
+    # 土曜も曜日が正しく出る (weekday() のオフセット間違いを捕まえる)
+    assert "2026/09/12(土)" in auto_predict._completion_message(
+        "20260912", 12, "lgbm-v6", True)
+
+
+def test_completion_message_always_carries_observation_only_notice():
+    """「観察専用」の一文が通知から落ちないこと。
+
+    現状のモデルは 1 番人気ベタ買い (79%) に負けており (◎ベタ 71.5%)、
+    利益エッジは未証明。通知だけを見た人が実弾の根拠と誤読すると
+    そのまま資金喪失につながるので、文面の必須要素として固定する。
+    """
+    for push_ok in (True, False):
+        msg = auto_predict._completion_message("20260913", 24, "lgbm-v6", push_ok)
+        assert "観察専用" in msg, msg
+        assert "エッジは未証明" in msg
+
+
+def test_completion_message_reports_push_failure():
+    """push に失敗したら Web 版が未更新であることを通知に書く。"""
+    ok = auto_predict._completion_message("20260913", 24, "v", True)
+    ng = auto_predict._completion_message("20260913", 24, "v", False)
+    assert "数分で更新" in ok
+    assert "push 失敗" in ng and "手動確認要" in ng

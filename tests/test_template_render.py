@@ -106,6 +106,7 @@ def _day(date: str, track: str, buy_count: int) -> dict:
 def context() -> dict:
     return {
         "generated_at": "2026-06-12 10:00:00",
+        "target_label": "2026/06/12（金）",
         "race_count": 4,
         "predicted_count": 4,
         "empty_count": 0,
@@ -365,7 +366,9 @@ def test_meta_completeness_warning_and_odds_freshness(context):
     context["days"][0]["races"][0]["horses"][0]["odds"] = 0
     html = _render(context)
     assert "予想 3 レース / 出走馬未確定 1" in html
-    assert "一部レースは出走馬未確定 (翌日分は当日朝に反映)" in html
+    # 日別化 (2026-09-13) 後は 1 ページ = 1 日なので「翌日分」は存在しない。
+    assert "一部レースは出走馬未確定 (次回の生成で更新されます)" in html
+    assert "翌日分" not in html, "日別化したのに翌日分の説明が残っている"
     assert 'title="取得 10:05"' in html
     assert "—" in html
 
@@ -395,3 +398,18 @@ def test_body_has_no_verification_mode_class_in_normal_mode(context):
     html = _render(context)
     assert '<body class="verification-mode">' not in html
     assert '<body>' in html
+
+
+def test_header_shows_target_day_not_only_generated_at(context):
+    """ヘッダに「どの日の予想か」が出ること (2026-09-13 日別化)。
+
+    「更新 2026-09-13 01:36:37」は **生成時刻** であって対象日ではない。
+    自動生成は当日朝に走るので普段は一致するが、前夜や翌日に手動で再生成すると
+    ずれる。Discord 通知に出る日付表記と同じ文字列を見出しにも出して、
+    通知から飛んできた人が別の日の予想を読まないようにする。
+    """
+    context["target_label"] = "2026/09/13（日）"
+    html = _render(context)
+
+    assert "<title>競馬予想 2026/09/13（日）</title>" in html
+    assert 'class="target-day">2026/09/13（日）<' in html
