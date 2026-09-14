@@ -3,9 +3,10 @@
 条件判定 → web.generator 生成 → docs/predictions/latest.md を commit+push →
 Discord webhook に「commit URL + 閲覧は iCloud」を通知。
 
-生成条件 (自己判断): 今日〜明日に出馬表 (races) が存在し、かつ **直近開催日の
-出走馬が実際に取り込まれている** こと。無ければ生成せず終了 (開催前々日以前や
-平日は静かに skip)。Task Scheduler から毎朝実行される前提。
+生成条件 (自己判断): **今日** に出馬表 (races) が存在し、かつその日の
+**出走馬が実際に取り込まれている** こと。無ければ生成せず終了 (非開催日は
+静かに skip)。Task Scheduler から毎朝実行される前提。
+生成は 1 日分ずつ (2026-09-13 日別化)。翌日分は翌朝の起動で出す。
 
 使い方: .venv64/Scripts/python.exe -m scripts.auto_predict [--dry-run] [--force-notify]
 """
@@ -15,7 +16,7 @@ import argparse
 import json
 import subprocess
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -106,6 +107,31 @@ def _notify(text: str) -> bool:
     return notify_discord(text)
 
 
+def _completion_message(target_date: str, n_races: int, version: str,
+                        push_ok: bool) -> str:
+    """生成完了の Discord 通知文を組み立てる。
+
+    日別化 (2026-09-13) で対象日が常に 1 日になったので、旧来の
+    「09/12〜09/13」という範囲表記はやめ、**日付 + 曜日** を出す。
+    ユーザは Discord の通知だけを見て「どっちの日の予想が出たのか」を
+    判断するため、曜日が無いと土日どちらの分か分からない。
+
+    「観察専用」の一文は必須。これが落ちると通知だけを見た人が実弾の根拠と
+    誤読しうる (資金喪失経路)。テストで固定してある。
+    """
+    wd = "月火水木金土日"[datetime.strptime(target_date, "%Y%m%d").weekday()]
+    web_line = (f"🌐 Web版: {PAGES_URL} (数分で更新)" if push_ok
+                else "🌐 Web版: main push 失敗のため未更新 (手動確認要)")
+    return (
+        f"🏇 **予想生成完了** "
+        f"{target_date[:4]}/{target_date[4:6]}/{target_date[6:]}({wd}) "
+        f"({n_races}R, {version})\n"
+        f"📱 今すぐ見る(確実): iPhone ファイルApp → iCloud Drive → 競馬予想 → index.html\n"
+        f"{web_line}\n"
+        f"⚠ 観察専用 (実弾根拠となるエッジは未証明)"
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="生成せず対象日のみ表示")
@@ -120,32 +146,39 @@ def main() -> int:
     min_coverage = args.min_entry_coverage
 
     today = date.today()
-    cand = [(today + timedelta(days=i)).strftime("%Y%m%d") for i in (0, 1)]
+    # 生成対象は **今日のみ** (2026-09-13 ユーザ指示で日別化)。
+    # 以前は今日+明日を 1 ページに出していたが、JRA の出馬表は前日確定なので
+    # 土曜朝の時点で日曜分は大半が「出走馬未取得」の空レースになり、スマホで
+    # 当日分が埋もれていた。実測でも前日に予想を付けられていたのは日曜 36R 中
+    # 2R だけ (日曜の出馬表確定は土曜 11:28 で最終起動に間に合わない) なので、
+    # 前日先出しをやめて失うものはほぼ無い。
+    # 翌日分は翌朝の各トリガ (register_auto_predict_task.ps1) で生成する。
+    cand = [today.strftime("%Y%m%d")]
     conn = sqlite3.connect(DB_PATH)
     targets = _race_days(conn, cand)
     conn.close()
     if not targets:
         print(f"skip: {cand} に出馬表なし (開催日でない)")
         return 0
-    d_from, d_to = targets[0][0], targets[-1][0]
-    n_races = sum(n for _, n in targets)
-    print(f"generate: {d_from}-{d_to} ({n_races} races)")
+    # 対象は常に 1 日 (cand が今日だけなので targets も高々 1 件)。
+    day, n_races = targets[0]
+    print(f"generate: {day} ({n_races} races)")
 
     # 出走馬取り込みゲート (2026-08-22 追加)。
-    # 直近開催日 (d_from) の出走馬がそろっていなければ publish しない。空ページを
+    # その日の出走馬がそろっていなければ publish しない。空ページを
     # 出すよりも「出さずに通知して次の起動で再試行」のほうが実害が小さい
     # (2026-07-25 / 08-01 は全 36 レース「出走馬未取得」の 46KB ページを公開して
     # しまい、その日の予想が丸ごと失われた)。閾値は env で調整可。
     conn = sqlite3.connect(DB_PATH)
     try:
-        with_entries, total = _entry_coverage(conn, d_from)
+        with_entries, total = _entry_coverage(conn, day)
     finally:
         conn.close()
     coverage = (with_entries / total) if total else 0.0
-    print(f"entry coverage {d_from}: {with_entries}/{total} ({coverage:.0%})")
+    print(f"entry coverage {day}: {with_entries}/{total} ({coverage:.0%})")
     if coverage < min_coverage:
         msg = (
-            f"⚠ 予想生成を中止: {d_from} の出走馬が未取り込み "
+            f"⚠ 予想生成を中止: {day} の出走馬が未取り込み "
             f"({with_entries}/{total} = {coverage:.0%} < {min_coverage:.0%})。"
             "次の起動で再試行します (空ページは publish しません)。"
         )
@@ -156,11 +189,11 @@ def main() -> int:
     if args.dry_run:
         return 0
 
-    r = subprocess.run([PY, "-m", "web.generator", "--from", d_from, "--to", d_to,
+    r = subprocess.run([PY, "-m", "web.generator", "--from", day, "--to", day,
                         "--log-predictions"],
                        capture_output=True, text=True, cwd=PROJECT_ROOT)
     if r.returncode != 0:
-        _notify(f"⚠ 予想生成に失敗 ({d_from}-{d_to})。ログ確認要。")
+        _notify(f"⚠ 予想生成に失敗 ({day})。ログ確認要。")
         print(r.stdout[-500:], r.stderr[-500:])
         return 1
 
@@ -170,18 +203,17 @@ def main() -> int:
 
     # GitHub Pages へ公開: 生成 HTML を docs/index.html にコピーして commit+push。
     # commit URL はレンダリングされないので通知には Pages URL を載せる (案A 改)。
-    from datetime import datetime
     PAGES_HTML.parent.mkdir(parents=True, exist_ok=True)
     PAGES_HTML.write_bytes(GENERATED_HTML.read_bytes())
     (PAGES_HTML.parent / ".nojekyll").touch()
     MARKER.write_text(
-        f"# 最新予想生成\n\n- 対象: {d_from}〜{d_to} ({n_races} レース)\n"
+        f"# 最新予想生成\n\n- 対象: {day} ({n_races} レース)\n"
         f"- 生成時刻: {datetime.now().isoformat(timespec='seconds')}\n"
         f"- モデル: {ver}\n- 閲覧: {PAGES_URL} (GitHub Pages) / iCloud Drive index.html\n",
         encoding="utf-8")
-    _stage_publish_artifacts(d_from)
+    _stage_publish_artifacts(day)
     c = subprocess.run(["git", "commit", "-m",
-                        f"predictions: {d_from}-{d_to} published to Pages ({ver})"],
+                        f"predictions: {day} published to Pages ({ver})"],
                        cwd=PROJECT_ROOT, capture_output=True, text=True)
     # Pages は main (デフォルトブランチ) からデプロイされるので main へ push する。
     # 非 fast-forward なら git が安全に reject → 通知して手動判断 (force はしない)。
@@ -204,15 +236,7 @@ def main() -> int:
             if not push_ok:
                 print("WARN: push to main failed:\n", p.stderr[-400:])
 
-    web_line = (f"🌐 Web版: {PAGES_URL} (数分で更新)" if push_ok
-                else f"🌐 Web版: main push 失敗のため未更新 (手動確認要)")
-    _notify(
-        f"🏇 **予想生成完了** {d_from[:4]}/{d_from[4:6]}/{d_from[6:]}〜{d_to[4:6]}/{d_to[6:]} "
-        f"({n_races}R, {ver})\n"
-        f"📱 今すぐ見る(確実): iPhone ファイルApp → iCloud Drive → 競馬予想 → index.html\n"
-        f"{web_line}\n"
-        f"⚠ 観察専用 (実弾根拠となるエッジは未証明)"
-    )
+    _notify(_completion_message(day, n_races, ver, push_ok))
     print("notified. push_ok=", push_ok)
     return 0
 

@@ -650,11 +650,23 @@ def build_view_model(
     # S7-β-4 (2026-05-18): フィルタ条件の header 明示用 context。
     # config.BUY_FILTER_DEFAULT を読み、None でない項目を表示文字列にまとめる。
     # ユーザーが「フィルタが効いていない状態」を検知できるセンサーとして機能。
+    # 対象日ラベル (2026-09-13 日別化)。header の「更新 <生成時刻>」は生成時刻で
+    # あって対象日ではないため、前夜や翌日に手動再生成すると「どの日の予想を見て
+    # いるのか」がページ単体で分からなくなる。Discord 通知の日付表記と同じ文字列を
+    # 見出しにも出して突き合わせられるようにする。
+    _dates = sorted({d["date"] for d in rendered_days})
+    if len(_dates) == 1:
+        _wd = next(d["weekday"] for d in rendered_days if d["date"] == _dates[0])
+        target_label = f"{_dates[0]}（{_wd}）"
+    else:
+        target_label = "〜".join([_dates[0], _dates[-1]]) if _dates else ""
+
     filter_summary = _build_filter_summary()
     # S7-β-5 (2026-05-18): footer version snapshot 用 context。
     version_info = _build_version_snapshot()
     return {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "target_label": target_label,
         "race_count": len(races),
         "buy_count": len(buy_candidates),
         "buy_candidates": buy_candidates,

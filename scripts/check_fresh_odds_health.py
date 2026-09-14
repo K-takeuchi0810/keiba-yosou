@@ -160,6 +160,12 @@ def evaluate_coverage(
         # 取得窓 (発走 25-2 分前) に入ったレースの累計。0 なら「まだ取りに行く
         # 対象が無い」ので ok_races=0 は正常。
         "eligible_races_today": 0,
+        # 開催日だが、まだどのレースも取得窓に入っていない状態 (朝イチ)。
+        # 「取得実績ゼロ」が正常な時間帯であることを decide() に伝えるための
+        # 明示フラグ。coverage 側で ok=True にするだけでは足りなかった
+        # (decide() が ok_races_today==0 を独立に見て HOLD を返していた。
+        #  2026-09-13 09:15 に Discord へ HOLD が飛んで判明)。
+        "awaiting_first_window": False,
         "contamination_detected": False,
         "contamination_examples": [],
         # 既知 source が想定稼働窓の外に居る「自己申告↔時刻の不一致」。混入 (FAIL) では
@@ -284,6 +290,7 @@ def evaluate_coverage(
         # 取得対象レースが 1 度も現れていない (eligible 累計 0) 間は判定を保留する。
         if out["eligible_races_today"] == 0:
             out["ok"] = True
+            out["awaiting_first_window"] = True
             out["reason"] = (
                 "race day but no race has entered the fetch window yet "
                 f"(eligible_races_today=0, races_in_db={out['races_in_db_today']})"
@@ -429,6 +436,12 @@ def integrate_decision(
     if not coverage.get("is_race_day"):
         # 非開催日は取得対象が無いので PASS (2026-09-03 の誤検知対応)。
         return "PASS", "not a race day; scheduler healthy and nothing to fetch"
+    if coverage.get("awaiting_first_window"):
+        # 開催日の朝イチ。第 1 レースは 9:50-10:05 発走が多く、取得窓 (発走
+        # 25-2 分前) に入るのは 9:25 以降なので、9:15 の定期チェックで取得実績が
+        # 0 なのは正常。ここを HOLD にしていたため開催日は毎回
+        # 「9:15 HOLD → 9:30 recovered PASS」の 2 通が Discord に届いていた。
+        return "PASS", coverage.get("reason", "race day; first fetch window not reached yet")
     if coverage.get("ok_races_today", 0) == 0:
         return "HOLD", coverage.get("reason", "ok_races_today=0")
     if db.get("fresh_horse_rows_since_check_time", 0) == 0:
