@@ -16,6 +16,7 @@ rolling で「直近 30 日」を見る週次監視 (Task Scheduler 登録済み
 """
 from __future__ import annotations
 
+import importlib
 import sqlite3
 
 import pytest
@@ -23,19 +24,80 @@ import pytest
 import config
 
 
+# 2026-09-17 以降、封印の開始日は **未定** (config.SEALED_FROM is None)。
+# 憲法 (docs/CHARTER_2026_09_17.md) 方針 8 により、試す価値のある候補が出るまで
+# Lockbox を開けない。
+#
+# そこで本ファイルは 2 種類のテストを持つ:
+#   1. 「今は封印していない」ことの確認 (下の test_seal_is_not_scheduled_yet)
+#   2. **開始日を入れたときに仕組みが正しく働くか** の確認 (それ以外すべて)
+# 2 のために、既定で開始日を入れた状態を作る fixture を置く。
+SCHEDULED_FROM = "20261001"
+SCHEDULED_UNTIL = "20260930"
+
+
+def _apply_schedule(monkeypatch, start=SCHEDULED_FROM, until=SCHEDULED_UNTIL):
+    """封印開始日を入れた状態を作る。
+
+    `from config import SEALED_FROM` で **値をコピーして持っている**モジュールが
+    あるので、そちらも合わせて差し替える。ここを忘れると、config だけ変えても
+    monitor / tickets / gui は古い値を見続けてテストが嘘をつく。
+    """
+    monkeypatch.setattr(config, "SEALED_FROM", start)
+    monkeypatch.setattr(config, "SEALED_UNTIL", until)
+    monkeypatch.setattr(config, "SEALED_JUDGMENT_DONE", False)
+    for modname in ("scripts.monitor", "predictor.tickets"):
+        try:
+            mod = importlib.import_module(modname)
+        except Exception:
+            continue
+        if hasattr(mod, "SEALED_FROM"):
+            monkeypatch.setattr(mod, "SEALED_FROM", start)
+        if hasattr(mod, "SEALED_UNTIL"):
+            monkeypatch.setattr(mod, "SEALED_UNTIL", until)
+
+
 @pytest.fixture(autouse=True)
 def _seal_active(monkeypatch):
-    monkeypatch.setattr(config, "SEALED_JUDGMENT_DONE", False)
+    _apply_schedule(monkeypatch)
 
 
-def test_sealed_boundary_matches_the_declared_design():
-    """封印開始日が設計書の宣言と一致すること。
+def test_seal_is_not_scheduled_yet(monkeypatch):
+    """**現在は封印していない** こと (2026-09-17 ユーザ決定で延期)。
 
-    docs/F3_MARKET_RESIDUAL_DESIGN.md D2: dev = 2026-07-04〜09-30 /
-    封印 = 2026-10-01〜。ここがズレると「事前宣言」が成立しない。
+    憲法 方針 8: Final Lockbox は開発完了まで一切見ない。試す価値のある候補が
+    無いまま開始すると、一度きりの Lockbox を「既知の答えの確認」に費やす。
+
+    開始するときは config.SEALED_FROM に開始日を、SEALED_UNTIL にその前日を入れる。
+    このテストはそのとき落ちるので、**封印を始めたことを必ず自覚できる**。
     """
-    assert config.SEALED_FROM == "20261001"
-    assert config.SEALED_UNTIL == "20260930", "封印開始日の前日であること"
+    monkeypatch.undo()   # fixture の仮スケジュールを外して実際の設定を見る
+    importlib.reload(config)
+
+    assert config.SEALED_FROM is None, (
+        "封印開始日が入っている。開始したのなら本テストを更新し、"
+        "事前登録 (docs/F3_PREREG_*.md) も同時に commit すること")
+    assert config.SEALED_UNTIL is None
+    assert config.sealed_window_active() is False
+    assert config.sealed_window_started() is False
+    # 封印していないので分析は制限されない
+    f, t, info = config.guard_analysis_window("00000000", "99999999")
+    assert (f, t) == ("00000000", "99999999")
+    assert config.sealed_notice(info) == ""
+    assert config.artifact_drift() == []
+
+
+def test_until_is_the_day_before_from():
+    """SEALED_UNTIL は必ず SEALED_FROM の前日であること。
+
+    2 つを別々に宣言しているので、片方だけ直すとゲートに穴が空く
+    (1 日ぶん見えてしまう / 1 日ぶん余計に隠れる)。
+    """
+    from datetime import date, timedelta
+
+    start = date(int(config.SEALED_FROM[:4]), int(config.SEALED_FROM[4:6]),
+                 int(config.SEALED_FROM[6:]))
+    assert config.SEALED_UNTIL == (start - timedelta(days=1)).strftime("%Y%m%d")
 
 
 def test_window_before_the_seal_is_untouched():
@@ -278,7 +340,7 @@ def test_artifact_drift_actually_detects_a_change(tmp_path, monkeypatch):
     """凍結検査が本当に変化を検出すること (検査自体が空振りしていないか)。"""
     monkeypatch.setattr(config, "SEALED_ARTIFACTS",
                         {"predictor/weights.json": "0" * 64})
-    monkeypatch.setattr(config, "SEALED_FROM", "20200101")   # 開始済みに見立てる
+    _apply_schedule(monkeypatch, "20200101", "20191231")   # 開始済みに見立てる
     assert config.artifact_drift(), "変化しているのに検出できていない"
 
 
@@ -287,7 +349,8 @@ def test_artifact_freeze_is_not_checked_after_judgment(monkeypatch):
     monkeypatch.setattr(config, "SEALED_JUDGMENT_DONE", True)
     monkeypatch.setattr(config, "SEALED_ARTIFACTS",
                         {"predictor/weights.json": "0" * 64})
-    monkeypatch.setattr(config, "SEALED_FROM", "20200101")
+    _apply_schedule(monkeypatch, "20200101", "20191231")
+    monkeypatch.setattr(config, "SEALED_JUDGMENT_DONE", True)
     assert config.artifact_drift() == []
 
 
