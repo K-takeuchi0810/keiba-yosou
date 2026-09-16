@@ -209,6 +209,10 @@ def init_db(conn: sqlite3.Connection) -> None:
     for _c in ("front3f_time", "front4f_time", "last3f_time", "last4f_time"):
         _ensure_column(conn, "races", _c, "INTEGER")
     _ensure_column(conn, "races", "lap_times", "TEXT")
+    # 予測の出所 (2026-09-17 憲法 Phase 0.5 項目 0)。既存 DB への後方互換 migration。
+    # 「どのコードがこの予測を出したのか分からない」状態を禁止する。
+    _ensure_column(conn, "prediction_log", "code_version", "TEXT")
+    _ensure_column(conn, "prediction_log", "data_version", "TEXT")
     # 3 代血統 (父母父/母母父) + HN 産地情報 (2026-07-05)。schema.sql に index が
     # 無いので後置で安全 (index を足す場合は dam_sire_breeding_num と同様に前置へ)。
     for _c in ("sire_dam_sire_breeding_num", "sire_dam_sire_name",
@@ -845,6 +849,12 @@ def insert_prediction_log(
        win_odds, win_popularity, confidence}
     同一 (generated_at, レース, 馬番) は INSERT OR REPLACE。戻り値は行数。
     """
+    # 出所を毎回刻む (2026-09-17 憲法 Phase 0.5 項目 0)。
+    # 呼び出し側が忘れられないよう、引数ではなくここで取る。
+    from predictor.provenance import code_version, data_version
+
+    code_v = code_version()
+    data_v = data_version(conn)
     payload = [
         (
             generated_at,
@@ -853,7 +863,7 @@ def insert_prediction_log(
             r.get("horse_num"), r.get("mark") or "", r.get("rank"), r.get("score"),
             r.get("win_probability"), r.get("raw_blended_probability"),
             r.get("win_odds"), r.get("win_popularity"), r.get("confidence") or "",
-            model_version, calibrator_version,
+            model_version, calibrator_version, code_v, data_v,
         )
         for r in rows
     ]
@@ -863,8 +873,9 @@ def insert_prediction_log(
         "INSERT OR REPLACE INTO prediction_log "
         "(generated_at, race_year, race_month_day, track_code, kaiji, nichiji, race_num, "
         " horse_num, mark, rank, score, win_probability, raw_blended_probability, "
-        " win_odds, win_popularity, confidence, model_version, calibrator_version) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        " win_odds, win_popularity, confidence, model_version, calibrator_version, "
+        " code_version, data_version) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         payload,
     )
     return len(payload)

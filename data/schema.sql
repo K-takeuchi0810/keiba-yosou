@@ -685,6 +685,12 @@ CREATE TABLE IF NOT EXISTS prediction_log (
     confidence              TEXT,
     model_version           TEXT,            -- lgbm rule_version
     calibrator_version      TEXT,
+    -- 出所 (2026-09-17 憲法 Phase 0.5 項目 0)。
+    -- 「どのコードがこの予測を出したのか分からない」状態を禁止するため。
+    -- 実際 JC/CC/TC 取り込みが未コミットのまま 1 ヶ月本番稼働しており、
+    -- その間の予測がどのコードによるものか git から特定できなかった。
+    code_version            TEXT,            -- git SHA 先頭 12 桁 (+ dirty なら -dirty)
+    data_version            TEXT,            -- 取り込み済みデータの指紋
     PRIMARY KEY (generated_at, race_year, race_month_day, track_code, kaiji, nichiji, race_num, horse_num)
 );
 
