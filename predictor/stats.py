@@ -85,24 +85,44 @@ def bootstrap_return_rate(
     n_resample: int = 1000,
     seed: int = 42,
     alpha: float = 0.05,
+    groups: list | None = None,
 ) -> tuple[float, float, float]:
     """各賭けの (stake, payout) ペアから return rate の bootstrap CI を計算。
 
     戻り: (point_estimate, lo_quantile, hi_quantile)
     既定 α=0.05 で 95% CI。
+
+    groups を渡すと **その単位でまとめて再抽出** する (ブロックブートストラップ)。
+    1 レースに複数点買う戦略では、同じレース内の結果が連動するため、
+    1 件ずつ独立に再抽出すると区間が不当に狭くなる。レース ID を渡すこと。
+    (2026-09-17 追加。憲法 方針 10)
     """
     if not payouts or not stakes or len(payouts) != len(stakes):
         return (0.0, 0.0, 0.0)
+    if groups is not None and len(groups) != len(payouts):
+        raise ValueError(
+            f"groups の長さ {len(groups)} が payouts {len(payouts)} と違う")
     total_stake = sum(stakes)
     total_return = sum(payouts)
     point = total_return / total_stake if total_stake else 0.0
     rng = random.Random(seed)
-    n = len(payouts)
+
+    if groups is None:
+        blocks = [[i] for i in range(len(payouts))]
+    else:
+        by: dict = {}
+        for i, g in enumerate(groups):
+            by.setdefault(g, []).append(i)
+        blocks = list(by.values())
+
     samples: list[float] = []
+    nb = len(blocks)
     for _ in range(n_resample):
-        idxs = [rng.randrange(n) for _ in range(n)]
-        s = sum(stakes[i] for i in idxs)
-        r = sum(payouts[i] for i in idxs)
+        s = r = 0
+        for _ in range(nb):
+            for i in blocks[rng.randrange(nb)]:
+                s += stakes[i]
+                r += payouts[i]
         samples.append(r / s if s else 0.0)
     samples.sort()
     lo_idx = max(0, int(n_resample * alpha / 2))
