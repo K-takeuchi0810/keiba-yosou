@@ -88,8 +88,18 @@ DATA_PERIODS: dict[str, dict[str, str]] = {
 # ここを書き換えるのはプロトコル違反にあたる。判定を実施したら
 # SEALED_JUDGMENT_DONE を True にして封印解除する (そのとき封印窓は次仮説の
 # dev 窓に転用できる)。
-SEALED_FROM: str = "20261001"          # この日以降が封印対象 (閉区間の開始)
-SEALED_UNTIL: str = "20260930"         # 分析が見てよい最終日 (SEALED_FROM の前日)
+# 2026-09-17 ユーザ決定により **封印開始を延期** (None = 開始日未定)。
+#
+# 憲法 (docs/CHARTER_2026_09_17.md) 方針 8 は「Final Lockbox は開発完了まで
+# 一切見ない」と定める。現時点で試す価値のある候補が無い (本番モデルの市場に
+# 対する重みは −0.130) 状態で 10/01 に開始すると、一度きりの Lockbox を
+# 「既知の答えの確認」に費やすことになる。
+#
+# 開始条件: Strategy Development 期間で見つけた候補が Validation を通過し、
+#           事前登録を commit した日に、その翌日以降の日付をここに入れる。
+# 開始したら SEALED_UNTIL も同時に (開始日の前日) に設定すること。
+SEALED_FROM: str | None = None         # 開始日 (None = 未定 = 封印していない)
+SEALED_UNTIL: str | None = None        # 分析が見てよい最終日 (開始日の前日)
 SEALED_JUDGMENT_DONE: bool = False     # 判定を実施したら True にして封印解除
 
 # 封印を破った事実を残す監査ログ。--allow-sealed で意図的に覗いた場合に追記する。
@@ -127,7 +137,7 @@ def sealed_window_started(today: str | None = None) -> bool:
     if not sealed_window_active():
         return False
     now = today or date.today().strftime("%Y%m%d")
-    return now >= SEALED_FROM
+    return SEALED_FROM is not None and now >= SEALED_FROM
 
 
 def artifact_drift() -> list[str]:
@@ -157,8 +167,12 @@ def artifact_drift() -> list[str]:
 
 
 def sealed_window_active() -> bool:
-    """封印が有効か (判定未実施のあいだ True)。"""
-    return not SEALED_JUDGMENT_DONE
+    """封印が有効か。
+
+    開始日が未定 (SEALED_FROM is None) なら封印していないので False。
+    判定を実施済み (SEALED_JUDGMENT_DONE) でも False。
+    """
+    return SEALED_FROM is not None and not SEALED_JUDGMENT_DONE
 
 
 def guard_analysis_window(
@@ -193,7 +207,9 @@ def guard_analysis_window(
         "clamped": False,
         "allow_sealed": bool(allow_sealed),
     }
-    if not sealed_window_active() or to_date < SEALED_FROM:
+    if not sealed_window_active():
+        return from_date, to_date, info
+    if to_date < SEALED_FROM:
         return from_date, to_date, info
 
     if allow_sealed:

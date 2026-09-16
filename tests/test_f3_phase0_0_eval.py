@@ -40,13 +40,13 @@ def test_zero_live_channels_changes_only_preregistered_columns():
     assert X.tolist() == [[9.0, 4.0, 1.0, 1.0, 8.0]], "input must not be mutated"
 
 
-def test_sealed_window_is_rejected():
+def test_sealed_window_is_rejected(_seal_scheduled):
     _guard_unsealed("20260101", "20260614")
     with pytest.raises(ValueError, match="sealed holdout access denied"):
         _guard_unsealed("20260901", "20261001")
 
 
-def test_cache_race_keys_are_checked_independently_of_declared_window():
+def test_cache_race_keys_are_checked_independently_of_declared_window(_seal_scheduled):
     _guard_cache_race_keys(["20210105_06_01_01_01", "20231228_09_05_09_12"])
     with pytest.raises(ValueError, match="sealed holdout access denied"):
         _guard_cache_race_keys(["20210105_06_01_01_01", "20261001_09_04_01_01"])
@@ -149,3 +149,23 @@ def test_saved_pair_reproduces_frozen_validation_auc():
     assert check["passed"] is True
     assert check["control"]["actual_auc"] == pytest.approx(0.7913195089, abs=1e-10)
     assert check["treatment"]["actual_auc"] == pytest.approx(0.7887806982, abs=1e-10)
+
+
+# ---------------------------------------------------------------------------
+# 封印テスト用の fixture (2026-09-17 追加)
+# ---------------------------------------------------------------------------
+# ユーザ決定により **封印開始は延期** され、config.SEALED_FROM は None (未定) に
+# なった。封印していない状態では窓を拒否しないのが正しい挙動なので、「拒否するか」
+# を確かめるテストは開始日を入れてから実行する。
+# `from config import SEALED_FROM` で値をコピーして持っているモジュール側も
+# 合わせて差し替える (ここを忘れると config だけ変えても古い値を見続ける)。
+@pytest.fixture()
+def _seal_scheduled(monkeypatch):
+    import config
+    from scripts import f3_phase0_0_eval as _mod
+
+    monkeypatch.setattr(config, "SEALED_FROM", "20261001")
+    monkeypatch.setattr(config, "SEALED_UNTIL", "20260930")
+    monkeypatch.setattr(config, "SEALED_JUDGMENT_DONE", False)
+    monkeypatch.setattr(_mod, "SEALED_START", "20261001", raising=False)
+    monkeypatch.setattr(_mod, "SEALED_FROM", "20261001", raising=False)

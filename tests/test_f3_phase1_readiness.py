@@ -77,7 +77,7 @@ def test_analyze_race_requires_two_different_times() -> None:
     assert result["wide_drift"] is False
 
 
-def test_sealed_window_is_rejected_before_query() -> None:
+def test_sealed_window_is_rejected_before_query(_seal_scheduled) -> None:
     _validate_window("20260704", "20260930")
     with pytest.raises(ValueError, match="must remain fixed"):
         _validate_window("20260703", "20260930")
@@ -114,3 +114,23 @@ def test_audit_script_source_is_ascii() -> None:
 
     source = open(module.__file__, "rb").read()
     source.decode("ascii")
+
+
+# ---------------------------------------------------------------------------
+# 封印テスト用の fixture (2026-09-17 追加)
+# ---------------------------------------------------------------------------
+# ユーザ決定により **封印開始は延期** され、config.SEALED_FROM は None (未定) に
+# なった。封印していない状態では窓を拒否しないのが正しい挙動なので、「拒否するか」
+# を確かめるテストは開始日を入れてから実行する。
+# `from config import SEALED_FROM` で値をコピーして持っているモジュール側も
+# 合わせて差し替える (ここを忘れると config だけ変えても古い値を見続ける)。
+@pytest.fixture()
+def _seal_scheduled(monkeypatch):
+    import config
+    from scripts import f3_phase1_readiness as _mod
+
+    monkeypatch.setattr(config, "SEALED_FROM", "20261001")
+    monkeypatch.setattr(config, "SEALED_UNTIL", "20260930")
+    monkeypatch.setattr(config, "SEALED_JUDGMENT_DONE", False)
+    monkeypatch.setattr(_mod, "SEALED_START", "20261001", raising=False)
+    monkeypatch.setattr(_mod, "SEALED_FROM", "20261001", raising=False)
