@@ -38,7 +38,9 @@ from db import (
     upsert_race,
     insert_odds_snapshot,
     upsert_course_info,
+    upsert_course_change,
     upsert_horse_name_origin,
+    upsert_jockey_change,
     upsert_lineage,
     upsert_race_cancellation,
     upsert_race_scratch,
@@ -80,8 +82,10 @@ from jvlink_client.parser import (
     parse_av,
     parse_bt,
     parse_cs,
+    parse_cc,
     parse_hy,
     parse_jg,
+    parse_jc,
     parse_ra,
     parse_rc,
     parse_se,
@@ -272,11 +276,17 @@ def ingest_file_dispatch(
             elif rec_type == "AV":
                 upsert_race_cancellation(conn, parse_av(rec))
                 _bump("AV")
+            elif rec_type == "JC":
+                upsert_jockey_change(conn, parse_jc(rec))
+                _bump("JC")
             elif rec_type == "TC":
                 upsert_start_time_change(conn, parse_tc(rec))
                 _bump("TC")
+            elif rec_type == "CC":
+                upsert_course_change(conn, parse_cc(rec))
+                _bump("CC")
             else:
-                # 未対応レコード種別 (CK/JC/CC/WH 等。WH/JC/CC は raw 未取得=JV-Link fetch 要)
+                # 未対応レコード種別 (CK/CC/WH 等。WH は別経路で反映)
                 skipped += 1
         except Exception as e:
             skipped += 1

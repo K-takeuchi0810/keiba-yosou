@@ -1533,8 +1533,10 @@ def parse_wf_file(path: str | Path) -> list[Win5]:
 # ============================================================
 # 参照系・速報系
 #   RC レコードマスタ / CS コース情報 / YS 開催スケジュール / BT 系統情報 /
-#   HY 馬名意味由来 / WE 天候馬場状態 / AV 出走取消・競走除外 / TC 発走時刻変更
-# 仕様書 §21(RC) §27(CS) §25(YS) §26(BT) §24(HY) §102(WE) §103(AV) §105(TC)
+#   HY 馬名意味由来 / WE 天候馬場状態 / AV 出走取消・競走除外 /
+#   JC 騎手変更 / TC 発走時刻変更
+# 仕様書 §21(RC) §27(CS) §25(YS) §26(BT) §24(HY) §102(WE) §103(AV)
+#        §104(JC) §105(TC)
 # parse_*_file は付けない (ingest は _split_records 経由。dead helper を増やさない)。
 # ============================================================
 
@@ -1545,7 +1547,9 @@ BT_LENGTH = 6889
 HY_LENGTH = 123
 WE_LENGTH = 42
 AV_LENGTH = 78
+JC_LENGTH = 161
 TC_LENGTH = 45
+CC_LENGTH = 50
 
 
 @dataclass
@@ -1785,6 +1789,57 @@ def parse_av(rec: bytes) -> Scratch:
 
 
 @dataclass
+class JockeyChange:
+    record_type: str
+    data_div: str
+    data_created: str
+    year: str
+    month_day: str
+    track_code: str
+    kaiji: str
+    nichiji: str
+    race_num: str
+    announced_time: str
+    horse_num: str
+    horse_name: str
+    new_burden_weight: int
+    new_jockey_code: str
+    new_jockey_name: str
+    new_apprentice_code: str
+    old_burden_weight: int
+    old_jockey_code: str
+    old_jockey_name: str
+    old_apprentice_code: str
+
+
+def parse_jc(rec: bytes) -> JockeyChange:
+    """速報開催情報の騎手変更 (JC) を公式161 byteレイアウトで読む。"""
+    rec = _fit(rec, JC_LENGTH)
+    return JockeyChange(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        year=_ascii(rec, 12, 4),
+        month_day=_ascii(rec, 16, 4),
+        track_code=_ascii(rec, 20, 2),
+        kaiji=_ascii(rec, 22, 2),
+        nichiji=_ascii(rec, 24, 2),
+        race_num=_ascii(rec, 26, 2),
+        announced_time=_ascii(rec, 28, 8),
+        horse_num=_ascii(rec, 36, 2),
+        horse_name=_str(rec, 38, 36),
+        new_burden_weight=_int(rec, 74, 3),
+        new_jockey_code=_ascii(rec, 77, 5),
+        new_jockey_name=_str(rec, 82, 34),
+        new_apprentice_code=_ascii(rec, 116, 1),
+        old_burden_weight=_int(rec, 117, 3),
+        old_jockey_code=_ascii(rec, 120, 5),
+        old_jockey_name=_str(rec, 125, 34),
+        old_apprentice_code=_ascii(rec, 159, 1),
+    )
+
+
+@dataclass
 class StartTimeChange:
     record_type: str
     data_div: str
@@ -1815,4 +1870,45 @@ def parse_tc(rec: bytes) -> StartTimeChange:
         announced_time=_ascii(rec, 28, 8),
         new_start_time=_ascii(rec, 36, 4),
         old_start_time=_ascii(rec, 40, 4),
+    )
+
+
+@dataclass
+class CourseChange:
+    record_type: str
+    data_div: str
+    data_created: str
+    year: str
+    month_day: str
+    track_code: str
+    kaiji: str
+    nichiji: str
+    race_num: str
+    announced_time: str
+    new_distance: int
+    new_track_type_code: str
+    old_distance: int
+    old_track_type_code: str
+    reason_code: str
+
+
+def parse_cc(rec: bytes) -> CourseChange:
+    """Parse the 0B14 course-change (CC) record (JV-Data spec section 106)."""
+    rec = _fit(rec, CC_LENGTH)
+    return CourseChange(
+        record_type=_ascii(rec, 1, 2),
+        data_div=_ascii(rec, 3, 1),
+        data_created=_ascii(rec, 4, 8),
+        year=_ascii(rec, 12, 4),
+        month_day=_ascii(rec, 16, 4),
+        track_code=_ascii(rec, 20, 2),
+        kaiji=_ascii(rec, 22, 2),
+        nichiji=_ascii(rec, 24, 2),
+        race_num=_ascii(rec, 26, 2),
+        announced_time=_ascii(rec, 28, 8),
+        new_distance=_int(rec, 36, 4),
+        new_track_type_code=_ascii(rec, 40, 2),
+        old_distance=_int(rec, 42, 4),
+        old_track_type_code=_ascii(rec, 46, 2),
+        reason_code=_ascii(rec, 48, 1),
     )
