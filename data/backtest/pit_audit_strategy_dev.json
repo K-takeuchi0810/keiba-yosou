@@ -1,0 +1,23 @@
+{
+ "meta": {
+  "git_sha": "a5189b4646764b901ec99740bb539c2c8afb9bdd",
+  "git_dirty": true,
+  "code_version": "a5189b464676-dirty",
+  "data_version": null,
+  "from_date": "20260509",
+  "to_date": "20260831",
+  "gate_minutes": 10
+ },
+ "races_total": 1176,
+ "no_start_time": 0,
+ "no_odds_before_t10": 239,
+ "t10_available": 937,
+ "t10_available_rate": 0.7968,
+ "pit_pass": 937,
+ "pit_fail": 0,
+ "races_with_start_time_change": 27,
+ "change_moved_decision_time": 27,
+ "post_start_data_used": 0,
+ "violation_kinds": {},
+ "violation_examples": []
+}

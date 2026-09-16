@@ -650,7 +650,13 @@ CREATE TABLE IF NOT EXISTS odds_snapshots (
     nichiji        TEXT NOT NULL,
     race_num       TEXT NOT NULL,
     horse_num      TEXT NOT NULL,
-    fetched_at     TEXT NOT NULL,   -- ISO8601 (取得時刻)
+    fetched_at     TEXT NOT NULL,   -- **data_received_at**: 我々が受信した時刻 (ローカル)
+    -- **odds_observed_at**: 提供元 (JRA) が示す発表時刻 MMDDHHMM。
+    -- 2026-09-17 憲法 Phase 0.5-1 で追加。3 種類の時刻を混同しないため:
+    --   (1) レース予定発走時刻  (2) 情報を取得した時刻 = fetched_at
+    --   (3) 提供元が示す観測時刻 = announced_at
+    -- 購入判断は (2) が決定時刻以前であることが必要条件、(3) は監査に使う。
+    announced_at   TEXT,            -- MMDDHHMM (提供元の発表時刻)
     win_odds       INTEGER,         -- 0.1 倍単位
     win_popularity INTEGER,
     source         TEXT,            -- 0B31 / morning / backfill_0B31 等

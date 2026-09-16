@@ -213,6 +213,9 @@ def init_db(conn: sqlite3.Connection) -> None:
     # 「どのコードがこの予測を出したのか分からない」状態を禁止する。
     _ensure_column(conn, "prediction_log", "code_version", "TEXT")
     _ensure_column(conn, "prediction_log", "data_version", "TEXT")
+    # 提供元が示すオッズ発表時刻 (2026-09-17 憲法 Phase 0.5-1)。
+    # 「受信した時刻」と「提供元が示す観測時刻」を分けて持つため。
+    _ensure_column(conn, "odds_snapshots", "announced_at", "TEXT")
     # 3 代血統 (父母父/母母父) + HN 産地情報 (2026-07-05)。schema.sql に index が
     # 無いので後置で安全 (index を足す場合は dam_sire_breeding_num と同様に前置へ)。
     for _c in ("sire_dam_sire_breeding_num", "sire_dam_sire_name",
@@ -819,7 +822,7 @@ def insert_odds_snapshot(
     """
     rows = [
         (o1.year, o1.month_day, o1.track_code, o1.kaiji, o1.nichiji, o1.race_num,
-         horse_num, fetched_at, odds, popularity, source)
+         horse_num, fetched_at, o1.announced_at or None, odds, popularity, source)
         for horse_num, odds, popularity in o1.win_odds
     ]
     if not rows:
@@ -827,8 +830,8 @@ def insert_odds_snapshot(
     conn.executemany(
         "INSERT OR REPLACE INTO odds_snapshots "
         "(race_year, race_month_day, track_code, kaiji, nichiji, race_num, "
-        " horse_num, fetched_at, win_odds, win_popularity, source) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        " horse_num, fetched_at, announced_at, win_odds, win_popularity, source) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         rows,
     )
     return len(rows)
