@@ -577,6 +577,30 @@ CREATE TABLE IF NOT EXISTS race_cancellations (
     PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji, race_num, horse_num)
 );
 
+-- 騎手変更 (JC、速報)。0B14 の現行スナップショットを保存する。
+CREATE TABLE IF NOT EXISTS jockey_changes (
+    race_year           TEXT NOT NULL,
+    race_month_day      TEXT NOT NULL,
+    track_code          TEXT NOT NULL,
+    kaiji               TEXT NOT NULL,
+    nichiji             TEXT NOT NULL,
+    race_num            TEXT NOT NULL,
+    horse_num           TEXT NOT NULL,
+    data_div            TEXT,
+    announced_time      TEXT,
+    horse_name          TEXT,
+    new_burden_weight   INTEGER,
+    new_jockey_code     TEXT,
+    new_jockey_name     TEXT,
+    new_apprentice_code TEXT,
+    old_burden_weight   INTEGER,
+    old_jockey_code     TEXT,
+    old_jockey_name     TEXT,
+    old_apprentice_code TEXT,
+    data_created        TEXT,
+    PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji, race_num, horse_num)
+);
+
 -- 発走時刻変更 (TC、速報)。
 CREATE TABLE IF NOT EXISTS start_time_changes (
     race_year      TEXT NOT NULL,
@@ -590,6 +614,25 @@ CREATE TABLE IF NOT EXISTS start_time_changes (
     old_start_time TEXT,
     data_div       TEXT,
     data_created   TEXT,
+    PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji, race_num, announced_time)
+);
+
+-- コース変更 (CC速報)。同一レースで複数回変更されるため発表時刻も主キーに含める。
+CREATE TABLE IF NOT EXISTS course_changes (
+    race_year          TEXT NOT NULL,
+    race_month_day     TEXT NOT NULL,
+    track_code         TEXT NOT NULL,
+    kaiji              TEXT NOT NULL,
+    nichiji            TEXT NOT NULL,
+    race_num           TEXT NOT NULL,
+    announced_time     TEXT NOT NULL,
+    new_distance       INTEGER,
+    new_track_type_code TEXT,
+    old_distance       INTEGER,
+    old_track_type_code TEXT,
+    reason_code        TEXT,
+    data_div           TEXT,
+    data_created       TEXT,
     PRIMARY KEY (race_year, race_month_day, track_code, kaiji, nichiji, race_num, announced_time)
 );
 

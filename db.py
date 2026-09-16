@@ -19,10 +19,12 @@ from config import DB_PATH, PROJECT_ROOT
 from jvlink_client.parser import (
     BreedingHorse,
     CourseInfo,
+    CourseChange,
     ExoticOdds,
     HorseMaster,
     HorseNameOrigin,
     HorseRaceInfo,
+    JockeyChange,
     JockeyMaster,
     Lineage,
     MiningPrediction,
@@ -416,7 +418,7 @@ def update_win_odds(
         # 刻印すると backtest の odds 鮮度ゲート (scripts.backtest.
         # race_odds_untrusted) がそのレースを post-start 扱いで除外するため、
         # 発走後に走った ingest が過去のレースを遡って検証母数から蹴り落とす。
-        # 実害: 2026 年 1-6 月の適格レースが 1,568 → 1,177 に縮小 (2026-08-22 検出、
+        # 実害: 2026 年 1-6 月の適格レースが 1,568 → 1,135 に縮小 (2026-08-22 検出、
         # 原因は毎分実行の外部 live ingest と 20:00 の傾向収集バッチ)。
         # 発走後のオッズは締切後で動かないので確定値と等価であり、NULL 刻印
         # (= 確定・信頼、ただし PIT 特徴には使用禁止) が正しい意味づけになる。
@@ -755,8 +757,49 @@ def upsert_race_cancellation(conn: sqlite3.Connection, av: Scratch) -> None:
     _upsert_race_keyed(conn, "race_cancellations", av)
 
 
+def upsert_jockey_change(conn: sqlite3.Connection, jc: JockeyChange) -> None:
+    """JC速報を保存し、出馬表の騎手・負担重量も現在値へ更新する。"""
+    _upsert_race_keyed(conn, "jockey_changes", jc)
+    conn.execute(
+        "UPDATE horse_races SET burden_weight=?,jockey_code=?,"
+        "jockey_short_name=?,jockey_apprentice_code=? "
+        "WHERE race_year=? AND race_month_day=? AND track_code=? AND kaiji=? "
+        "AND nichiji=? AND race_num=? AND horse_num=?",
+        (jc.new_burden_weight, jc.new_jockey_code, jc.new_jockey_name,
+         jc.new_apprentice_code, jc.year, jc.month_day, jc.track_code, jc.kaiji,
+         jc.nichiji, jc.race_num, jc.horse_num),
+    )
+
+
 def upsert_start_time_change(conn: sqlite3.Connection, tc: StartTimeChange) -> None:
     _upsert_race_keyed(conn, "start_time_changes", tc)
+    if _valid_hhmm(tc.new_start_time):
+        conn.execute(
+            "UPDATE races SET start_time=? WHERE race_year=? AND race_month_day=? "
+            "AND track_code=? AND kaiji=? AND nichiji=? AND race_num=?",
+            (tc.new_start_time, tc.year, tc.month_day, tc.track_code, tc.kaiji,
+             tc.nichiji, tc.race_num),
+        )
+
+
+def _valid_hhmm(value: object) -> bool:
+    raw = str(value or "")
+    if len(raw) != 4 or not raw.isdigit():
+        return False
+    return 0 <= int(raw[:2]) <= 23 and 0 <= int(raw[2:]) <= 59
+
+
+def upsert_course_change(conn: sqlite3.Connection, cc: CourseChange) -> None:
+    _upsert_race_keyed(conn, "course_changes", cc)
+    track_type = str(cc.new_track_type_code or "").strip()
+    if cc.new_distance > 0 and len(track_type) == 2 and track_type.isdigit():
+        conn.execute(
+            "UPDATE races SET distance=?,track_type_code=? WHERE race_year=? "
+            "AND race_month_day=? AND track_code=? AND kaiji=? AND nichiji=? "
+            "AND race_num=?",
+            (cc.new_distance, cc.new_track_type_code, cc.year, cc.month_day,
+             cc.track_code, cc.kaiji, cc.nichiji, cc.race_num),
+        )
 
 
 def insert_odds_snapshot(

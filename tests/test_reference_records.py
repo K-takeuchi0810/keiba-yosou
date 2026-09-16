@@ -1,4 +1,4 @@
-"""参照系・速報系レコード (RC/CS/YS/BT/HY/WE/AV/TC) パーサと取り込みのテスト。
+"""参照系・速報系レコード (RC/CS/YS/BT/HY/WE/AV/JC/TC) パーサと取り込みのテスト。
 
 仕様書 docs/JV-Data4901.pdf §21(RC) §27(CS) §25(YS,HY) §26(BT) §102(WE) §103(AV) §105(TC)。
 byte 位置は 1-indexed。BT のみ実 BLOD データに合わせて系統名 pos50 開始。
@@ -11,8 +11,10 @@ from pathlib import Path
 
 from db import (
     SCHEMA_PATH,
+    upsert_course_change,
     upsert_course_info,
     upsert_horse_name_origin,
+    upsert_jockey_change,
     upsert_lineage,
     upsert_race_cancellation,
     upsert_record_master,
@@ -23,17 +25,21 @@ from db import (
 from jvlink_client.ingest import ingest_file_dispatch, _split_records
 from jvlink_client.parser import (
     AV_LENGTH,
+    CC_LENGTH,
     BT_LENGTH,
     CS_LENGTH,
     HY_LENGTH,
+    JC_LENGTH,
     RC_LENGTH,
     TC_LENGTH,
     WE_LENGTH,
     YS_LENGTH,
     parse_av,
+    parse_cc,
     parse_bt,
     parse_cs,
     parse_hy,
+    parse_jc,
     parse_rc,
     parse_tc,
     parse_we,
@@ -125,13 +131,75 @@ def test_parse_av_scratch():
     assert av.horse_name == "グーフィー" and av.reason_code == "001"
 
 
+def test_parse_jc_and_upsert_updates_entry():
+    buf = bytearray(b" " * JC_LENGTH)
+    _put(buf, 1, "JC"); _put(buf, 3, "1"); _put(buf, 12, "2026"); _put(buf, 16, "0509")
+    _put(buf, 20, "08"); _put(buf, 22, "03"); _put(buf, 24, "05"); _put(buf, 26, "01")
+    _put(buf, 28, "05090954"); _put(buf, 36, "09"); _put(buf, 38, "テストホース")
+    _put(buf, 74, "555"); _put(buf, 77, "01234"); _put(buf, 82, "新騎手")
+    _put(buf, 116, "1"); _put(buf, 117, "550"); _put(buf, 120, "04321")
+    _put(buf, 125, "旧騎手"); _put(buf, 159, "0")
+    jc = parse_jc(bytes(buf))
+    assert jc.horse_num == "09" and jc.new_burden_weight == 555
+    assert jc.new_jockey_code == "01234" and jc.new_jockey_name == "新騎手"
+    assert jc.old_burden_weight == 550 and jc.old_jockey_name == "旧騎手"
+
+    conn = _schema_conn()
+    conn.execute(
+        "INSERT INTO horse_races "
+        "(race_year,race_month_day,track_code,kaiji,nichiji,race_num,horse_num) "
+        "VALUES ('2026','0509','08','03','05','01','09')"
+    )
+    upsert_jockey_change(conn, jc)
+    got = conn.execute(
+        "SELECT jockey_code,jockey_short_name,burden_weight FROM horse_races"
+    ).fetchone()
+    assert got == ("01234", "新騎手", 555)
+    assert conn.execute("SELECT COUNT(*) FROM jockey_changes").fetchone()[0] == 1
+
+
 def test_parse_tc_start_time_change():
+    """発走時刻変更を races.start_time に反映すること。
+
+    **これは PIT (T−10) の基準そのもの**。発走 10 分前を計算する起点なので、
+    反映されないと「取得可能だったオッズ」の判定が旧時刻基準になり、
+    憲法 方針 7 (購入時点で取得可能だった情報のみ) が崩れる。
+    実データでは 2026-05〜09 に 32 件の変更があり、すべて 1 分の繰り下げ
+    (例 1600 → 1601)。小さいが T−10 の境界をまたぐレースが出る。
+    """
     buf = bytearray(b" " * TC_LENGTH)
     _put(buf, 1, "TC"); _put(buf, 3, "1"); _put(buf, 12, "2026"); _put(buf, 16, "0509")
     _put(buf, 20, "04"); _put(buf, 22, "01"); _put(buf, 24, "03"); _put(buf, 26, "12")
     _put(buf, 28, "05090820"); _put(buf, 36, "1601"); _put(buf, 40, "1600")
     tc = parse_tc(bytes(buf))
     assert tc.race_num == "12" and tc.new_start_time == "1601" and tc.old_start_time == "1600"
+
+    conn = _schema_conn()
+    conn.execute(
+        "INSERT INTO races (race_year,race_month_day,track_code,kaiji,nichiji,race_num,start_time) "
+        "VALUES ('2026','0509','04','01','03','12','1600')"
+    )
+    upsert_start_time_change(conn, tc)
+    assert conn.execute("SELECT start_time FROM races").fetchone()[0] == "1601"
+
+
+def test_parse_cc_and_upsert_updates_course():
+    buf = bytearray(b" " * CC_LENGTH)
+    _put(buf, 1, "CC"); _put(buf, 3, "1"); _put(buf, 12, "2026"); _put(buf, 16, "0509")
+    _put(buf, 20, "04"); _put(buf, 22, "01"); _put(buf, 24, "03"); _put(buf, 26, "12")
+    _put(buf, 28, "05090830"); _put(buf, 36, "1800"); _put(buf, 40, "23")
+    _put(buf, 42, "1600"); _put(buf, 46, "11"); _put(buf, 48, "1")
+    cc = parse_cc(bytes(buf))
+    assert (cc.new_distance, cc.new_track_type_code) == (1800, "23")
+    assert (cc.old_distance, cc.old_track_type_code, cc.reason_code) == (1600, "11", "1")
+
+    conn = _schema_conn()
+    conn.execute(
+        "INSERT INTO races (race_year,race_month_day,track_code,kaiji,nichiji,race_num,distance,track_type_code) "
+        "VALUES ('2026','0509','04','01','03','12',1600,'11')"
+    )
+    upsert_course_change(conn, cc)
+    assert conn.execute("SELECT distance,track_type_code FROM races").fetchone() == (1800, "23")
 
 
 def _schema_conn() -> sqlite3.Connection:
@@ -154,7 +222,7 @@ def test_upsert_reference_roundtrips():
     _put(bt, 1, "BT"); _put(bt, 12, "1110057602"); _put(bt, 22, "010201"); _put(bt, 50, "パーソロン")
     upsert_lineage(conn, parse_bt(bytes(bt)))
     assert conn.execute("SELECT keito_name FROM horse_lineages").fetchone()[0] == "パーソロン"
-    # HY, CS, WE, AV, TC, YS upsert は OperationalError が出ないことだけ確認
+    # HY, CS, WE, AV, JC, TC, YS upsert は OperationalError が出ないことだけ確認
     hy = bytearray(b" " * HY_LENGTH); _put(hy, 1, "HY"); _put(hy, 12, "2019106526")
     upsert_horse_name_origin(conn, parse_hy(bytes(hy)))
     cs = bytearray(b" " * CS_LENGTH); _put(cs, 1, "CS"); _put(cs, 12, "01"); _put(cs, 14, "1000"); _put(cs, 18, "17"); _put(cs, 20, "19900609")
@@ -163,6 +231,8 @@ def test_upsert_reference_roundtrips():
     upsert_weather_going(conn, parse_we(bytes(we)))
     av = bytearray(b" " * AV_LENGTH); _put(av, 1, "AV"); _put(av, 12, "2026"); _put(av, 16, "0509"); _put(av, 20, "08"); _put(av, 22, "03"); _put(av, 24, "05"); _put(av, 26, "01"); _put(av, 36, "09")
     upsert_race_cancellation(conn, parse_av(bytes(av)))
+    jc = bytearray(b" " * JC_LENGTH); _put(jc, 1, "JC"); _put(jc, 12, "2026"); _put(jc, 16, "0509"); _put(jc, 20, "08"); _put(jc, 22, "03"); _put(jc, 24, "05"); _put(jc, 26, "01"); _put(jc, 36, "09")
+    upsert_jockey_change(conn, parse_jc(bytes(jc)))
     tc = bytearray(b" " * TC_LENGTH); _put(tc, 1, "TC"); _put(tc, 12, "2026"); _put(tc, 16, "0509"); _put(tc, 20, "04"); _put(tc, 22, "01"); _put(tc, 24, "03"); _put(tc, 26, "12"); _put(tc, 28, "05090820")
     upsert_start_time_change(conn, parse_tc(bytes(tc)))
     ys = bytearray(b" " * YS_LENGTH); _put(ys, 1, "YS"); _put(ys, 12, "2026"); _put(ys, 16, "0104"); _put(ys, 20, "06"); _put(ys, 22, "01"); _put(ys, 24, "01")
