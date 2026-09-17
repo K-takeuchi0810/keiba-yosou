@@ -1,0 +1,223 @@
+{
+ "meta": {
+  "git_sha": "e63a20d0131ade60973a21ca86ee71bf7236f64f",
+  "git_dirty": false,
+  "code_version": "e63a20d0131a",
+  "data_version": null,
+  "from_date": "20260509",
+  "to_date": "20260831"
+ },
+ "n_got": 937,
+ "n_missing": 239,
+ "overall_rate": 0.7968,
+ "dimensions": {
+  "競馬場": [
+   {
+    "key": "中京",
+    "got": 142,
+    "missing": 2,
+    "total": 144,
+    "rate": 0.9861
+   },
+   {
+    "key": "京都",
+    "got": 67,
+    "missing": 29,
+    "total": 96,
+    "rate": 0.6979
+   },
+   {
+    "key": "函館",
+    "got": 93,
+    "missing": 51,
+    "total": 144,
+    "rate": 0.6458
+   },
+   {
+    "key": "小倉",
+    "got": 48,
+    "missing": 48,
+    "total": 96,
+    "rate": 0.5
+   },
+   {
+    "key": "新潟",
+    "got": 189,
+    "missing": 27,
+    "total": 216,
+    "rate": 0.875
+   },
+   {
+    "key": "札幌",
+    "got": 142,
+    "missing": 2,
+    "total": 144,
+    "rate": 0.9861
+   },
+   {
+    "key": "東京",
+    "got": 137,
+    "missing": 31,
+    "total": 168,
+    "rate": 0.8155
+   },
+   {
+    "key": "福島",
+    "got": 48,
+    "missing": 48,
+    "total": 96,
+    "rate": 0.5
+   },
+   {
+    "key": "阪神",
+    "got": 71,
+    "missing": 1,
+    "total": 72,
+    "rate": 0.9861
+   }
+  ],
+  "月": [
+   {
+    "key": "202605",
+    "got": 180,
+    "missing": 84,
+    "total": 264,
+    "rate": 0.6818
+   },
+   {
+    "key": "202606",
+    "got": 260,
+    "missing": 4,
+    "total": 264,
+    "rate": 0.9848
+   },
+   {
+    "key": "202607",
+    "got": 143,
+    "missing": 145,
+    "total": 288,
+    "rate": 0.4965
+   },
+   {
+    "key": "202608",
+    "got": 354,
+    "missing": 6,
+    "total": 360,
+    "rate": 0.9833
+   }
+  ],
+  "レース番号": [
+   {
+    "key": "1-3R",
+    "got": 208,
+    "missing": 86,
+    "total": 294,
+    "rate": 0.7075
+   },
+   {
+    "key": "10-12R",
+    "got": 249,
+    "missing": 45,
+    "total": 294,
+    "rate": 0.8469
+   },
+   {
+    "key": "4-6R",
+    "got": 234,
+    "missing": 60,
+    "total": 294,
+    "rate": 0.7959
+   },
+   {
+    "key": "7-9R",
+    "got": 246,
+    "missing": 48,
+    "total": 294,
+    "rate": 0.8367
+   }
+  ],
+  "芝ダ障": [
+   {
+    "key": "ダート",
+    "got": 393,
+    "missing": 107,
+    "total": 500,
+    "rate": 0.786
+   },
+   {
+    "key": "芝",
+    "got": 517,
+    "missing": 121,
+    "total": 638,
+    "rate": 0.8103
+   },
+   {
+    "key": "障害",
+    "got": 27,
+    "missing": 11,
+    "total": 38,
+    "rate": 0.7105
+   }
+  ],
+  "頭数": [
+   {
+    "key": "13-15頭",
+    "got": 273,
+    "missing": 69,
+    "total": 342,
+    "rate": 0.7982
+   },
+   {
+    "key": "16頭以上",
+    "got": 318,
+    "missing": 88,
+    "total": 406,
+    "rate": 0.7833
+   },
+   {
+    "key": "8頭以下",
+    "got": 71,
+    "missing": 13,
+    "total": 84,
+    "rate": 0.8452
+   },
+   {
+    "key": "9-12頭",
+    "got": 275,
+    "missing": 69,
+    "total": 344,
+    "rate": 0.7994
+   }
+  ],
+  "クラス": [
+   {
+    "key": "G1",
+    "got": 6,
+    "missing": 0,
+    "total": 6,
+    "rate": 1.0
+   },
+   {
+    "key": "G2",
+    "got": 3,
+    "missing": 0,
+    "total": 3,
+    "rate": 1.0
+   },
+   {
+    "key": "G3",
+    "got": 22,
+    "missing": 3,
+    "total": 25,
+    "rate": 0.88
+   },
+   {
+    "key": "重賞以外",
+    "got": 906,
+    "missing": 236,
+    "total": 1142,
+    "rate": 0.7933
+   }
+  ]
+ }
+}

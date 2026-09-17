@@ -450,6 +450,9 @@ GATE_EXEMPT = {
     "scripts/fresh_odds_coverage.py",
     # 門そのもの
     "scripts/backtest.py",
+    # PIT 監査・取得率の偏り調査 (成績ではなく「データが取れているか」を見る)
+    "scripts/pit_audit.py", "scripts/pit_coverage_bias.py",
+    "scripts/backfill_announced_at.py",
     # 入力が既に封印済みの経路から来るもの。
     #   - data/results/<date>/ の CSV は build_daily_results が作るが、そちらは
     #     封印窓の日付では出力しない
