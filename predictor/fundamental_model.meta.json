@@ -1,0 +1,63 @@
+{
+ "git_sha": "c19e716f8e5ef1a264dfe71ce7cb6e420ecaf64a",
+ "git_dirty": false,
+ "code_version": "c19e716f8e5e",
+ "data_version": null,
+ "features": [
+  "h_starts",
+  "h_wins",
+  "h_winrate",
+  "h_top3rate",
+  "h_last_finish",
+  "h_days_since",
+  "h_best_finish",
+  "h_recent3_avg_finish",
+  "hd_starts",
+  "hd_winrate",
+  "ht_starts",
+  "ht_winrate",
+  "j_rides",
+  "j_winrate",
+  "t_runs",
+  "t_winrate",
+  "s_winrate",
+  "age",
+  "sex",
+  "burden",
+  "waku",
+  "starters",
+  "dist",
+  "surface",
+  "cond",
+  "weather",
+  "grade",
+  "w_abs",
+  "w_delta",
+  "blinker"
+ ],
+ "train": [
+  "20210101",
+  "20231231"
+ ],
+ "validation": [
+  "20240101",
+  "20251231"
+ ],
+ "n_train": 142490,
+ "n_valid": 94922,
+ "excluded_train": {
+  "skip_race_without_result": 232480,
+  "skip_did_not_start": 4980,
+  "rows": 142490
+ },
+ "excluded_valid": {
+  "skip_race_without_result": 232685,
+  "skip_did_not_start": 5123,
+  "rows": 94922
+ },
+ "best_iteration": 174,
+ "validation_log_loss": 0.22694014725347283,
+ "validation_brier": 0.06219386302185705,
+ "validation_calibration_error": 0.005677,
+ "market_features": 0
+}
