@@ -1,0 +1,39 @@
+{
+ "meta": {
+  "git_sha": "e63a20d0131ade60973a21ca86ee71bf7236f64f",
+  "git_dirty": true,
+  "code_version": "e63a20d0131a-dirty",
+  "data_version": null,
+  "from_date": "20260509",
+  "to_date": "20260831",
+  "odds_source_t10": "T-10",
+  "odds_source_final": "final"
+ },
+ "counts": {
+  "races_total": 1176,
+  "no_t10": 239,
+  "t10_available": 937,
+  "runner_set_same": 933,
+  "runner_set_other": 4
+ },
+ "n_races_analysed": 933,
+ "n_horses_analysed": 12559,
+ "t10_market": {
+  "log_loss": 0.21183299565736208,
+  "brier": 0.05930212359977114,
+  "calibration_error": 0.008126893860976193,
+  "winner_mean_probability": 0.1915211556978708
+ },
+ "final_market": {
+  "log_loss": 0.20997894563966055,
+  "brier": 0.05902380339987277,
+  "calibration_error": 0.004995318894816466,
+  "winner_mean_probability": 0.19922474838101273
+ },
+ "delta_log_loss": 0.0018540500177015307,
+ "delta_log_loss_ci95": [
+  0.0007982925479102787,
+  0.0029498173797275207
+ ],
+ "movements_rows": 12617
+}

@@ -160,7 +160,11 @@ class T10Market:
     odds: dict[str, float]                  # 馬番 → 単勝オッズ (倍)
     implied: dict[str, float]               # 馬番 → T-10 Market Implied Probability
     market_rank: dict[str, int]             # 馬番 → 市場での順位 (1 = 最低オッズ)
-    overround: float                        # 正規化前の Σ(1/odds)
+    # 正規化前の Σ(1/odds)。**固定オッズ市場の overround とは同義ではない**。
+    # JRA はパリミュチュエルで、オッズは投票総額から事後的に決まる。
+    # ブックメーカーが利鞘として上乗せするマージンとは成り立ちが違うので、
+    # 中立的に「逆オッズの総和」と呼ぶ (2026-09-18 ユーザ指摘)。
+    inverse_odds_mass: float
     odds_received_at: str                   # 採用したスナップの受信時刻
     odds_observed_at: str | None            # 提供元が示す発表時刻 (分かる場合)
     n_horses: int
@@ -210,8 +214,9 @@ def t10_market(conn: sqlite3.Connection, race: dict,
     observed_raw = next((str(r[2]) for r in rows if r[2]), None)
 
     raw = {h: 1.0 / o for h, o in odds.items() if o > 0}
-    overround = sum(raw.values())
-    implied = ({h: v / overround for h, v in raw.items()} if overround > 0 else {})
+    inverse_odds_mass = sum(raw.values())
+    implied = ({h: v / inverse_odds_mass for h, v in raw.items()}
+               if inverse_odds_mass > 0 else {})
     ranked = sorted(odds, key=lambda h: odds[h])
     market_rank = {h: i + 1 for i, h in enumerate(ranked)}
 
@@ -234,7 +239,8 @@ def t10_market(conn: sqlite3.Connection, race: dict,
         race_id="-".join(str(race.get(k)) for k in RACE_KEYS),
         decision_time=cutoff,
         start_time_used=start_used.isoformat(timespec="minutes") if start_used else "",
-        odds=odds, implied=implied, market_rank=market_rank, overround=overround,
+        odds=odds, implied=implied, market_rank=market_rank,
+        inverse_odds_mass=inverse_odds_mass,
         odds_received_at=received_at,
         odds_observed_at=observed_dt.isoformat(timespec="minutes") if observed_dt else None,
         n_horses=len(odds), violations=violations,

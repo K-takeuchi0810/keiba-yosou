@@ -174,11 +174,13 @@ def test_implied_probability_is_normalised_within_the_race():
     conn.close()
 
 
-def test_overround_before_normalisation_is_kept():
-    """正規化前の合計 (控除率の目安) を保存すること。
+def test_inverse_odds_mass_before_normalisation_is_kept():
+    """正規化前の Σ(1/odds) を保存すること。
 
-    パリミュチュエルなので「市場の真の確率」ではない。後から市場状態を
-    再現できるよう、正規化前の値も残す。
+    **固定オッズ市場の overround とは同義ではない**。JRA はパリミュチュエルで、
+    オッズは投票総額から事後的に決まる。ブックメーカーが利鞘として上乗せする
+    マージンとは成り立ちが違うので、中立的な名前にしてある。
+    後から市場状態を再現できるよう、正規化前の値も残す。
     """
     conn = _conn()
     race = dict(RACE, start_time="1540")
@@ -186,7 +188,7 @@ def test_overround_before_normalisation_is_kept():
 
     m = t10_market(conn, race)
 
-    assert m.overround == pytest.approx(0.75)
+    assert m.inverse_odds_mass == pytest.approx(0.75)
     conn.close()
 
 
@@ -211,7 +213,7 @@ def test_all_required_fields_are_saved():
     m = t10_market(conn, race)
 
     assert m.odds and m.implied and m.market_rank
-    assert m.overround > 0
+    assert m.inverse_odds_mass > 0
     assert m.decision_time == "2026-09-20T15:30:00"
     assert m.odds_received_at == "2026-09-20T15:25:00"
     assert m.odds_observed_at == "2026-09-20T15:24"
