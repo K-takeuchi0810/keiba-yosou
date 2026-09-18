@@ -1,12 +1,9 @@
 {
  "meta": {
-  "git_sha": "40b1ed2e1c1880692190431f3f5e1edffd1d65c7",
-  "git_dirty": true,
-  "code_version": "40b1ed2e1c18-dirty",
+  "git_sha": "533b7b659718008103e7941e329d756689cd4a4d",
+  "git_dirty": false,
+  "code_version": "533b7b659718",
   "data_version": "33479:4c7318a09d",
-  "dirty_paths": [
-   "predictor/fundamental_model.meta.json"
-  ],
   "from_date": "20260509",
   "to_date": "20260831",
   "odds_source": "T-10",
