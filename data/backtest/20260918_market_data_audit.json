@@ -1,9 +1,12 @@
 {
  "meta": {
-  "git_sha": "2fb703a12bfe55382579b20226d58c65344b33b6",
-  "git_dirty": false,
-  "code_version": "2fb703a12bfe",
+  "git_sha": "40b1ed2e1c1880692190431f3f5e1edffd1d65c7",
+  "git_dirty": true,
+  "code_version": "40b1ed2e1c18-dirty",
   "data_version": null,
+  "dirty_paths": [
+   "predictor/fundamental_model.meta.json"
+  ],
   "from_date": "20260509",
   "to_date": "20260831",
   "max_lead_minutes": 30

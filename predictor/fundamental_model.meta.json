@@ -1,19 +1,8 @@
 {
- "git_sha": "2fb703a12bfe55382579b20226d58c65344b33b6",
- "git_dirty": true,
- "code_version": "2fb703a12bfe-dirty",
+ "git_sha": "40b1ed2e1c1880692190431f3f5e1edffd1d65c7",
+ "git_dirty": false,
+ "code_version": "40b1ed2e1c18",
  "data_version": null,
- "dirty_paths": [
-  "predictor/feature_manifest.py",
-  "predictor/fundamental_model.txt",
-  "predictor/provenance.py",
-  "scripts/fundamental_eval.py",
-  "scripts/fundamental_model.py",
-  "scripts/market_data_audit.py",
-  "tests/test_feature_manifest.py",
-  "tests/test_fundamental_dataset.py",
-  "tests/test_provenance.py"
- ],
  "features": [
   "h_starts",
   "h_wins",
