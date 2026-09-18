@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
+
 from predictor import provenance
 
 
@@ -113,5 +115,36 @@ def test_snapshot_has_all_required_fields():
     snap = provenance.snapshot(conn)
     conn.close()
 
-    assert set(snap) == {"git_sha", "git_dirty", "code_version", "data_version"}
+    assert {"git_sha", "git_dirty", "code_version", "data_version"} <= set(snap)
     assert isinstance(snap["git_dirty"], bool)
+    # dirty のときは理由になったパスも残す。「dirty だった」だけでは
+    # 後から何が未コミットだったのか分からず、再現の手掛かりにならない。
+    assert ("dirty_paths" in snap) == snap["git_dirty"]
+
+
+def test_untracked_code_counts_as_dirty():
+    """**未追跡のコードも dirty**。
+
+    2026-09-18 の実例: Phase 0.5-3 の生成スクリプト 3 本が丸ごと未追跡のまま
+    成果物を作り、`git_dirty=false` と刻んでいた。その commit にスクリプトは
+    存在せず、刻んだ出所から成果物を再現できなかった。
+    `--untracked-files=no` は、この関数が防ぐべき事故そのものを見逃していた。
+    """
+    import subprocess
+
+    from config import PROJECT_ROOT
+
+    out = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        capture_output=True, text=True, cwd=PROJECT_ROOT, timeout=30).stdout
+    untracked_code = [ln[3:] for ln in out.splitlines()
+                      if ln.startswith("??") and ln[3:].startswith(
+                          provenance.CODE_DIRS)]
+    if not untracked_code:
+        pytest.skip("未追跡のコードが無いので、この状況を再現できない")
+
+    provenance.git_dirty.cache_clear()
+    provenance.git_status_lines.cache_clear()
+    provenance.dirty_code_paths.cache_clear()
+    assert provenance.git_dirty() is True
+    assert provenance.code_version().endswith("-dirty")

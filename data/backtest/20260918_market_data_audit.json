@@ -1,0 +1,69 @@
+{
+ "meta": {
+  "git_sha": "2fb703a12bfe55382579b20226d58c65344b33b6",
+  "git_dirty": false,
+  "code_version": "2fb703a12bfe",
+  "data_version": null,
+  "from_date": "20260509",
+  "to_date": "20260831",
+  "max_lead_minutes": 30
+ },
+ "defect_a_final_odds": {
+  "total_winners_checked": 1178,
+  "mismatch": 563,
+  "by_month": {
+   "05": {
+    "n": 265,
+    "mismatch": 178,
+    "rate": 0.6716981132075471
+   },
+   "06": {
+    "n": 264,
+    "mismatch": 243,
+    "rate": 0.9204545454545454
+   },
+   "07": {
+    "n": 288,
+    "mismatch": 0,
+    "rate": 0.0
+   },
+   "08": {
+    "n": 361,
+    "mismatch": 142,
+    "rate": 0.39335180055401664
+   }
+  }
+ },
+ "defect_b_t10_staleness": {
+  "n_races": 937,
+  "lead_min": {
+   "min": 10.05,
+   "p25": 14.966666666666667,
+   "median": 19.95,
+   "p75": 100.16666666666667,
+   "p90": 395.15,
+   "max": 964.05
+  },
+  "over_minutes": {
+   "15": 563,
+   "20": 326,
+   "30": 307,
+   "60": 269,
+   "120": 222
+  }
+ },
+ "baseline_all": {
+  "n_races": 923,
+  "n_horses": 12421,
+  "log_loss": 0.21217427615006976,
+  "brier": 0.0593875324356858,
+  "calibration_error": 0.008083
+ },
+ "baseline_fresh_only": {
+  "n_races": 624,
+  "n_horses": 8256,
+  "log_loss": 0.21360670067522106,
+  "brier": 0.05980478415640234,
+  "calibration_error": 0.009529124273255814
+ }
+}

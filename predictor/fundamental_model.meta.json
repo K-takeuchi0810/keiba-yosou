@@ -1,8 +1,19 @@
 {
- "git_sha": "c19e716f8e5ef1a264dfe71ce7cb6e420ecaf64a",
- "git_dirty": false,
- "code_version": "c19e716f8e5e",
+ "git_sha": "2fb703a12bfe55382579b20226d58c65344b33b6",
+ "git_dirty": true,
+ "code_version": "2fb703a12bfe-dirty",
  "data_version": null,
+ "dirty_paths": [
+  "predictor/feature_manifest.py",
+  "predictor/fundamental_model.txt",
+  "predictor/provenance.py",
+  "scripts/fundamental_eval.py",
+  "scripts/fundamental_model.py",
+  "scripts/market_data_audit.py",
+  "tests/test_feature_manifest.py",
+  "tests/test_fundamental_dataset.py",
+  "tests/test_provenance.py"
+ ],
  "features": [
   "h_starts",
   "h_wins",
@@ -46,18 +57,16 @@
  "n_train": 142490,
  "n_valid": 94922,
  "excluded_train": {
-  "skip_race_without_result": 232480,
-  "skip_did_not_start": 4980,
-  "rows": 142490
+  "rows": 142490,
+  "skip_did_not_start": 223
  },
  "excluded_valid": {
-  "skip_race_without_result": 232685,
-  "skip_did_not_start": 5123,
+  "skip_did_not_start": 366,
   "rows": 94922
  },
- "best_iteration": 174,
- "validation_log_loss": 0.22694014725347283,
- "validation_brier": 0.06219386302185705,
- "validation_calibration_error": 0.005677,
+ "best_iteration": 192,
+ "validation_log_loss": 0.22708239339893538,
+ "validation_brier": 0.062229095287631986,
+ "validation_calibration_error": 0.00624,
  "market_features": 0
 }

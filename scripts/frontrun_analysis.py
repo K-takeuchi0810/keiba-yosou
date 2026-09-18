@@ -45,14 +45,27 @@ N_BOOT = 2000
 SEED = 20260918
 
 
-def load(path: Path) -> list[dict]:
+def load(path: Path, max_lead: float, confirmed_only: bool) -> list[dict]:
+    """標本を読み、**信用できる行だけ**に絞る。
+
+    - `lead_min` が大きい行は T−10 のオッズではない (朝〜前夜のスナップ)。
+    - `final_odds_confirmed=0` の行は `horse_races.win_odds` が確定払戻と
+      一致しておらず、ΔMarket が本物の値動きを表していない。
+
+    どちらも 2026-09-18 の専門家レビューで発覚した。絞らずに出した
+    「価格を落とした相関 +0.180」は、この 2 つの汚染を含んだ値だった。
+    """
     with open(path, encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     for r in rows:
         for k in ("won", "p_t10", "p_fund", "p_final", "delta_ai",
-                  "delta_market", "odds_t10", "odds_final"):
+                  "delta_market", "odds_t10", "odds_final", "lead_min"):
             r[k] = float(r[k])
-    return rows
+        r["final_odds_confirmed"] = int(r["final_odds_confirmed"])
+    kept = [r for r in rows if r["lead_min"] <= max_lead]
+    if confirmed_only:
+        kept = [r for r in kept if r["final_odds_confirmed"]]
+    return kept
 
 
 def _block_boot(rows: list[dict], stat, n_boot: int = N_BOOT,
@@ -190,11 +203,20 @@ def main() -> int:
     ap.add_argument("csv", nargs="?",
                     default="data/backtest/20260918_phase05_3_fundamental_samples.csv")
     ap.add_argument("--json", default=None)
+    ap.add_argument("--max-lead", type=float, default=30.0,
+                    help="T−10 スナップの発走までの残り分数の上限")
+    ap.add_argument("--all-final", action="store_true",
+                    help="最終オッズが確定払戻と一致しない行も含める (参考用)")
     args = ap.parse_args()
 
-    rows = load(Path(args.csv))
+    rows = load(Path(args.csv), args.max_lead, not args.all_final)
+    if not rows:
+        print("条件を満たす行が無い", file=sys.stderr)
+        return 1
     n_races = len({r["race_id"] for r in rows})
     print(f"=== 価格帯を揃えた ΔAI の検定 ({n_races:,} レース / {len(rows):,} 頭) ===")
+    print(f"絞り込み: T−10 の鮮度 {args.max_lead:.0f} 分以内"
+          + ("" if args.all_final else " / 最終オッズが確定払戻と一致"))
     print("ΔMarket = P_final − P_T10 (市場がその後どう動いたか)")
     print("実−T10 = その群で市場が外していた量\n")
 
@@ -232,7 +254,9 @@ def main() -> int:
     out = {"meta": {**snapshot(), "source_csv": args.csv, "n_races": n_races,
                     "n_horses": len(rows), "n_bootstrap": N_BOOT,
                     "n_hypotheses": len(strat) * 3 + 1},
-           "stratified": strat, "correlation": pc}
+           "stratified": strat, "correlation": pc,
+           "filters": {"max_lead_minutes": args.max_lead,
+                       "confirmed_final_only": not args.all_final}}
     if args.json:
         Path(args.json).parent.mkdir(parents=True, exist_ok=True)
         Path(args.json).write_text(json.dumps(out, ensure_ascii=False, indent=1),

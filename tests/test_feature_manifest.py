@@ -14,6 +14,8 @@
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from predictor import feature_manifest as fm
@@ -61,20 +63,67 @@ def test_the_actual_fundamental_feature_list_is_clean():
     assert not suspicious, f"名前が市場由来に見える特徴: {suspicious}"
 
 
-def test_code_paths_reading_market_columns_are_detected():
-    """特徴生成コードで市場列を読む関数を機械的に検出できること。
+# `predictor/features.py` で市場語を読んでよい関数。**ここと完全一致を要求する**。
+# 増えたら必ずテストが落ちるので、台帳に追記するか経路を断つかを迫られる。
+ALLOWED_MARKET_READERS = {
+    "horse_past_runs",        # 過去走の取得。特徴には流していない (要確認の対象)
+    "_track_recent_stats",    # track_recent_*_avg_winning_pop の生成元
+    "compute_features",       # 上記特徴名を文字列として持つだけ
+}
 
-    名前検索の網から漏れる派生特徴を捕まえる第 2 の網。空振りしていないか、
-    既知の 2 関数が出ることで確かめる。
+
+def test_code_paths_reading_market_columns_match_the_allowlist_exactly():
+    """市場語を読む関数の集合が **許可リストと完全一致** すること。
+
+    「含まれる」だけを見ると、新しく市場列を読み始めた関数が増えても気づけない。
+    完全一致にすれば、増えた瞬間にテストが落ちて台帳更新を強制できる。
     """
     found = fm.market_reading_functions()
 
-    assert "_track_recent_stats" in found, (
-        "市場列を読む関数を検出できていない = 検査が空振り")
-    assert "win_popularity" in found["_track_recent_stats"]
-    # horse_past_runs は取得するが特徴には流していない (2026-09-18 確認)。
-    # 検出はされるべき (使い始めたら気づけるように)。
-    assert "horse_past_runs" in found
+    assert set(found) == ALLOWED_MARKET_READERS, (
+        f"市場語を読む関数が許可リストと違う。増えた: "
+        f"{set(found) - ALLOWED_MARKET_READERS} / 消えた: "
+        f"{ALLOWED_MARKET_READERS - set(found)}")
+    assert "popularity" in found["_track_recent_stats"]
+
+
+def test_the_fundamental_generation_code_reads_no_market_column():
+    """**Fundamental の実データ経路**に検出器を当てる。
+
+    ここが本命。2026-09-18 のレビューで、`build_dataset` の SELECT に
+    `win_popularity` を 1 列足してもテスト 14 本が全部通ることが実証された
+    (台帳の名前と Fundamental の特徴名は名前空間が交わらないので、
+    集合積による照合は原理的に空振りする)。
+    """
+    assert fm.market_reading_functions(
+        Path("scripts/fundamental_model.py")) == {}
+
+
+def test_planting_a_market_column_in_the_fundamental_path_raises(tmp_path):
+    """植え込んだら例外になること (対照実験)。
+
+    上のテストが「たまたま空」なのか「本当に守っている」のかを区別する。
+    """
+    src = tmp_path / "fundamental_model.py"
+    src.write_text(
+        "def build_dataset(conn):\n"
+        "    return conn.execute('SELECT win_popularity FROM horse_races')\n",
+        encoding="utf-8")
+
+    with pytest.raises(ValueError, match="市場列を読んでいる"):
+        fm.assert_no_market_features(["h_winrate"], source_module=src)
+
+
+def test_market_token_matching_survives_underscores():
+    """`odds` が `place_odds` や `odds_low` にも当たること。
+
+    以前は `` 付きの完全語一致だったが、正規表現では `_` が語文字なので
+    `win_odds` を登録しても `place_odds` に当たらなかった。
+    """
+    assert any(t in "place_odds" for t in fm.MARKET_TOKENS)
+    assert any(t in "odds_low" for t in fm.MARKET_TOKENS)
+    assert any(t in "tan_pop1" for t in fm.MARKET_TOKENS)
+    assert not any(t in "confirmed_order" for t in fm.MARKET_TOKENS)
 
 
 def test_detector_finds_a_planted_market_read(tmp_path):
@@ -87,7 +136,8 @@ def test_detector_finds_a_planted_market_read(tmp_path):
 
     found = fm.market_reading_functions(src)
 
-    assert found == {"some_derived_feature": ["win_popularity"]}
+    assert list(found) == ["some_derived_feature"]
+    assert "popularity" in found["some_derived_feature"]
 
 
 def test_detector_ignores_clean_code(tmp_path):

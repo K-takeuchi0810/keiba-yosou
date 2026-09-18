@@ -30,12 +30,23 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# DB 上の市場列。ここを読むコードは市場依存。
-MARKET_COLUMNS = frozenset({
-    "win_odds", "win_popularity", "odds", "popularity", "votes",
-    "win5", "exotic_odds", "vote_counts", "odds_snapshots",
-    "market_rank", "betting_share",
+# DB 上の市場に関する語。**部分一致で拾う**。
+#
+# 以前は `\b` 付きの完全語一致で照合していたが、正規表現では `_` が語文字なので
+# `win_odds` を登録しても `place_odds` や `odds_low` に当たらなかった。
+# 逆に `betting_share` `market_rank` のように **スキーマに存在しない名前** を
+# 想像で並べていた (専門家レビューで両方指摘)。
+#
+# 市場語は部分一致で拾い、誤検出は NOT_MARKET_DESPITE_NAME に理由付きで登録する。
+# 「拾いすぎて理由を書く」方が「漏れて気づかない」より安全。
+MARKET_TOKENS = frozenset({
+    "odds", "popularity", "votes", "vote_count", "payout", "pop1", "pop2",
+    "pop3", "_pop", "win5", "betting_share", "market_rank",
 })
+
+# 実スキーマに存在する市場列 (schema_market_columns() で検証する)。
+MARKET_TABLES = frozenset({"odds_snapshots", "payouts", "win5_payouts",
+                           "exotic_odds", "vote_counts"})
 
 
 @dataclass(frozen=True)
@@ -99,10 +110,14 @@ NOT_MARKET_DESPITE_NAME: dict[str, str] = {
 
 
 def market_reading_functions(path: Path | None = None) -> dict[str, list[str]]:
-    """特徴生成コードの中で **市場列を読んでいる関数** を機械的に洗い出す。
+    """コードの中で **市場に関する語を読んでいる関数** を機械的に洗い出す。
 
-    文字列 (SQL) の中に市場列名が出てくる関数を返す。名前検索では見つからない
+    文字列 (SQL) の中に市場語が出てくる関数を返す。名前検索では見つからない
     派生特徴を捕まえるための第 2 の網。
+
+    **限界 (誤検出しない側に倒れるので、これだけに頼らない)**:
+    関数の外で定義したモジュール定数経由の列名、f-string のプレースホルダで
+    組み立てる列名、`row.win_odds` のような属性アクセスは検出できない。
     """
     src_path = path or (PROJECT_ROOT / "predictor" / "features.py")
     tree = ast.parse(src_path.read_text(encoding="utf-8"))
@@ -113,18 +128,39 @@ def market_reading_functions(path: Path | None = None) -> dict[str, list[str]]:
         hits: set[str] = set()
         for sub in ast.walk(node):
             if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
-                for col in MARKET_COLUMNS:
-                    if re.search(rf"\b{re.escape(col)}\b", sub.value):
-                        hits.add(col)
+                low = sub.value.lower()
+                hits.update(t for t in MARKET_TOKENS if t in low)
+                hits.update(t for t in MARKET_TABLES if t in low)
         if hits:
             found[node.name] = sorted(hits)
     return found
 
 
-def assert_no_market_features(feature_names: list[str]) -> None:
-    """Fundamental Model の特徴に市場依存が混じっていないか検査する。
+def schema_market_columns(conn) -> dict[str, list[str]]:
+    """実スキーマの中で市場語を含む列を洗い出す (台帳の裏取り用)。
 
-    混じっていたら **黙って落とさず例外**。Phase 0.5-3 の合格条件。
+    想像で列名を並べると、存在しない名前を守った気になる。実際 2026-09-18 の
+    初版は `betting_share` `market_rank` を登録していたがどちらも DB に無く、
+    逆に `sale_votes` `odds_low` は集合から漏れていた。
+    """
+    out: dict[str, list[str]] = {}
+    for (table,) in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'").fetchall():
+        cols = [c[1] for c in conn.execute(f"PRAGMA table_info({table})")]
+        hit = [c for c in cols if any(t in c.lower() for t in MARKET_TOKENS)]
+        if hit or table in MARKET_TABLES:
+            out[table] = sorted(hit)
+    return out
+
+
+def assert_no_market_features(feature_names: list[str],
+                              source_module: Path | None = None) -> None:
+    """特徴に市場依存が混じっていないか、**名前と経路の両方で**検査する。
+
+    名前照合だけでは素通りする。台帳の名前 (`track_recent_*`) と Fundamental の
+    特徴名 (`h_*` `j_*`) は名前空間が交わらないので、集合積は原理的に空になる。
+    実際レビューで `build_dataset` の SQL に `win_popularity` を植え込んでも
+    テストが全部通ることが実証された。**そこで生成コード自体も走査する**。
     """
     bad = sorted(set(feature_names) & MARKET_DEPENDENT_NAMES)
     if bad:
@@ -132,6 +168,12 @@ def assert_no_market_features(feature_names: list[str]) -> None:
             f"Fundamental Model に市場依存の特徴が入っている: {bad}\n"
             "憲法 Phase 0.5-3 は市場情報の完全排除を要求する。"
             "predictor/feature_manifest.MARKET_DEPENDENT を参照")
+    if source_module is not None:
+        reading = market_reading_functions(source_module)
+        if reading:
+            raise ValueError(
+                f"{source_module.name} が市場列を読んでいる: {reading}\n"
+                "憲法 Phase 0.5-3 は市場情報の完全排除を要求する。")
 
 
 def manifest_rows() -> list[dict]:

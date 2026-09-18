@@ -50,21 +50,49 @@ def git_sha() -> str:
         return UNKNOWN
 
 
-@lru_cache(maxsize=1)
-def git_dirty() -> bool:
-    """tracked ファイルに未コミットの変更があるか。
+# 未追跡でも「これが未コミットなら成果物は再現できない」ディレクトリ。
+# data/ や docs/ の未追跡はコードの再現性に影響しないので数えない。
+CODE_DIRS = ("predictor/", "scripts/", "gui/", "web/", "jvlink_client/", "tests/")
 
-    True なら git_sha は「実際に動いたコード」を指していない。
-    2026-09-17 まで 1 ヶ月続いた状態がまさにこれ。
-    """
+
+@lru_cache(maxsize=1)
+def git_status_lines() -> tuple[str, ...]:
+    """`git status --porcelain` の行。**未追跡ファイルも含める**。"""
     try:
         out = subprocess.run(
-            ["git", "status", "--porcelain", "--untracked-files=no"],
+            ["git", "status", "--porcelain", "--untracked-files=all"],
             capture_output=True, text=True, cwd=PROJECT_ROOT,
-            check=True, timeout=10).stdout.strip()
-        return bool(out)
+            check=True, timeout=20).stdout
+        return tuple(ln for ln in out.splitlines() if ln.strip())
     except Exception:
-        return False
+        return ()
+
+
+@lru_cache(maxsize=1)
+def git_dirty() -> bool:
+    """git_sha が「実際に動いたコード」を指していないなら True。
+
+    tracked の変更だけでなく **未追跡のコードも dirty とみなす**。
+
+    2026-09-18 の実例: Phase 0.5-3 の生成スクリプト 3 本が丸ごと未追跡の状態で
+    成果物を作り、`git_sha=c19e716 / git_dirty=false` と刻んでいた。その commit に
+    スクリプトは存在しないので、刻んだ出所から成果物を再現できない。
+    `--untracked-files=no` は「新規ファイルがまだコミットされていない」という
+    この関数が防ぐべき事故そのものを見逃していた (専門家レビュー 4 名が指摘)。
+    """
+    return bool(dirty_code_paths())
+
+
+@lru_cache(maxsize=1)
+def dirty_code_paths() -> tuple[str, ...]:
+    """dirty の理由になっているパス。meta に入れて「何が原因か」を残す。"""
+    out = []
+    for line in git_status_lines():
+        path = line[3:].strip().strip('"')
+        top_level_code = "/" not in path.rstrip("/") and path.endswith((".py", ".json"))
+        if path.startswith(CODE_DIRS) or top_level_code:
+            out.append(path)
+    return tuple(sorted(out))
 
 
 def code_version() -> str:
@@ -93,10 +121,18 @@ def data_version(conn: sqlite3.Connection) -> str:
 
 
 def snapshot(conn: sqlite3.Connection | None = None) -> dict:
-    """成果物の meta にそのまま入れる辞書。"""
-    return {
+    """成果物の meta にそのまま入れる辞書。
+
+    dirty のときは **理由になったパスも残す**。「dirty だった」だけでは
+    後から何が未コミットだったのか分からず、再現の手掛かりにならない。
+    """
+    dirty = git_dirty()
+    meta = {
         "git_sha": git_sha(),
-        "git_dirty": git_dirty(),
+        "git_dirty": dirty,
         "code_version": code_version(),
         "data_version": data_version(conn) if conn is not None else None,
     }
+    if dirty:
+        meta["dirty_paths"] = list(dirty_code_paths()[:50])
+    return meta
