@@ -27,6 +27,7 @@ from config import (  # noqa: E402
     artifact_drift,
 )
 from db import SQL_VALID_HORSE_NUM  # noqa: E402
+from scripts.notify_dedup import decide, record  # noqa: E402
 from scripts.notify_discord import notify_discord  # noqa: E402
 import os  # noqa: E402
 import sqlite3  # noqa: E402
@@ -112,6 +113,46 @@ def _notify(text: str) -> bool:
     return notify_discord(text)
 
 
+def _notify_once(notification_type: str, subject: str, payload: dict,
+                 text: str, force: bool = False) -> bool:
+    """同じ内容なら送らない。変わったときは「変更点 + 全文」を送る。
+
+    Task Scheduler が同じ日に 3 回起動するので、3 回とも同じ結果なら同じ本文が
+    3 通届いていた (2026-09-19 是正)。判定は **通知層だけ**で行い、予測・
+    特徴量・DB 取込・PIT・評価処理には触れない。
+
+    判定に失敗したら送る側に倒す。中止通知を握り潰すのが最悪の事故なので、
+    重複を 1 通許す方がまし。
+    """
+    if force:
+        return _notify(text)
+    d = decide(notification_type, subject, payload, text)
+    if not d.should_send:
+        print(f"notify suppressed ({notification_type}:{subject}): {d.reason}")
+        return True
+    if d.reason.startswith("fail_open"):
+        print(f"WARN: 重複判定に失敗したので送信します ({d.reason})")
+    ok = _notify(d.text)
+    if ok:
+        # **送れてから記録する。** 送信前に記録すると、POST が失敗したのに
+        # 「送った」ことになり、次の起動で抑止されて永久に届かなくなる。
+        record(notification_type, subject, payload)
+    else:
+        print(f"WARN: 送信に失敗したので記録しません (次回再送します): "
+              f"{notification_type}:{subject}")
+    return ok
+
+
+def _completion_payload(n_races: int, version: str, push_ok: bool) -> dict:
+    """生成完了通知の「中身」。重複判定はこれだけを見る。
+
+    **生成時刻・URL・本文は入れないこと。** 入れた瞬間に毎回違う payload に
+    なり、抑止が 1 通も効かなくなる (本文で判定していたのと同じ状態に戻る)。
+    キー集合はテストで固定してある。
+    """
+    return {"n_races": n_races, "version": version, "push_ok": push_ok}
+
+
 def _completion_message(target_date: str, n_races: int, version: str,
                         push_ok: bool) -> str:
     """生成完了の Discord 通知文を組み立てる。
@@ -140,6 +181,11 @@ def _completion_message(target_date: str, n_races: int, version: str,
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="生成せず対象日のみ表示")
+    ap.add_argument(
+        "--force-notify", action="store_true",
+        help="重複判定を通さず必ず通知する。docstring には以前から書いてあったが "
+             "**実装されていなかった** (2026-09-19 に重複判定を入れる際に発見)",
+    )
     ap.add_argument(
         "--min-entry-coverage",
         type=float,
@@ -189,7 +235,10 @@ def main() -> int:
         )
         print(msg)
         if not args.dry_run:
-            _notify(msg)
+            _notify_once("coverage_abort", day,
+                         {"with_entries": with_entries, "total": total,
+                          "min_coverage": min_coverage},
+                         msg, force=args.force_notify)
         return 2
     # F3 封印中はモデルを変えない (2026-09-14)。12 月の判定は「封印窓のあいだ
     # 同じモデルが予想し続けた」ことを前提にしており、途中で重み・calibrator・
@@ -203,7 +252,11 @@ def main() -> int:
                  "封印窓を捨てて再開始するか判定を先に行うこと。")
         print(msg)
         if not args.dry_run:
-            _notify(msg)
+            # drift は順序が揺れうるので、並べ替えてから payload にする
+            # (本質的でない並び順の差で再通知しないため)。
+            _notify_once("artifact_drift_abort", day,
+                         {"drift": sorted(drift)}, msg,
+                         force=args.force_notify)
         return 3
 
     if args.dry_run:
@@ -213,7 +266,9 @@ def main() -> int:
                         "--log-predictions"],
                        capture_output=True, text=True, cwd=PROJECT_ROOT)
     if r.returncode != 0:
-        _notify(f"⚠ 予想生成に失敗 ({day})。ログ確認要。")
+        _notify_once("generation_failed", day, {"returncode": r.returncode},
+                     f"⚠ 予想生成に失敗 ({day})。ログ確認要。",
+                     force=args.force_notify)
         print(r.stdout[-500:], r.stderr[-500:])
         return 1
 
@@ -256,7 +311,11 @@ def main() -> int:
             if not push_ok:
                 print("WARN: push to main failed:\n", p.stderr[-400:])
 
-    _notify(_completion_message(day, n_races, ver, push_ok))
+    # payload に生成時刻・URL は入れない。中身が同じなら送らない。
+    _notify_once("generation_complete", day,
+                 _completion_payload(n_races, ver, push_ok),
+                 _completion_message(day, n_races, ver, push_ok),
+                 force=args.force_notify)
     print("notified. push_ok=", push_ok)
     return 0
 
