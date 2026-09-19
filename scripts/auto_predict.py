@@ -27,7 +27,7 @@ from config import (  # noqa: E402
     artifact_drift,
 )
 from db import SQL_VALID_HORSE_NUM  # noqa: E402
-from scripts.notify_dedup import decide, record  # noqa: E402
+from scripts.notify_dedup import JST, decide, jst_today, record  # noqa: E402
 from scripts.notify_discord import notify_discord  # noqa: E402
 import os  # noqa: E402
 import sqlite3  # noqa: E402
@@ -114,7 +114,8 @@ def _notify(text: str) -> bool:
 
 
 def _notify_once(notification_type: str, subject: str, payload: dict,
-                 text: str, force: bool = False) -> bool:
+                 text: str, force: bool = False,
+                 supersedes: bool = True) -> bool:
     """同じ内容なら送らない。変わったときは「変更点 + 全文」を送る。
 
     Task Scheduler が同じ日に 3 回起動するので、3 回とも同じ結果なら同じ本文が
@@ -124,23 +125,74 @@ def _notify_once(notification_type: str, subject: str, payload: dict,
     判定に失敗したら送る側に倒す。中止通知を握り潰すのが最悪の事故なので、
     重複を 1 通許す方がまし。
     """
+    def audit(decision: str, attempted: bool, delivered, recorded) -> None:
+        """1 行で「起動 → 判定 → 送信 → 記録」を追えるようにする。
+
+        **Discord を静かにしても監査ログまで静かにしてはいけない。**
+        「通知が来なかった」だけでは、抑止が効いたのか処理自体が走らなかったのか
+        区別できない。grep しやすい固定書式で毎回 1 行出す。
+        """
+        def tri(v):
+            return "-" if v is None else ("ok" if v else "failed")
+        print(f"notify-audit type={notification_type} subject={subject} "
+              f"decision={decision} attempted={'yes' if attempted else 'no'} "
+              f"delivered={tri(delivered)} recorded={tri(recorded)}")
+
     if force:
-        return _notify(text)
+        ok = _notify(text)
+        audit("forced", True, ok, None)
+        return ok
     d = decide(notification_type, subject, payload, text)
     if not d.should_send:
         print(f"notify suppressed ({notification_type}:{subject}): {d.reason}")
+        audit(d.reason, False, None, None)
         return True
     if d.degraded:
         print(f"WARN: 重複判定に失敗したので送信します ({d.reason})")
     ok = _notify(d.text)
+    recorded = None
     if ok:
         # **送れてから記録する。** 送信前に記録すると、POST が失敗したのに
         # 「送った」ことになり、次の起動で抑止されて永久に届かなくなる。
-        record(notification_type, subject, payload)
+        recorded = record(notification_type, subject, payload,
+                          supersedes=supersedes)
     else:
         print(f"WARN: 送信に失敗したので記録しません (次回再送します): "
               f"{notification_type}:{subject}")
+    audit(d.reason, True, ok, recorded)
     return ok
+
+
+# 最終起動の時刻。`scripts/register_auto_predict_task.ps1` の `ThirdStartTime` と
+# **必ず一致させる** (テストで固定してある)。Task Scheduler はトリガごとに別の
+# 引数を渡せないので、最終起動かどうかはこちら側で JST 時刻から判断する。
+FINAL_ATTEMPT_HOUR = 11
+
+
+def _is_final_attempt() -> bool:
+    """この起動がその日の最終予定起動か (JST で判断)。"""
+    return datetime.now(JST).hour >= FINAL_ATTEMPT_HOUR
+
+
+def _final_confirmation_message(reason: str) -> str:
+    """最終確認の heartbeat。**中止通知の再送ではない、別の意味の通知**。
+
+    重複抑止を入れたことで「依然中止」と「タスクが起動しなかった」が Discord 上で
+    区別できなくなった (以前は同文 3 通が暗黙の生存信号だった)。最終起動が実際に
+    走ったことをこの 1 通で示す。
+
+      通常起動が成功し状態も変わらない → 無通知
+      最終起動まで中止が続いた         → この 1 通
+      最終起動自体が動かなかった       → この 1 通が来ない
+
+    3 つ目を読み取れることが目的なので、**中止が続いたときだけ**送る。
+    """
+    d = jst_today()
+    return "\n".join([
+        f"🕚 **本日の最終確認** ({d[:4]}/{d[4:6]}/{d[6:]})",
+        f"中止状態が継続しています ({reason})。最終確認処理は正常に実行されました。",
+        "⚠ 観察専用 (実弾根拠となるエッジは未証明)",
+    ])
 
 
 def _completion_payload(n_races: int, version: str, push_ok: bool) -> dict:
@@ -178,9 +230,25 @@ def _completion_message(target_date: str, n_races: int, version: str,
     )
 
 
+def _final_confirmation(args, day: str, reason: str) -> None:
+    """最終起動で中止が続いていたら、最終確認を 1 通だけ送る。"""
+    if not (args.final_attempt or _is_final_attempt()):
+        return
+    # supersedes=False: これは結末の通知ではないので、中止通知の記録を消さない。
+    # 消すと、そのあと同じ中止通知をもう 1 通送ってしまう。
+    _notify_once("final_confirmation", day, {"reason": reason},
+                 _final_confirmation_message(reason),
+                 force=args.force_notify, supersedes=False)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="生成せず対象日のみ表示")
+    ap.add_argument(
+        "--final-attempt", action="store_true",
+        help="その日の最終予定起動として扱い、中止が続いていれば最終確認を 1 通送る。"
+             "既定は JST 時刻から自動判定 (11 時以降)",
+    )
     ap.add_argument(
         "--force-notify", action="store_true",
         help="重複判定を通さず必ず通知する。docstring には以前から書いてあったが "
@@ -239,6 +307,8 @@ def main() -> int:
                          {"with_entries": with_entries, "total": total,
                           "min_coverage": min_coverage},
                          msg, force=args.force_notify)
+            _final_confirmation(args, day,
+                                f"{with_entries}/{total} 出走馬未取り込み")
         return 2
     # F3 封印中はモデルを変えない (2026-09-14)。12 月の判定は「封印窓のあいだ
     # 同じモデルが予想し続けた」ことを前提にしており、途中で重み・calibrator・
@@ -257,6 +327,7 @@ def main() -> int:
             _notify_once("artifact_drift_abort", day,
                          {"drift": sorted(drift)}, msg,
                          force=args.force_notify)
+            _final_confirmation(args, day, "封印モデルの変更を検知")
         return 3
 
     if args.dry_run:

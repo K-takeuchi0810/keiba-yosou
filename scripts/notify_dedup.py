@@ -229,14 +229,19 @@ def decide(notification_type: str, subject: str, payload: dict[str, Any],
 
 
 def record(notification_type: str, subject: str, payload: dict[str, Any],
-           path: Path | None = None) -> None:
+           path: Path | None = None, supersedes: bool = True) -> bool:
     """**送信が成功してから**呼ぶ。次回から同じ中身を抑止する。
 
     判定と同時に記録してはいけない。Discord への POST が失敗したのに「送った」
     と記録すると、次の起動で抑止されて **その通知は永久に届かない**。中止通知
     でこれが起きると、その日の予想を失ったことに誰も気付けない。
 
-    記録に失敗しても例外は投げない (最悪もう 1 通届くだけ)。
+    `supersedes` は「これは対象の結末を伝える通知か」。True なら同じ対象の
+    別の結末の記録を捨てる (下記)。最終確認の heartbeat のように結末ではない
+    通知は False にする。結末の記録を消してしまうと、そのあと同じ結末を
+    もう 1 通送ってしまう。
+
+    記録に失敗しても例外は投げない (最悪もう 1 通届くだけ)。成否を返す。
     """
     try:
         p = path or state_path()
@@ -246,9 +251,10 @@ def record(notification_type: str, subject: str, payload: dict[str, Any],
         # これが無いと「08:00 生成失敗 → 09:00 生成成功 → 11:00 また生成失敗」の
         # 3 通目が「朝と同じ失敗」として抑止され、その日が成功で終わったと
         # 誤解したまま終わる (実測で再現した穴)。
-        data = {k: v for k, v in data.items()
-                if v.get("subject") != subject
-                or v.get("notification_type") == notification_type}
+        if supersedes:
+            data = {k: v for k, v in data.items()
+                    if v.get("subject") != subject
+                    or v.get("notification_type") == notification_type}
         data[_key(notification_type, subject)] = {
             "canonical": _canonical(payload), "payload": payload,
             "date_jst": today,
@@ -256,9 +262,11 @@ def record(notification_type: str, subject: str, payload: dict[str, Any],
             "notification_type": notification_type,
             "subject": subject}
         _save(p, data)
+        return True
     except Exception as exc:                       # noqa: BLE001
         # 記録できなくても通知は既に届いているので送信側は成功。ただし
         # **無音にはしない**。ここが黙ると、抑止が効かず毎回 3 通届く状態に
         # 退行しても痕跡が残らない。
         print(f"WARN: 通知の記録に失敗しました ({type(exc).__name__}: {exc})。"
               f"次の起動で同じ通知がもう 1 通届きます。")
+        return False

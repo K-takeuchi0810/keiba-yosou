@@ -105,6 +105,28 @@ cd C:\Users\kizun\dev\keiba-yosou
 | 中身が変わった | 「🔁 前回から変更あり」+ 変更点 + 全文 |
 | 判定に失敗した (状態ファイル破損など) | **送る**。重複を 1 通許す方が、中止通知を消すよりまし |
 | Discord への送信そのものが失敗した | 記録しない。**次の起動で再送する** |
+| 最終起動 (11:00) まで中止が続いた | **最終確認を 1 通**送る (下記) |
+
+**最終確認 (heartbeat)**: 抑止を入れると「依然中止」と「タスクが起動しなかった」が
+Discord 上で区別できない (以前は同文 3 通が暗黙の生存信号だった)。最終起動 (11:00) まで
+中止が続いた場合だけ、**中止通知の再送ではなく別の意味の通知**として 1 通送る。
+
+    通常起動が成功し状態も変わらない → 無通知
+    最終起動まで中止が続いた         → 最終確認 1 通
+    最終起動自体が動かなかった       → 最終確認が来ない  ← これを読み取るのが目的
+
+最終起動かどうかは JST 時刻で判断する (`FINAL_ATTEMPT_HOUR = 11`)。Task Scheduler は
+トリガごとに違う引数を渡せないため。登録側 (`register_auto_predict_task.ps1` の
+`ThirdStartTime`) とずれないようテストで突き合わせてある。
+
+**監査ログ**: 通知の判断は毎回 1 行残る。**Discord を静かにしても監査ログまで
+静かにしてはいけない**ので、抑止したときも必ず出る。
+
+    notify-audit type=generation_complete subject=20260920 decision=duplicate attempted=no delivered=- recorded=-
+
+`decision` は first_time / changed / duplicate / fail_open / forced。
+`attempted` は送信を試みたか、`delivered` は Discord が受けたか、`recorded` は状態を
+書けたか。`grep notify-audit data/logs/auto_predict_daily_YYYYMMDD.log` で 1 日ぶんが追える。
 
 **通知が来ないときの確認手順**:
 

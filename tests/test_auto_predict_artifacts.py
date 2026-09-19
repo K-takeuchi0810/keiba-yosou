@@ -251,6 +251,9 @@ def _abort_day(tmp_path, monkeypatch):
     sent: list[str] = []
     monkeypatch.setattr(auto_predict, "_notify",
                         lambda text: sent.append(text) or True)
+    # 最終起動かどうかは実時刻で決まるので、固定しないと 11 時以降だけ
+    # 最終確認が 1 通増えてテストが時間帯で落ちる。
+    monkeypatch.setattr(auto_predict, "_is_final_attempt", lambda: False)
     return sent
 
 
@@ -290,6 +293,7 @@ def test_main_resends_the_abort_notice_when_coverage_changes(tmp_path, monkeypat
     sent: list[str] = []
     monkeypatch.setattr(auto_predict, "_notify",
                         lambda text: sent.append(text) or True)
+    monkeypatch.setattr(auto_predict, "_is_final_attempt", lambda: False)
     monkeypatch.setattr("sys.argv", ["auto_predict"])
 
     assert auto_predict.main() == 2
@@ -306,3 +310,64 @@ def test_main_resends_the_abort_notice_when_coverage_changes(tmp_path, monkeypat
 
     assert len(sent) == 2, "取り込みが進んだのに再送していない"
     assert "with_entries: 0 -> 1" in sent[1]
+
+
+def test_a_full_abort_day_sends_two_messages(tmp_path, monkeypatch, capsys):
+    """開催日 3 起動が全部中止 → 中止 1 通 + 最終確認 1 通。
+
+    明日 (09/20) の本番実証で期待する系列そのもの。
+      08:00 中止 → 中止通知
+      09:00 中止 → 抑止 (無通知)
+      11:00 中止 → 最終確認 1 通 (「起動はした」の生存信号)
+    通知が 1 通も来ない = タスクが動いていない、と読めるようになる。
+    """
+    from datetime import date
+
+    today = date.today().strftime("%Y%m%d")
+    db = tmp_path / "t.db"
+    _entry_db(db, days_scheduled=(today,)).close()
+    monkeypatch.setattr(auto_predict, "DB_PATH", str(db))
+    monkeypatch.setattr(auto_predict.subprocess, "run",
+                        lambda command, **kwargs: None)
+    sent: list[str] = []
+    monkeypatch.setattr(auto_predict, "_notify",
+                        lambda text: sent.append(text) or True)
+
+    # 08:00 / 09:00 相当 (最終起動ではない)
+    monkeypatch.setattr(auto_predict, "_is_final_attempt", lambda: False)
+    monkeypatch.setattr("sys.argv", ["auto_predict"])
+    assert auto_predict.main() == 2
+    assert auto_predict.main() == 2
+    assert len(sent) == 1, "2 回目が抑止されていない"
+
+    # 11:00 相当
+    monkeypatch.setattr("sys.argv", ["auto_predict", "--final-attempt"])
+    assert auto_predict.main() == 2
+
+    assert len(sent) == 2, f"最終確認が出ていない: {sent}"
+    assert "最終確認" in sent[1] and "正常に実行されました" in sent[1]
+
+    audit = [l for l in capsys.readouterr().out.splitlines()
+             if l.startswith("notify-audit ")]
+    assert len(audit) == 4, f"監査行が足りない: {audit}"
+    assert "decision=duplicate attempted=no" in audit[1]
+    assert "type=final_confirmation" in audit[3]
+
+
+def test_a_normal_day_sends_no_final_confirmation(tmp_path, monkeypatch):
+    """中止していない日に最終確認は出さない (通知を増やさない)。"""
+    from datetime import date
+
+    today = date.today().strftime("%Y%m%d")
+    db = tmp_path / "t.db"
+    _entry_db(db, days_with_entries=(today,)).close()
+    monkeypatch.setattr(auto_predict, "DB_PATH", str(db))
+    monkeypatch.setattr(auto_predict.subprocess, "run",
+                        lambda command, **kwargs: None)
+    sent: list[str] = []
+    monkeypatch.setattr(auto_predict, "_notify",
+                        lambda text: sent.append(text) or True)
+    monkeypatch.setattr("sys.argv", ["auto_predict", "--final-attempt", "--dry-run"])
+
+    assert auto_predict.main() == 0
+    assert sent == [], "中止していないのに最終確認を送っている"

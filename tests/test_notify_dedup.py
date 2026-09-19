@@ -582,3 +582,92 @@ def test_the_autouse_fixture_redirects_state_by_default(tmp_path):
     prod = PROJECT_ROOT / "data" / "runtime" / "notification_state.json"
     assert Path(override) != prod
     assert notify_dedup.state_path() != prod
+
+
+# --- 最終確認 heartbeat --------------------------------------------------
+# 重複抑止で「依然中止」と「タスク未起動」が Discord 上で区別できなくなった。
+# 以前は同文 3 通が暗黙の生存信号だった。最終起動が走ったことを 1 通で示す。
+
+
+def test_final_attempt_hour_matches_the_registered_trigger():
+    """最終起動の時刻が Task Scheduler の登録と一致していること。
+
+    Task Scheduler はトリガごとに違う引数を渡せないので、最終起動かどうかは
+    コード側が JST 時刻で判断する。登録側の時刻とずれると heartbeat が
+    出ない / 毎回出る のどちらかになるので、2 つの出典を突き合わせる。
+    """
+    import re
+
+    from scripts import auto_predict
+
+    ps1 = (Path(__file__).resolve().parents[1]
+           / "scripts" / "register_auto_predict_task.ps1").read_text(encoding="utf-8")
+    m = re.search(r'\$ThirdStartTime\s*=\s*"(\d+):', ps1)
+    assert m, "register_auto_predict_task.ps1 の ThirdStartTime が読めない"
+    assert auto_predict.FINAL_ATTEMPT_HOUR == int(m.group(1)), (
+        "FINAL_ATTEMPT_HOUR と登録された最終トリガの時刻がずれている")
+
+
+def test_final_confirmation_says_the_run_happened(wired):
+    """最終確認の本文が「最終起動は走った」ことを伝えること。"""
+    auto_predict, _ = wired
+    text = auto_predict._final_confirmation_message("0/12 出走馬未取り込み")
+
+    assert "最終確認" in text
+    assert "正常に実行されました" in text, "起動したこと自体が伝わらない"
+    assert "0/12 出走馬未取り込み" in text
+    assert "観察専用" in text, "観察専用の断り書きが落ちている"
+
+
+def test_final_confirmation_does_not_erase_the_abort_record(wired):
+    """heartbeat が中止通知の記録を消さないこと。
+
+    消すと、そのあと同じ中止通知をもう 1 通送ってしまう。heartbeat は
+    「結末」ではなく追加の生存信号なので supersedes=False で記録する。
+    """
+    auto_predict, sent = wired
+
+    auto_predict._notify_once("coverage_abort", "20260919",
+                              {"total": 12}, "⚠ 中止")
+    auto_predict._notify_once("final_confirmation", "20260919",
+                              {"reason": "0/12"}, "最終確認", supersedes=False)
+    auto_predict._notify_once("coverage_abort", "20260919",
+                              {"total": 12}, "⚠ 中止")
+
+    assert len(sent) == 2, "heartbeat が中止通知の記録を消して再送させている"
+
+
+def test_audit_line_is_emitted_for_every_outcome(wired, capsys):
+    """抑止でも送信でも、監査 1 行を必ず残すこと。
+
+    「通知が来なかった」だけでは、抑止が効いたのか処理自体が走らなかったのか
+    区別できない。Discord を静かにしても監査ログまで静かにしてはいけない。
+    """
+    auto_predict, _ = wired
+
+    auto_predict._notify_once("generation_complete", "20260919",
+                              {"n_races": 12}, "本文")
+    auto_predict._notify_once("generation_complete", "20260919",
+                              {"n_races": 12}, "本文")
+
+    lines = [l for l in capsys.readouterr().out.splitlines()
+             if l.startswith("notify-audit ")]
+    assert len(lines) == 2, f"監査行が 2 行出ていない: {lines}"
+    assert "decision=first_time attempted=yes delivered=ok recorded=ok" in lines[0]
+    assert "decision=duplicate attempted=no" in lines[1]
+
+
+def test_audit_line_records_a_failed_send(wired, capsys):
+    """送信失敗も監査 1 行に出ること。"""
+    auto_predict, _ = wired
+    import scripts.auto_predict as ap
+    monkey = ap._notify
+    try:
+        ap._notify = lambda text: False
+        ap._notify_once("coverage_abort", "20260919", {"total": 12}, "⚠ 中止")
+    finally:
+        ap._notify = monkey
+
+    line = next(l for l in capsys.readouterr().out.splitlines()
+                if l.startswith("notify-audit "))
+    assert "attempted=yes delivered=failed recorded=-" in line
