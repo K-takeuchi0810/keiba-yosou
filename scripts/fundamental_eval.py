@@ -135,8 +135,16 @@ def conditional_logit(samples: list[dict], cols: list[str]) -> list[float]:
     if not races:
         return [float("nan")] * len(cols)
 
+    # **列を標準化してから解く。** 2026-09-19 に発散を実測: logit(P_T10) の 3 次項
+    # (−227 まで) と補正 (0.06 程度) を同時に入れると 4 桁のスケール差で
+    # ヘッセ行列の条件数が跳ね、係数が −2.7e9 になった。数学的には同値なので
+    # 標準化して解き、係数を元のスケールへ戻す。
+    scale = np.concatenate([X for X, _ in races]).std(axis=0)
+    scale[scale <= 0] = 1.0
+    races = [(X / scale, y) for X, y in races]
+
     beta = np.zeros(len(cols))
-    for _ in range(60):
+    for _ in range(100):
         grad = np.zeros(len(cols))
         hess = np.zeros((len(cols), len(cols)))
         for X, y in races:
@@ -146,14 +154,22 @@ def conditional_logit(samples: list[dict], cols: list[str]) -> list[float]:
             w /= w.sum()
             grad += X.T @ (y - w * y.sum())
             hess -= y.sum() * (X.T @ (np.diag(w) - np.outer(w, w)) @ X)
+        # 共線性で特異に近いときのための微小リッジ。解を動かさない大きさ。
+        hess -= np.eye(len(cols)) * 1e-8
         try:
             step = np.linalg.solve(hess, grad)
         except np.linalg.LinAlgError:
-            break
+            return [float("nan")] * len(cols)
+        # 1 歩が大きすぎるときは刻む (発散防止)。
+        big = np.abs(step).max()
+        if big > 2.0:
+            step = step * (2.0 / big)
         beta = beta - step
+        if not np.all(np.isfinite(beta)):
+            return [float("nan")] * len(cols)
         if np.abs(step).max() < 1e-9:
             break
-    return [float(b) for b in beta]
+    return [float(b) for b in beta / scale]
 
 
 def band_calibration(samples: list[dict], key: str) -> list[dict]:

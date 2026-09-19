@@ -1,0 +1,225 @@
+{
+ "meta": {
+  "git_sha": "fb588064b14e49b3e81e454bf78123674dcca9ca",
+  "git_dirty": true,
+  "code_version": "fb588064b14e-dirty",
+  "data_version": "33719:324f6e9111",
+  "dirty_paths": [
+   "predictor/market_offset_model.meta.json",
+   "predictor/market_offset_model.txt",
+   "scripts/fundamental_eval.py",
+   "scripts/market_offset_eval.py",
+   "scripts/market_offset_model.py",
+   "tests/test_feature_manifest.py"
+  ],
+  "from_date": "20260509",
+  "to_date": "20260831",
+  "prereg": "docs/PHASE05_PREREG.md",
+  "run_index": 1,
+  "baseline_log_loss": 0.21351,
+  "max_lead_minutes": 30,
+  "buy_edge_pt": 0.05,
+  "market_features": 0
+ },
+ "counts": {
+  "no_t10": 239,
+  "analysed": 931,
+  "t10_fresh": 626,
+  "runner_set_mismatch": 6
+ },
+ "sets": {
+  "all": {
+   "n_races": 931,
+   "n_horses": 12533
+  },
+  "fresh_t10": {
+   "n_races": 626,
+   "n_horses": 8279
+  }
+ },
+ "primary_conditional_logit": {
+  "coef_market": 0.961385446547996,
+  "coef_correction": 0.3861664668070173,
+  "coef_correction_ci95": [
+   -0.8300823478090398,
+   1.7316329474136316
+  ],
+  "pass": false
+ },
+ "rejection_1_price_polynomial": {
+  "coef_correction": 0.40152316939282034,
+  "coef_correction_ci95": [
+   -0.7774175434698545,
+   1.7059340251720068
+  ],
+  "survives": false
+ },
+ "t10_market_fresh_t10": {
+  "n_races": 626,
+  "n_horses": 8279,
+  "log_loss": 0.21351180680419896,
+  "brier": 0.0597782385645052,
+  "calibration_error": 0.009373644159922695
+ },
+ "offset_fresh_t10": {
+  "n_races": 626,
+  "n_horses": 8279,
+  "log_loss": 0.21363454488543815,
+  "brier": 0.05980692196459026,
+  "calibration_error": 0.009639344123686435
+ },
+ "t10_market_all": {
+  "n_races": 931,
+  "n_horses": 12533,
+  "log_loss": 0.21193957914982547,
+  "brier": 0.05933715808062012,
+  "calibration_error": 0.008215
+ },
+ "offset_all": {
+  "n_races": 931,
+  "n_horses": 12533,
+  "log_loss": 0.212090173381319,
+  "brier": 0.0593532233434176,
+  "calibration_error": 0.008353
+ },
+ "hypothesis_2_log_loss": {
+  "offset": 0.21363454488543815,
+  "baseline": 0.21351,
+  "pass": false
+ },
+ "band_calibration_offset": [
+  {
+   "band": "0-5%",
+   "n": 4585,
+   "predicted": 0.021743425306324744,
+   "actual": 0.01723009814612868,
+   "gap": -0.004513327160196062,
+   "gap_ci95": [
+    -0.007870914391999679,
+    -0.0008200629133198536
+   ]
+  },
+  {
+   "band": "5-10%",
+   "n": 1639,
+   "predicted": 0.07114598098562282,
+   "actual": 0.06345332519829164,
+   "gap": -0.007692655787331179,
+   "gap_ci95": [
+    -0.01745869404934635,
+    0.003505979347819474
+   ]
+  },
+  {
+   "band": "10-20%",
+   "n": 1339,
+   "predicted": 0.1402762191482256,
+   "actual": 0.15832710978342046,
+   "gap": 0.018050890635194855,
+   "gap_ci95": [
+    0.0022534768926688875,
+    0.03392853396202336
+   ]
+  },
+  {
+   "band": "20-30%",
+   "n": 432,
+   "predicted": 0.24203212119575424,
+   "actual": 0.2361111111111111,
+   "gap": -0.00592101008464313,
+   "gap_ci95": [
+    -0.04295827072763708,
+    0.028486629593460627
+   ]
+  },
+  {
+   "band": "30%+",
+   "n": 284,
+   "predicted": 0.4130647828838919,
+   "actual": 0.45774647887323944,
+   "gap": 0.044681695989347514,
+   "gap_ci95": [
+    -0.011069160608598916,
+    0.09945894313631942
+   ]
+  }
+ ],
+ "band_calibration_t10": [
+  {
+   "band": "0-5%",
+   "n": 4616,
+   "predicted": 0.02149449579805475,
+   "actual": 0.01776429809358752,
+   "gap": -0.0037301977044672287,
+   "gap_ci95": [
+    -0.0071513603610388644,
+    8.957033810305659e-05
+   ]
+  },
+  {
+   "band": "5-10%",
+   "n": 1606,
+   "predicted": 0.07103613926691074,
+   "actual": 0.06351183063511831,
+   "gap": -0.007524308631792431,
+   "gap_ci95": [
+    -0.01683066459164051,
+    0.0036053434042580823
+   ]
+  },
+  {
+   "band": "10-20%",
+   "n": 1324,
+   "predicted": 0.14030934077710172,
+   "actual": 0.1510574018126888,
+   "gap": 0.010748061035587092,
+   "gap_ci95": [
+    -0.005030583997800792,
+    0.02616369804996549
+   ]
+  },
+  {
+   "band": "20-30%",
+   "n": 440,
+   "predicted": 0.24107062623555647,
+   "actual": 0.25,
+   "gap": 0.008929373764443527,
+   "gap_ci95": [
+    -0.026211564566412077,
+    0.04509816865704311
+   ]
+  },
+  {
+   "band": "30%+",
+   "n": 293,
+   "predicted": 0.4124802901057784,
+   "actual": 0.4539249146757679,
+   "gap": 0.041444624569989486,
+   "gap_ci95": [
+    -0.013586563784207917,
+    0.09450819953804357
+   ]
+  }
+ ],
+ "rejection_2_stale_only_win": {
+  "delta_fresh": 0.00012273808123919316,
+  "delta_all": 0.0001505942314935227,
+  "triggered": false
+ },
+ "flat_bet_all": {
+  "n_bets": 8279,
+  "roi": 0.7033458147119217,
+  "roi_ci95": [
+   0.6174990973643038,
+   0.8008708099725635
+  ]
+ },
+ "flat_bet_edge": null,
+ "money_pass": false,
+ "verdict": {
+  "primary": false,
+  "money": false,
+  "rejected_by": [],
+  "overall_pass": false
+ }
+}

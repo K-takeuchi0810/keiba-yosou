@@ -1,0 +1,71 @@
+{
+ "git_sha": "fb588064b14e49b3e81e454bf78123674dcca9ca",
+ "git_dirty": true,
+ "code_version": "fb588064b14e-dirty",
+ "data_version": null,
+ "dirty_paths": [
+  "predictor/market_offset_model.txt",
+  "scripts/market_offset_model.py"
+ ],
+ "features": [
+  "h_starts",
+  "h_wins",
+  "h_winrate",
+  "h_top3rate",
+  "h_last_finish",
+  "h_days_since",
+  "h_best_finish",
+  "h_recent3_avg_finish",
+  "hd_starts",
+  "hd_winrate",
+  "ht_starts",
+  "ht_winrate",
+  "j_rides",
+  "j_winrate",
+  "t_runs",
+  "t_winrate",
+  "s_winrate",
+  "age",
+  "sex",
+  "burden",
+  "waku",
+  "starters",
+  "dist",
+  "surface",
+  "cond",
+  "weather",
+  "grade",
+  "w_abs",
+  "w_delta",
+  "blinker"
+ ],
+ "params": {
+  "objective": "binary",
+  "learning_rate": 0.03,
+  "num_leaves": 63,
+  "min_child_samples": 100,
+  "bagging_fraction": 0.8,
+  "bagging_freq": 1,
+  "feature_fraction": 0.8,
+  "seed": 20260918,
+  "verbose": -1
+ },
+ "train": [
+  "20210101",
+  "20231231"
+ ],
+ "validation": [
+  "20240101",
+  "20251231"
+ ],
+ "n_train": 142207,
+ "n_valid": 94709,
+ "excluded": {
+  "skip_no_market_price": 496
+ },
+ "best_iteration": 27,
+ "validation_log_loss_market_only": 0.2032755149050517,
+ "validation_log_loss_offset": 0.2031912456673405,
+ "training_market_source": "horse_races.win_odds (確定オッズではない)",
+ "market_features": 0
+}
