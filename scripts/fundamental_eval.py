@@ -40,10 +40,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import DATA_SPLIT, guard_analysis_window, sealed_notice  # noqa: E402
 from db import DB_PATH  # noqa: E402
-from predictor.evaluation import (  # noqa: E402
-    brier,
-    expected_calibration_error,
-    log_loss,
+from predictor.eval_stats import (  # noqa: E402
+    BANDS,
+    N_BOOT,
+    SEED,
+    band_calibration,
+    block_boot,
+    coefficient_ci,
+    conditional_logit,
+    flat_bet_roi,
+    logit,
+    metrics,
+    normalise,
 )
 from predictor.feature_manifest import assert_no_market_features  # noqa: E402
 from predictor.pit_t10 import RACE_KEYS, decision_time, t10_market  # noqa: E402
@@ -56,23 +64,26 @@ from scripts.market_data_audit import confirmed_win_payouts  # noqa: E402
 # 見込んで 30 分を既定にする。
 DEFAULT_MAX_LEAD_MINUTES = 30
 
-# 「市場 10%、AI 20% だから買う」と判断するには、**AI の 20% が信用できないと
-# 意味がない**。分位ではなく確率の固定帯で較正を見る (憲法 Phase 0.5-3)。
-BANDS: tuple[tuple[float, float, str], ...] = (
-    (0.00, 0.05, "0-5%"), (0.05, 0.10, "5-10%"), (0.10, 0.20, "10-20%"),
-    (0.20, 0.30, "20-30%"), (0.30, 1.01, "30%+"),
-)
-N_BOOT = 1000
-SEED = 20260918
+# 統計部品は predictor/eval_stats.py に移した (0.5-4A 以降 消費者が複数)。
+_logit = logit
+_normalise = normalise
+_block_boot = block_boot
+
+__all__ = ["BANDS", "N_BOOT", "SEED", "DEFAULT_MAX_LEAD_MINUTES",
+           "band_calibration", "block_boot", "coefficient_ci",
+           "conditional_logit", "flat_bet_roi", "logit", "metrics",
+           "normalise", "collect", "run"]
 
 
-def _logit(p) -> np.ndarray:
-    p = np.clip(np.asarray(p, dtype=float), 1e-9, 1 - 1e-9)
-    return np.log(p / (1 - p))
+def _final_market_odds(conn, race) -> dict[str, float]:
+    """`horse_races.win_odds` の全頭ぶん。
 
-
-def _final_market_odds(conn: sqlite3.Connection, race: dict) -> dict[str, float]:
-    """`horse_races.win_odds` の全頭ぶん。**確定オッズとは限らない**。"""
+    **2021-2025 では確定オッズそのもの** (勝ち馬で確定払戻と 99.5%+ 一致、
+    不一致は全件が同着による払戻半減)。一方 **2026 は 77.4% しか一致しない**。
+    fresh odds 取得 (0B30/0B31) が発走前の値を後から書いているため。
+    評価窓 (2026-05〜08) では 40.8% しか一致しないので、この列を
+    「最終市場」として使えるのは `final_odds_confirmed` が立つレースだけ。
+    """
     rows = conn.execute(
         """SELECT horse_num, win_odds FROM horse_races
             WHERE race_year=? AND race_month_day=? AND track_code=?
@@ -80,120 +91,6 @@ def _final_market_odds(conn: sqlite3.Connection, race: dict) -> dict[str, float]
               AND horse_num NOT IN ('', '00') AND win_odds > 0""",
         tuple(race.get(k) for k in RACE_KEYS)).fetchall()
     return {str(r[0]).strip(): r[1] / 10.0 for r in rows}
-
-
-def _normalise(d: dict[str, float]) -> dict[str, float]:
-    tot = sum(d.values())
-    return {k: v / tot for k, v in d.items()} if tot > 0 else {}
-
-
-def _block_boot(samples: list[dict], stat, n_boot: int = N_BOOT,
-                seed: int = SEED) -> tuple[float, float]:
-    """レースを塊として再抽出した 95% 区間。
-
-    同一レースの馬は「1 頭しか勝たない」ので独立ではない。馬単位で再抽出すると
-    区間が狭く出て、無い差を有ると言ってしまう。
-    """
-    blocks: dict[str, list[dict]] = defaultdict(list)
-    for s in samples:
-        blocks[s["race_id"]].append(s)
-    bl = list(blocks.values())
-    rng = random.Random(seed)
-    vals: list[float] = []
-    for _ in range(n_boot):
-        draw: list[dict] = []
-        for _ in range(len(bl)):
-            draw.extend(bl[rng.randrange(len(bl))])
-        v = stat(draw)
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            continue
-        vals.append(float(v))
-    if len(vals) < n_boot // 2:
-        return float("nan"), float("nan")
-    vals.sort()
-    return vals[int(0.025 * len(vals))], vals[int(0.975 * len(vals))]
-
-
-def conditional_logit(samples: list[dict], cols: list[str]) -> list[float]:
-    """レース内で 1 頭だけ勝つ構造を使った条件付きロジット (Benter 型)。
-
-    `P(i が勝つ) = exp(x_i·β) / Σ_j exp(x_j·β)` を最尤で解く。
-
-    先読み分析より **強い問い**。「AI の意見が市場の値動きと相関するか」ではなく
-    「市場の価格を与えた上で、AI の意見が **結果** を説明するか」を直接測る。
-    レース内正規化・価格水準・レース固有効果はすべて構造に吸収される。
-    """
-    by_race: dict[str, list[dict]] = defaultdict(list)
-    for s in samples:
-        by_race[s["race_id"]].append(s)
-    races = []
-    for rows in by_race.values():
-        y = np.array([r["won"] for r in rows], dtype=float)
-        if y.sum() <= 0:
-            continue
-        races.append((np.array([[r[c] for c in cols] for r in rows], dtype=float), y))
-    if not races:
-        return [float("nan")] * len(cols)
-
-    # **列を標準化してから解く。** 2026-09-19 に発散を実測: logit(P_T10) の 3 次項
-    # (−227 まで) と補正 (0.06 程度) を同時に入れると 4 桁のスケール差で
-    # ヘッセ行列の条件数が跳ね、係数が −2.7e9 になった。数学的には同値なので
-    # 標準化して解き、係数を元のスケールへ戻す。
-    scale = np.concatenate([X for X, _ in races]).std(axis=0)
-    scale[scale <= 0] = 1.0
-    races = [(X / scale, y) for X, y in races]
-
-    beta = np.zeros(len(cols))
-    for _ in range(100):
-        grad = np.zeros(len(cols))
-        hess = np.zeros((len(cols), len(cols)))
-        for X, y in races:
-            u = X @ beta
-            u -= u.max()
-            w = np.exp(u)
-            w /= w.sum()
-            grad += X.T @ (y - w * y.sum())
-            hess -= y.sum() * (X.T @ (np.diag(w) - np.outer(w, w)) @ X)
-        # 共線性で特異に近いときのための微小リッジ。解を動かさない大きさ。
-        hess -= np.eye(len(cols)) * 1e-8
-        try:
-            step = np.linalg.solve(hess, grad)
-        except np.linalg.LinAlgError:
-            return [float("nan")] * len(cols)
-        # 1 歩が大きすぎるときは刻む (発散防止)。
-        big = np.abs(step).max()
-        if big > 2.0:
-            step = step * (2.0 / big)
-        beta = beta - step
-        if not np.all(np.isfinite(beta)):
-            return [float("nan")] * len(cols)
-        if np.abs(step).max() < 1e-9:
-            break
-    return [float(b) for b in beta / scale]
-
-
-def band_calibration(samples: list[dict], key: str) -> list[dict]:
-    """固定帯ごとの予測確率 vs 実勝率。区間はレース単位ブートストラップ。"""
-    out: list[dict] = []
-    for lo, hi, label in BANDS:
-        sel = [s for s in samples if lo <= s[key] < hi]
-        if not sel:
-            continue
-
-        def gap(draw, lo=lo, hi=hi, key=key):
-            d = [r for r in draw if lo <= r[key] < hi]
-            if len(d) < 20:
-                return None
-            return (sum(r["won"] for r in d) / len(d)
-                    - sum(r[key] for r in d) / len(d))
-
-        lo_ci, hi_ci = _block_boot(samples, gap)
-        pred = sum(s[key] for s in sel) / len(sel)
-        act = sum(s["won"] for s in sel) / len(sel)
-        out.append({"band": label, "n": len(sel), "predicted": pred,
-                    "actual": act, "gap": act - pred,
-                    "gap_ci95": [lo_ci, hi_ci]})
-    return out
 
 
 def delta_distribution(samples: list[dict]) -> dict:
@@ -293,32 +190,6 @@ def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter]:
             })
     conn.close()
     return samples, c
-
-
-def metrics(samples: list[dict], key: str) -> dict:
-    y = [s["won"] for s in samples]
-    p = [s[key] for s in samples]
-    return {"n_races": len({s["race_id"] for s in samples}), "n_horses": len(p),
-            "log_loss": log_loss(y, p), "brier": brier(y, p),
-            "calibration_error": expected_calibration_error(y, p)}
-
-
-def flat_bet_roi(samples: list[dict]) -> dict:
-    """100 円均等で買ったときの回収率。**払戻は確定値から取る**。
-
-    確率の良し悪しではなく金額。140% が目標なので、最後はこの数字に帰着する。
-    """
-    def roi(draw):
-        if not draw:
-            return None
-        ret = sum(100.0 * s["payout_odds"] for s in draw if s["won"] == 1)
-        return ret / (100.0 * len(draw))
-
-    lo, hi = _block_boot(samples, roi)
-    point = roi(samples)
-    return {"n_bets": len(samples),
-            "roi": float("nan") if point is None else point,
-            "roi_ci95": [lo, hi]}
 
 
 def run(from_date: str, to_date: str, max_lead: int) -> dict:

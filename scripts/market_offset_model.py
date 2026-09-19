@@ -12,16 +12,33 @@ LightGBM の `init_score = logit(P_market)` で学習する。教師は実際の
 これは「現在の特徴セットでは市場を超えられない」という仮説を正式に検証する
 実験であって、勝たせるための実験ではない。
 
-## 学習時の市場価格について (既知の弱点、事前登録済)
+## 学習時の市場価格について (2026-09-19 に訂正)
 
 `odds_snapshots` は 2026-05 以降しか無い。学習期間 (2021-2025) には T−10 の
-市場価格が存在しないので、`horse_races.win_odds` を使う。この列は確定オッズでは
-なく、勝ち馬の 47.8% で確定払戻と一致しない (0.5-3 で判明)。
+市場価格が存在しないので、`horse_races.win_odds` を使う。
 
-つまり **学習時の市場価格には系統誤差が入る**。評価時は T−10 の
-`odds_snapshots` を使うので train-serve skew が残る。この skew は
-「学習時の市場が実際より不正確 → 補正が過大に学習される」方向なので、
-**正の結果が出た場合は割り引いて読む**。負の結果はそのまま読んでよい。
+**当初この列を「確定オッズではない (47.8% 不一致)」と書いたが、それは誤り。**
+47.8% 不一致は **2026 年だけ** の現象で、fresh odds 取得 (0B30/0B31) が
+発走前の値を後から書いているために起きる。年別の一致率 (勝ち馬 vs 確定単勝払戻):
+
+    2021 99.5% / 2022 99.8% / 2023 99.8% / 2024 99.7% / 2025 99.7% / 2026 77.4%
+
+しかも 2021-2025 の不一致は **全件が同着** (払戻が半額になる) なので、
+実質 **一致率 100%**。つまり学習の init_score は **確定した最終オッズそのもの**。
+
+これは skew の向きを逆にする。同一 626 レースで測ると:
+
+    win_odds implied の LogLoss 0.21110  <  T-10 implied 0.21351
+    差 -0.00241、95% 区間 [-0.00405, -0.00097] (0 を含まない)
+
+**学習の基準市場は運用の基準市場より強い。** モデルが学ぶ残差
+`logit(P_true) - logit(P_final)` には T-10 から最終までの遅い資金の情報が
+含まれない。したがって:
+
+- **金額 (回収率) については負の結果をそのまま読める。** 払戻は確定オッズで
+  決まるので、確定市場に足せない特徴は原理的に回収率エッジを作れない
+- **「T-10 市場に足せるか」は、この設計では検定していない。** T-10 固有の
+  非効率 (0.5-3 の先読み +0.169 に対応する成分) は原理的に学べない
 
 usage:
     .venv64/Scripts/python.exe -m scripts.market_offset_model --fit
@@ -39,7 +56,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from config import DATA_SPLIT  # noqa: E402
+from config import DATA_SPLIT, guard_analysis_window  # noqa: E402
 from db import DB_PATH  # noqa: E402
 from predictor.feature_manifest import assert_no_market_features  # noqa: E402
 from predictor.provenance import snapshot  # noqa: E402
@@ -95,6 +112,43 @@ def training_market(conn: sqlite3.Connection, from_year: str,
     return out
 
 
+def payout_agreement(conn: sqlite3.Connection, from_year: str,
+                     to_date: str, sample: int = 4000) -> float:
+    """勝ち馬の `win_odds` が確定単勝払戻と一致する割合。
+
+    **この列の意味が期間によって変わる**ので、学習前に必ず測る。2026 年は
+    fresh odds 取得が発走前の値を後から書くため一致率が 77% まで落ちる。
+    同じ列を確定オッズのつもりで学習に使うと、気づかないまま意味が変わる。
+    同着は払戻が半額になるので一致しない。除外せず分母に入れる (保守的)。
+    """
+    rows = conn.execute(
+        """SELECT h.horse_num hn, h.win_odds o,
+                  p.tan_horse_num1 h1, p.tan_payout1 p1,
+                  p.tan_horse_num2 h2, p.tan_payout2 p2
+             FROM horse_races h
+             JOIN payouts p ON p.race_year=h.race_year
+              AND p.race_month_day=h.race_month_day AND p.track_code=h.track_code
+              AND p.kaiji=h.kaiji AND p.nichiji=h.nichiji AND p.race_num=h.race_num
+              AND p.data_div='2'
+            WHERE h.confirmed_order=1 AND h.race_year >= ?
+              AND (h.race_year||h.race_month_day) <= ?
+              AND CAST(h.track_code AS INTEGER) BETWEEN 1 AND 10
+            LIMIT ?""", (from_year, to_date, sample)).fetchall()
+    ok = tot = 0
+    for r in rows:
+        pay = None
+        for hc, pc in (("h1", "p1"), ("h2", "p2")):
+            if (str(r[hc]).strip().zfill(2) == str(r["hn"]).strip().zfill(2)
+                    and r[pc]):
+                pay = r[pc]
+        if not pay:
+            continue
+        tot += 1
+        if abs(pay / 100.0 - r["o"] / 10.0) < 1e-6:
+            ok += 1
+    return ok / tot if tot else 0.0
+
+
 def attach_market(data: list[dict], market: dict[tuple[str, str], float],
                   stats: Counter) -> list[dict]:
     """市場価格が取れた行だけ残す。
@@ -128,11 +182,26 @@ def fit() -> dict:
         FEATURES, source_module=Path(__file__).parent / "fundamental_model.py")
     tr_from, tr_to = DATA_SPLIT["train"]["from"], DATA_SPLIT["train"]["to"]
     va_from, va_to = DATA_SPLIT["validation"]["from"], DATA_SPLIT["validation"]["to"]
+    # 市場価格と一致率の検査は着順を読むので、ここでも封印の門を通す。
+    # 学習窓は封印窓より前なので現状は素通りだが、窓を延ばしたときに抜けない
+    # ようにする (呼び出し側の作法に任せると必ず抜ける)。
+    tr_from, tr_to, _ = guard_analysis_window(
+        tr_from, tr_to, context="market_offset_model.fit/train")
+    va_from, va_to, _ = guard_analysis_window(
+        va_from, va_to, context="market_offset_model.fit/validation")
 
     conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
     market = training_market(conn, TRUST_FLOOR_YEAR, va_to)
-    conn.close()
-    print(f"学習用の市場価格 {len(market):,} 頭ぶん", flush=True)
+    agreement = payout_agreement(conn, TRUST_FLOOR_YEAR, va_to)
+    print(f"学習用の市場価格 {len(market):,} 頭ぶん "
+          f"(確定払戻との一致率 {agreement:.4f})", flush=True)
+    if agreement < 0.99:
+        conn.close()
+        raise ValueError(
+            f"学習用の市場価格が確定払戻と {agreement:.1%} しか一致しない。"
+            "この列の意味が変わっている (2026 のように発走前の値が"
+            "書かれている可能性)。意味を確かめてから学習すること。")
 
     stats: Counter = Counter()
     print(f"学習データ構築 {tr_from}〜{tr_to} ...", flush=True)
@@ -158,9 +227,11 @@ def fit() -> dict:
     # 検証での確認 (合否には使わない。早期停止が効いているかの目視用)
     margin = booster.predict(Xva, num_iteration=booster.best_iteration,
                              raw_score=True)
+    conn.close()
     from predictor.evaluation import log_loss
     p_off = 1.0 / (1.0 + np.exp(-(iva + margin)))
-    meta = {**snapshot(), "features": FEATURES, "params": PARAMS,
+    meta = {**snapshot(conn), "features": FEATURES, "params": PARAMS,
+            "training_market_payout_agreement": agreement,
             "train": [tr_from, tr_to], "validation": [va_from, va_to],
             "n_train": len(train), "n_valid": len(valid),
             "excluded": dict(stats),
@@ -168,7 +239,8 @@ def fit() -> dict:
             "validation_log_loss_market_only": log_loss(list(yva),
                                                         list(1 / (1 + np.exp(-iva)))),
             "validation_log_loss_offset": log_loss(list(yva), list(p_off)),
-            "training_market_source": "horse_races.win_odds (確定オッズではない)",
+            "training_market_source":
+                "horse_races.win_odds (2021-2025 では確定オッズ。同着を除き一致率 100%)",
             "market_features": 0}
     META_PATH.write_text(json.dumps(meta, ensure_ascii=False, indent=1),
                          encoding="utf-8")

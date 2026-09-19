@@ -1,23 +1,32 @@
 {
  "meta": {
-  "git_sha": "fb588064b14e49b3e81e454bf78123674dcca9ca",
+  "git_sha": "efe611c89c3f7e870edb01b196390d424facd68c",
   "git_dirty": true,
-  "code_version": "fb588064b14e-dirty",
-  "data_version": "33719:324f6e9111",
+  "code_version": "efe611c89c3f-dirty",
+  "data_version": "33957:b46ec57e66",
   "dirty_paths": [
+   "predictor/eval_stats.py",
    "predictor/market_offset_model.meta.json",
-   "predictor/market_offset_model.txt",
    "scripts/fundamental_eval.py",
    "scripts/market_offset_eval.py",
    "scripts/market_offset_model.py",
+   "tests/test_eval_stats.py",
    "tests/test_feature_manifest.py"
   ],
   "from_date": "20260509",
   "to_date": "20260831",
   "prereg": "docs/PHASE05_PREREG.md",
-  "run_index": 1,
+  "run_index": 3,
+  "n_boot_primary": 300,
   "baseline_log_loss": 0.21351,
   "max_lead_minutes": 30,
+  "sealed": {
+   "sealed_from": null,
+   "sealed_active": false,
+   "requested_to": "20260831",
+   "clamped": false,
+   "allow_sealed": false
+  },
   "buy_edge_pt": 0.05,
   "market_features": 0
  },
@@ -39,18 +48,18 @@
  },
  "primary_conditional_logit": {
   "coef_market": 0.961385446547996,
-  "coef_correction": 0.3861664668070173,
+  "coef_correction": 0.38616646680701733,
   "coef_correction_ci95": [
-   -0.8300823478090398,
+   -0.8300823478090404,
    1.7316329474136316
   ],
   "pass": false
  },
  "rejection_1_price_polynomial": {
-  "coef_correction": 0.40152316939282034,
+  "coef_correction": 0.40152316939282023,
   "coef_correction_ci95": [
-   -0.7774175434698545,
-   1.7059340251720068
+   -0.7774175434698541,
+   1.7059340251720074
   ],
   "survives": false
  },
@@ -97,7 +106,8 @@
    "gap_ci95": [
     -0.007870914391999679,
     -0.0008200629133198536
-   ]
+   ],
+   "z": -2.509188792574822
   },
   {
    "band": "5-10%",
@@ -108,7 +118,8 @@
    "gap_ci95": [
     -0.01745869404934635,
     0.003505979347819474
-   ]
+   ],
+   "z": -1.4383556683119179
   },
   {
    "band": "10-20%",
@@ -119,7 +130,8 @@
    "gap_ci95": [
     0.0022534768926688875,
     0.03392853396202336
-   ]
+   ],
+   "z": 2.2338773209124363
   },
   {
    "band": "20-30%",
@@ -130,7 +142,8 @@
    "gap_ci95": [
     -0.04295827072763708,
     0.028486629593460627
-   ]
+   ],
+   "z": -0.32486479951349406
   },
   {
    "band": "30%+",
@@ -141,7 +154,8 @@
    "gap_ci95": [
     -0.011069160608598916,
     0.09945894313631942
-   ]
+   ],
+   "z": 1.5846560762532191
   }
  ],
  "band_calibration_t10": [
@@ -154,7 +168,8 @@
    "gap_ci95": [
     -0.0071513603610388644,
     8.957033810305659e-05
-   ]
+   ],
+   "z": -2.0193683705617556
   },
   {
    "band": "5-10%",
@@ -165,7 +180,8 @@
    "gap_ci95": [
     -0.01683066459164051,
     0.0036053434042580823
-   ]
+   ],
+   "z": -1.4432734657534043
   },
   {
    "band": "10-20%",
@@ -176,7 +192,8 @@
    "gap_ci95": [
     -0.005030583997800792,
     0.02616369804996549
-   ]
+   ],
+   "z": 1.3506201339909905
   },
   {
    "band": "20-30%",
@@ -187,7 +204,8 @@
    "gap_ci95": [
     -0.026211564566412077,
     0.04509816865704311
-   ]
+   ],
+   "z": 0.49085167843812055
   },
   {
    "band": "30%+",
@@ -198,7 +216,8 @@
    "gap_ci95": [
     -0.013586563784207917,
     0.09450819953804357
-   ]
+   ],
+   "z": 1.5029400066038823
   }
  ],
  "rejection_2_stale_only_win": {
@@ -206,19 +225,31 @@
   "delta_all": 0.0001505942314935227,
   "triggered": false
  },
- "flat_bet_all": {
+ "control_flat_all": {
   "n_bets": 8279,
   "roi": 0.7033458147119217,
   "roi_ci95": [
    0.6174990973643038,
    0.8008708099725635
-  ]
+  ],
+  "testable": true,
+  "min_bets_required": 100
  },
- "flat_bet_edge": null,
- "money_pass": false,
+ "flat_bet_edge": {
+  "n_bets": 0,
+  "roi": NaN,
+  "roi_ci95": [
+   NaN,
+   NaN
+  ],
+  "testable": false,
+  "min_bets_required": 100
+ },
+ "money_pass": null,
  "verdict": {
   "primary": false,
-  "money": false,
+  "money": null,
+  "money_untestable_reason": "購入条件に該当 0 頭 (最低 100 頭)",
   "rejected_by": [],
   "overall_pass": false
  }
