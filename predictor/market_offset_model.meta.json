@@ -1,7 +1,7 @@
 {
- "git_sha": "af42382b79affd3cd7a684a925e017e9899ea8f3",
+ "git_sha": "99eec6886e3746f3866289f66851ddb7a9291847",
  "git_dirty": true,
- "code_version": "af42382b79af-dirty",
+ "code_version": "99eec6886e37-dirty",
  "data_version": "nodata",
  "dirty_paths": [
   "config.py",
@@ -71,9 +71,9 @@
  "excluded": {
   "skip_no_market_price": 416
  },
- "best_iteration": 27,
+ "best_iteration": 28,
  "validation_log_loss_market_only": 0.2036002423884326,
- "validation_log_loss_offset": 0.2034825217669603,
+ "validation_log_loss_offset": 0.20348468295621047,
  "training_market_source": "horse_races.win_odds (2021-2025 では確定オッズ。同着を除き一致率 100%)",
  "market_features": 0
 }

@@ -50,19 +50,29 @@ CREATE TABLE horse_masters (
 
 def _add_race(conn, date8: str, race_num: str, horses: list[tuple],
               track: str = "05", start_time: str = "1000",
-              data_div: str = "7", blood_prefix: str | None = None) -> None:
-    """horses = [(馬番, 確定着順, 異常コード), ...]"""
+              data_div: str = "7", blood_prefix: str | None = None,
+              jockeys: list[str] | None = None,
+              trainers: list[str] | None = None,
+              ages: list[str] | None = None) -> None:
+    """horses = [(馬番, 確定着順, 異常コード), ...]
+
+    騎手・調教師・年齢を馬ごとに変えられる。既定で全頭同じにすると、
+    「騎手の数を調教師の列から読む」ような取り違えをテストが見逃す。
+    """
     y, md = date8[:4], date8[4:]
     started = [h for h in horses if h[2] != "1"]
     conn.execute(
         "INSERT INTO races VALUES (?,?,?,'01','01',?,1600,'1','1','0','1','',?,?,?,?)",
         (y, md, track, race_num, len(started), len(horses), start_time, data_div))
-    for hn, fin, abn in horses:
+    for i, (hn, fin, abn) in enumerate(horses):
         bn = f"{blood_prefix}{hn}" if blood_prefix else f"H{hn}{date8}{track}{race_num}"
+        jc = jockeys[i] if jockeys else "J1"
+        trc = trainers[i] if trainers else "T1"
+        age = ages[i] if ages else "04"
         conn.execute(
             "INSERT INTO horse_races VALUES (?,?,?,'01','01',?,?,?,"
-            "'J1','T1','04','1','550','1','470','+','2','0',?,?)",
-            (y, md, track, race_num, hn, bn, fin, abn))
+            "?,?,?,'1','550','1','470','+','2','0',?,?)",
+            (y, md, track, race_num, hn, bn, jc, trc, age, fin, abn))
 
 
 @pytest.fixture()
@@ -315,27 +325,129 @@ def test_rolling_count_keeps_recent_rides(db):
 
 
 def test_truncated_history_is_flagged(db):
-    """2020 以前が見えない馬に印が付くこと。
+    """信頼下限より前に走った記録がある馬に印が付くこと。
 
-    JRA の競走馬はほぼ 2-3 歳でデビューするので、**信頼下限の 1 年目に
-    3 歳以上で初めて現れた馬**は、それ以前のキャリアが記録に無い。
-    通算成績が「新馬と同じ値」に見えることをモデルに伝える必要がある。
+    2020 以前は着順が破損しているが **血統登録番号は無傷**なので、
+    「履歴が途切れている」の真値が DB から直接取れる。
+
+    初版は「初出時に 4 歳以上」という年齢のヒューリスティクスで判定しており、
+    実測で **取りこぼし 0・誤検出 17.5% (1,448 頭)** だった。3 歳 1-3 月
+    デビューが想定より多かったため。
     """
     conn, path = db
-    # 2021 年に 5 歳で初出 = 2019-2020 に走っていたはずだが記録が無い
-    _add_race(conn, "20210601", "01", [("01", 1, "0"), ("02", 2, "0")])
-    conn.execute("UPDATE horse_races SET age='05' WHERE race_year='2021'")
-    # 2026 年に 2 歳で初出 = 本当の新馬
-    _add_race(conn, "20260601", "01", [("03", 1, "0"), ("04", 2, "0")])
-    conn.execute("UPDATE horse_races SET age='02' WHERE race_year='2026'")
+    # 2020 (信頼下限より前) に走った馬。着順は破損しているとみなす。
+    _add_race(conn, "20200601", "01", [("01", 0, "0")], blood_prefix="OLD")
+    # 同じ馬が 2022 に出走
+    _add_race(conn, "20220601", "01", [("01", 1, "0"), ("02", 2, "0")],
+              blood_prefix="OLD")
     conn.commit()
 
-    rows, _ = build_dataset("20210101", "20261231", db_path=path)
+    rows, _ = build_dataset("20220101", "20261231", db_path=path)
 
-    old_horses = [r for r in rows if r["date"] == "20210601"]
-    debutants = [r for r in rows if r["date"] == "20260601"]
-    assert old_horses and all(r["h_history_truncated"] == 1.0 for r in old_horses)
-    assert debutants and all(r["h_history_truncated"] == 0.0 for r in debutants)
+    flagged = {r["horse_num"]: r["h_history_truncated"] for r in rows}
+    assert flagged["01"] == 1.0, "2020 に走った馬に印が付いていない"
+    assert flagged["02"] == 0.0, "2020 に走っていない馬にまで印が付いている"
+
+
+def test_late_debut_without_old_record_is_not_flagged(db):
+    """2020 以前の記録が無ければ、何歳で初出でも印を付けないこと。
+
+    旧ルール (初出時 4 歳以上) はここで誤検出していた。地方転入や遅い
+    デビューは「JRA の履歴が破損で隠れている」のとは **意味が違う集団**。
+    """
+    conn, path = db
+    _add_race(conn, "20230601", "01", [("01", 1, "0"), ("02", 2, "0")],
+              ages=["06", "05"])
+    conn.commit()
+
+    rows, _ = build_dataset("20220101", "20261231", db_path=path)
+
+    assert rows and all(r["h_history_truncated"] == 0.0 for r in rows), (
+        "2020 の記録が無いのに印が付いている (旧ルールの誤検出)")
+
+
+def test_flag_does_not_depend_on_current_age(db):
+    """同じ馬が年を取っても判定が変わらないこと。
+
+    「初出時の年齢」ではなく「現在の年齢」で判定する実装に壊しても、
+    1 レースしか無いフィクスチャでは気づけない。歳を重ねる馬を置く。
+    """
+    conn, path = db
+    _add_race(conn, "20220601", "01", [("01", 1, "0"), ("02", 2, "0")],
+              blood_prefix="AGE", ages=["02", "02"])
+    _add_race(conn, "20240601", "01", [("01", 1, "0"), ("02", 2, "0")],
+              blood_prefix="AGE", ages=["04", "04"])
+    conn.commit()
+
+    rows, _ = build_dataset("20220101", "20261231", db_path=path)
+
+    later = [r for r in rows if r["date"] == "20240601"]
+    assert later and all(r["h_history_truncated"] == 0.0 for r in later), (
+        "現在の年齢で判定している (4 歳になった時点で印が付いた)")
+
+
+def test_jockey_and_trainer_counts_are_not_swapped(db):
+    """騎手の数を調教師の列から読んでいないこと。
+
+    全頭を同じ騎手・同じ調教師にすると、取り違えても値が一致して
+    テストが素通りする。**わざと非対称にする**。
+    """
+    conn, path = db
+    # 騎手は 2 人で分ける、調教師は 1 人に集約 → 直近の件数が食い違う
+    _add_race(conn, "20260301", "01", [("01", 1, "0"), ("02", 2, "0")],
+              jockeys=["JA", "JB"], trainers=["TA", "TA"])
+    _add_race(conn, "20260601", "01", [("01", 1, "0"), ("02", 2, "0")],
+              jockeys=["JA", "JB"], trainers=["TA", "TA"])
+    conn.commit()
+
+    rows, _ = build_dataset("20220101", "20261231", db_path=path)
+
+    later = [r for r in rows if r["date"] == "20260601"]
+    assert later, "2 走目が取れていない"
+    for r in later:
+        assert r["j_rides_365"] == 1, f"騎手の件数が違う: {r['j_rides_365']}"
+        assert r["t_runs_365"] == 2, f"調教師の件数が違う: {r['t_runs_365']}"
+
+
+def test_rolling_window_boundary_is_exactly_365_days(db):
+    """窓の境界がちょうど 365 日であること。
+
+    `<` と `<=` を取り違えると窓が 1 日ずれる。1 日の差でも
+    「何日ぶんを数えているか」が変わるので固定する。
+    """
+    conn, path = db
+    # 2026-06-01 のちょうど 365 日前 = 2025-06-01
+    _add_race(conn, "20250601", "01", [("01", 1, "0"), ("02", 2, "0")])
+    # その 1 日前 = 窓の外
+    _add_race(conn, "20250531", "01", [("01", 1, "0"), ("02", 2, "0")])
+    _add_race(conn, "20260601", "01", [("01", 1, "0"), ("02", 2, "0")])
+    conn.commit()
+
+    rows, _ = build_dataset("20220101", "20261231", db_path=path)
+
+    later = [r for r in rows if r["date"] == "20260601"]
+    assert later and all(r["j_rides_365"] == 2 for r in later), (
+        f"窓が 365 日になっていない: {[r['j_rides_365'] for r in later]} "
+        "(2025-06-01 の 2 頭だけが入るはず)")
+
+
+def test_reading_a_rolling_count_does_not_destroy_the_history(db):
+    """ローリング件数を読んでも元の履歴を壊さないこと。
+
+    初版は `popleft` で窓の外を捨てていた。現行の呼び出し順では無害だが、
+    **同じ列から 2 つ目の窓 (例 30 日) を読んだ瞬間に静かに壊れる**。
+    値は「もっともらしい範囲」に収まるので域外率の監査でも捕まらない。
+    """
+    from scripts.fundamental_model import _roll
+
+    history = [1000, 1100, 1200, 1300, 1340, 1360]
+
+    short = _roll(history, 1365 - 30)     # 直近 30 日 (1335 以降 = 2 件)
+    long_ = _roll(history, 1365 - 365)    # 直近 365 日 (1000 以降 = 6 件)
+
+    assert short == 2.0, short
+    assert long_ == 6.0, f"短い窓を先に読んだら長い窓が壊れた: {long_}"
+    assert history == [1000, 1100, 1200, 1300, 1340, 1360], "元の列が変わった"
 
 
 def test_no_feature_is_a_lifetime_cumulative_person_count():

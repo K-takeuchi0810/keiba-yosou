@@ -38,7 +38,8 @@ import argparse
 import json
 import sqlite3
 import sys
-from collections import Counter, defaultdict, deque
+from bisect import bisect_left
+from collections import Counter, defaultdict
 from datetime import date
 from pathlib import Path
 
@@ -78,15 +79,19 @@ def _rate(w: int, n: int, pw: float = 1.0, pn: float = 12.0) -> float:
     return (w + pw) / (n + pn)
 
 
-def _roll(dq, cutoff: int) -> float:
-    """直近窓に残っている件数。窓から出たものは **その場で捨てる**。
+def _roll(seq, cutoff: int) -> float:
+    """直近窓に残っている件数。**読み出しで元の列を壊さない**。
 
     累積カウントと違い、時間が経っても値が伸び続けない。学習域を出ないので、
     木モデルが「見たことのない領域」を定数外挿する事態を避けられる。
+
+    初版は `popleft` で窓の外を捨てていた。現行の呼び出し順 (発走時刻順で
+    cutoff が単調) では無害だが、**同じ列から 2 つ目の窓 (例 30 日) を
+    読んだ瞬間に静かに壊れる**。しかも値は「もっともらしい範囲」に収まるので
+    域外率の監査でも捕まらない。0.5-5 は「新しいカウント系はローリング窓で」と
+    定めており、その拡張が起きる確率は高い。二分探索で非破壊にしておく。
     """
-    while dq and dq[0] < cutoff:
-        dq.popleft()
-    return float(len(dq))
+    return float(len(seq) - bisect_left(seq, cutoff))
 
 
 def _dband(d: int) -> int:
@@ -121,12 +126,17 @@ TRUST_FLOOR_YEAR = "2021"
 # **この値は 2026 の成績を見ずに、データ構造だけから決めた** (Phase 0.5-4B)。
 ROLLING_DAYS = 365
 
-# 「この馬の過去成績は途切れている」と判断する条件。JRA の競走馬はほぼ 2-3 歳で
-# デビューするので、**初めて記録に現れた時点で 4 歳以上なら、それ以前の
-# キャリアが見えていない**。信頼下限の 1 年目に 3 歳以上で現れた馬も同じ。
-TRUNCATED_FIRST_SEEN_AGE = 4
-TRUNCATED_FLOOR_YEAR_AGE = 3
-FLOOR_FIRST_YEAR_END = date(int(TRUST_FLOOR_YEAR) + 1, 1, 1).toordinal()
+# 「この馬の過去成績は途切れている」= **信頼下限より前に JRA を走った記録が
+# 残っている馬**。着順は破損しているが血統登録番号は無傷なので、DB から
+# 真値が直接取れる。
+#
+# 初版は「初出時に 4 歳以上」「信頼下限の 1 年目に 3 歳以上」という年齢の
+# ヒューリスティクスを使っていた。専門家レビューで実測したところ
+# **取りこぼし 0、誤検出 17.5% (1,448 頭)** だった。3 歳 1-3 月デビューが
+# 想定より多く、2021 に 3 歳初出の 30.5% は 2020 に走っていない。
+# さらに 2023 年以降に 4 歳以上で初出する馬は地方転入・遅いデビューで、
+# 「JRA の履歴が破損で隠れている」とは **意味が違う集団**だった。
+# 真値で定義すれば誤検出も意味の食い違いも消える。
 
 
 def build_dataset(from_date: str, to_date: str,
@@ -187,6 +197,15 @@ def build_dataset(from_date: str, to_date: str,
                   AND race_year >= ? AND horse_num NOT IN ('', '00')
                 GROUP BY 1,2,3,4,5,6""", (to_date, TRUST_FLOOR_YEAR)).fetchall():
         scratched[tuple(row[:6])] = row[6]
+    # 信頼下限より前に JRA を走った馬。着順は破損しているが血統登録番号は
+    # 無傷なので、「履歴が途切れている」の真値としてそのまま使える。
+    pre_floor_horses = {
+        r[0] for r in conn.execute(
+            """SELECT DISTINCT blood_register_num FROM horse_races
+                WHERE race_year < ? AND blood_register_num IS NOT NULL
+                  AND blood_register_num <> ''
+                  AND CAST(track_code AS INTEGER) BETWEEN 1 AND 10""",
+            (TRUST_FLOOR_YEAR,)).fetchall()}
     conn.close()
 
     hn_ = Counter(); hw_ = Counter(); ht3 = Counter(); hbest: dict = {}
@@ -196,8 +215,7 @@ def build_dataset(from_date: str, to_date: str,
     sn = Counter(); sw = Counter()
     hlast: dict = {}; hlastfin: dict = {}
     # 騎手・調教師の直近 ROLLING_DAYS 日の騎乗/出走 (日付の通し番号を貯める)
-    jroll: dict = defaultdict(deque); troll: dict = defaultdict(deque)
-    hfirst: dict = {}                  # 血統番号 → (初出の通し番号, そのときの年齢)
+    jroll: dict = defaultdict(list); troll: dict = defaultdict(list)
     out: list[dict] = []
     stats = Counter()
     pending: list[tuple] = []          # 同一発走時刻ブロックぶんの更新待ち
@@ -276,13 +294,7 @@ def build_dataset(from_date: str, to_date: str,
         d8 = r["d"]
         ordv = date(int(d8[:4]), int(d8[4:6]), int(d8[6:])).toordinal()
         cutoff = ordv - ROLLING_DAYS
-        age_now = float(str(r["age"] or 0).strip() or 0)
-        if bn not in hfirst:
-            hfirst[bn] = (ordv, age_now)
-        first_ord, first_age = hfirst[bn]
-        truncated = (first_age >= TRUNCATED_FIRST_SEEN_AGE
-                     or (first_ord < FLOOR_FIRST_YEAR_END
-                         and first_age >= TRUNCATED_FLOOR_YEAR_AGE))
+        truncated = bn in pre_floor_horses
         rkey = (r["ry"], r["rmd"], r["tc"], r["ka"], r["ni"], r["rc"])
         starters_at_t10 = float(r["registered"] or 0) - scratched.get(rkey, 0)
 
@@ -290,6 +302,7 @@ def build_dataset(from_date: str, to_date: str,
             out.append({
                 "race_id": f"{r['ry']}-{r['rmd']}-{r['tc']}-{r['ka']}-{r['ni']}-{r['rc']}",
                 "horse_num": str(r["hn"]).strip(), "date": r["d"],
+                "blood_register_num": bn,
                 "won": 1 if fin == 1 else 0,
                 "h_starts": hn_[bn], "h_wins": hw_[bn],
                 "h_winrate": _rate(hw_[bn], hn_[bn]),
@@ -341,7 +354,7 @@ def _matrix(data: list[dict]) -> tuple[np.ndarray, np.ndarray]:
 
 
 def fit() -> dict:
-    """2021-2023 で学習し、2024-2025 で検証する。2026 は一切見ない。"""
+    """2022-2024 で学習し、2025 で早期停止する。2021 は burn-in。2026 は見ない。"""
     import lightgbm as lgb
 
     assert_no_market_features(FEATURES, source_module=Path(__file__))
@@ -365,9 +378,10 @@ def fit() -> dict:
               callbacks=[lgb.early_stopping(100, verbose=False)])
     model.booster_.save_model(str(MODEL_PATH))
 
+    conn_meta = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
     from predictor.evaluation import evaluate_probabilities
     rep = evaluate_probabilities(list(yva), list(model.predict_proba(Xva)[:, 1]))
-    meta = {**snapshot(), "features": FEATURES,
+    meta = {**snapshot(conn_meta), "features": FEATURES,
             "train": [tr_from, tr_to], "validation": [va_from, va_to],
             "n_train": len(train), "n_valid": len(valid),
             "excluded_train": dict(s_tr), "excluded_valid": dict(s_va),
@@ -375,6 +389,7 @@ def fit() -> dict:
             "validation_log_loss": rep.log_loss, "validation_brier": rep.brier,
             "validation_calibration_error": rep.calibration_error,
             "market_features": 0}
+    conn_meta.close()
     META_PATH.write_text(json.dumps(meta, ensure_ascii=False, indent=1),
                          encoding="utf-8")
     print(f"\n保存: {MODEL_PATH.name} (best_iteration={meta['best_iteration']})")

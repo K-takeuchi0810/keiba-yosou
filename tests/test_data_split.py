@@ -83,12 +83,19 @@ def test_new_split_does_not_collide_with_legacy_periods():
             continue
         # 食い違ってよいのは **理由を宣言したものだけ**。黙って変えると、
         # 旧 train で学習して新 train で評価する in-sample 事故が通る。
-        reason = config.SPLIT_DIVERGENCE.get(name)
-        assert reason and len(reason) > 30, (
+        decl = config.SPLIT_DIVERGENCE.get(name)
+        assert decl, (
             f"{name} が旧 DATA_PERIODS と食い違っているのに "
-            f"config.SPLIT_DIVERGENCE に理由が無い: "
+            f"config.SPLIT_DIVERGENCE に宣言が無い: "
             f"新 {config.data_split(name)} / 旧 "
             f"({old_period['from']}, {old_period['to']})")
+        # **宣言した期間そのものと一致すること。** 理由文の存在だけを見ると、
+        # 一度宣言した分割は以後どこへ動かしても無音になる。
+        assert config.data_split(name) == (decl["from"], decl["to"]), (
+            f"{name} の期間が宣言と違う: 実 {config.data_split(name)} / "
+            f"宣言 ({decl['from']}, {decl['to']})。期間を変えるなら "
+            f"SPLIT_DIVERGENCE の値と理由も更新すること")
+        assert len(decl["reason"]) > 30, f"{name} の理由が短すぎる"
 
 
 def test_declared_divergences_are_real():

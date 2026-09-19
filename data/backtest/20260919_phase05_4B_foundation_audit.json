@@ -1,14 +1,17 @@
 {
  "meta": {
-  "git_sha": "af42382b79affd3cd7a684a925e017e9899ea8f3",
+  "git_sha": "99eec6886e3746f3866289f66851ddb7a9291847",
   "git_dirty": true,
-  "code_version": "af42382b79af-dirty",
-  "data_version": null,
+  "code_version": "99eec6886e37-dirty",
+  "data_version": "35626:cce388ce8e",
   "dirty_paths": [
    "config.py",
+   "predictor/market_offset_model.meta.json",
+   "predictor/market_offset_model.txt",
    "scripts/feature_domain_audit.py",
    "scripts/foundation_repair_audit.py",
    "scripts/fundamental_model.py",
+   "scripts/market_offset_eval.py",
    "tests/test_data_split.py",
    "tests/test_fundamental_dataset.py"
   ],
@@ -23,21 +26,46 @@
    "min_date": "20220105"
   },
   "2_no_corrupted_year_history": {
-   "trust_floor_year": "2021",
-   "rows_excluded_as_corrupted": 283778,
-   "rows_used": 273284,
-   "mojibake_rate_in_used_rows": 0.0,
+   "sampled": 300,
+   "matches_floor_only": 300,
+   "differs_when_corrupt_included": 287,
    "ok": true
   },
   "3_no_same_day_future_leak": {
-   "sampled": 2000,
+   "per_target": {
+    "strategy_dev/調教師": {
+     "sampled": 1000,
+     "mismatches": 0,
+     "examples": [],
+     "ok": true
+    },
+    "strategy_dev/騎手": {
+     "sampled": 1000,
+     "mismatches": 0,
+     "examples": [],
+     "ok": true
+    },
+    "train/調教師": {
+     "sampled": 1000,
+     "mismatches": 0,
+     "examples": [],
+     "ok": true
+    },
+    "train/騎手": {
+     "sampled": 1000,
+     "mismatches": 0,
+     "examples": [],
+     "ok": true
+    }
+   },
+   "sampled": 4000,
    "mismatches": 0,
-   "examples": [],
    "ok": true
   },
   "4_starters_knowable_at_t10": {
    "checked": 2000,
    "mismatches": 0,
+   "races_where_starter_count_differs": 86,
    "ok": true
   },
   "5_market_independence": {
@@ -46,10 +74,10 @@
    "violation": null,
    "ok": true
   },
-  "7_feature_manifest": {
-   "market_features": 0,
-   "generation_code_market_reads": {},
-   "violation": null,
+  "6_feature_manifest_tests": {
+   "passed": 11,
+   "failed": 0,
+   "summary": "11 passed in 0.27s",
    "ok": true
   }
  },

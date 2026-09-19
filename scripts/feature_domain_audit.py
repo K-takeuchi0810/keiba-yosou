@@ -68,7 +68,13 @@ def run(features: list[str], splits: dict[str, list[dict]]) -> dict:
                "out_of_train_range": {
                    k: out_of_range(arrays[k][f], lo, hi) for k in names}}
         rows_out.append(rec)
-    return {"meta": {**snapshot(), "base_split": base, "splits": names,
+    import sqlite3
+
+    from db import DB_PATH
+    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    meta = snapshot(conn)
+    conn.close()
+    return {"meta": {**meta, "base_split": base, "splits": names,
                      "n_rows": {k: len(v) for k, v in splits.items()}},
             "features": rows_out}
 
@@ -86,13 +92,14 @@ def print_report(out: dict, threshold: float = 0.01) -> None:
     worst = []
     for rec in out["features"]:
         rates = [rec["out_of_train_range"][k] for k in names]
-        if max(r for r in rates if r == r) > threshold:
+        finite = [r for r in rates if r == r]      # 全 NaN なら空になる
+        if finite and max(finite) > threshold:
             worst.append(rec)
         print(f"{rec['feature']:>26} {rec['train_min']:10.4g} "
               f"{rec['train_max']:10.4g} " + " ".join(
                   f"{r * 100:13.2f}%" for r in rates))
     print(f"\n域外率が {threshold * 100:.0f}% を超える特徴: "
-          f"{len(worst)} 件 — {[r['feature'] for r in worst] or 'なし'}")
+          f"{len(worst)} 件: {[r['feature'] for r in worst] or 'なし'}")
 
 
 def main() -> int:

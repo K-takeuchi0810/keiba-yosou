@@ -77,6 +77,31 @@ N_BOOT_PRIMARY = 300
 BUY_EDGE_PT = 0.05
 
 
+def assert_model_window_disjoint(from_date: str, to_date: str) -> None:
+    """モデルの学習・検証窓が評価窓と重なっていないことを **実行時に** 確かめる。
+
+    `config.SPLIT_DIVERGENCE` は文書化の強制であって実行時の防御ではない。
+    新 train (2022-2024) で学習した booster を旧 `DATA_PERIODS["test"]`
+    (2024-2025) で評価すると 2024 が in-sample になるが、宣言制の guard は
+    それを落とさない (専門家レビュー指摘)。モデル meta に学習窓が記録して
+    あるので、ここで突き合わせる。
+    """
+    meta_path = MODEL_PATH.with_suffix(".meta.json")
+    if not meta_path.exists():
+        raise FileNotFoundError(f"モデルの meta が無い: {meta_path}")
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    for key in ("train", "validation"):
+        span = meta.get(key)
+        if not span:
+            continue
+        lo, hi = span
+        if lo <= to_date and from_date <= hi:
+            raise ValueError(
+                f"モデルの {key} 窓 ({lo}〜{hi}) が評価窓 "
+                f"({from_date}〜{to_date}) と重なっている = in-sample。"
+                f"モデル: {MODEL_PATH.name}")
+
+
 def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter]:
     """T−10 市場を init_score にして補正を当て、確定払戻と突き合わせる。"""
     import lightgbm as lgb
@@ -86,6 +111,7 @@ def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter]:
     print("評価期間の特徴を構築中 ...", flush=True)
     data, _ = build_dataset(from_date, to_date)
     booster = lgb.Booster(model_file=str(MODEL_PATH))
+    assert_model_window_disjoint(from_date, to_date)
     X = np.array([[d[c] for c in FEATURES] for d in data], dtype=float)
     for d, m in zip(data, booster.predict(X, raw_score=True), strict=True):
         d["margin"] = float(m)
@@ -272,8 +298,9 @@ def main() -> int:
     ap.add_argument("--to", dest="to_date", default=dev["to"])
     ap.add_argument("--json", default=None)
     ap.add_argument("--csv", default=None)
-    ap.add_argument("--label", default="Phase 0.5-4A",
-                    help="成果物と表示に刻む工程名 (0.5-4B 再評価などで変える)")
+    ap.add_argument("--label", required=True,
+                    help="成果物と表示に刻む工程名。既定値を持たせると、"
+                         "付け忘れたときに旧工程名が成果物に刻まれる")
     ap.add_argument("--run-index", type=int, required=True,
                     help="この窓での通算実行回数。成果物に刻む (事前登録 §6)")
     args = ap.parse_args()

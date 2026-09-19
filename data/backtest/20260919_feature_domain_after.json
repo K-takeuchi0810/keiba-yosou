@@ -1,13 +1,17 @@
 {
  "meta": {
-  "git_sha": "af42382b79affd3cd7a684a925e017e9899ea8f3",
+  "git_sha": "99eec6886e3746f3866289f66851ddb7a9291847",
   "git_dirty": true,
-  "code_version": "af42382b79af-dirty",
-  "data_version": null,
+  "code_version": "99eec6886e37-dirty",
+  "data_version": "35626:cce388ce8e",
   "dirty_paths": [
    "config.py",
+   "predictor/market_offset_model.meta.json",
+   "predictor/market_offset_model.txt",
    "scripts/feature_domain_audit.py",
+   "scripts/foundation_repair_audit.py",
    "scripts/fundamental_model.py",
+   "scripts/market_offset_eval.py",
    "tests/test_data_split.py",
    "tests/test_fundamental_dataset.py"
   ],
@@ -878,7 +882,7 @@
      "p25": 0.0,
      "p50": 0.0,
      "p75": 0.0,
-     "p99": 1.0,
+     "p99": 0.0,
      "p100": 1.0
     }
    },
