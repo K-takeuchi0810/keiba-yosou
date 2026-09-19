@@ -186,9 +186,9 @@ def test_same_day_later_race_does_not_feed_an_earlier_one(db):
     early = [r for r in rows if r["race_id"].split("-")[2] == "09"]
     assert early, "場 09 のレースが取れていない"
     for r in early:
-        assert r["j_rides"] == 0, (
+        assert r["j_rides_365"] == 0, (
             "同日後発走 (15:00) の結果が先発走 (10:00) の騎手カウンタに入っている")
-        assert r["t_runs"] == 0
+        assert r["t_runs_365"] == 0
 
 
 def test_same_day_earlier_race_is_still_used(db):
@@ -203,7 +203,7 @@ def test_same_day_earlier_race_is_still_used(db):
     rows, _ = build_dataset("20260101", "20261231", db_path=path)
 
     late = [r for r in rows if r["race_id"].split("-")[2] == "01"]
-    assert late and all(r["j_rides"] == 2 for r in late), (
+    assert late and all(r["j_rides_365"] == 2 for r in late), (
         "同日先発走の結果が使われていない (絞りすぎ)")
 
 
@@ -276,3 +276,69 @@ def test_gate_excluded_horse_is_not_counted_as_a_start(db):
                   if r["horse_num"] == "02" and r["date"] == "20260607")
     assert second["h_starts"] == 0, "競走除外が 1 戦として数えられている"
     assert "3" in NOT_A_START
+
+
+def test_rolling_count_forgets_old_rides(db):
+    """騎乗数は **直近 365 日ぶんだけ** 数えること。
+
+    累積生涯カウントは信頼下限 (2021) から数え始めるので、実質
+    「観測窓の経過時間」を測ってしまう。実測で学習域を出る行が
+    2026 窓に `j_rides` 42.5% / `t_runs` 23.2% あった。木モデルは域外を
+    定数で外挿するので、その出力は学習して検証した関数の値ではない。
+    """
+    conn, path = db
+    # 2 年前に 1 戦、直近に 1 戦。365 日窓なら古い方は数えない。
+    _add_race(conn, "20240101", "01", [("01", 1, "0"), ("02", 2, "0")])
+    _add_race(conn, "20260601", "01", [("01", 1, "0"), ("02", 2, "0")])
+    conn.commit()
+
+    rows, _ = build_dataset("20210101", "20261231", db_path=path)
+
+    late = [r for r in rows if r["date"] == "20260601"]
+    assert late and all(r["j_rides_365"] == 0 for r in late), (
+        f"365 日より古い騎乗を数えている: {[r['j_rides_365'] for r in late]}")
+    assert all(r["t_runs_365"] == 0 for r in late)
+
+
+def test_rolling_count_keeps_recent_rides(db):
+    """逆に窓の中の騎乗は数えること (忘れすぎていないか)。"""
+    conn, path = db
+    _add_race(conn, "20260301", "01", [("01", 1, "0"), ("02", 2, "0")])
+    _add_race(conn, "20260601", "01", [("01", 1, "0"), ("02", 2, "0")])
+    conn.commit()
+
+    rows, _ = build_dataset("20210101", "20261231", db_path=path)
+
+    late = [r for r in rows if r["date"] == "20260601"]
+    assert late and all(r["j_rides_365"] == 2 for r in late), (
+        f"窓の中の騎乗を数えていない: {[r['j_rides_365'] for r in late]}")
+
+
+def test_truncated_history_is_flagged(db):
+    """2020 以前が見えない馬に印が付くこと。
+
+    JRA の競走馬はほぼ 2-3 歳でデビューするので、**信頼下限の 1 年目に
+    3 歳以上で初めて現れた馬**は、それ以前のキャリアが記録に無い。
+    通算成績が「新馬と同じ値」に見えることをモデルに伝える必要がある。
+    """
+    conn, path = db
+    # 2021 年に 5 歳で初出 = 2019-2020 に走っていたはずだが記録が無い
+    _add_race(conn, "20210601", "01", [("01", 1, "0"), ("02", 2, "0")])
+    conn.execute("UPDATE horse_races SET age='05' WHERE race_year='2021'")
+    # 2026 年に 2 歳で初出 = 本当の新馬
+    _add_race(conn, "20260601", "01", [("03", 1, "0"), ("04", 2, "0")])
+    conn.execute("UPDATE horse_races SET age='02' WHERE race_year='2026'")
+    conn.commit()
+
+    rows, _ = build_dataset("20210101", "20261231", db_path=path)
+
+    old_horses = [r for r in rows if r["date"] == "20210601"]
+    debutants = [r for r in rows if r["date"] == "20260601"]
+    assert old_horses and all(r["h_history_truncated"] == 1.0 for r in old_horses)
+    assert debutants and all(r["h_history_truncated"] == 0.0 for r in debutants)
+
+
+def test_no_feature_is_a_lifetime_cumulative_person_count():
+    """人的カウントに累積生涯カウントが残っていないこと (回帰)。"""
+    assert "j_rides" not in FEATURES and "t_runs" not in FEATURES
+    assert "j_rides_365" in FEATURES and "t_runs_365" in FEATURES

@@ -8,11 +8,16 @@
 
 ## 学習と評価の分離
 
-  学習   2021-01-01〜2023-12-31  (DATA_SPLIT.train)
-         ※ 2020 以前は raw のバイト破損で使えない (TRUST_FLOOR_YEAR)。
-           2021 の学習行は過去成績カウンタが冷えた状態から始まる。
-  検証   2024-01-01〜2025-12-31  (DATA_SPLIT.validation)
-  評価   2026-05-09〜2026-08-31  (DATA_SPLIT.strategy_dev)
+  burn-in 2021-01-01〜2021-12-31  (DATA_SPLIT.warmup、学習には使わない)
+  学習    2022-01-01〜2024-12-31  (DATA_SPLIT.train)
+  検証    2025-01-01〜2025-12-31  (DATA_SPLIT.validation)
+  評価    2026-05-09〜2026-08-31  (DATA_SPLIT.strategy_dev)
+
+2020 以前は raw のバイト破損で使えない (TRUST_FLOOR_YEAR)。そのため 2021 年
+初頭の過去成績は左打ち切りされている。**2021 を burn-in 専用**にすると、
+365 日のローリング特徴は 2022 の開始時点で 1 年ぶんの履歴を確保できる
+(Phase 0.5-4B 基盤修復、2026-09-19)。それでも 2019-2020 に走っていた馬の
+キャリアは復元できないので、`h_history_truncated` で印を付ける。
 
 **モデル構造・特徴選択・ハイパーパラメータは 2025 以前で決める**。
 2026 は評価対象であって、見ながら調整すると 933 レースに過学習する。
@@ -33,7 +38,7 @@ import argparse
 import json
 import sqlite3
 import sys
-from collections import Counter
+from collections import Counter, defaultdict, deque
 from datetime import date
 from pathlib import Path
 
@@ -56,8 +61,13 @@ FEATURES = [
     "h_days_since", "h_best_finish", "h_recent3_avg_finish",
     "hd_starts", "hd_winrate",              # 同距離帯
     "ht_starts", "ht_winrate",              # 同競馬場
-    # 人的要因
-    "j_rides", "j_winrate", "t_runs", "t_winrate", "s_winrate",
+    # 人的要因。**騎乗数・出走数は 365 日のローリング**にする。
+    # 累積生涯カウントは信頼下限 (2021) から数え始めるので、実質
+    # 「観測窓の経過時間」を測ってしまい、学習域を出る (Phase 0.5-4B)。
+    "j_rides_365", "j_winrate", "t_runs_365", "t_winrate", "s_winrate",
+    # 2020 以前の raw が使えないため、そこで途切れている馬に印を付ける。
+    # 通算成績が「新馬と同じ値」に見えることをモデルに伝える。
+    "h_history_truncated",
     # レース条件 (市場ではない)
     "age", "sex", "burden", "waku", "starters", "dist", "surface", "cond",
     "weather", "grade", "w_abs", "w_delta", "blinker",
@@ -66,6 +76,17 @@ FEATURES = [
 
 def _rate(w: int, n: int, pw: float = 1.0, pn: float = 12.0) -> float:
     return (w + pw) / (n + pn)
+
+
+def _roll(dq, cutoff: int) -> float:
+    """直近窓に残っている件数。窓から出たものは **その場で捨てる**。
+
+    累積カウントと違い、時間が経っても値が伸び続けない。学習域を出ないので、
+    木モデルが「見たことのない領域」を定数外挿する事態を避けられる。
+    """
+    while dq and dq[0] < cutoff:
+        dq.popleft()
+    return float(len(dq))
 
 
 def _dband(d: int) -> int:
@@ -94,6 +115,18 @@ NOT_A_START = frozenset({"1", "2", "3"})
 # 2021 以降は文字化け 0%・異常着順 0 件 (実測)。
 # 修復は JV-Link 再取得しかない (現行 parser で raw を読み直しても同じゴミ)。
 TRUST_FLOOR_YEAR = "2021"
+
+# 人的カウントのローリング窓。365 日にするのは、2021 を burn-in にすれば
+# 2022 の開始時点で 1 年ぶんの信頼できる履歴が確保できるため。
+# **この値は 2026 の成績を見ずに、データ構造だけから決めた** (Phase 0.5-4B)。
+ROLLING_DAYS = 365
+
+# 「この馬の過去成績は途切れている」と判断する条件。JRA の競走馬はほぼ 2-3 歳で
+# デビューするので、**初めて記録に現れた時点で 4 歳以上なら、それ以前の
+# キャリアが見えていない**。信頼下限の 1 年目に 3 歳以上で現れた馬も同じ。
+TRUNCATED_FIRST_SEEN_AGE = 4
+TRUNCATED_FLOOR_YEAR_AGE = 3
+FLOOR_FIRST_YEAR_END = date(int(TRUST_FLOOR_YEAR) + 1, 1, 1).toordinal()
 
 
 def build_dataset(from_date: str, to_date: str,
@@ -162,6 +195,9 @@ def build_dataset(from_date: str, to_date: str,
     jn = Counter(); jw = Counter(); tn = Counter(); tw = Counter()
     sn = Counter(); sw = Counter()
     hlast: dict = {}; hlastfin: dict = {}
+    # 騎手・調教師の直近 ROLLING_DAYS 日の騎乗/出走 (日付の通し番号を貯める)
+    jroll: dict = defaultdict(deque); troll: dict = defaultdict(deque)
+    hfirst: dict = {}                  # 血統番号 → (初出の通し番号, そのときの年齢)
     out: list[dict] = []
     stats = Counter()
     pending: list[tuple] = []          # 同一発走時刻ブロックぶんの更新待ち
@@ -177,9 +213,10 @@ def build_dataset(from_date: str, to_date: str,
         調教師カウンタで 3,196 行 (20.1%)、父カウンタで 4,978 行 (31.4%) が
         該当した (専門家レビューで検出)。
         """
-        for bn, db, tc, jc, trc, sire, fin, d in pending:
+        for bn, db, tc, jc, trc, sire, fin, d, ordv in pending:
             hn_[bn] += 1; hdn[(bn, db)] += 1; htn[(bn, tc)] += 1
             jn[jc] += 1; tn[trc] += 1
+            jroll[jc].append(ordv); troll[trc].append(ordv)
             if sire:
                 sn[sire] += 1
             if fin == 1:
@@ -236,6 +273,16 @@ def build_dataset(from_date: str, to_date: str,
         surface = str(r["tt"] or "").strip()[:1]
         cond = str((r["dcond"] if surface == "2" else r["tcond"]) or "").strip()
         recent = hrec.get(bn, [])
+        d8 = r["d"]
+        ordv = date(int(d8[:4]), int(d8[4:6]), int(d8[6:])).toordinal()
+        cutoff = ordv - ROLLING_DAYS
+        age_now = float(str(r["age"] or 0).strip() or 0)
+        if bn not in hfirst:
+            hfirst[bn] = (ordv, age_now)
+        first_ord, first_age = hfirst[bn]
+        truncated = (first_age >= TRUNCATED_FIRST_SEEN_AGE
+                     or (first_ord < FLOOR_FIRST_YEAR_END
+                         and first_age >= TRUNCATED_FLOOR_YEAR_AGE))
         rkey = (r["ry"], r["rmd"], r["tc"], r["ka"], r["ni"], r["rc"])
         starters_at_t10 = float(r["registered"] or 0) - scratched.get(rkey, 0)
 
@@ -254,8 +301,11 @@ def build_dataset(from_date: str, to_date: str,
                                          if recent else np.nan),
                 "hd_starts": hdn[(bn, db)], "hd_winrate": _rate(hdw[(bn, db)], hdn[(bn, db)]),
                 "ht_starts": htn[(bn, tc)], "ht_winrate": _rate(htw[(bn, tc)], htn[(bn, tc)]),
-                "j_rides": jn[jc], "j_winrate": _rate(jw[jc], jn[jc], 1.0, 20.0),
-                "t_runs": tn[trc], "t_winrate": _rate(tw[trc], tn[trc], 1.0, 20.0),
+                "j_rides_365": _roll(jroll[jc], cutoff),
+                "j_winrate": _rate(jw[jc], jn[jc], 1.0, 20.0),
+                "t_runs_365": _roll(troll[trc], cutoff),
+                "t_winrate": _rate(tw[trc], tn[trc], 1.0, 20.0),
+                "h_history_truncated": 1.0 if truncated else 0.0,
                 "s_winrate": _rate(sw[sire], sn[sire], 1.0, 30.0) if sire else np.nan,
                 "age": float(str(r["age"] or 0).strip() or 0),
                 "sex": float(str(r["sex"] or 0).strip() or 0),
@@ -279,7 +329,7 @@ def build_dataset(from_date: str, to_date: str,
         # 競走除外・発走除外の馬は走っていないので「1 戦」に数えない
         # (標本には敗者として残すが、キャリアの分母には入れない)。
         if str(r["abn"] or "").strip() not in NOT_A_START:
-            pending.append((bn, db, tc, jc, trc, sire, fin, r["d"]))
+            pending.append((bn, db, tc, jc, trc, sire, fin, r["d"], ordv))
     flush()
     return out, stats
 

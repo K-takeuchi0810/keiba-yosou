@@ -12,7 +12,21 @@ import config
 
 def test_four_splits_exist():
     """憲法が要求する 4 分割が揃っていること。"""
-    assert set(config.DATA_SPLIT) == {"train", "validation", "strategy_dev", "lockbox"}
+    assert {"train", "validation", "strategy_dev", "lockbox"} <= set(config.DATA_SPLIT)
+
+
+def test_warmup_is_declared_and_precedes_training():
+    """burn-in 専用期間が宣言され、学習より前にあること。
+
+    2020 以前の raw がバイト破損で使えないので、2021 年初頭の過去成績は
+    左打ち切りされている。2021 を学習に使うと「通算成績が新馬と同じ値」の行を
+    学習することになる (実測: 2021H1 の 26%)。
+    """
+    warm_from, warm_to = config.data_split("warmup")
+    train_from, _ = config.data_split("train")
+
+    assert warm_to < train_from, "burn-in が学習期間に食い込んでいる"
+    assert warm_from >= "2021", "信頼下限より前を burn-in にしても中身が壊れている"
 
 
 def test_splits_do_not_overlap():
@@ -60,12 +74,31 @@ def test_new_split_does_not_collide_with_legacy_periods():
     なるが、何も落ちずに通ってしまう (2026-09-17 コード品質レビュー指摘)。
     """
     assert set(config.DATA_PERIODS) == {"train", "test", "production"}
-    # 同名 train は同じ境界であること
-    assert config.data_split("train") == (
-        config.DATA_PERIODS["train"]["from"], config.DATA_PERIODS["train"]["to"])
-    # 旧 test = 新 validation (名前だけ変えた関係) であること
-    assert config.data_split("validation") == (
-        config.DATA_PERIODS["test"]["from"], config.DATA_PERIODS["test"]["to"])
+
+    legacy = {"train": config.DATA_PERIODS["train"],
+              "validation": config.DATA_PERIODS["test"]}
+    for name, old_period in legacy.items():
+        same = config.data_split(name) == (old_period["from"], old_period["to"])
+        if same:
+            continue
+        # 食い違ってよいのは **理由を宣言したものだけ**。黙って変えると、
+        # 旧 train で学習して新 train で評価する in-sample 事故が通る。
+        reason = config.SPLIT_DIVERGENCE.get(name)
+        assert reason and len(reason) > 30, (
+            f"{name} が旧 DATA_PERIODS と食い違っているのに "
+            f"config.SPLIT_DIVERGENCE に理由が無い: "
+            f"新 {config.data_split(name)} / 旧 "
+            f"({old_period['from']}, {old_period['to']})")
+
+
+def test_declared_divergences_are_real():
+    """宣言だけ残って実体が一致に戻った、という状態を作らないこと。"""
+    legacy = {"train": config.DATA_PERIODS["train"],
+              "validation": config.DATA_PERIODS["test"]}
+    for name in config.SPLIT_DIVERGENCE:
+        old_period = legacy[name]
+        assert config.data_split(name) != (old_period["from"], old_period["to"]), (
+            f"{name} は一致しているのに SPLIT_DIVERGENCE に残っている")
 
 
 def test_confirm_window_starts_after_strategy_dev():

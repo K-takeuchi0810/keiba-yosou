@@ -1,0 +1,57 @@
+{
+ "meta": {
+  "git_sha": "af42382b79affd3cd7a684a925e017e9899ea8f3",
+  "git_dirty": true,
+  "code_version": "af42382b79af-dirty",
+  "data_version": null,
+  "dirty_paths": [
+   "config.py",
+   "scripts/feature_domain_audit.py",
+   "scripts/foundation_repair_audit.py",
+   "scripts/fundamental_model.py",
+   "tests/test_data_split.py",
+   "tests/test_fundamental_dataset.py"
+  ],
+  "rolling_days": 365,
+  "n_features": 31
+ },
+ "checks": {
+  "1_no_warmup_rows_in_training": {
+   "train_from": "20220101",
+   "rows_before_train_start": 0,
+   "ok": true,
+   "min_date": "20220105"
+  },
+  "2_no_corrupted_year_history": {
+   "trust_floor_year": "2021",
+   "rows_excluded_as_corrupted": 283778,
+   "rows_used": 273284,
+   "mojibake_rate_in_used_rows": 0.0,
+   "ok": true
+  },
+  "3_no_same_day_future_leak": {
+   "sampled": 2000,
+   "mismatches": 0,
+   "examples": [],
+   "ok": true
+  },
+  "4_starters_knowable_at_t10": {
+   "checked": 2000,
+   "mismatches": 0,
+   "ok": true
+  },
+  "5_market_independence": {
+   "market_features": 0,
+   "generation_code_market_reads": {},
+   "violation": null,
+   "ok": true
+  },
+  "7_feature_manifest": {
+   "market_features": 0,
+   "generation_code_market_reads": {},
+   "violation": null,
+   "ok": true
+  }
+ },
+ "all_ok": true
+}

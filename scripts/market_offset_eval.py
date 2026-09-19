@@ -272,11 +272,14 @@ def main() -> int:
     ap.add_argument("--to", dest="to_date", default=dev["to"])
     ap.add_argument("--json", default=None)
     ap.add_argument("--csv", default=None)
+    ap.add_argument("--label", default="Phase 0.5-4A",
+                    help="成果物と表示に刻む工程名 (0.5-4B 再評価などで変える)")
     ap.add_argument("--run-index", type=int, required=True,
                     help="この窓での通算実行回数。成果物に刻む (事前登録 §6)")
     args = ap.parse_args()
 
     out = run(args.from_date, args.to_date, args.run_index)
+    out["meta"]["label"] = args.label
 
     # **表示より先に保存する。** 既定の Windows コンソール (cp932) は本文の
     # 記号を出せずに落ちることがあり、85 秒の計算がそれで消えた (2026-09-19 実測)。
