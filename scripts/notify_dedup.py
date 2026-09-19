@@ -42,6 +42,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -83,6 +84,7 @@ class Decision:
     reason: str                       # first_time / changed / duplicate / fail_open
     text: str                         # 実際に送る本文 (送らないときは空)
     changes: dict[str, tuple] | None = None
+    degraded: bool = False            # 判定できず送る側に倒した
 
 
 def _key(notification_type: str, subject: str) -> str:
@@ -105,31 +107,73 @@ def _canonical(payload: dict[str, Any]) -> str:
 
 
 def _load(path: Path) -> dict:
-    """状態を読む。**壊れていても例外を出さない** (空として扱う)。"""
+    """状態を読む。**壊れていても例外を出さない** (壊れた分だけ捨てる)。
+
+    値が dict でない壊れ方 (`{"key": "ごみ"}`) を素通りさせると、あとで
+    `_prune` の `.get` が毎回 AttributeError になり、判定は永久に fail_open、
+    記録も毎回失敗して **自己修復しない**。構文が壊れている場合だけでなく、
+    中身の型が壊れている場合もここで捨てる。
+    """
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
     except FileNotFoundError:
         return {}
     except Exception:
         # 壊れたファイルで通知が止まる方が事故なので、握り潰して空から始める。
         return {}
+    if not isinstance(data, dict):
+        return {}
+    return {k: v for k, v in data.items() if isinstance(v, dict)}
 
 
 def _save(path: Path, data: dict) -> None:
-    """状態を書く。途中で落ちても壊れたファイルを残さないよう原子的に置換する。"""
+    """状態を書く。途中で落ちても壊れたファイルを残さないよう原子的に置換する。
+
+    `default=str` は `_canonical` と **必ず揃えること**。片方だけに付いていると、
+    JSON 化できない値を含む payload が「判定は通るのに記録だけ毎回失敗する」= 抑止が
+    無音で永久に死ぬ、という状態になる。
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
+    _sweep_stale_tmp(path.parent)
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=1)
-        os.replace(tmp, path)
+            json.dump(data, f, ensure_ascii=False, indent=1, default=str)
+        # Windows では他プロセス (バックアップ / ウイルス対策 / エディタ) が
+        # 開いているだけで replace が PermissionError になる。数十 ms で消える
+        # ことが多いので少しだけ待って再試行する。
+        for attempt in range(3):
+            try:
+                os.replace(tmp, path)
+                break
+            except PermissionError:
+                if attempt == 2:
+                    raise
+                time.sleep(0.05)
     except Exception:
         try:
             os.unlink(tmp)
         except OSError:
             pass
         raise
+
+
+def _sweep_stale_tmp(directory: Path) -> None:
+    """置換前に落ちて取り残された一時ファイルを掃除する。
+
+    `mkstemp` と `os.replace` のあいだでプロセスが死ぬと `tmpXXXX.tmp` が残り、
+    誰も消さない。1 日以上古いものだけ消す (書き込み中のものを消さないため)。
+    """
+    try:
+        cutoff = time.time() - 86400
+        for f in directory.glob("tmp*.tmp"):
+            try:
+                if f.stat().st_mtime < cutoff:
+                    f.unlink()
+            except OSError:
+                pass
+    except Exception:                              # noqa: BLE001
+        pass
 
 
 def _prune(data: dict, today: str) -> dict:
@@ -180,7 +224,8 @@ def decide(notification_type: str, subject: str, payload: dict[str, Any],
     except Exception as exc:                       # noqa: BLE001
         # **握り潰して送る側に倒す。** 重複を 1 通許す方が、中止通知を
         # 消してしまうよりはるかにまし。
-        return Decision(True, f"fail_open:{type(exc).__name__}", text)
+        return Decision(True, f"fail_open:{type(exc).__name__}", text,
+                        degraded=True)
 
 
 def record(notification_type: str, subject: str, payload: dict[str, Any],
@@ -197,6 +242,13 @@ def record(notification_type: str, subject: str, payload: dict[str, Any],
         p = path or state_path()
         today = jst_today()
         data = _prune(_load(p), today)
+        # 同じ対象について **別の結末** を伝えたら、それ以前の結末の記録は捨てる。
+        # これが無いと「08:00 生成失敗 → 09:00 生成成功 → 11:00 また生成失敗」の
+        # 3 通目が「朝と同じ失敗」として抑止され、その日が成功で終わったと
+        # 誤解したまま終わる (実測で再現した穴)。
+        data = {k: v for k, v in data.items()
+                if v.get("subject") != subject
+                or v.get("notification_type") == notification_type}
         data[_key(notification_type, subject)] = {
             "canonical": _canonical(payload), "payload": payload,
             "date_jst": today,
@@ -204,5 +256,9 @@ def record(notification_type: str, subject: str, payload: dict[str, Any],
             "notification_type": notification_type,
             "subject": subject}
         _save(p, data)
-    except Exception:                              # noqa: BLE001
-        pass
+    except Exception as exc:                       # noqa: BLE001
+        # 記録できなくても通知は既に届いているので送信側は成功。ただし
+        # **無音にはしない**。ここが黙ると、抑止が効かず毎回 3 通届く状態に
+        # 退行しても痕跡が残らない。
+        print(f"WARN: 通知の記録に失敗しました ({type(exc).__name__}: {exc})。"
+              f"次の起動で同じ通知がもう 1 通届きます。")

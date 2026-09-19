@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -415,3 +416,169 @@ def test_wiring_does_not_record_a_failed_send(tmp_path, monkeypatch):
     auto_predict._notify_once("coverage_abort", "20260919",
                               {"total": 12}, "⚠ 中止")
     assert len(attempts) == 3, "届いた後も送り続けている"
+
+
+# --- レビューで見つかった穴 ---------------------------------------------
+# 7 名の expert-review が、上のテストを素通りする欠陥を 13 種見つけた。
+# 大半は「decide / record / _notify_once は見ているが、main() の 4 箇所の
+# 配線を誰も見ていない」ことが原因。以下はその穴を塞ぐ。
+
+
+def test_state_with_broken_values_self_heals(state):
+    """値が dict でない壊れ方から自己修復すること。
+
+    `{"key": "ごみ"}` は JSON として妥当なので構文チェックを通り抜ける。
+    これを捨てないと `_prune` の `.get` が毎回 AttributeError になり、判定は
+    永久に fail_open、記録も毎回失敗して **自己修復しない**。
+    """
+    state.write_text(json.dumps({"coverage_abort:20260919": "ごみ"}),
+                     encoding="utf-8")
+
+    first = send("coverage_abort", "20260919", {"total": 12}, "中止", path=state)
+    assert first.should_send is True
+    assert first.degraded is False, "壊れた値を捨てずに fail_open している"
+
+    second = send("coverage_abort", "20260919", {"total": 12}, "中止", path=state)
+    assert second.should_send is False, "次回から抑止が効いていない"
+
+
+def test_unserialisable_payload_is_still_recorded(state):
+    """JSON 化できない値を含む payload でも記録できること。
+
+    `_canonical` にだけ `default=str` が付いていると、判定は通るのに記録だけ
+    毎回失敗し、抑止が **無音で永久に死ぬ**。2 つの直列化を必ず揃える。
+    """
+    payload = {"drift": Path("predictor/weights.json")}
+
+    assert send("artifact_drift_abort", "20260919", payload, "drift",
+                path=state).should_send is True
+    assert state.exists(), "状態が書けていない"
+    assert send("artifact_drift_abort", "20260919", payload, "drift",
+                path=state).should_send is False
+
+
+def test_a_failure_after_a_success_is_notified(state):
+    """失敗 → 成功 → また失敗 の 3 通目が届くこと。
+
+    種類ごとに独立したキーだけを持つと、3 通目が「朝と同じ失敗」として抑止
+    され、その日が成功で終わったと誤解したまま終わる。
+    """
+    assert send("generation_failed", "20260919", {"returncode": 1}, "失敗",
+                path=state).should_send is True
+    assert send("generation_complete", "20260919", {"n_races": 12}, "完了",
+                path=state).should_send is True
+    third = send("generation_failed", "20260919", {"returncode": 1}, "失敗",
+                 path=state)
+
+    assert third.should_send is True, "成功を挟んだ再失敗が抑止されている"
+
+
+def test_record_writes_the_date_so_pruning_works(state):
+    """記録に JST の日付が入ること (入らないと永久に prune されない)。"""
+    send("generation_complete", "20260919", {"n_races": 12}, "本文", path=state)
+
+    entry = json.loads(state.read_text(encoding="utf-8"))["generation_complete:20260919"]
+    assert entry["date_jst"] == notify_dedup.jst_today()
+    assert entry["sent_at"].endswith("+09:00"), "JST で刻んでいない"
+
+
+def test_a_removed_field_is_reported_as_a_change(state):
+    """項目が消えた場合も変更として報告すること。
+
+    削除を無視すると「変更あり」の見出しだけで中身が空の通知になる。
+    """
+    send("generation_complete", "20260919",
+         {"n_races": 12, "version": "v6"}, "本文", path=state)
+
+    d = send("generation_complete", "20260919", {"n_races": 12}, "本文",
+             path=state)
+
+    assert d.changes == {"version": ("v6", None)}
+    assert "version: v6 -> None" in d.text
+
+
+def test_retention_boundary_keeps_the_oldest_kept_day(state):
+    """保持期間の境界: ちょうど 14 日前は残し、15 日前は捨てる。
+
+    **日数を `RETENTION_DAYS` から計算してはいけない。** それをやると値が
+    何であってもテストが通る同語反復になる (実際に最初はそう書いていて、
+    `RETENTION_DAYS = 0` の変異を見逃した)。14 という数を直接書く。
+    """
+    from datetime import datetime, timedelta
+
+    assert notify_dedup.RETENTION_DAYS == 14, (
+        "保持期間を変えるならこのテストの日数も意図して変えること")
+    today = datetime.strptime(notify_dedup.jst_today(), "%Y%m%d")
+    keep = (today - timedelta(days=14)).strftime("%Y%m%d")
+    drop = (today - timedelta(days=15)).strftime("%Y%m%d")
+    state.write_text(json.dumps({
+        f"generation_complete:{keep}": {"canonical": "{}", "payload": {},
+                                        "date_jst": keep, "subject": keep,
+                                        "notification_type": "generation_complete"},
+        f"generation_complete:{drop}": {"canonical": "{}", "payload": {},
+                                        "date_jst": drop, "subject": drop,
+                                        "notification_type": "generation_complete"},
+    }), encoding="utf-8")
+
+    send("generation_complete", "20260919", {"n": 1}, "本文", path=state)
+
+    kept = json.loads(state.read_text(encoding="utf-8"))
+    assert f"generation_complete:{keep}" in kept, "14 日前を捨てている"
+    assert f"generation_complete:{drop}" not in kept, "15 日前が残っている"
+
+
+def test_save_leaves_no_partial_file_on_failure(state, monkeypatch):
+    """書き込み中に落ちても、前の状態を壊さず一時ファイルも残さないこと。"""
+    send("generation_complete", "20260919", {"n_races": 12}, "本文", path=state)
+    before = state.read_text(encoding="utf-8")
+
+    real_dump = notify_dedup.json.dump
+    monkeypatch.setattr(notify_dedup.json, "dump",
+                        lambda *a, **k: (_ for _ in ()).throw(OSError("ENOSPC")))
+    notify_dedup.record("generation_complete", "20260920", {"n_races": 24},
+                        path=state)
+    monkeypatch.setattr(notify_dedup.json, "dump", real_dump)
+
+    assert state.read_text(encoding="utf-8") == before, "前の状態が壊れた"
+    assert not list(state.parent.glob("tmp*.tmp")), "一時ファイルが残っている"
+
+
+def test_stale_temp_files_are_swept(state):
+    """前回クラッシュで取り残された一時ファイルを掃除すること。
+
+    `mkstemp` と `os.replace` のあいだで落ちると `tmpXXXX.tmp` が残り、誰も
+    消さないまま溜まる。書き込み中のものまで消さないよう、古いものだけ。
+    """
+    import os
+    import time
+
+    state.parent.mkdir(parents=True, exist_ok=True)
+    stale = state.parent / "tmpOLD1234.tmp"
+    fresh = state.parent / "tmpNEW5678.tmp"
+    stale.write_text("x", encoding="utf-8")
+    fresh.write_text("x", encoding="utf-8")
+    old_time = time.time() - 2 * 86400
+    os.utime(stale, (old_time, old_time))
+
+    record("generation_complete", "20260919", {"n_races": 12}, path=state)
+
+    assert not stale.exists(), "古い一時ファイルが残っている"
+    assert fresh.exists(), "書き込み中かもしれない新しい一時ファイルを消している"
+
+
+def test_the_autouse_fixture_redirects_state_by_default(tmp_path):
+    """どのテストでも既定で本番の状態ファイルを向いていないこと。
+
+    conftest の autouse fixture が外れると、`main()` を通すテストが本番の
+    状態に架空の payload を書き込み、当日の本物の中止通知を抑止しうる
+    (導入直後に実際に起きた)。この fixture を消したら気付けるようにする。
+    """
+    import os
+
+    override = os.environ.get("NOTIFY_STATE_PATH")
+    assert override, "conftest の autouse fixture が効いていない"
+
+    from config import PROJECT_ROOT
+    prod = PROJECT_ROOT / "data" / "runtime" / "notification_state.json"
+    assert Path(override) != prod
+    assert notify_dedup.state_path() != prod

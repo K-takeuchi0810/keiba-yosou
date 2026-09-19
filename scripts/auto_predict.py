@@ -130,7 +130,7 @@ def _notify_once(notification_type: str, subject: str, payload: dict,
     if not d.should_send:
         print(f"notify suppressed ({notification_type}:{subject}): {d.reason}")
         return True
-    if d.reason.startswith("fail_open"):
+    if d.degraded:
         print(f"WARN: 重複判定に失敗したので送信します ({d.reason})")
     ok = _notify(d.text)
     if ok:
@@ -312,11 +312,13 @@ def main() -> int:
                 print("WARN: push to main failed:\n", p.stderr[-400:])
 
     # payload に生成時刻・URL は入れない。中身が同じなら送らない。
-    _notify_once("generation_complete", day,
-                 _completion_payload(n_races, ver, push_ok),
-                 _completion_message(day, n_races, ver, push_ok),
-                 force=args.force_notify)
-    print("notified. push_ok=", push_ok)
+    sent = _notify_once("generation_complete", day,
+                        _completion_payload(n_races, ver, push_ok),
+                        _completion_message(day, n_races, ver, push_ok),
+                        force=args.force_notify)
+    # 抑止・送信失敗のときに "notified." と出すと、直前の suppressed / WARN 行と
+    # 矛盾してログが読めなくなる。結果をそのまま出す。
+    print(f"notify: {'ok' if sent else 'failed'}. push_ok={push_ok}")
     return 0
 
 

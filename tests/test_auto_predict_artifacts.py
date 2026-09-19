@@ -227,3 +227,82 @@ def test_completion_message_reports_push_failure():
     ng = auto_predict._completion_message("20260913", 24, "v", False)
     assert "数分で更新" in ok
     assert "push 失敗" in ng and "手動確認要" in ng
+
+
+# --- main() を通した通知の配線 ------------------------------------------
+# 通知の重複抑止 (2026-09-19) のテストは decide / record / _notify_once を
+# 直接叩いており、**main() の 4 箇所の配線は誰も見ていなかった**。
+# expert-review で「呼び出し 1 箇所を素の _notify に戻す」「force= を落とす」
+# 変異が 13 種すべて素通りしたので、ここで main() 経由の契約を固定する。
+
+
+def _abort_day(tmp_path, monkeypatch):
+    """出走馬が未取り込みの開催日を仕立て、送信された本文を集める。"""
+    from datetime import date
+
+    today = date.today().strftime("%Y%m%d")
+    db = tmp_path / "t.db"
+    _entry_db(db, days_scheduled=(today,)).close()
+    monkeypatch.setattr(auto_predict, "DB_PATH", str(db))
+    monkeypatch.setattr(
+        auto_predict.subprocess, "run",
+        lambda command, **kwargs: None,
+    )
+    sent: list[str] = []
+    monkeypatch.setattr(auto_predict, "_notify",
+                        lambda text: sent.append(text) or True)
+    return sent
+
+
+def test_main_sends_the_abort_notice_only_once_per_day(tmp_path, monkeypatch):
+    """同じ日に 3 回起動しても中止通知は 1 通 (main() 経由)。"""
+    sent = _abort_day(tmp_path, monkeypatch)
+    monkeypatch.setattr("sys.argv", ["auto_predict"])
+
+    for _ in range(3):
+        assert auto_predict.main() == 2
+
+    assert len(sent) == 1, f"{len(sent)} 通送っている"
+    assert "出走馬" in sent[0]
+
+
+def test_main_force_notify_sends_every_time(tmp_path, monkeypatch):
+    """--force-notify なら中止通知も毎回送る (呼び出し側で force を落とさない)。"""
+    sent = _abort_day(tmp_path, monkeypatch)
+    monkeypatch.setattr("sys.argv", ["auto_predict", "--force-notify"])
+
+    for _ in range(3):
+        assert auto_predict.main() == 2
+
+    assert len(sent) == 3, "中止経路で --force-notify が効いていない"
+
+
+def test_main_resends_the_abort_notice_when_coverage_changes(tmp_path, monkeypatch):
+    """取り込みが進んだら差分付きで再送する (抑止しすぎない)。"""
+    from datetime import date
+
+    today = date.today().strftime("%Y%m%d")
+    db = tmp_path / "t.db"
+    _entry_db(db, days_scheduled=(today,)).close()
+    monkeypatch.setattr(auto_predict, "DB_PATH", str(db))
+    monkeypatch.setattr(auto_predict.subprocess, "run",
+                        lambda command, **kwargs: None)
+    sent: list[str] = []
+    monkeypatch.setattr(auto_predict, "_notify",
+                        lambda text: sent.append(text) or True)
+    monkeypatch.setattr("sys.argv", ["auto_predict"])
+
+    assert auto_predict.main() == 2
+
+    # 2 レース中 1 レースぶんの出走馬が到着
+    import sqlite3
+    conn = sqlite3.connect(db)
+    conn.execute("INSERT INTO horse_races VALUES (?,?,'05','01','01','01','01')",
+                 (today[:4], today[4:]))
+    conn.commit()
+    conn.close()
+
+    assert auto_predict.main() == 2
+
+    assert len(sent) == 2, "取り込みが進んだのに再送していない"
+    assert "with_entries: 0 -> 1" in sent[1]

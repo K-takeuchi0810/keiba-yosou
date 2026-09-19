@@ -6,8 +6,6 @@
 このファイルは tests/ を pytest のテストパッケージとして明示する役割のみ。
 """
 
-import os
-
 import pytest
 
 
@@ -22,5 +20,3 @@ def _isolate_notification_state(tmp_path, monkeypatch):
     """
     monkeypatch.setenv("NOTIFY_STATE_PATH",
                        str(tmp_path / "notification_state.json"))
-    yield
-    os.environ.pop("NOTIFY_STATE_PATH", None)
