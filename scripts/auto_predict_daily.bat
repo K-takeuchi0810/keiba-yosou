@@ -2,7 +2,9 @@
 REM Daily pipeline with persistent logs and best-effort Discord gap alerts.
 cd /d C:\Users\kizun\dev\keiba-yosou
 if not exist data\logs mkdir data\logs
-for /f %%D in ('.venv64\Scripts\python.exe -c "from datetime import date; d=date.today().isoformat(); print(d[0:4]+d[5:7]+d[8:10])"') do set RUNDATE=%%D
+REM Log file date must match the prediction target date, so ask the same
+REM single source the Python side uses (jst.current_jst_daystamp).
+for /f %%D in ('.venv64\Scripts\python.exe -c "from jst import current_jst_daystamp; print(current_jst_daystamp())"') do set RUNDATE=%%D
 set LOGFILE=data\logs\auto_predict_daily_%RUNDATE%.log
 call :run >> "%LOGFILE%" 2>&1
 set FINALCODE=%errorlevel%

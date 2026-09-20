@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from jst import current_jst_date
 from config import (
     BET_KELLY_MAX_PCT,
     BET_KELLY_MODE,
@@ -308,7 +309,10 @@ def build_view_model(
         except Exception:  # noqa: BLE001
             pass
 
-    today = datetime.now().date()
+    # 「今日」は jst.py の 1 箇所で決める (2026-09-20)。auto_predict が
+    # --from/--to を渡す通常運用では使われないが、引数なしで直接叩いた
+    # ときに auto_predict と違う日を指さないようにする。
+    today = current_jst_date()
     from_d = from_date or (today - timedelta(days=14)).strftime("%Y%m%d")
     to_d = to_date or (today + timedelta(days=14)).strftime("%Y%m%d")
     from_y, from_md = from_d[:4], from_d[4:]

@@ -27,7 +27,8 @@ from config import (  # noqa: E402
     artifact_drift,
 )
 from db import SQL_VALID_HORSE_NUM  # noqa: E402
-from scripts.notify_dedup import JST, decide, jst_today, record  # noqa: E402
+from jst import current_jst_date, current_jst_datetime  # noqa: E402
+from scripts.notify_dedup import decide, jst_today, record  # noqa: E402
 from scripts.notify_discord import notify_discord  # noqa: E402
 import os  # noqa: E402
 import sqlite3  # noqa: E402
@@ -169,9 +170,9 @@ def _notify_once(notification_type: str, subject: str, payload: dict,
 FINAL_ATTEMPT_HOUR = 11
 
 
-def _is_final_attempt() -> bool:
+def _is_final_attempt(now=None) -> bool:
     """この起動がその日の最終予定起動か (JST で判断)。"""
-    return datetime.now(JST).hour >= FINAL_ATTEMPT_HOUR
+    return current_jst_datetime(now).hour >= FINAL_ATTEMPT_HOUR
 
 
 def _final_confirmation_message(reason: str) -> str:
@@ -264,7 +265,9 @@ def main() -> int:
     args = ap.parse_args()
     min_coverage = args.min_entry_coverage
 
-    today = date.today()
+    # 対象日は jst.py の 1 箇所で決める。ここで date.today() を読むと
+    # OS がローカル時刻次第で別の日を指し、1 日ぶんの予想を落としうる。
+    today = current_jst_date()
     # 生成対象は **今日のみ** (2026-09-13 ユーザ指示で日別化)。
     # 以前は今日+明日を 1 ページに出していたが、JRA の出馬表は前日確定なので
     # 土曜朝の時点で日曜分は大半が「出走馬未取得」の空レースになり、スマホで
