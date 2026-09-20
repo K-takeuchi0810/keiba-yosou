@@ -75,6 +75,25 @@ def test_a_naive_datetime_is_refused():
         current_jst_daystamp(now=datetime(2026, 9, 20, 15, 0, 0))
 
 
+def test_a_tzinfo_without_an_offset_is_refused():
+    """tzinfo は付いているが `utcoffset()` が None を返すものも拒否すること。
+
+    `tzinfo is None` だけ見ていると、これが素通りして `astimezone` が
+    ローカル時刻を仮定する。naive を拒否した意味が無くなる。
+    """
+    from datetime import datetime, tzinfo
+
+    class NoOffset(tzinfo):
+        def utcoffset(self, dt):
+            return None
+
+        def dst(self, dt):
+            return None
+
+    with pytest.raises(ValueError):
+        current_jst_daystamp(now=datetime(2026, 9, 20, 15, 0, tzinfo=NoOffset()))
+
+
 def test_now_defaults_to_utc_not_local_time():
     """既定の now がシステムのローカル時刻でないこと。
 
@@ -90,13 +109,59 @@ def test_now_defaults_to_utc_not_local_time():
 
 # --- 集約されていること ---------------------------------------------------
 
-def test_dedup_and_the_target_day_agree():
-    """dedup 側と生成対象日側が同じ日付を返すこと。"""
-    from scripts import auto_predict, notify_dedup
+def test_the_default_now_is_really_jst_now():
+    """`now` を渡さない既定パスが、本当に JST の現在時刻を返すこと。
 
-    assert notify_dedup.jst_today() == current_jst_daystamp()
-    assert auto_predict.current_jst_date() == current_jst_date()
-    assert notify_dedup.jst_today() == current_jst_date().strftime("%Y%m%d")
+    **これが一番の穴だった**。境界テストはすべて `now` を注入しており、既定
+    パスを見ているテストが 1 本も無かった。そのため 2026-09-21 に
+    `datetime.now(timezone.utc) - timedelta(days=1)` という変異が作業ツリーに
+    4 分間生き残っても、12 件すべて緑のままだった (実際に起きた)。
+
+    実装の定数を使わず、テスト側で JST を **独立に組み立てて**突き合わせる。
+    """
+    from datetime import datetime, timedelta, timezone
+
+    expected = datetime.now(timezone(timedelta(hours=9)))
+    got = current_jst_datetime()
+
+    drift = abs((got - expected).total_seconds())
+    assert drift < 5, f"既定の now が {drift:.0f} 秒ずれている (1 日 = 86400)"
+    assert got.utcoffset() == timedelta(hours=9)
+
+
+def test_the_entry_point_uses_the_single_source(tmp_path, monkeypatch, capsys):
+    """`main()` が実際に採る対象日が、単一出典の値と一致すること。
+
+    以前ここは `current_jst_daystamp()` 同士を比べるだけの同語反復で、
+    `main()` が何を見ているかを 1 つも検証していなかった。実際にエントリ
+    ポイントを通して、出力された対象日を突き合わせる。
+    """
+    import sqlite3
+
+    from scripts import auto_predict
+
+    day = current_jst_daystamp()
+    db = tmp_path / "t.db"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE races (race_year TEXT, race_month_day TEXT,"
+                 " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT)")
+    conn.execute("CREATE TABLE horse_races (race_year TEXT, race_month_day TEXT,"
+                 " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT,"
+                 " horse_num TEXT)")
+    conn.execute("INSERT INTO races VALUES (?,?,'05','01','01','01')",
+                 (day[:4], day[4:]))
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(auto_predict, "DB_PATH", str(db))
+    monkeypatch.setattr(auto_predict.subprocess, "run",
+                        lambda command, **kwargs: None)
+    monkeypatch.setattr("sys.argv", ["auto_predict", "--dry-run"])
+    auto_predict.main()
+
+    line = next(l for l in capsys.readouterr().out.splitlines()
+                if l.startswith("generate:"))
+    assert day in line, f"main() の対象日が単一出典とずれている: {line}"
 
 
 def test_the_final_attempt_hour_is_judged_in_jst():
@@ -111,25 +176,9 @@ def test_the_final_attempt_hour_is_judged_in_jst():
         now=datetime(2026, 9, 20, 2, 0, tzinfo=timezone.utc)) is True
 
 
-@pytest.mark.parametrize("rel", [
-    "scripts/auto_predict.py",
-    "scripts/notify_dedup.py",
-    "web/generator.py",
-])
-def test_no_module_makes_its_own_today(rel):
-    """「今日」を各自で作る書き方が復活していないこと。
-
-    ここが緩むと、また 4 箇所が別々の日付を持つ状態に戻る。生成時刻の刻印
-    (`generated_at` など) は対象日ではないので対象外。
-    """
-    src = (REPO / rel).read_text(encoding="utf-8")
-    src = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith("#"))
-
-    for pattern in (r"date\.today\(\)", r"datetime\.now\(\)\.date\(\)",
-                    r"datetime\.today\(\)"):
-        assert not re.search(pattern, src), (
-            f"{rel} が独自に今日を作っている ({pattern})。"
-            f"jst.current_jst_date / current_jst_daystamp を使うこと")
+# 「今日」を各自で作る書き方の検出は tests/test_today_single_source.py に
+# 移した。正規表現版はここにあったが、実際に使われている書き方の
+# 9 割を素通りさせていたので AST 版に置き換えた。
 
 
 def test_the_batch_log_uses_the_same_source():

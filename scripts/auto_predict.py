@@ -16,7 +16,7 @@ import argparse
 import json
 import subprocess
 import sys
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -27,8 +27,9 @@ from config import (  # noqa: E402
     artifact_drift,
 )
 from db import SQL_VALID_HORSE_NUM  # noqa: E402
-from jst import current_jst_date, current_jst_datetime  # noqa: E402
-from scripts.notify_dedup import decide, jst_today, record  # noqa: E402
+from jst import (current_jst_date, current_jst_datetime,  # noqa: E402
+                 current_jst_daystamp)
+from scripts.notify_dedup import decide, record  # noqa: E402
 from scripts.notify_discord import notify_discord  # noqa: E402
 import os  # noqa: E402
 import sqlite3  # noqa: E402
@@ -188,7 +189,7 @@ def _final_confirmation_message(reason: str) -> str:
 
     3 つ目を読み取れることが目的なので、**中止が続いたときだけ**送る。
     """
-    d = jst_today()
+    d = current_jst_daystamp()
     return "\n".join([
         f"🕚 **本日の最終確認** ({d[:4]}/{d[4:6]}/{d[6:]})",
         f"中止状態が継続しています ({reason})。最終確認処理は正常に実行されました。",
@@ -343,6 +344,10 @@ def main() -> int:
         _notify_once("generation_failed", day, {"returncode": r.returncode},
                      f"⚠ 予想生成に失敗 ({day})。ログ確認要。",
                      force=args.force_notify)
+        # 生成失敗も「中止が続いている」ので最終確認の対象にする。
+        # ここを外していたため、3 回とも同じ rc で失敗する日は 1 通のあと
+        # 沈黙し、「タスクが起動しなかった」と区別できなかった。
+        _final_confirmation(args, day, f"生成失敗 rc={r.returncode}")
         print(r.stdout[-500:], r.stderr[-500:])
         return 1
 

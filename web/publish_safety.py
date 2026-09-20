@@ -55,7 +55,9 @@ def assess_race_completeness(
     予想生成のたびに WARN が Discord に飛んでいた。本アラートの目的は
     「今日の予想が出せていない」ことの検知なので、今日だけを見る。
     """
-    base_date = today or date.today()
+    # 「今日」は jst.py の 1 箇所で決める (2026-09-21)。generator は
+    # today= を渡すが、渡らなかったときもローカル時刻に落ちないように。
+    base_date = today or current_jst_date()
     target_dates = {base_date.strftime("%Y%m%d")}
     relevant_races = []
     for day in days:

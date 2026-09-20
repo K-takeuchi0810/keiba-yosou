@@ -20,6 +20,7 @@ from pathlib import Path
 import webview
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from jst import current_jst_daystamp
 from config import (
     BUY_FILTER_DEFAULT,
     BUY_FILTER_SUSPENDED_SINCE,
@@ -402,7 +403,10 @@ class Api:
             from_date = to_date
         if from_date and to_date:
             return from_date, to_date
-        today = datetime.now().strftime("%Y%m%d")
+        # 「今日」は jst.py の 1 箇所で決める (2026-09-21)。GUI だけ
+        # ローカル時刻を読むと、auto_predict が出す予想と GUI が示す
+        # 「今日開催あり」が別の日を指しうる。
+        today = current_jst_daystamp()
         with open_db() as conn:
             exists = conn.execute(
                 "SELECT 1 FROM races WHERE race_year || race_month_day=? LIMIT 1",

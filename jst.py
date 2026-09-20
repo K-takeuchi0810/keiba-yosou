@@ -52,7 +52,10 @@ def current_jst_datetime(now: datetime | None = None) -> datetime:
     """
     if now is None:
         now = datetime.now(timezone.utc)
-    if now.tzinfo is None:
+    # `tzinfo is None` だけでは足りない。tzinfo が付いていても
+    # `utcoffset()` が None を返す実装は naive と同じ扱いになり、astimezone が
+    # ローカル時刻を仮定してしまう。実際にオフセットが取れることまで見る。
+    if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError(
             "now には tz 付きの datetime を渡してください。naive だと UTC か "
             "ローカルかが呼び出し側にしか分からず、取り違えても気付けません。")

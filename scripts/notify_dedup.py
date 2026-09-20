@@ -44,15 +44,12 @@ import os
 import tempfile
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from jst import JST as _JST, current_jst_daystamp, current_jst_datetime
+from jst import current_jst_daystamp, current_jst_datetime
 
-# 日付の決定は jst.py に一本化してある (2026-09-20)。ここで独自に
-# `datetime.now()` を読むと、同じ起動の中で「今日」が 2 通り存在しうる。
-JST = _JST
 
 # 状態を残す期間 (JST の日数)。これより古い記録は捨てる。
 # 「日付が変わったら前日の状態を引き継がない」ことはキーに対象日が入るので
@@ -73,14 +70,6 @@ def state_path() -> Path:
     from config import PROJECT_ROOT
 
     return PROJECT_ROOT / "data" / "runtime" / "notification_state.json"
-
-
-def jst_today(now: datetime | None = None) -> str:
-    """JST の今日 (YYYYMMDD)。実体は `jst.current_jst_daystamp`。
-
-    後方互換のために名前を残してあるが、**日付の決定はここではしない**。
-    """
-    return current_jst_daystamp(now)
 
 
 @dataclass(frozen=True)
@@ -210,7 +199,7 @@ def decide(notification_type: str, subject: str, payload: dict[str, Any],
     """
     try:
         p = path or state_path()
-        today = jst_today()
+        today = current_jst_daystamp()
         key = _key(notification_type, subject)
         data = _prune(_load(p), today)
         prev = data.get(key)
@@ -252,7 +241,7 @@ def record(notification_type: str, subject: str, payload: dict[str, Any],
     """
     try:
         p = path or state_path()
-        today = jst_today()
+        today = current_jst_daystamp()
         data = _prune(_load(p), today)
         # 同じ対象について **別の結末** を伝えたら、それ以前の結末の記録は捨てる。
         # これが無いと「08:00 生成失敗 → 09:00 生成成功 → 11:00 また生成失敗」の

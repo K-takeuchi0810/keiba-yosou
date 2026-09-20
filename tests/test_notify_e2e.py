@@ -29,11 +29,11 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from datetime import date
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
+from jst import current_jst_daystamp
 from scripts import auto_predict
 from scripts.notify_discord import notify_discord
 
@@ -70,7 +70,7 @@ def webhook(tmp_path):
 @pytest.fixture()
 def abort_day(tmp_path, monkeypatch, webhook):
     """出走馬が 1 頭も入っていない開催日を仕立て、実送信につなぐ。"""
-    today = date.today().strftime("%Y%m%d")
+    today = current_jst_daystamp()
     db = tmp_path / "t.db"
     conn = sqlite3.connect(db)
     conn.execute("CREATE TABLE races (race_year TEXT, race_month_day TEXT,"
@@ -177,3 +177,51 @@ def test_a_rejected_post_is_retried_on_the_next_run(
 
     assert len(posts) == 2, "届かなかった通知が再送されていない"
     assert posts[0] == posts[1]
+
+
+def test_a_repeatedly_failing_generation_gets_a_final_confirmation(
+        tmp_path, monkeypatch, webhook):
+    """生成が 3 回とも失敗する日も、最終起動で最終確認が届くこと。
+
+    ここを外していたため、同じ rc で 3 回失敗する日は 1 通のあと沈黙し、
+    「タスクが起動しなかった」と区別できなかった (収益性判定者の指摘)。
+    """
+    from scripts.notify_discord import notify_discord
+
+    today = current_jst_daystamp()
+    db = tmp_path / "t.db"
+    import sqlite3
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE races (race_year TEXT, race_month_day TEXT,"
+                 " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT)")
+    conn.execute("CREATE TABLE horse_races (race_year TEXT, race_month_day TEXT,"
+                 " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT,"
+                 " horse_num TEXT)")
+    conn.execute("INSERT INTO races VALUES (?,?,'05','01','01','01')",
+                 (today[:4], today[4:]))
+    conn.execute("INSERT INTO horse_races VALUES (?,?,'05','01','01','01','01')",
+                 (today[:4], today[4:]))
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(auto_predict, "DB_PATH", str(db))
+    monkeypatch.setattr(auto_predict, "_notify",
+                        lambda text: notify_discord(text, webhook_file=webhook["file"]))
+
+    class Failed:
+        returncode = 1
+        stdout = stderr = ""
+
+    monkeypatch.setattr(auto_predict.subprocess, "run",
+                        lambda command, **kwargs: Failed())
+
+    posts = webhook["posts"]
+    assert _run(monkeypatch, final=False) == 1
+    assert len(posts) == 1
+    assert _run(monkeypatch, final=False) == 1
+    assert len(posts) == 1, "同じ失敗が 2 通届いている"
+
+    assert _run(monkeypatch, final=True) == 1
+
+    assert len(posts) == 2, f"最終確認が届いていない: {posts}"
+    assert "最終確認" in posts[1] and "生成失敗 rc=1" in posts[1]

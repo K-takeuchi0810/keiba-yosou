@@ -6,6 +6,8 @@ import argparse
 import os
 import sys
 from datetime import datetime
+
+from jst import current_jst_daystamp
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -17,7 +19,10 @@ from jvlink_client.ingest import ingest_all
 
 def normalize_date(value: str | None) -> str:
     if not value or value.lower() == "today":
-        return datetime.now().strftime("%Y%m%d")
+        # 予想と同じ「今日」を使う (2026-09-21)。ここがずれると
+        # 「予想は JST の今日、mining は別の日」になり、依存度の高い
+        # mining 特徴がその日だけ欠ける。
+        return current_jst_daystamp()
     digits = "".join(ch for ch in value if ch.isdigit())
     if len(digits) != 8:
         raise SystemExit(f"invalid date: {value!r}")
