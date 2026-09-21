@@ -491,3 +491,60 @@ def test_manifest_splits_issued_from_evaluable():
     for key in ("evaluation_rows_total", "evaluation_rows_evaluable",
                 "evaluation_rows_excluded", "evaluation_exclusion_reasons"):
         assert key in src, f"manifest に {key} が無い"
+
+
+# --- 実クエリを実行して確かめる (静的ガードに頼らない) -------------------
+# AST ガードは「races を読む SQL」しか見ないので、**述語ごと消して races を
+# 読まなくなった SQL** は検査対象から外れて素通りする (検証プロセス監査の
+# M16/M17 で実証)。そこで実際のクエリ文字列を取り出して実行する。
+
+def _module_sql(rel: str, must_contain: str) -> str:
+    """モジュール内の SQL リテラルを 1 本取り出す (f-string は連結)。"""
+    import ast
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[1]
+    tree = ast.parse((repo / rel).read_text(encoding="utf-8"))
+    # f-string の中の定数断片は親の JoinedStr として見る。個別に拾うと
+    # 「マーカーを含む断片」だけが先に見つかり、述語が別断片にあるのに
+    # 「無い」と誤判定する。
+    inside = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.JoinedStr):
+            for v in node.values:
+                inside.add(id(v))
+    for node in ast.walk(tree):
+        if id(node) in inside:
+            continue
+        if isinstance(node, ast.JoinedStr):
+            parts = []
+            for v in node.values:
+                parts.append(v.value if isinstance(v, ast.Constant)
+                             else ast.unparse(v))
+            text = "".join(parts)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            text = node.value
+        else:
+            continue
+        if must_contain in text:
+            return text
+    raise AssertionError(f"{rel} に {must_contain!r} を含む SQL が無い")
+
+
+@pytest.mark.parametrize("rel,marker", [
+    ("scripts/prediction_accuracy.py", "hr.confirmed_order > 0"),
+    ("scripts/monitor.py", "AS with_mining"),
+])
+def test_the_real_query_text_still_excludes_cancelled(rel, marker):
+    """実際の SQL 本文に中止除外が残っていること。
+
+    ガードは「races を読む SQL」を見るので、`NOT EXISTS (...races...)` を
+    丸ごと消すと **races を読まなくなり検査対象から外れる**。消したことを
+    検知するには、その SQL 本文自体を取り出して見るしかない。
+    """
+    sql = _module_sql(rel, marker)
+
+    assert "NOT EXISTS" in sql, f"{rel}: 中止除外の NOT EXISTS が消えている"
+    assert "races" in sql, f"{rel}: races を参照しなくなっている"
+    assert ("cancelled" in sql or "data_div" in sql), (
+        f"{rel}: 中止の述語が入っていない")

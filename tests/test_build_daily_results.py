@@ -11,7 +11,14 @@ def _html_fragment(
     *,
     horse_name_html: str = "テストホース",
     odds_html: str = '22.9<br><span class="pick-reason">6人気</span>',
+    top_pick: str = "",
 ) -> str:
+    """`top_pick` に本命行を渡すと bet_candidate 付きの予想を作れる。
+
+    中止レースで損益が計上されないことを見るには **買い候補が立っている行**が
+    要る。立っていないと profit は元から 0 で、`and evaluable` を外しても
+    何も変わらず、テストが変異を捕まえられない。
+    """
     return f"""
     <details id="race-20260712-02-1" class="race">
       <table class="entries"><tbody><tr>
@@ -20,6 +27,7 @@ def _html_fragment(
         <td class="horse-name">{horse_name_html}</td>
         <td>{odds_html}</td>
       </tr></tbody></table>
+      {top_pick}
     </details>
     """
 
@@ -32,6 +40,7 @@ def _run_main(
     expected_rc: int = 0,
     starter_count: int = 18,
     registered_count: int = 18,
+    data_div: str = "6",
 ) -> Path:
     db_path = tmp_path / "daily_results.sqlite3"
     if db_path.exists():
@@ -79,10 +88,10 @@ def _run_main(
         (*common, "01", 500, "01", 200, None, None, "00", 0, None, None, None, None),
     )
     conn.execute(
-        "INSERT INTO races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'6')",
+        "INSERT INTO races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             *common, "テスト競走", 1200, "24", "",
-            registered_count, starter_count, "", "1", "1", "1100",
+            registered_count, starter_count, "", "1", "1", "1100", data_div,
         ),
     )
     conn.commit()
@@ -307,3 +316,89 @@ def test_would_be_candidate_derivation():
     assert derive_would_be_candidate({**base, "expected_value": 0.9}) is False
     assert derive_would_be_candidate({**base, "win_probability": None}) is None
     assert derive_would_be_candidate({**base, "morning_popularity": None}) is False
+
+
+# --- 中止レース: 予想は残すが評価しない -------------------------------
+# ここは **production の main() を実際に走らせて出力 CSV を読む**。
+# 式を自前で再現して自分と比べる形だと、実装側で `and evaluable` を外しても
+# テストは通ってしまう (検証プロセス監査で実証された)。
+
+_BET_PICK = (
+    '<div class="pick-line">'
+    '<span class="pick-mark">◎</span>'
+    '<span class="pick-num">1</span>'
+    '<span class="conf-tag">P 30.0%</span>'
+    '<span class="conf-tag">EV 1.20</span>'
+    '<span class="conf-tag">標準</span>'
+    '<span class="bet-tag">買い候補</span>'
+    '</div>'
+)
+
+
+def _summary_rows(output_dir):
+    return _read_csv(output_dir / "evaluation_summary.csv")
+
+
+def test_a_cancelled_race_books_no_loss_through_main(tmp_path, monkeypatch):
+    """中止レースの買い候補に損益と賭け金が立たないこと (main() 経由)。
+
+    この改修が直した当のバグ。買い候補が立っている行で確かめないと、
+    profit は元から 0 で変異を捕まえられない。
+    """
+    output_dir = _run_main(
+        tmp_path, monkeypatch, data_div="9",
+        html_text=_html_fragment(top_pick=_BET_PICK))
+
+    rows = _summary_rows(output_dir)
+    assert rows, "行ごと消してはいけない (予想を出した記録は残す)"
+    for row in rows:
+        assert row["bet_candidate"] in ("True", "true", "1"), (
+            "買い候補が立っていないと、この変異を捕まえられない")
+        assert row["profit_loss_yen_100unit"] == "0", (
+            f"走っていないレースで損益が計上されている: {row}")
+        assert row["stake_yen_100unit"] == "0", (
+            f"走っていないレースに賭け金が立っている: {row}")
+        assert row["evaluable"] == "False"
+        assert row["race_status"] == "CANCELLED"
+        assert row["evaluation_exclusion_reason"] == "cancelled"
+        # 走っていないので「実施日」は空。ここを日付で埋めると、順延先の
+        # 結果へ紐付ける誤用 (9/21 予想 → 9/22 結果) の入口になる。
+        assert row["actual_execution_date"] in ("", "None"), (
+            f"中止レースに実施日が入っている: {row['actual_execution_date']}")
+
+
+def test_a_running_race_still_books_its_loss_through_main(tmp_path, monkeypatch):
+    """実施レースでは従来どおり損益が立つこと (除外しすぎていない対照)。"""
+    output_dir = _run_main(
+        tmp_path, monkeypatch, data_div="6",
+        html_text=_html_fragment(top_pick=_BET_PICK))
+
+    rows = _summary_rows(output_dir)
+    bet_rows = [r for r in rows if r["bet_candidate"] in ("True", "true", "1")]
+    assert bet_rows, "対照が成立していない (買い候補が無い)"
+    for row in bet_rows:
+        assert row["stake_yen_100unit"] == "100"
+        assert row["profit_loss_yen_100unit"] != "0", (
+            "実施レースの損益まで 0 にしている")
+        assert row["evaluable"] == "True"
+        assert row["race_status"] == "RUN"
+        assert row["evaluation_exclusion_reason"] in ("", "None")
+
+
+def test_manifest_counts_split_evaluable_from_issued(tmp_path, monkeypatch):
+    """manifest が発行 N と評価可 N を分けて書くこと (main() 経由)。"""
+    import json
+
+    output_dir = _run_main(
+        tmp_path, monkeypatch, data_div="9",
+        html_text=_html_fragment(top_pick=_BET_PICK))
+
+    manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+    counts = manifest["counts"]
+
+    assert counts["evaluation_rows_total"] >= 1
+    assert counts["evaluation_rows_evaluable"] == 0, (
+        f"中止しかない日に評価可の行がある: {counts}")
+    assert counts["evaluation_rows_excluded"] == counts["evaluation_rows_total"]
+    assert counts["evaluation_exclusion_reasons"].get("cancelled") == (
+        counts["evaluation_rows_excluded"])
