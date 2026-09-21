@@ -103,6 +103,32 @@ def sql_evaluable_race(column: str = "data_div") -> str:
 SQL_EVALUABLE_RACE = sql_evaluable_race()
 
 
+def exclusion_reason(not_cancelled: bool, result_resolved: bool) -> str | None:
+    """評価対象外の理由を決める **唯一の場所**。
+
+    呼び出し側で if/elif を並べると、**順序を入れ替えるだけで中止レースが
+    `result_not_yet_available` として記録される** (中止レースは結果も無いので
+    両方の条件に当てはまる)。2026-09-22 の監査で、分岐の並びを入れ替える変異が
+    テストを全部素通りし、実データで中止 161 行が「結果待ち」になることが
+    実証された。ここに集約して 4 通りすべてをテストで固定する。
+
+        中止 かつ 結果なし -> cancelled                  (永久除外。馬券は返還)
+        中止 かつ 結果あり -> cancelled                  (中止が優先)
+        実施 かつ 結果なし -> result_not_yet_available   (結果が来れば評価可へ)
+        実施 かつ 結果あり -> None                       (評価する)
+    """
+    if not not_cancelled:
+        return EXCLUSION_CANCELLED
+    if not result_resolved:
+        return EXCLUSION_RESULT_PENDING
+    return None
+
+
+def is_evaluable(not_cancelled: bool, result_resolved: bool) -> bool:
+    """評価に使えるか。`exclusion_reason` と必ず一致すること。"""
+    return exclusion_reason(not_cancelled, result_resolved) is None
+
+
 def sql_cancelled_race(column: str = "data_div") -> str:
     """**中止と分かっている**行だけを指す述語。
 

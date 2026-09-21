@@ -41,8 +41,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from db import SQL_VALID_HORSE_NUM
-from db import (EXCLUSION_CANCELLED, EXCLUSION_RESULT_PENDING,
-                is_evaluable_race)
+from db import exclusion_reason, is_evaluable, is_evaluable_race
 from config import guard_analysis_window, sealed_notice  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -715,13 +714,10 @@ def main() -> int:
         # 落ちたまま気付けなくなる。
         not_cancelled = is_evaluable_race(race.get("data_div"))
         result_resolved = rid in resolved_race_ids
-        evaluable = not_cancelled and result_resolved
-        if not not_cancelled:
-            exclusion = EXCLUSION_CANCELLED          # 永久除外
-        elif not result_resolved:
-            exclusion = EXCLUSION_RESULT_PENDING     # 結果が来れば評価可へ
-        else:
-            exclusion = None
+        # 分岐をここに書かない。並び順を変えるだけで中止が「結果待ち」に
+        # なる (中止レースは結果も無いので両方に当てはまる)。
+        exclusion = exclusion_reason(not_cancelled, result_resolved)
+        evaluable = is_evaluable(not_cancelled, result_resolved)
         # 100 円ベース profit_loss (買い判定 (bet_candidate=True) のとき 100 円賭けた前提で計算)
         if pred.get("bet_candidate") and evaluable:
             profit = (win_pay - 100) if win_pay > 0 else -100

@@ -573,9 +573,10 @@ def test_evaluable_requires_both_not_cancelled_and_resolved():
     src = (Path(__file__).resolve().parents[1]
            / "scripts" / "build_daily_results.py").read_text(encoding="utf-8")
 
-    assert "evaluable = not_cancelled and result_resolved" in src, (
-        "evaluable に多義を持たせている (中止だけを見ていないか)")
-    assert "EXCLUSION_RESULT_PENDING" in src, "結果未取得の理由が使われていない"
+    # 判定は db.exclusion_reason / is_evaluable に集約した (分岐の並びで
+    # 答えが変わらないようにするため)。呼び出し側は委譲するだけ。
+    assert "is_evaluable(not_cancelled, result_resolved)" in src, (
+        "evaluable の導出が呼び出し側に散っている")
     assert '"result_resolved"' in src, "result_resolved が出力に無い"
 
 
@@ -593,3 +594,163 @@ def test_analyze_misses_skips_excluded_races():
     assert "evaluable" in src, "evaluable を見ていない"
     assert 'skipped[f"excluded_{reason}"]' in src, (
         "除外を理由ごとに数えていない (cancelled と pending が潰れる)")
+
+
+# --- 除外理由の導出 (4 セルすべて) ---------------------------------------
+
+@pytest.mark.parametrize("not_cancelled,result_resolved,want_reason,want_eval", [
+    # **中止レースは結果も無い**ので両方の条件に当てはまる。分岐の並びで
+    # 答えが変わらないよう、4 通りすべてを固定する。
+    (False, False, "cancelled", False),               # 現実の中止
+    (False, True,  "cancelled", False),               # 中止が優先
+    (True,  False, "result_not_yet_available", False),  # 結果待ち (負けにしない)
+    (True,  True,  None, True),                        # 評価する
+])
+def test_exclusion_reason_truth_table(not_cancelled, result_resolved,
+                                      want_reason, want_eval):
+    """除外理由の 4 通り。順序依存の実装だと必ずどれかが落ちる。"""
+    from db import exclusion_reason, is_evaluable
+
+    assert exclusion_reason(not_cancelled, result_resolved) == want_reason
+    assert is_evaluable(not_cancelled, result_resolved) is want_eval
+
+
+def test_evaluable_and_reason_never_disagree():
+    """`is_evaluable` と `exclusion_reason` が食い違わないこと。"""
+    from db import exclusion_reason, is_evaluable
+
+    for nc in (True, False):
+        for rr in (True, False):
+            assert is_evaluable(nc, rr) is (exclusion_reason(nc, rr) is None)
+
+
+def test_the_caller_does_not_reimplement_the_branching():
+    """呼び出し側に if/elif を書き戻していないこと。
+
+    分岐が 2 箇所にあると、片方の順序を変えたときに気付けない。
+    """
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1]
+           / "scripts" / "build_daily_results.py").read_text(encoding="utf-8")
+
+    assert "exclusion = exclusion_reason(" in src
+    assert "EXCLUSION_RESULT_PENDING" not in src, (
+        "呼び出し側で理由を組み立て直している")
+
+
+# --- 実クエリを「実行」して確かめる -------------------------------------
+# 述語を `1=1` や `1=0` に置き換える変異は、語が残るので静的検査を通り抜ける
+# (両レビューが同じ抜けを別々に実証した)。実行すれば必ず落ちる。
+
+
+@pytest.fixture()
+def two_race_db(tmp_path):
+    """中止 1 レース + 実施 1 レース。実施側にだけ確定着順がある。"""
+    path = tmp_path / "exec.db"
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE races (race_year TEXT, race_month_day TEXT,"
+                 " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT,"
+                 " distance INTEGER, data_div TEXT)")
+    conn.execute("CREATE TABLE horse_races (race_year TEXT, race_month_day TEXT,"
+                 " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT,"
+                 " horse_num TEXT, confirmed_order INTEGER)")
+    # 06 = 中止 (着順なし)、09 = 実施 (1 着あり)
+    conn.execute("INSERT INTO races VALUES ('2026','0921','06','01','01','01',1200,'9')")
+    conn.execute("INSERT INTO races VALUES ('2026','0921','09','01','01','01',1200,'6')")
+    conn.execute("INSERT INTO horse_races VALUES ('2026','0921','06','01','01','01','01',0)")
+    conn.execute("INSERT INTO horse_races VALUES ('2026','0921','09','01','01','01','01',1)")
+    conn.commit()
+    yield conn
+    conn.close()
+
+
+def test_backtest_list_races_excludes_cancelled_when_run(two_race_db):
+    """`backtest.list_races` を **実際に呼んで** 中止が出てこないこと。
+
+    金銭の分母になる関数なので、静的検査ではなく実行で確かめる。
+    `require_confirmed=False` にして「着順があるから落ちているだけ」という
+    偶然を排除する。
+    """
+    from scripts import backtest
+
+    races = backtest.list_races(two_race_db, "20260921", "20260921",
+                                require_confirmed=False, allow_sealed=True)
+
+    tracks = {r["track_code"] for r in races}
+    assert "09" in tracks, "実施レースまで落としている"
+    assert "06" not in tracks, "中止レースが金銭の分母に入っている"
+
+
+def test_the_generator_prediction_query_excludes_cancelled(two_race_db):
+    """generator が **予想ループに渡す** 行の SQL を実行して確かめる。
+
+    予想ループは `horse_races` から回るので、races 側だけ守っても
+    中止レースの predict_race は走り続ける。述語を `1=0` で殺す変異は
+    語が残るため静的検査では捕まらない。
+    """
+    from db import SQL_VALID_HORSE_NUM, sql_cancelled_race
+
+    sql = _module_sql("web/generator.py", "FROM horse_races h")
+    sql = sql.format(SQL_VALID_HORSE_NUM=SQL_VALID_HORSE_NUM.replace(
+                         "horse_num", "h.horse_num"),
+                     cancelled=sql_cancelled_race("r.data_div"))
+
+    rows = two_race_db.execute(sql, ("20260921", "20260921")).fetchall()
+
+    tracks = {r["track_code"] for r in rows}
+    assert "09" in tracks, "実施レースまで落としている"
+    assert "06" not in tracks, "予想ループが中止レースを回る"
+
+
+@pytest.mark.parametrize("rel", [
+    "scripts/build_daily_results.py",
+    "scripts/backtest.py",
+    "scripts/prediction_accuracy.py",
+    "scripts/monitor.py",
+    "web/generator.py",
+    "scripts/fetch_fresh_odds.py",
+    "scripts/fresh_odds_coverage.py",
+])
+def test_the_predicate_is_a_call_not_a_literal(rel):
+    """SQL に埋める述語が **関数呼び出し** であること。
+
+    `.format(cancelled="1=0")` のように文字列で差し替えると、SQL 本文には
+    `{cancelled}` が残るので静的検査を通り抜け、実行テストも (テスト側が
+    自分で正しい述語を埋めていれば) 通ってしまう。埋める値そのものを見る。
+    """
+    import ast
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1] / rel).read_text(encoding="utf-8")
+    tree = ast.parse(src)
+
+    # 狙いは「**リテラルでの差し替えを禁じる**」こと。`evaluable` という名前は
+    # SQL 述語 (sql_evaluable_race) にも Python の真偽値 (is_evaluable) にも
+    # 使うので、正規の関数呼び出しはどちらも許す。文字列や数値を入れた時点で
+    # 落ちる。
+    SANCTIONED = {"sql_evaluable_race", "sql_cancelled_race",
+                  "is_evaluable", "exclusion_reason"}
+
+    def is_predicate_call(value) -> bool:
+        return (isinstance(value, ast.Call)
+                and isinstance(value.func, ast.Name)
+                and value.func.id in SANCTIONED)
+
+    offenders = []
+    for node in ast.walk(tree):
+        # `.format(cancelled=...)` の形
+        if isinstance(node, ast.Call):
+            for kw in node.keywords:
+                if kw.arg in ("evaluable", "cancelled") and not is_predicate_call(kw.value):
+                    offenders.append(f"{rel}:{kw.value.lineno} {kw.arg}=")
+        # f-string 用に `cancelled = ...` と変数へ入れる形 (monitor がこれ)
+        elif isinstance(node, ast.Assign):
+            names = {t.id for t in node.targets if isinstance(t, ast.Name)}
+            if names & {"evaluable", "cancelled"} and not is_predicate_call(node.value):
+                offenders.append(f"{rel}:{node.lineno} {sorted(names)} =")
+
+    assert not offenders, (
+        f"述語を文字列で差し替えている: {offenders}。"
+        f"db.sql_evaluable_race() / sql_cancelled_race() を渡すこと")

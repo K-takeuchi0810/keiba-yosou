@@ -347,8 +347,11 @@ def test_a_cancelled_race_books_no_loss_through_main(tmp_path, monkeypatch):
     この改修が直した当のバグ。買い候補が立っている行で確かめないと、
     profit は元から 0 で変異を捕まえられない。
     """
+    # **中止レースに着順は無い**。confirmed_order=1 の中止レースという
+    # 非現実な組合せで試していたため、「中止 かつ 結果なし」という現実の
+    # セルが未検査で、分岐の並びを入れ替える変異を逃していた (監査で実証)。
     output_dir = _run_main(
-        tmp_path, monkeypatch, data_div="9",
+        tmp_path, monkeypatch, data_div="9", confirmed_order=0,
         html_text=_html_fragment(top_pick=_BET_PICK))
 
     rows = _summary_rows(output_dir)
