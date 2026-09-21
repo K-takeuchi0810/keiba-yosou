@@ -271,8 +271,12 @@ def test_every_races_query_applies_the_predicate(rel):
         flat = " ".join(sql.lower().split())
         if "from races" not in flat:
             continue
-        if ("evaluable" in sql or "cancelled" in sql
-                or "data_div" in sql):
+        # **述語が入っているか**だけを見る。`data_div` という語の存在で
+        # 免除すると、`SELECT *, data_div FROM races` と書くだけで
+        # 述語なしでも通る抜け道になる (収益性レビューの指摘、再現済み)。
+        if "{evaluable}" in sql or "{cancelled}" in sql:
+            continue
+        if "sql_evaluable_race(" in sql or "sql_cancelled_race(" in sql:
             continue
         if (rel, flat) in allowed:
             continue
@@ -437,3 +441,35 @@ def test_the_five_audit_fields_are_written(tmp_path):
         assert f'"{field}"' in text, f"{field} が出力に無い"
         # CSV の列一覧にも入っていること (dict に入れただけでは出力されない)
         assert text.count(f'"{field}"') >= 2, f"{field} が CSV 列に無い"
+
+
+def test_stake_is_zero_for_cancelled_races():
+    """回収率の分母は件数ではなく金額で持つこと。
+
+    中止レースにも `bet_candidate` が残る (公開 HTML 由来なので、その日に
+    買い候補として出したことは事実)。件数を分母にすると、賭けていない馬が
+    分母に入って回収率が 100% 側へ歪む。
+    """
+    def stake(bet_candidate: bool, evaluable: bool) -> int:
+        return 100 if (bet_candidate and evaluable) else 0
+
+    assert stake(True, True) == 100
+    assert stake(True, False) == 0, "中止レースの買い候補に賭け金が立っている"
+    assert stake(False, True) == 0
+
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1]
+           / "scripts" / "build_daily_results.py").read_text(encoding="utf-8")
+    assert src.count('"stake_yen_100unit"') >= 2, "CSV 列に出ていない"
+
+
+def test_manifest_splits_issued_from_evaluable():
+    """manifest が「出した件数」と「評価できた件数」を分けて書くこと。"""
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1]
+           / "scripts" / "build_daily_results.py").read_text(encoding="utf-8")
+
+    for key in ("evaluation_rows_total", "evaluation_rows_evaluable",
+                "evaluation_rows_excluded", "evaluation_exclusion_reasons"):
+        assert key in src, f"manifest に {key} が無い"

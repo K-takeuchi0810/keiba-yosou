@@ -737,6 +737,11 @@ def main() -> int:
             "win_payout": win_pay,
             "place_payout": place_pay,
             "profit_loss_yen_100unit": profit,
+            # 回収率の分母は **bet_candidate の件数ではなくこの金額**を使う。
+            # 中止レースにも bet_candidate が残る (公開 HTML 由来) ので、
+            # 件数を分母にすると賭けていない馬が分母に入り 100% 側へ歪む。
+            "stake_yen_100unit": (100 if (pred.get("bet_candidate") and evaluable)
+                                  else 0),
             # 「予想を出した」ことと「統計評価に使える」ことは別物として持つ。
             # 中止・順延・不成立・返還が起きても N だけが水増しされないように。
             "prediction_issued": True,
@@ -795,6 +800,7 @@ def main() -> int:
         "morning_odds", "morning_popularity", "final_odds", "final_popularity",
         "market_probability", "win_probability", "expected_value_morning",
         "confidence", "bet_candidate", "confirmed_order", "win_payout", "place_payout",
+        "stake_yen_100unit",
         "prediction_issued", "race_status", "actual_execution_date", "evaluable",
         "evaluation_exclusion_reason",
         "profit_loss_yen_100unit",
@@ -827,6 +833,20 @@ def main() -> int:
             ),
         },
         "counts": {
+            # 「予想を出した件数」と「統計評価できた件数」を **同じ数で書かない**。
+            # 中止・順延・不成立・返還が起きたとき、N だけが水増しされるのを防ぐ。
+            "evaluation_rows_total": len(eval_rows),
+            "evaluation_rows_evaluable": sum(
+                1 for r in eval_rows if r.get("evaluable")),
+            "evaluation_rows_excluded": sum(
+                1 for r in eval_rows if not r.get("evaluable")),
+            "evaluation_exclusion_reasons": {
+                reason: sum(1 for r in eval_rows
+                            if r.get("evaluation_exclusion_reason") == reason)
+                for reason in sorted(
+                    {r.get("evaluation_exclusion_reason") for r in eval_rows}
+                    - {None})
+            },
             "html_races_parsed": len(races),
             "html_horses_parsed": sum(len(r["horses"]) for r in races),
             "html_top_picks_parsed": sum(len(r["top_picks"]) for r in races),
