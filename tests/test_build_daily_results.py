@@ -61,7 +61,7 @@ def _run_main(
           track_type_code TEXT, grade_code TEXT, registered_count INTEGER,
           starter_count INTEGER,
           turf_condition TEXT, dirt_condition TEXT, weather_code TEXT,
-          start_time TEXT
+          start_time TEXT, data_div TEXT
         );
         """
     )
@@ -79,7 +79,7 @@ def _run_main(
         (*common, "01", 500, "01", 200, None, None, "00", 0, None, None, None, None),
     )
     conn.execute(
-        "INSERT INTO races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'6')",
         (
             *common, "テスト競走", 1200, "24", "",
             registered_count, starter_count, "", "1", "1", "1100",

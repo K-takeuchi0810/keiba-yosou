@@ -41,6 +41,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from db import SQL_VALID_HORSE_NUM
+from db import EXCLUSION_CANCELLED, is_evaluable_race
 from config import guard_analysis_window, sealed_notice  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -570,7 +571,8 @@ def main() -> int:
         SELECT race_year, race_month_day, track_code, kaiji, nichiji, race_num,
                race_name, distance, track_type_code, grade_code,
                registered_count, starter_count,
-               turf_condition, dirt_condition, weather_code, start_time
+               turf_condition, dirt_condition, weather_code, start_time,
+               data_div
           FROM races
          WHERE race_year = ? AND race_month_day = ?
          ORDER BY track_code, race_num
@@ -696,8 +698,14 @@ def main() -> int:
         confirmed = rr.get("confirmed_order") or 0
         win_pay = win_payout_by.get((rid, hn), 0)
         place_pay = place_payout_by.get((rid, hn), 0)
+        # 中止レース (data_div='9') は **予想は残すが評価しない**。
+        # 馬券は返還されるので、外れでも負けでもない。ここを落とさないと
+        # 走っていないレースが confirmed_order=0 で「不的中」に数えられ、
+        # 買い候補があれば profit=-100 が計上される (2026-09-21 の中山 12R)。
+        evaluable = is_evaluable_race(race.get("data_div"))
+        exclusion = None if evaluable else EXCLUSION_CANCELLED
         # 100 円ベース profit_loss (買い判定 (bet_candidate=True) のとき 100 円賭けた前提で計算)
-        if pred.get("bet_candidate"):
+        if pred.get("bet_candidate") and evaluable:
             profit = (win_pay - 100) if win_pay > 0 else -100
         else:
             profit = 0
@@ -729,6 +737,13 @@ def main() -> int:
             "win_payout": win_pay,
             "place_payout": place_pay,
             "profit_loss_yen_100unit": profit,
+            # 「予想を出した」ことと「統計評価に使える」ことは別物として持つ。
+            # 中止・順延・不成立・返還が起きても N だけが水増しされないように。
+            "prediction_issued": True,
+            "race_status": ("CANCELLED" if not evaluable else "RUN"),
+            "actual_execution_date": (date if evaluable else None),
+            "evaluable": evaluable,
+            "evaluation_exclusion_reason": exclusion,
         })
 
     quality_errors = validate_output_quality(
@@ -780,6 +795,8 @@ def main() -> int:
         "morning_odds", "morning_popularity", "final_odds", "final_popularity",
         "market_probability", "win_probability", "expected_value_morning",
         "confidence", "bet_candidate", "confirmed_order", "win_payout", "place_payout",
+        "prediction_issued", "race_status", "actual_execution_date", "evaluable",
+        "evaluation_exclusion_reason",
         "profit_loss_yen_100unit",
     ], eval_rows)
 

@@ -64,6 +64,60 @@ def is_valid_horse_num(value: object) -> bool:
     return bool(text) and text != "00"
 
 
+# --- 中止レース ---------------------------------------------------------
+# JV-Data の data_div='9' は「中止」。台風などで開催が飛ぶとこの値になり、
+# 確定着順も払戻も存在しない。**馬券は返還される**ので、的中率の分母にも
+# 購入件数にも利益にも入れてはいけない。
+#
+# 2026-09-21 の中山 12R (台風で 9/22 へ順延) で、これを除外していない経路が
+# 1 つ見つかった: `build_daily_results.py` は日付だけで引くため、中止レースの
+# confirmed_order が 0 になって「◎ が外れた」と数えられ、買い候補があれば
+# `profit = -100` に計上されていた。走っていないレースの負けである。
+#
+# 他の経路 (backtest / prediction_accuracy / monitor) は `confirmed_order > 0`
+# の副作用で **たまたま**落ちていた。その条件が将来緩むと中止が再流入するので、
+# 暗黙に頼らず下の述語で明示する。
+CANCELLED_DATA_DIV = "9"
+
+#: 評価対象から外した理由。`evaluation_exclusion_reason` に入れる。
+EXCLUSION_CANCELLED = "cancelled"
+
+
+def sql_evaluable_race(column: str = "data_div") -> str:
+    """統計評価に使えるレースだけを残す SQL 述語。
+
+    `column` には `races` 側の data_div を修飾名で渡す (例 "r.data_div")。
+    NULL は中止と判定できないので残す (取り込み途中の行を黙って捨てない)。
+    """
+    return f"({column} IS NULL OR {column} <> '{CANCELLED_DATA_DIV}')"
+
+
+SQL_EVALUABLE_RACE = sql_evaluable_race()
+
+
+def sql_cancelled_race(column: str = "data_div") -> str:
+    """**中止と分かっている**行だけを指す述語。
+
+    `races` を外部結合や EXISTS で参照するときは、こちらを `NOT EXISTS` で
+    使う。`EXISTS (evaluable)` にすると、`races` 行がまだ取り込まれていない
+    レースまで黙って落ちてしまい、件数が理由も分からず減る。
+    「中止と積極的に判明したものだけ除く」方が安全側。
+    """
+    return f"{column} = '{CANCELLED_DATA_DIV}'"
+
+
+def is_evaluable_race(data_div: object) -> bool:
+    """Python 側の判定。`sql_evaluable_race` と同じ答えを返すこと。"""
+    if data_div is None:
+        return True
+    return str(data_div).strip() != CANCELLED_DATA_DIV
+
+
+def is_cancelled_race(data_div: object) -> bool:
+    """中止レースか (`is_evaluable_race` の裏)。"""
+    return not is_evaluable_race(data_div)
+
+
 def sql_invalid_horse_num(column: str = "horse_num") -> str:
     """SQL inverse of sql_valid_horse_num, including NULL explicitly."""
     return f"NOT COALESCE(({sql_valid_horse_num(column)}), 0)"

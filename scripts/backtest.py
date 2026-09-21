@@ -32,6 +32,7 @@ from predictor.calibration import (
     fit_bin_calibrator,
     fit_isotonic_calibrator,
 )
+from db import sql_evaluable_race
 from config import (  # noqa: E402
     PIT_GATE_MINUTES,
     guard_analysis_window,
@@ -586,10 +587,13 @@ def list_races(
         if sealed_info.get("fully_sealed"):
             return []
 
+    # 中止 (data_div='9') は無条件に除外する。require_confirmed の副作用に
+    # 頼ると、そのオプションを緩めた瞬間に中止が再流入する。
     sql = """
         SELECT * FROM races
         WHERE (race_year || race_month_day) BETWEEN ? AND ?
-    """
+          AND {evaluable}
+    """.format(evaluable=sql_evaluable_race())
     if jra_only:
         sql += " AND CAST(track_code AS INTEGER) BETWEEN 1 AND 10 "
     if require_confirmed:

@@ -161,9 +161,10 @@ def _db_with_races(dates) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute(
         "CREATE TABLE races (race_year TEXT, race_month_day TEXT, track_code TEXT,"
-        " kaiji TEXT, nichiji TEXT, race_num TEXT, distance INTEGER)")
+        " kaiji TEXT, nichiji TEXT, race_num TEXT, distance INTEGER,"
+        " data_div TEXT)")
     for d in dates:
-        conn.execute("INSERT INTO races VALUES (?,?,?,?,?,?,?)",
+        conn.execute("INSERT INTO races VALUES (?,?,?,?,?,?,?,'6')",
                      (d[:4], d[4:], "05", "01", "01", "01", 1600))
     conn.commit()
     return conn

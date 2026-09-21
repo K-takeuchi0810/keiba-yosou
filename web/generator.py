@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from db import sql_evaluable_race
 from config import (
     BET_KELLY_MAX_PCT,
     BET_KELLY_MODE,
@@ -319,8 +320,9 @@ def build_view_model(
             """
             SELECT * FROM races
             WHERE (race_year || race_month_day) BETWEEN ? AND ?
+              AND {evaluable}
             ORDER BY race_year, race_month_day, track_code, race_num
-            """,
+            """.format(evaluable=sql_evaluable_race()),
             (from_y + from_md, to_y + to_md),
         ).fetchall()
         horse_rows = conn.execute(
