@@ -198,6 +198,8 @@ def test_6_the_exclusion_survives_a_loosened_confirmed_order(db):
     "scripts/monitor.py",
     "scripts/auto_predict.py",
     "web/generator.py",
+    "scripts/fetch_fresh_odds.py",
+    "scripts/fresh_odds_coverage.py",
 ])
 def test_every_races_query_applies_the_predicate(rel):
     """`races` を読む SQL が **1 本残らず** 中止除外を通していること。
@@ -269,7 +271,14 @@ def test_every_races_query_applies_the_predicate(rel):
         if sql is None:
             continue
         flat = " ".join(sql.lower().split())
-        if "from races" not in flat:
+        # `horse_races` を見るのは generator だけに限る。**予想ループは
+        # horse_races から回る**ので、races 側だけ守っても中止レースの
+        # predict_race は走り続ける (データ基盤レビューで実証)。
+        # 他ファイルの horse_races 読みは、すでに絞った races に紐づく取得か、
+        # 行ごとに evaluable を付ける取得なので対象にしない (ノイズになる)。
+        reads = ("from races" in flat
+                 or (rel == "web/generator.py" and "from horse_races" in flat))
+        if not reads:
             continue
         # **述語が入っているか**だけを見る。`data_div` という語の存在で
         # 免除すると、`SELECT *, data_div FROM races` と書くだけで
@@ -366,12 +375,21 @@ def test_a_fully_cancelled_day_is_not_a_coverage_failure(tmp_path, monkeypatch, 
     monkeypatch.setattr(auto_predict, "_notify", lambda t: sent.append(t) or True)
     monkeypatch.setattr("sys.argv", ["auto_predict"])
 
+    monkeypatch.setattr(auto_predict, "_is_final_attempt", lambda *a, **k: False)
     rc = auto_predict.main()
 
     out = capsys.readouterr().out
     assert rc == 0, f"中止だけの日を失敗扱いにしている (rc={rc})"
-    assert sent == [], f"中止だけの日に通知を出している: {sent}"
+    assert sent == [], f"通常起動で中止だけの日に通知を出している: {sent}"
     assert "評価対象レースなし" in out
+
+    # 最終起動では **黙らない**。完全に無音だと「タスクが起動しなかった」と
+    # 区別できず、heartbeat を入れた意味が無くなる。
+    monkeypatch.setattr(auto_predict, "_is_final_attempt", lambda *a, **k: True)
+    monkeypatch.setattr("sys.argv", ["auto_predict", "--final-attempt"])
+    assert auto_predict.main() == 0
+    assert len(sent) == 1, f"最終起動でも無音のまま: {sent}"
+    assert "すべて中止" in sent[0]
 
 
 def test_a_half_cancelled_day_still_passes_the_gate(tmp_path, monkeypatch, capsys):

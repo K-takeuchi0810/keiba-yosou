@@ -322,6 +322,13 @@ def main() -> int:
         if scheduled_all:
             print(f"skip: {cand} は評価対象レースなし "
                   f"(予定 {scheduled_all} レースすべて中止)")
+            # 全レース中止の日を完全無音にしない。heartbeat を入れた目的は
+            # 「沈黙 = タスクが起動しなかった」を読めるようにすることなので、
+            # ここだけ黙ると開催日に何も来ず、未起動と区別できなくなる。
+            if not args.dry_run:
+                _final_confirmation(
+                    args, cand[0],
+                    f"予定 {scheduled_all} レースすべて中止")
         else:
             print(f"skip: {cand} に出馬表なし (開催日でない)")
         return 0

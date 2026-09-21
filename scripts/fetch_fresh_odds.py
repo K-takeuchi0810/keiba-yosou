@@ -29,7 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from db import open_db
+from db import open_db, sql_evaluable_race
 from jvlink_client import JVLinkClient
 from jvlink_client.ingest import ingest_all
 
@@ -193,8 +193,9 @@ def main() -> int:
                    race_num, start_time
             FROM races
             WHERE race_year || race_month_day BETWEEN ? AND ?
+              AND {evaluable}
             ORDER BY race_year, race_month_day, track_code, race_num
-            """,
+            """.format(evaluable=sql_evaluable_race()),
             (target_date, target_date),
         ).fetchall()
 
