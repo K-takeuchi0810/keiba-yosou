@@ -41,6 +41,7 @@ def _run_main(
     starter_count: int = 18,
     registered_count: int = 18,
     data_div: str = "6",
+    confirmed_order: int = 1,
 ) -> Path:
     db_path = tmp_path / "daily_results.sqlite3"
     if db_path.exists():
@@ -81,7 +82,8 @@ def _run_main(
     )
     conn.execute(
         "INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-        (*common, "01", "テストホース", 229, 6, 1, "2026-07-12T10:00:00"),
+        (*common, "01", "テストホース", 229, 6, confirmed_order,
+         "2026-07-12T10:00:00"),
     )
     conn.execute(
         "INSERT INTO payouts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -402,3 +404,26 @@ def test_manifest_counts_split_evaluable_from_issued(tmp_path, monkeypatch):
     assert counts["evaluation_rows_excluded"] == counts["evaluation_rows_total"]
     assert counts["evaluation_exclusion_reasons"].get("cancelled") == (
         counts["evaluation_rows_excluded"])
+
+
+def test_a_race_without_results_is_pending_not_a_loss(tmp_path, monkeypatch):
+    """結果がまだ来ていないレースを「不的中・負け」にしないこと。
+
+    中止 (永久除外) と結果未取得 (一時的) を同じ扱いにすると、前者は
+    永久に評価から落ち、後者は結果が来ても戻らないまま気付けなくなる。
+    ここでは **走ったが結果がまだ取り込まれていない** 状態を作る。
+    """
+    output_dir = _run_main(
+        tmp_path, monkeypatch, data_div="6", confirmed_order=0,
+        html_text=_html_fragment(top_pick=_BET_PICK))
+
+    rows = _summary_rows(output_dir)
+    assert rows
+    for row in rows:
+        assert row["race_status"] == "RUN", "中止ではない (走る予定のレース)"
+        assert row["result_resolved"] == "False"
+        assert row["evaluable"] == "False"
+        assert row["evaluation_exclusion_reason"] == "result_not_yet_available", (
+            f"中止と同じ理由で潰している: {row['evaluation_exclusion_reason']}")
+        assert row["profit_loss_yen_100unit"] == "0", "結果待ちを負けにしている"
+        assert row["stake_yen_100unit"] == "0"

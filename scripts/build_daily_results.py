@@ -41,7 +41,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from db import SQL_VALID_HORSE_NUM
-from db import EXCLUSION_CANCELLED, is_evaluable_race
+from db import (EXCLUSION_CANCELLED, EXCLUSION_RESULT_PENDING,
+                is_evaluable_race)
 from config import guard_analysis_window, sealed_notice  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -672,6 +673,13 @@ def main() -> int:
     race_info = {race_id_of(r["track_code"], r["race_num"]): r for r in race_rows}
     final_by = {(o["race_id"], o["horse_num"]): o for o in final_odds}
     result_by = {(r["race_id"], r["horse_num"]): r for r in race_results}
+    # 結果が取り込まれたレース。1 頭でも確定着順があれば「結果あり」。
+    # これが無いと「まだ結果が来ていない」と「走ったが全馬 0 着」の区別が
+    # つかず、前者を不的中として数えてしまう。
+    resolved_race_ids = {
+        r["race_id"] for r in race_results
+        if (r.get("confirmed_order") or 0) > 0
+    }
     # payout を horse_num に展開
     win_payout_by: dict[tuple[str, str], int] = {}
     place_payout_by: dict[tuple[str, str], int] = {}
@@ -702,8 +710,18 @@ def main() -> int:
         # 馬券は返還されるので、外れでも負けでもない。ここを落とさないと
         # 走っていないレースが confirmed_order=0 で「不的中」に数えられ、
         # 買い候補があれば profit=-100 が計上される (2026-09-21 の中山 12R)。
-        evaluable = is_evaluable_race(race.get("data_div"))
-        exclusion = None if evaluable else EXCLUSION_CANCELLED
+        # 3 つに分ける。`evaluable` に多義を持たせると、「中止」と
+        # 「まだ結果が来ていない」が同じ扱いになり、後者が永久に評価から
+        # 落ちたまま気付けなくなる。
+        not_cancelled = is_evaluable_race(race.get("data_div"))
+        result_resolved = rid in resolved_race_ids
+        evaluable = not_cancelled and result_resolved
+        if not not_cancelled:
+            exclusion = EXCLUSION_CANCELLED          # 永久除外
+        elif not result_resolved:
+            exclusion = EXCLUSION_RESULT_PENDING     # 結果が来れば評価可へ
+        else:
+            exclusion = None
         # 100 円ベース profit_loss (買い判定 (bet_candidate=True) のとき 100 円賭けた前提で計算)
         if pred.get("bet_candidate") and evaluable:
             profit = (win_pay - 100) if win_pay > 0 else -100
@@ -745,7 +763,8 @@ def main() -> int:
             # 「予想を出した」ことと「統計評価に使える」ことは別物として持つ。
             # 中止・順延・不成立・返還が起きても N だけが水増しされないように。
             "prediction_issued": True,
-            "race_status": ("CANCELLED" if not evaluable else "RUN"),
+            "race_status": ("CANCELLED" if not not_cancelled else "RUN"),
+            "result_resolved": result_resolved,
             "actual_execution_date": (date if evaluable else None),
             "evaluable": evaluable,
             "evaluation_exclusion_reason": exclusion,
@@ -801,7 +820,8 @@ def main() -> int:
         "market_probability", "win_probability", "expected_value_morning",
         "confidence", "bet_candidate", "confirmed_order", "win_payout", "place_payout",
         "stake_yen_100unit",
-        "prediction_issued", "race_status", "actual_execution_date", "evaluable",
+        "prediction_issued", "race_status", "result_resolved",
+        "actual_execution_date", "evaluable",
         "evaluation_exclusion_reason",
         "profit_loss_yen_100unit",
     ], eval_rows)

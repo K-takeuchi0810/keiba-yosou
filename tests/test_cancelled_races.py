@@ -548,3 +548,48 @@ def test_the_real_query_text_still_excludes_cancelled(rel, marker):
     assert "races" in sql, f"{rel}: races を参照しなくなっている"
     assert ("cancelled" in sql or "data_div" in sql), (
         f"{rel}: 中止の述語が入っていない")
+
+
+# --- 中止 と 結果未取得 を潰さない -------------------------------------
+
+def test_cancelled_and_pending_are_different_reasons():
+    """永久除外と一時的な未取得を同じ理由で潰さないこと。
+
+    一緒くたにすると、「まだ結果が来ていないだけ」のレースを永久に評価から
+    落としたまま気付けなくなる。逆に未取得を評価対象に入れると
+    `confirmed_order=0` が「不的中」に数えられて的中率が下がる。
+    """
+    from db import EXCLUSION_CANCELLED, EXCLUSION_RESULT_PENDING
+
+    assert EXCLUSION_CANCELLED != EXCLUSION_RESULT_PENDING
+    assert EXCLUSION_CANCELLED == "cancelled"
+    assert EXCLUSION_RESULT_PENDING == "result_not_yet_available"
+
+
+def test_evaluable_requires_both_not_cancelled_and_resolved():
+    """evaluable = 中止でない AND 結果あり、であること。"""
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1]
+           / "scripts" / "build_daily_results.py").read_text(encoding="utf-8")
+
+    assert "evaluable = not_cancelled and result_resolved" in src, (
+        "evaluable に多義を持たせている (中止だけを見ていないか)")
+    assert "EXCLUSION_RESULT_PENDING" in src, "結果未取得の理由が使われていない"
+    assert '"result_resolved"' in src, "result_resolved が出力に無い"
+
+
+def test_analyze_misses_skips_excluded_races():
+    """分析系でも評価対象外のレースを数えないこと。
+
+    主要集計だけ直しても、ここが素通りだと中止レースが分析で復活する。
+    """
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1]
+           / "scripts" / "analyze_misses.py").read_text(encoding="utf-8")
+
+    assert "evaluation_exclusion_reason" in src, "除外理由を見ていない"
+    assert "evaluable" in src, "evaluable を見ていない"
+    assert 'skipped[f"excluded_{reason}"]' in src, (
+        "除外を理由ごとに数えていない (cancelled と pending が潰れる)")

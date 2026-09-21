@@ -80,7 +80,15 @@ def is_valid_horse_num(value: object) -> bool:
 CANCELLED_DATA_DIV = "9"
 
 #: 評価対象から外した理由。`evaluation_exclusion_reason` に入れる。
+#
+# **この 2 つを同じ「評価対象外」で潰してはいけない。**
+#   cancelled              = 永久除外。レースが行われず馬券は返還された
+#   result_not_yet_available = 一時的。結果が取り込まれれば評価可能へ遷移する
+# 一緒くたにすると、「まだ結果が来ていないだけ」のレースを永久に評価から
+# 落としたまま気付けなくなる。逆に結果未取得を評価対象に入れると、
+# confirmed_order=0 が「不的中」に数えられて的中率が下がる。
 EXCLUSION_CANCELLED = "cancelled"
+EXCLUSION_RESULT_PENDING = "result_not_yet_available"
 
 
 def sql_evaluable_race(column: str = "data_div") -> str:
