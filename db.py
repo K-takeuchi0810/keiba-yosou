@@ -89,6 +89,10 @@ CANCELLED_DATA_DIV = "9"
 # confirmed_order=0 が「不的中」に数えられて的中率が下がる。
 EXCLUSION_CANCELLED = "cancelled"
 EXCLUSION_RESULT_PENDING = "result_not_yet_available"
+#: 着順は来たが払戻がまだ。**これを負けにも 0 円決済にもしてはいけない**。
+# 「着順だけ先に入る → 払戻未取得 → 勝った買い候補を -100 円」は、今回の
+# 中止レースと同型の事故。着順の到着と払戻の到着は別のタイミングで来る。
+EXCLUSION_PAYOUT_PENDING = "payout_not_yet_available"
 
 
 def sql_evaluable_race(column: str = "data_div") -> str:
@@ -103,30 +107,36 @@ def sql_evaluable_race(column: str = "data_div") -> str:
 SQL_EVALUABLE_RACE = sql_evaluable_race()
 
 
-def exclusion_reason(not_cancelled: bool, result_resolved: bool) -> str | None:
+def exclusion_reason(not_cancelled: bool, has_finish: bool,
+                     has_payout: bool) -> str | None:
     """評価対象外の理由を決める **唯一の場所**。
 
     呼び出し側で if/elif を並べると、**順序を入れ替えるだけで中止レースが
     `result_not_yet_available` として記録される** (中止レースは結果も無いので
-    両方の条件に当てはまる)。2026-09-22 の監査で、分岐の並びを入れ替える変異が
+    複数の条件に当てはまる)。2026-09-22 の監査で、分岐の並びを入れ替える変異が
     テストを全部素通りし、実データで中止 161 行が「結果待ち」になることが
-    実証された。ここに集約して 4 通りすべてをテストで固定する。
+    実証された。ここに集約して全通りをテストで固定する。
 
-        中止 かつ 結果なし -> cancelled                  (永久除外。馬券は返還)
-        中止 かつ 結果あり -> cancelled                  (中止が優先)
-        実施 かつ 結果なし -> result_not_yet_available   (結果が来れば評価可へ)
-        実施 かつ 結果あり -> None                       (評価する)
+        中止                       -> cancelled                (永久除外。馬券は返還)
+        実施 / 着順なし            -> result_not_yet_available (結果が来れば評価可へ)
+        実施 / 着順あり / 払戻なし -> payout_not_yet_available (払戻が来れば評価可へ)
+        実施 / 着順あり / 払戻あり -> None                     (評価する)
+
+    `has_payout` は **レース単位**で「その馬券種の確定払戻データが届いたか」。
+    各馬に払戻行が要るという意味ではない (敗戦馬に払戻は無い)。
     """
     if not not_cancelled:
         return EXCLUSION_CANCELLED
-    if not result_resolved:
+    if not has_finish:
         return EXCLUSION_RESULT_PENDING
+    if not has_payout:
+        return EXCLUSION_PAYOUT_PENDING
     return None
 
 
-def is_evaluable(not_cancelled: bool, result_resolved: bool) -> bool:
+def is_evaluable(not_cancelled: bool, has_finish: bool, has_payout: bool) -> bool:
     """評価に使えるか。`exclusion_reason` と必ず一致すること。"""
-    return exclusion_reason(not_cancelled, result_resolved) is None
+    return exclusion_reason(not_cancelled, has_finish, has_payout) is None
 
 
 def sql_cancelled_race(column: str = "data_div") -> str:

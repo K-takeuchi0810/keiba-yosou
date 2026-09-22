@@ -675,9 +675,17 @@ def main() -> int:
     # 結果が取り込まれたレース。1 頭でも確定着順があれば「結果あり」。
     # これが無いと「まだ結果が来ていない」と「走ったが全馬 0 着」の区別が
     # つかず、前者を不的中として数えてしまう。
-    resolved_race_ids = {
+    races_with_finish = {
         r["race_id"] for r in race_results
         if (r.get("confirmed_order") or 0) > 0
+    }
+    # **レース単位**で単勝の確定払戻が届いたか。各馬に払戻行が要るという意味
+    # ではない (敗戦馬に払戻は無い)。着順と払戻は別のタイミングで届くので、
+    # 着順だけで評価可にすると「勝った買い候補の払戻がまだ 0」→ -100 円に
+    # なる。中止レースと同型の事故。
+    races_with_payout = {
+        race_id_of(p["track_code"], p["race_num"]) for p in payout_rows
+        if p.get("tan_horse_num1") and int(p.get("tan_payout1") or 0) > 0
     }
     # payout を horse_num に展開
     win_payout_by: dict[tuple[str, str], int] = {}
@@ -713,11 +721,13 @@ def main() -> int:
         # 「まだ結果が来ていない」が同じ扱いになり、後者が永久に評価から
         # 落ちたまま気付けなくなる。
         not_cancelled = is_evaluable_race(race.get("data_div"))
-        result_resolved = rid in resolved_race_ids
+        result_resolved = rid in races_with_finish
+        payout_resolved = rid in races_with_payout
         # 分岐をここに書かない。並び順を変えるだけで中止が「結果待ち」に
-        # なる (中止レースは結果も無いので両方に当てはまる)。
-        exclusion = exclusion_reason(not_cancelled, result_resolved)
-        evaluable = is_evaluable(not_cancelled, result_resolved)
+        # なる (中止レースは複数の条件に当てはまる)。
+        exclusion = exclusion_reason(not_cancelled, result_resolved,
+                                     payout_resolved)
+        evaluable = is_evaluable(not_cancelled, result_resolved, payout_resolved)
         # 100 円ベース profit_loss (買い判定 (bet_candidate=True) のとき 100 円賭けた前提で計算)
         if pred.get("bet_candidate") and evaluable:
             profit = (win_pay - 100) if win_pay > 0 else -100
@@ -751,16 +761,18 @@ def main() -> int:
             "win_payout": win_pay,
             "place_payout": place_pay,
             "profit_loss_yen_100unit": profit,
-            # 回収率の分母は **bet_candidate の件数ではなくこの金額**を使う。
-            # 中止レースにも bet_candidate が残る (公開 HTML 由来) ので、
-            # 件数を分母にすると賭けていない馬が分母に入り 100% 側へ歪む。
-            "stake_yen_100unit": (100 if (pred.get("bet_candidate") and evaluable)
-                                  else 0),
+            # **予定**と**決済済み**を分ける。予想時に 100 円買うつもりだった
+            # という事実は残しつつ、未決済 (払戻待ち・結果待ち・中止) のレースを
+            # 回収率の分母に入れないため。分母は planned ではなく settled。
+            "planned_stake_yen_100unit": (100 if pred.get("bet_candidate") else 0),
+            "settled_stake_yen_100unit": (
+                100 if (pred.get("bet_candidate") and evaluable) else 0),
             # 「予想を出した」ことと「統計評価に使える」ことは別物として持つ。
             # 中止・順延・不成立・返還が起きても N だけが水増しされないように。
             "prediction_issued": True,
             "race_status": ("CANCELLED" if not not_cancelled else "RUN"),
             "result_resolved": result_resolved,
+            "payout_resolved": payout_resolved,
             "actual_execution_date": (date if evaluable else None),
             "evaluable": evaluable,
             "evaluation_exclusion_reason": exclusion,
@@ -815,8 +827,8 @@ def main() -> int:
         "morning_odds", "morning_popularity", "final_odds", "final_popularity",
         "market_probability", "win_probability", "expected_value_morning",
         "confidence", "bet_candidate", "confirmed_order", "win_payout", "place_payout",
-        "stake_yen_100unit",
-        "prediction_issued", "race_status", "result_resolved",
+        "planned_stake_yen_100unit", "settled_stake_yen_100unit",
+        "prediction_issued", "race_status", "result_resolved", "payout_resolved",
         "actual_execution_date", "evaluable",
         "evaluation_exclusion_reason",
         "profit_loss_yen_100unit",

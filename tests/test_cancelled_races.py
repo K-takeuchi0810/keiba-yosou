@@ -478,7 +478,9 @@ def test_stake_is_zero_for_cancelled_races():
     from pathlib import Path
     src = (Path(__file__).resolve().parents[1]
            / "scripts" / "build_daily_results.py").read_text(encoding="utf-8")
-    assert src.count('"stake_yen_100unit"') >= 2, "CSV 列に出ていない"
+    # 予定 (planned) と決済済み (settled) を分ける。回収率の分母は settled。
+    for col in ('"planned_stake_yen_100unit"', '"settled_stake_yen_100unit"'):
+        assert src.count(col) >= 2, f"{col} が CSV 列に出ていない"
 
 
 def test_manifest_splits_issued_from_evaluable():
@@ -575,7 +577,7 @@ def test_evaluable_requires_both_not_cancelled_and_resolved():
 
     # 判定は db.exclusion_reason / is_evaluable に集約した (分岐の並びで
     # 答えが変わらないようにするため)。呼び出し側は委譲するだけ。
-    assert "is_evaluable(not_cancelled, result_resolved)" in src, (
+    assert "is_evaluable(not_cancelled, result_resolved, payout_resolved)" in src, (
         "evaluable の導出が呼び出し側に散っている")
     assert '"result_resolved"' in src, "result_resolved が出力に無い"
 
@@ -598,21 +600,29 @@ def test_analyze_misses_skips_excluded_races():
 
 # --- 除外理由の導出 (4 セルすべて) ---------------------------------------
 
-@pytest.mark.parametrize("not_cancelled,result_resolved,want_reason,want_eval", [
-    # **中止レースは結果も無い**ので両方の条件に当てはまる。分岐の並びで
-    # 答えが変わらないよう、4 通りすべてを固定する。
-    (False, False, "cancelled", False),               # 現実の中止
-    (False, True,  "cancelled", False),               # 中止が優先
-    (True,  False, "result_not_yet_available", False),  # 結果待ち (負けにしない)
-    (True,  True,  None, True),                        # 評価する
+@pytest.mark.parametrize("not_cancelled,has_finish,has_payout,want_reason,want_eval", [
+    # **中止レースは着順も払戻も無い**ので複数の条件に当てはまる。分岐の並びで
+    # 答えが変わらないよう、8 通りすべてを固定する。
+    (False, False, False, "cancelled", False),                 # 現実の中止
+    (False, True,  True,  "cancelled", False),                 # 中止が最優先
+    (False, True,  False, "cancelled", False),
+    (False, False, True,  "cancelled", False),
+    (True,  False, False, "result_not_yet_available", False),  # 結果待ち
+    (True,  False, True,  "result_not_yet_available", False),  # 着順が先に要る
+    (True,  True,  False, "payout_not_yet_available", False),  # ★ 払戻待ち
+    (True,  True,  True,  None, True),                         # 評価する
 ])
-def test_exclusion_reason_truth_table(not_cancelled, result_resolved,
+def test_exclusion_reason_truth_table(not_cancelled, has_finish, has_payout,
                                       want_reason, want_eval):
-    """除外理由の 4 通り。順序依存の実装だと必ずどれかが落ちる。"""
+    """除外理由の 8 通り。順序依存の実装だと必ずどれかが落ちる。
+
+    ★ `payout_not_yet_available` が独立していることが要点。着順だけで
+    評価可にすると「勝った買い候補の払戻がまだ 0」→ -100 円になる。
+    """
     from db import exclusion_reason, is_evaluable
 
-    assert exclusion_reason(not_cancelled, result_resolved) == want_reason
-    assert is_evaluable(not_cancelled, result_resolved) is want_eval
+    assert exclusion_reason(not_cancelled, has_finish, has_payout) == want_reason
+    assert is_evaluable(not_cancelled, has_finish, has_payout) is want_eval
 
 
 def test_evaluable_and_reason_never_disagree():
@@ -620,8 +630,21 @@ def test_evaluable_and_reason_never_disagree():
     from db import exclusion_reason, is_evaluable
 
     for nc in (True, False):
-        for rr in (True, False):
-            assert is_evaluable(nc, rr) is (exclusion_reason(nc, rr) is None)
+        for f in (True, False):
+            for pay in (True, False):
+                assert is_evaluable(nc, f, pay) is (
+                    exclusion_reason(nc, f, pay) is None)
+
+
+def test_payout_pending_is_its_own_state():
+    """払戻待ちを「結果待ち」や「中止」と同じ理由で潰さないこと。"""
+    from db import (EXCLUSION_CANCELLED, EXCLUSION_PAYOUT_PENDING,
+                    EXCLUSION_RESULT_PENDING, exclusion_reason)
+
+    assert len({EXCLUSION_CANCELLED, EXCLUSION_RESULT_PENDING,
+                EXCLUSION_PAYOUT_PENDING}) == 3
+    assert exclusion_reason(True, True, False) == EXCLUSION_PAYOUT_PENDING
+    assert EXCLUSION_PAYOUT_PENDING == "payout_not_yet_available"
 
 
 def test_the_caller_does_not_reimplement_the_branching():
@@ -635,8 +658,8 @@ def test_the_caller_does_not_reimplement_the_branching():
            / "scripts" / "build_daily_results.py").read_text(encoding="utf-8")
 
     assert "exclusion = exclusion_reason(" in src
-    assert "EXCLUSION_RESULT_PENDING" not in src, (
-        "呼び出し側で理由を組み立て直している")
+    for name in ("EXCLUSION_RESULT_PENDING", "EXCLUSION_PAYOUT_PENDING"):
+        assert name not in src, "呼び出し側で理由を組み立て直している"
 
 
 # --- 実クエリを「実行」して確かめる -------------------------------------
