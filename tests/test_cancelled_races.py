@@ -900,3 +900,19 @@ def test_the_accuracy_query_excludes_cancelled_when_run(two_race_db):
     tracks = {r["track_code"] for r in rows}
     assert "09" in tracks
     assert "06" not in tracks, "中止レースが的中率の分母に入る"
+
+
+def test_the_final_payout_contract_is_marked_as_observed_not_specified():
+    """`data_div='2'` = 確定 は **実データで確認した契約**だと明記すること。
+
+    一次資料 (JRA-VAN / JV-Link 仕様) で裏を取ったわけではないので、
+    そう読めるコメントを残しておかないと、後から仕様だと誤解される。
+    """
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1] / "db.py").read_text(encoding="utf-8")
+    block = src[src.index("FINAL_PAYOUT_DATA_DIV") - 900:
+                src.index('FINAL_PAYOUT_DATA_DIV = "2"')]
+
+    assert "2026" in block, "いつのデータで確認したか書かれていない"
+    assert "一次資料" in block, "仕様で確認したものでないことが書かれていない"
