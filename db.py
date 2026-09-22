@@ -107,6 +107,31 @@ def sql_evaluable_race(column: str = "data_div") -> str:
 SQL_EVALUABLE_RACE = sql_evaluable_race()
 
 
+#: 馬券が **返還** される異常区分 (出走取消・除外)。走っていないので外れでもない。
+# `scripts/fundamental_model.py` の `NOT_A_START` と同じ集合
+# (あちらは「1 戦」に数えない基準)。値がずれたらテストで落ちる。
+REFUNDED_ABNORMAL_CODES = frozenset({"1", "2", "3"})
+
+#: 着順が付かない異常区分。上記に加えて競走中止 (4) を含む。
+# **競走中止は馬券が返還されない** (出走はしている) ので返還集合とは別。
+# 「結果が確定したか」を判定するとき、この馬たちに着順を要求してはいけない。
+NON_FINISHER_ABNORMAL_CODES = REFUNDED_ABNORMAL_CODES | frozenset({"4"})
+
+
+def is_refunded(abnormal_code: object) -> bool:
+    """この馬の馬券が返還されるか (出走取消・除外)。
+
+    返還された馬券を「外れ = -100 円」に数えるのは、中止レースを負けに
+    数えるのとまったく同じ誤り。
+    """
+    return str(abnormal_code or "").strip() in REFUNDED_ABNORMAL_CODES
+
+
+def expects_a_finishing_order(abnormal_code: object) -> bool:
+    """この馬に確定着順が付くはずか (速報と確定の区別に使う)。"""
+    return str(abnormal_code or "").strip() not in NON_FINISHER_ABNORMAL_CODES
+
+
 def exclusion_reason(not_cancelled: bool, has_finish: bool,
                      has_payout: bool) -> str | None:
     """評価対象外の理由を決める **唯一の場所**。

@@ -777,3 +777,121 @@ def test_the_predicate_is_a_call_not_a_literal(rel):
     assert not offenders, (
         f"述語を文字列で差し替えている: {offenders}。"
         f"db.sql_evaluable_race() / sql_cancelled_race() を渡すこと")
+
+
+# --- 馬単位の返還 (レース単位の中止と同型) -------------------------------
+
+def test_a_race_abandonment_is_not_a_refund():
+    """競走中止 (走ったが完走せず) は **返還されない**こと。
+
+    出走取消・除外は走っていないので返還されるが、競走中止は出走している
+    ので馬券は的中せず戻らない。ここを混ぜると、外れを返還扱いして損失を
+    過少に見せることになる。
+    """
+    from db import (NON_FINISHER_ABNORMAL_CODES, REFUNDED_ABNORMAL_CODES,
+                    expects_a_finishing_order, is_refunded)
+
+    assert is_refunded("1") is True, "出走取消は返還"
+    assert is_refunded("2") is True
+    assert is_refunded("3") is True
+    assert is_refunded("4") is False, "競走中止を返還扱いしている (損失の過少計上)"
+    assert is_refunded("0") is False
+
+    # 着順が付くかは別軸。競走中止は返還されないが着順も付かない。
+    assert expects_a_finishing_order("4") is False
+    assert expects_a_finishing_order("0") is True
+    assert "4" in NON_FINISHER_ABNORMAL_CODES
+    assert "4" not in REFUNDED_ABNORMAL_CODES
+
+
+def test_the_refund_codes_match_the_research_pipeline():
+    """返還の集合が研究側の「1 戦に数えない」集合と一致すること。
+
+    2 箇所で別々に定義すると必ずずれる。ずれたらここで落とす。
+    """
+    from db import REFUNDED_ABNORMAL_CODES
+    from scripts.fundamental_model import NOT_A_START
+
+    assert REFUNDED_ABNORMAL_CODES == NOT_A_START
+
+
+# --- 残り 3 経路も「実行」で確かめる -------------------------------------
+# `test_the_real_query_text_still_excludes_cancelled` は本文を見るだけなので、
+# `(1=1 OR NOT EXISTS (...))` のように語を残したまま無効化する変異を通した
+# (M6 / M16b / M17b として 2 回持ち越された)。実行すれば必ず落ちる。
+
+
+def _run_module_sql(conn, rel, marker, params, **fmt):
+    sql = _module_sql(rel, marker)
+    if fmt:
+        sql = sql.format(**fmt)
+    return conn.execute(sql, params).fetchall()
+
+
+def test_the_generator_race_query_excludes_cancelled_when_run(two_race_db):
+    """generator の races 側クエリを実行して中止が出てこないこと (M6)。"""
+    from db import sql_evaluable_race
+
+    rows = _run_module_sql(two_race_db, "web/generator.py", "SELECT * FROM races",
+                           ("20260921", "20260921"),
+                           evaluable=sql_evaluable_race())
+
+    tracks = {r["track_code"] for r in rows}
+    assert "09" in tracks, "実施レースまで落としている"
+    assert "06" not in tracks, "中止レースが描画対象に入る"
+
+
+def test_the_monitor_query_excludes_cancelled_when_run(two_race_db):
+    """monitor の集計クエリを実行して中止が出てこないこと (M17b)。
+
+    `NOT EXISTS` を `(1=1 OR NOT EXISTS (...))` にする変異は、語が残るので
+    本文検査を通り抜ける。実行すれば中止レースが混ざって落ちる。
+    """
+    from db import sql_cancelled_race
+
+    two_race_db.execute("CREATE TABLE mining_predictions (race_year TEXT,"
+                        " race_month_day TEXT, track_code TEXT, kaiji TEXT,"
+                        " nichiji TEXT, race_num TEXT, horse_num TEXT)")
+    # 中止側にも着順を入れて「confirmed_order > 0 の副作用で落ちている」
+    # 可能性を排除する
+    two_race_db.execute("UPDATE horse_races SET confirmed_order=1"
+                        " WHERE track_code='06'")
+
+    sql = _module_sql("scripts/monitor.py", "AS with_mining")
+    sql = sql.format(ph="?,?", cancelled=sql_cancelled_race("r.data_div"))
+    row = two_race_db.execute(sql, ("06", "09", "20260921", "20260921")).fetchone()
+
+    assert row["total"] == 1, (
+        f"中止レースが monitor の集計に入っている (total={row['total']})")
+
+
+def test_the_accuracy_query_excludes_cancelled_when_run(two_race_db):
+    """prediction_accuracy のクエリに中止が出てこないこと (M16b)。
+
+    完全な実行は prediction_log 等が要るので、ここでは中止除外の副問合せだけを
+    取り出して当てる。語を残して無効化する変異はこれで落ちる。
+    """
+    from db import sql_cancelled_race
+
+    sql = _module_sql("scripts/prediction_accuracy.py", "hr.confirmed_order > 0")
+    # `NOT EXISTS (` から **対応する閉じ括弧まで**を数えて取り出す。
+    open_at = sql.index("NOT EXISTS (") + len("NOT EXISTS (")
+    depth, i = 1, open_at
+    while depth:
+        if sql[i] == "(":
+            depth += 1
+        elif sql[i] == ")":
+            depth -= 1
+        i += 1
+    subquery = sql[open_at:i - 1].format(
+        cancelled=sql_cancelled_race("r.data_div"))
+
+    two_race_db.execute("UPDATE horse_races SET confirmed_order=1")
+    rows = two_race_db.execute(f"""
+        SELECT hr.track_code FROM horse_races hr
+         WHERE hr.confirmed_order > 0 AND NOT EXISTS ({subquery})
+    """).fetchall()
+
+    tracks = {r["track_code"] for r in rows}
+    assert "09" in tracks
+    assert "06" not in tracks, "中止レースが的中率の分母に入る"

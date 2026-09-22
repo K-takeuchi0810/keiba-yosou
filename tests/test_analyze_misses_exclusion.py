@@ -144,3 +144,23 @@ def test_a_cancelled_race_is_not_a_miss(results_dir):
     assert all("05" != r["race_id"].rsplit("-", 1)[-1] for r in rows)
     assert all("04" != r["race_id"].rsplit("-", 1)[-1] for r in rows), (
         "払戻待ちが miss に数えられている")
+
+
+def test_the_reason_breakdown_is_not_collapsed(results_dir):
+    """2 つ以上の理由が混ざったとき、内訳が潰れないこと。
+
+    1 理由しか無い fixture だと「まとめて数える」変異を捕まえられない
+    (M25 として 2 回持ち越された)。ここは 3 理由が同時に立つ。
+    """
+    _rows, stats = analyze_misses.build(db_path=results_dir)
+    skipped = stats["skipped"]
+
+    reasons = {k: v for k, v in skipped.items()
+               if k.startswith("excluded_") and v}
+    assert len(reasons) == 3, f"理由がまとめられている: {reasons}"
+    assert set(reasons) == {
+        "excluded_cancelled",
+        "excluded_result_not_yet_available",
+        "excluded_payout_not_yet_available",
+    }
+    assert sum(reasons.values()) == 3
