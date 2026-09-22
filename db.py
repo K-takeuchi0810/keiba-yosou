@@ -93,6 +93,18 @@ EXCLUSION_RESULT_PENDING = "result_not_yet_available"
 # 「着順だけ先に入る → 払戻未取得 → 勝った買い候補を -100 円」は、今回の
 # 中止レースと同型の事故。着順の到着と払戻の到着は別のタイミングで来る。
 EXCLUSION_PAYOUT_PENDING = "payout_not_yet_available"
+#: 払戻は届いたが **速報値**。降着等で金額が変わりうるので ROI を確定しない。
+# 着順速報を排除したのと同じ理由。`payouts.data_div` が '1' のあいだはこれ。
+EXCLUSION_PAYOUT_NOT_FINAL = "payout_not_yet_final"
+
+#: 確定した払戻レコードの区分。実データでは開催の 1-2 日後に '1' (速報) から
+# '2' (確定) へ置き換わる (2026 年: '2' が 2,490 行 / '1' が 72 行)。
+FINAL_PAYOUT_DATA_DIV = "2"
+
+
+def is_final_payout(data_div: object) -> bool:
+    """確定した払戻か (速報値で ROI を確定しないため)。"""
+    return str(data_div or "").strip() == FINAL_PAYOUT_DATA_DIV
 
 
 def sql_evaluable_race(column: str = "data_div") -> str:
@@ -133,7 +145,7 @@ def expects_a_finishing_order(abnormal_code: object) -> bool:
 
 
 def exclusion_reason(not_cancelled: bool, has_finish: bool,
-                     has_payout: bool) -> str | None:
+                     has_payout: bool, payout_final: bool = True) -> str | None:
     """評価対象外の理由を決める **唯一の場所**。
 
     呼び出し側で if/elif を並べると、**順序を入れ替えるだけで中止レースが
@@ -145,7 +157,12 @@ def exclusion_reason(not_cancelled: bool, has_finish: bool,
         中止                       -> cancelled                (永久除外。馬券は返還)
         実施 / 着順なし            -> result_not_yet_available (結果が来れば評価可へ)
         実施 / 着順あり / 払戻なし -> payout_not_yet_available (払戻が来れば評価可へ)
-        実施 / 着順あり / 払戻あり -> None                     (評価する)
+        実施 / 着順あり / 速報払戻 -> payout_not_yet_final     (確定すれば評価可へ)
+        実施 / 着順あり / 確定払戻 -> None                     (評価する)
+
+    段階は `レース実施 -> 着順確定 -> 払戻最終確定 -> evaluable`。
+    「着順が入ったから評価できる」「払戻行があるから評価できる」という
+    **単一条件には戻さないこと**。
 
     `has_payout` は **レース単位**で「その馬券種の確定払戻データが届いたか」。
     各馬に払戻行が要るという意味ではない (敗戦馬に払戻は無い)。
@@ -156,12 +173,16 @@ def exclusion_reason(not_cancelled: bool, has_finish: bool,
         return EXCLUSION_RESULT_PENDING
     if not has_payout:
         return EXCLUSION_PAYOUT_PENDING
+    if not payout_final:
+        return EXCLUSION_PAYOUT_NOT_FINAL
     return None
 
 
-def is_evaluable(not_cancelled: bool, has_finish: bool, has_payout: bool) -> bool:
+def is_evaluable(not_cancelled: bool, has_finish: bool, has_payout: bool,
+                 payout_final: bool = True) -> bool:
     """評価に使えるか。`exclusion_reason` と必ず一致すること。"""
-    return exclusion_reason(not_cancelled, has_finish, has_payout) is None
+    return exclusion_reason(not_cancelled, has_finish, has_payout,
+                            payout_final) is None
 
 
 def sql_cancelled_race(column: str = "data_div") -> str:

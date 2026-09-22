@@ -46,6 +46,7 @@ def _run_main(
     abnormal_code: str = "0",
     extra_horses: tuple = (),
     dead_heat: bool = False,
+    payout_final: bool = True,
 ) -> Path:
     """`extra_horses` は (horse_num, confirmed_order, abnormal_code) の並び。
 
@@ -74,7 +75,7 @@ def _run_main(
           fuku_horse_num2 TEXT, fuku_payout2 INTEGER,
           fuku_horse_num3 TEXT, fuku_payout3 INTEGER,
           fuku_horse_num4 TEXT, fuku_payout4 INTEGER,
-          fuku_horse_num5 TEXT, fuku_payout5 INTEGER
+          fuku_horse_num5 TEXT, fuku_payout5 INTEGER, data_div TEXT
         );
         CREATE TABLE races (
           race_year TEXT, race_month_day TEXT, track_code TEXT, kaiji TEXT,
@@ -103,11 +104,14 @@ def _run_main(
         )
     if with_payout:
         conn.execute(
-            "INSERT INTO payouts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO payouts VALUES"
+            " (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (*common,
              ("02" if dead_heat else "01"), 500,
              ("01" if dead_heat else None), (700 if dead_heat else None),
-             "01", 200, None, None, "00", 0, None, None, None, None),
+             "01", 200, None, None, "00", 0, None, None, None, None,
+             # '2' = 確定払戻、'1' = 速報 (降着等で金額が変わりうる)
+             ("2" if payout_final else "1")),
         )
     conn.execute(
         "INSERT INTO races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -596,3 +600,48 @@ def test_a_dead_heat_winner_is_paid(tmp_path, monkeypatch):
         f"同着 2 頭目の払戻を拾えていない: {by_num['1']['win_payout']}")
     assert by_num["1"]["profit_loss_yen_100unit"] == "600", (
         "同着で勝ったのに損益が正しくない")
+
+
+def test_a_provisional_payout_is_not_evaluable(tmp_path, monkeypatch):
+    """★ 速報払戻で ROI を確定しないこと。
+
+    着順速報を排除したのと同じ理由。降着等で金額が変わりうるので、
+    払戻が最終確定するまで評価対象にしない。
+    段階は レース実施 → 着順確定 → **払戻最終確定** → evaluable。
+    """
+    output_dir = _run_main(
+        tmp_path, monkeypatch, data_div="6", confirmed_order=1,
+        extra_horses=(("02", 2, "0"),), payout_final=False,
+        html_text=_html_fragment(top_pick=_BET_PICK))
+
+    rows = _summary_rows(output_dir)
+    for row in rows:
+        assert row["result_resolved"] == "True", "着順は確定している"
+        assert row["payout_resolved"] == "True", "払戻自体は届いている"
+        assert row["payout_final"] == "False", "速報のはず"
+        assert row["evaluable"] == "False", "速報払戻で評価を確定している"
+        assert row["evaluation_exclusion_reason"] == "payout_not_yet_final"
+        assert row["profit_loss_yen_100unit"] == "0"
+        assert row["settled_stake_yen_100unit"] == "0"
+
+
+def test_the_three_stages_are_distinct(tmp_path, monkeypatch):
+    """結果確定前 → 非評価、着順確定・払戻速報 → 非評価、最終払戻 → evaluable。
+
+    指示された 3 段階が実際に分かれていることを 1 本で見る。
+    """
+    for i, (order, final, want_reason, want_eval) in enumerate([
+        (0, True,  "result_not_yet_available", "False"),
+        (1, False, "payout_not_yet_final",     "False"),
+        (1, True,  "",                          "True"),
+    ]):
+        d = tmp_path / f"s{i}"
+        d.mkdir()
+        rows = _summary_rows(_run_main(
+            d, monkeypatch, data_div="6", confirmed_order=order,
+            extra_horses=(("02", 2 if order else 0, "0"),),
+            payout_final=final, html_text=_html_fragment(top_pick=_BET_PICK)))
+        got = rows[0]["evaluation_exclusion_reason"]
+        assert got in (want_reason, "None" if not want_reason else want_reason), (
+            f"段階 {i}: 期待 {want_reason!r} だが {got!r}")
+        assert rows[0]["evaluable"] == want_eval, f"段階 {i} の evaluable"

@@ -42,7 +42,8 @@ from pathlib import Path
 
 from db import SQL_VALID_HORSE_NUM
 from db import (exclusion_reason, expects_a_finishing_order,
-                is_evaluable, is_evaluable_race, is_refunded)
+                is_evaluable, is_evaluable_race, is_final_payout,
+                is_refunded)
 from config import guard_analysis_window, sealed_notice  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -560,7 +561,7 @@ def main() -> int:
     cur = conn.execute("""
         SELECT race_year, race_month_day, track_code, kaiji, nichiji, race_num,
                tan_horse_num1, tan_payout1,
-               tan_horse_num2, tan_payout2,
+               tan_horse_num2, tan_payout2, data_div,
                fuku_horse_num1, fuku_payout1, fuku_horse_num2, fuku_payout2,
                fuku_horse_num3, fuku_payout3, fuku_horse_num4, fuku_payout4,
                fuku_horse_num5, fuku_payout5
@@ -705,6 +706,12 @@ def main() -> int:
         race_id_of(p["track_code"], p["race_num"]) for p in payout_rows
         if p.get("tan_horse_num1") and int(p.get("tan_payout1") or 0) > 0
     }
+    # **速報払戻で ROI を確定しない**。降着等で金額が変わりうるので、
+    # 着順速報を排除したのと同じ理由で確定を待つ。
+    races_with_final_payout = {
+        race_id_of(p["track_code"], p["race_num"]) for p in payout_rows
+        if is_final_payout(p.get("data_div"))
+    }
     # payout を horse_num に展開
     win_payout_by: dict[tuple[str, str], int] = {}
     place_payout_by: dict[tuple[str, str], int] = {}
@@ -746,11 +753,13 @@ def main() -> int:
         not_cancelled = is_evaluable_race(race.get("data_div"))
         result_resolved = rid in races_with_finish
         payout_resolved = rid in races_with_payout
+        payout_final = rid in races_with_final_payout
         # 分岐をここに書かない。並び順を変えるだけで中止が「結果待ち」に
         # なる (中止レースは複数の条件に当てはまる)。
         exclusion = exclusion_reason(not_cancelled, result_resolved,
-                                     payout_resolved)
-        evaluable = is_evaluable(not_cancelled, result_resolved, payout_resolved)
+                                     payout_resolved, payout_final)
+        evaluable = is_evaluable(not_cancelled, result_resolved,
+                                 payout_resolved, payout_final)
         horse_refunded = is_refunded(rr.get("abnormal_code"))
         # 100 円ベース profit_loss (買い判定 (bet_candidate=True) のとき 100 円賭けた前提で計算)
         if pred.get("bet_candidate") and evaluable and not horse_refunded:
@@ -802,6 +811,7 @@ def main() -> int:
             "race_status": ("CANCELLED" if not not_cancelled else "RUN"),
             "result_resolved": result_resolved,
             "payout_resolved": payout_resolved,
+            "payout_final": payout_final,
             "actual_execution_date": (date if evaluable else None),
             "evaluable": evaluable,
             "evaluation_exclusion_reason": exclusion,
@@ -859,6 +869,7 @@ def main() -> int:
         "planned_stake_yen_100unit", "settled_stake_yen_100unit",
         "horse_refunded",
         "prediction_issued", "race_status", "result_resolved", "payout_resolved",
+        "payout_final",
         "actual_execution_date", "evaluable",
         "evaluation_exclusion_reason",
         "profit_loss_yen_100unit",

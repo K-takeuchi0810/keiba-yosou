@@ -577,8 +577,9 @@ def test_evaluable_requires_both_not_cancelled_and_resolved():
 
     # 判定は db.exclusion_reason / is_evaluable に集約した (分岐の並びで
     # 答えが変わらないようにするため)。呼び出し側は委譲するだけ。
-    assert "is_evaluable(not_cancelled, result_resolved, payout_resolved)" in src, (
+    assert "is_evaluable(not_cancelled, result_resolved," in src, (
         "evaluable の導出が呼び出し側に散っている")
+    assert "payout_final)" in src, "払戻の確定を評価条件に入れていない"
     assert '"result_resolved"' in src, "result_resolved が出力に無い"
 
 
@@ -600,20 +601,21 @@ def test_analyze_misses_skips_excluded_races():
 
 # --- 除外理由の導出 (4 セルすべて) ---------------------------------------
 
-@pytest.mark.parametrize("not_cancelled,has_finish,has_payout,want_reason,want_eval", [
+@pytest.mark.parametrize("not_cancelled,has_finish,has_payout,payout_final,want_reason,want_eval", [
     # **中止レースは着順も払戻も無い**ので複数の条件に当てはまる。分岐の並びで
     # 答えが変わらないよう、8 通りすべてを固定する。
-    (False, False, False, "cancelled", False),                 # 現実の中止
-    (False, True,  True,  "cancelled", False),                 # 中止が最優先
-    (False, True,  False, "cancelled", False),
-    (False, False, True,  "cancelled", False),
-    (True,  False, False, "result_not_yet_available", False),  # 結果待ち
-    (True,  False, True,  "result_not_yet_available", False),  # 着順が先に要る
-    (True,  True,  False, "payout_not_yet_available", False),  # ★ 払戻待ち
-    (True,  True,  True,  None, True),                         # 評価する
+    (False, False, False, True,  "cancelled", False),                # 現実の中止
+    (False, True,  True,  True,  "cancelled", False),                # 中止が最優先
+    (False, True,  False, True,  "cancelled", False),
+    (False, False, True,  True,  "cancelled", False),
+    (True,  False, False, True,  "result_not_yet_available", False), # 結果待ち
+    (True,  False, True,  True,  "result_not_yet_available", False), # 着順が先
+    (True,  True,  False, True,  "payout_not_yet_available", False), # 払戻待ち
+    (True,  True,  True,  False, "payout_not_yet_final", False),     # ★ 速報払戻
+    (True,  True,  True,  True,  None, True),                        # 評価する
 ])
 def test_exclusion_reason_truth_table(not_cancelled, has_finish, has_payout,
-                                      want_reason, want_eval):
+                                      payout_final, want_reason, want_eval):
     """除外理由の 8 通り。順序依存の実装だと必ずどれかが落ちる。
 
     ★ `payout_not_yet_available` が独立していることが要点。着順だけで
@@ -621,8 +623,10 @@ def test_exclusion_reason_truth_table(not_cancelled, has_finish, has_payout,
     """
     from db import exclusion_reason, is_evaluable
 
-    assert exclusion_reason(not_cancelled, has_finish, has_payout) == want_reason
-    assert is_evaluable(not_cancelled, has_finish, has_payout) is want_eval
+    assert exclusion_reason(not_cancelled, has_finish, has_payout,
+                            payout_final) == want_reason
+    assert is_evaluable(not_cancelled, has_finish, has_payout,
+                        payout_final) is want_eval
 
 
 def test_evaluable_and_reason_never_disagree():
@@ -632,8 +636,9 @@ def test_evaluable_and_reason_never_disagree():
     for nc in (True, False):
         for f in (True, False):
             for pay in (True, False):
-                assert is_evaluable(nc, f, pay) is (
-                    exclusion_reason(nc, f, pay) is None)
+                for fin in (True, False):
+                    assert is_evaluable(nc, f, pay, fin) is (
+                        exclusion_reason(nc, f, pay, fin) is None)
 
 
 def test_payout_pending_is_its_own_state():
