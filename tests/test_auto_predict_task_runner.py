@@ -346,12 +346,20 @@ def _run_runner(fixture: Path, *extra: str) -> int:
     ).returncode
 
 
-def test_watchdog_forwards_dry_run_to_the_batch(tmp_path: Path) -> None:
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize("subdir", ["plain", "with space (x86)"])
+def test_watchdog_forwards_dry_run_to_the_batch(tmp_path: Path, subdir: str) -> None:
     """-DryRun を付けたときだけ子の bat に --dry-run が渡ること (2026-09-25)。
 
     渡らないと「dry-run のつもりで本番の取り込み・通知・push が走る」。
+    空白と括弧を含むパスでも見る (`Program Files (x86)` のような場所)。cmd は
+    /c の文字列の引用符を条件次第で剥がすので、二重に包まないとここで壊れる。
     """
-    fixture, seen = _args_probe(tmp_path)
+    d = tmp_path / subdir
+    d.mkdir()
+    fixture, seen = _args_probe(d)
 
     assert _run_runner(fixture, "-DryRun") == 0
     assert seen.read_text(encoding="ascii").strip() == "[--dry-run]"
