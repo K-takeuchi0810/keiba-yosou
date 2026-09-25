@@ -6,6 +6,8 @@
 このファイルは tests/ を pytest のテストパッケージとして明示する役割のみ。
 """
 
+import os
+
 import pytest
 
 
@@ -38,6 +40,28 @@ def _snapshot_runtime_dirs(root):
     return snap
 
 
+#: 見張りのモードを決める環境変数。値は 2 つだけ (2026-09-26)。
+#:   strict (既定) : 開発・worktree・変異テスト。変化があれば失敗
+#:   off           : 週次監視 (weekly_monitor.bat) 専用。この見張りだけを止める
+RUNTIME_GUARD_ENV = "KEIBA_RUNTIME_GUARD"
+RUNTIME_GUARD_MODES = ("strict", "off")
+
+
+def runtime_guard_mode() -> str:
+    """見張りのモード。未知の値は黙って off にせず、その場で止める。"""
+    mode = os.environ.get(RUNTIME_GUARD_ENV, "strict").strip().lower() or "strict"
+    if mode not in RUNTIME_GUARD_MODES:
+        raise pytest.UsageError(
+            f"{RUNTIME_GUARD_ENV}={os.environ.get(RUNTIME_GUARD_ENV)!r} は使えない "
+            f"(使えるのは {', '.join(RUNTIME_GUARD_MODES)})")
+    return mode
+
+
+def pytest_configure(config):
+    # 未知の値はテストを 1 本も流す前に止める (黙って見張りを外さない)
+    runtime_guard_mode()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _tests_do_not_touch_runtime_logs():
     """テスト全体で `data/logs` と `data/runtime` を 1 バイトも変えないこと (2026-09-25)。
@@ -46,11 +70,26 @@ def _tests_do_not_touch_runtime_logs():
     watchdog のテストが本番の `auto_predict_watchdog.log` に 426 行書き込んでいた
     (「沈黙 = 未起動」を読む運用ログ)。テストがログを出すなら tmp_path へ。
 
-    まれに、テストと同時刻に本物の定期実行 (08:00 / 09:00 / 11:00 など) が走ると
-    ここで落ちる。そのときは差分のファイル名が本番起動のものかを見て判断する。
+    ## off にする場所は週次監視だけ
+
+    前後の比較では **誰が書いたか** を区別できない。週次監視 (毎週日曜 10:00) は
+    本番 checkout で pytest を回し、同じ時間帯に fresh odds の取得 (10 分ごと) なども
+    data/logs に書くので、この見張りは必ず落ちる (2026-09-26 のレビューで再現)。
+    そこで週次監視では `KEIBA_RUNTIME_GUARD=off` で **この見張りだけ** を止め、
+    pytest の出力も data/logs の外に出す。警告に落とす方式は採らない (毎週ほぼ確実に
+    出る警告は、テストの汚染か正規のタスクかを区別できず、読まれなくなる)。
+
+    off で止まるのはこの見張りだけ。通知の状態ファイルの隔離 (上の fixture) や、
+    変異テストの枠 (`scripts/mutation_sandbox.py`、子プロセスを常に strict で流す)
+    は影響を受けない。
     """
     from pathlib import Path
 
+    if runtime_guard_mode() == "off":
+        print(f"\n[{RUNTIME_GUARD_ENV}=off] 運用ログ置き場の前後比較を止めています "
+              "(週次監視専用)")
+        yield
+        return
     root = Path(__file__).resolve().parents[1]
     before = _snapshot_runtime_dirs(root)
     yield

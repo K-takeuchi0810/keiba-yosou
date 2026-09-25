@@ -231,8 +231,11 @@ def run_mutants(copy_root: Path, mutants, tests, *,
         import tempfile
 
         with tempfile.TemporaryDirectory(prefix="mut-pyc-") as pyc:
+            # conftest の見張りは常に strict で流す。呼び出し元が週次監視用の
+            # KEIBA_RUNTIME_GUARD=off を持っていても、変異の実行には持ち込まない
+            # (環境変数 1 つで枠の内側の防御線まで外れないように)。
             env = {**os.environ, "PYTHONPYCACHEPREFIX": pyc,
-                   "PYTHONIOENCODING": "utf-8"}
+                   "PYTHONIOENCODING": "utf-8", "KEIBA_RUNTIME_GUARD": "strict"}
             return subprocess.run(
                 [py, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", *tests],
                 cwd=copy_root, capture_output=True, text=True, encoding="utf-8",

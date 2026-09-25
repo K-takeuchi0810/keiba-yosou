@@ -19,12 +19,22 @@ set GAPCODE=%errorlevel%
 set TESTCODE=0
 .venv64\Scripts\python.exe -c "import pytest" 2>nul
 if errorlevel 1 goto :pytest_skip
-echo --- pytest tests/ ---
+REM pytest runs in the production checkout while other scheduled tasks (fresh
+REM odds every 10 min, healthcheck every 15 min) write data\logs. A before/after
+REM snapshot cannot tell who wrote, so tests\conftest.py's runtime-log guard is
+REM switched off for this run only (KEIBA_RUNTIME_GUARD=off; any other value
+REM than strict/off aborts pytest). pytest's own output goes outside data\logs.
+if not exist data\monitor_runs mkdir data\monitor_runs
+set "PYTESTLOG=data\monitor_runs\weekly_pytest_%RUNDATE%.log"
+echo --- pytest tests/ (output: %PYTESTLOG%) ---
+set "KEIBA_RUNTIME_GUARD=off"
 REM $null=$p.Handle is REQUIRED: PowerShell 5.1 leaves $p.ExitCode null after
 REM WaitForExit(ms) unless the process Handle was touched before it exits, which
 REM would silently turn a red pytest into exit 0 (verified 2026-07-19).
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$p=Start-Process -FilePath '.venv64\Scripts\python.exe' -ArgumentList '-m','pytest','tests/','-q' -NoNewWindow -PassThru; $null=$p.Handle; if(-not $p.WaitForExit(600*1000)){taskkill.exe /PID $p.Id /T /F | Out-Null; exit 124}; exit $p.ExitCode"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$p=Start-Process -FilePath '.venv64\Scripts\python.exe' -ArgumentList '-m','pytest','tests/','-q' -NoNewWindow -PassThru -RedirectStandardOutput '%PYTESTLOG%' -RedirectStandardError '%PYTESTLOG%.stderr'; $null=$p.Handle; if(-not $p.WaitForExit(600*1000)){taskkill.exe /PID $p.Id /T /F | Out-Null; exit 124}; exit $p.ExitCode"
 set TESTCODE=%errorlevel%
+set "KEIBA_RUNTIME_GUARD="
+echo pytest exit %TESTCODE% (full output: %PYTESTLOG%)
 goto :pytest_done
 :pytest_skip
 echo --- pytest skip (not installed: pip install -r requirements-dev.txt) ---

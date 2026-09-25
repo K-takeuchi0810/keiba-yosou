@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 import sys
 from pathlib import Path
 
@@ -413,7 +414,11 @@ def test_a_leak_in_the_baseline_run_is_reported_as_such(tmp_path, prod):
                        ["tests/test_calc.py"], production_root=prod)
 
 
-@pytest.mark.parametrize("rel", ["sub/../calc.py", "./sub/../calc.py", "calc.py/../calc.py"])
+@pytest.mark.parametrize("rel", [
+    "sub/../calc.py", "./sub/../calc.py", "calc.py/../calc.py",
+    # バックスラッシュ区切り・混在 (区切りを / だけで分ける変異 R9 を落とす)
+    "sub\\..\\calc.py", ".\\sub\\..\\calc.py", "sub/..\\calc.py",
+])
 def test_dotdot_is_refused_even_if_it_stays_inside(tmp_path, prod, rel):
     """`..` は、解決後にコピーの中に収まる場合でも拒否すること (指示どおり「.. 禁止」)。
 
@@ -429,3 +434,47 @@ def test_dotdot_is_refused_even_if_it_stays_inside(tmp_path, prod, rel):
                              ["tests/test_calc.py"], production_root=prod)
     assert results[0].status == "REFUSED", results
     assert (copy / "calc.py").read_bytes() == before
+
+
+def test_mutant_runs_ignore_a_caller_side_guard_off(tmp_path, prod, monkeypatch):
+    """★ 呼び出し元が KEIBA_RUNTIME_GUARD=off でも、変異の実行は strict で流すこと。
+
+    off は週次監視専用。環境変数 1 つで、枠の内側の防御線 (conftest の見張り) まで
+    外れてはいけない。変異なしの実行と変異ごとの実行の両方で確かめる。
+    """
+    monkeypatch.setenv("KEIBA_RUNTIME_GUARD", "off")
+    copy = _project(tmp_path / "copy")
+    seen = tmp_path / "guard_modes.txt"
+    (copy / "tests" / "test_guard_mode.py").write_text(
+        "import os\n\n"
+        "def test_mode():\n"
+        f"    with open({str(seen)!r}, 'a') as f:\n"
+        "        f.write(os.environ.get('KEIBA_RUNTIME_GUARD', '') + chr(10))\n")
+
+    ms.run_mutants(copy, [("M1", "calc.py", "return a + b", "return a - b")],
+                   ["tests/test_guard_mode.py", "tests/test_calc.py"], production_root=prod)
+
+    modes = seen.read_text().splitlines()
+    assert modes == ["strict", "strict"], f"off が変異の実行に持ち込まれた: {modes}"
+
+
+def test_a_same_size_overwrite_in_production_is_detected(tmp_path, prod):
+    """本番のログを **同じサイズで** 上書きしても検出すること (サイズだけ見る変異を落とす)。"""
+    log = prod / "data" / "logs" / "auto_predict_watchdog.log"
+    log.write_text("x\n")
+    before = ms.snapshot_production(prod)
+    time.sleep(0.02)
+    log.write_text("y\n")                                       # 同じ 2 バイト
+
+    assert ms.diff_snapshots(before, ms.snapshot_production(prod)) == [
+        "data/logs/auto_predict_watchdog.log"]
+
+
+def test_a_leak_into_a_production_subdirectory_is_detected(tmp_path, prod):
+    """本番の監視対象の **サブディレクトリ** への漏れも検出すること (rglob → glob の変異)。"""
+    copy = _project(tmp_path / "copy", writes_to=prod / "data" / "logs" / "sub")
+    (prod / "data" / "logs" / "sub").mkdir()
+
+    with pytest.raises(ms.SandboxError, match="本番が変わった"):
+        ms.run_mutants(copy, [("M1", "calc.py", "return a + b", "return a - b")],
+                       ["tests/test_calc.py"], production_root=prod)
