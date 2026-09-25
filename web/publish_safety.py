@@ -26,6 +26,12 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+# today を省略したときの基準日。2026-09-21 に date.today() を置き換えた際に
+# この import が抜けており、省略した経路は NameError で必ず落ちていた
+# (generator は常に today を渡すので本番では表に出なかった。2026-09-26 に
+# tests/test_generator_today.py が検出)。
+from jst import current_jst_date
+
 
 STALE_PUBLISH_WARNING = (
     "検証モード (オッズ鮮度無視) では iCloud 公開を強制的にスキップしました。"
