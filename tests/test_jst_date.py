@@ -143,12 +143,14 @@ def test_the_entry_point_uses_the_single_source(tmp_path, monkeypatch, capsys):
     day = current_jst_daystamp()
     db = tmp_path / "t.db"
     conn = sqlite3.connect(db)
+    # data_div は中止判定 (main 8a91d73) で必須。'6' = 実施予定。
     conn.execute("CREATE TABLE races (race_year TEXT, race_month_day TEXT,"
-                 " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT)")
+                 " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT,"
+                 " data_div TEXT)")
     conn.execute("CREATE TABLE horse_races (race_year TEXT, race_month_day TEXT,"
                  " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT,"
                  " horse_num TEXT)")
-    conn.execute("INSERT INTO races VALUES (?,?,'05','01','01','01')",
+    conn.execute("INSERT INTO races VALUES (?,?,'05','01','01','01','6')",
                  (day[:4], day[4:]))
     conn.commit()
     conn.close()

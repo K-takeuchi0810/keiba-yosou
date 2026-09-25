@@ -193,7 +193,8 @@ def test_eligible_coverage_record_is_open_day_fallback(monkeypatch):
 
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE races (race_year TEXT, race_month_day TEXT, track_code TEXT)"
+        "CREATE TABLE races (race_year TEXT, race_month_day TEXT, track_code TEXT,"
+        " data_div TEXT)"
     )
 
     @contextmanager

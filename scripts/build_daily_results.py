@@ -41,6 +41,9 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from db import SQL_VALID_HORSE_NUM
+from db import (exclusion_reason, expects_a_finishing_order,
+                is_evaluable, is_evaluable_race, is_final_payout,
+                is_refunded)
 from config import guard_analysis_window, sealed_notice  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -548,7 +551,7 @@ def main() -> int:
     cur = conn.execute(f"""
         SELECT race_year, race_month_day, track_code, kaiji, nichiji, race_num,
                horse_num, horse_name, win_odds, win_popularity, confirmed_order,
-               odds_fetched_at
+               odds_fetched_at, abnormal_code
          FROM horse_races
          WHERE race_year = ? AND race_month_day = ?
            AND {SQL_VALID_HORSE_NUM}
@@ -558,6 +561,7 @@ def main() -> int:
     cur = conn.execute("""
         SELECT race_year, race_month_day, track_code, kaiji, nichiji, race_num,
                tan_horse_num1, tan_payout1,
+               tan_horse_num2, tan_payout2, data_div,
                fuku_horse_num1, fuku_payout1, fuku_horse_num2, fuku_payout2,
                fuku_horse_num3, fuku_payout3, fuku_horse_num4, fuku_payout4,
                fuku_horse_num5, fuku_payout5
@@ -570,7 +574,8 @@ def main() -> int:
         SELECT race_year, race_month_day, track_code, kaiji, nichiji, race_num,
                race_name, distance, track_type_code, grade_code,
                registered_count, starter_count,
-               turf_condition, dirt_condition, weather_code, start_time
+               turf_condition, dirt_condition, weather_code, start_time,
+               data_div
           FROM races
          WHERE race_year = ? AND race_month_day = ?
          ORDER BY track_code, race_num
@@ -645,6 +650,9 @@ def main() -> int:
             "horse_num": normalize_horse_num(h.get("horse_num")),
             "horse_name": h.get("horse_name"),
             "confirmed_order": h.get("confirmed_order") or 0,
+            # 返還判定 (取消・除外) と「速報か確定か」の判定に要る。
+            # これを載せ忘れると両方の判定が全馬 None で素通りする。
+            "abnormal_code": h.get("abnormal_code"),
         })
 
     # ---- payouts.csv (DB 由来、単勝 + 複勝) ----
@@ -670,13 +678,52 @@ def main() -> int:
     race_info = {race_id_of(r["track_code"], r["race_num"]): r for r in race_rows}
     final_by = {(o["race_id"], o["horse_num"]): o for o in final_odds}
     result_by = {(r["race_id"], r["horse_num"]): r for r in race_results}
+    # 結果が取り込まれたレース。1 頭でも確定着順があれば「結果あり」。
+    # これが無いと「まだ結果が来ていない」と「走ったが全馬 0 着」の区別が
+    # つかず、前者を不的中として数えてしまう。
+    # **速報 (3-5 着まで) を「結果あり」にしない**。1 頭でも着順があれば
+    # resolved としていたため、9/22 の速報レースが evaluable になり、
+    # ◎ が 4 着以下だと confirmed_order=0 のまま「評価済み」と記録された。
+    # 着順が付くはずの馬 (取消・除外・競走中止を除く) が全員そろって初めて確定。
+    _expected: dict[str, int] = {}
+    _finished: dict[str, int] = {}
+    for r in race_results:
+        if not expects_a_finishing_order(r.get("abnormal_code")):
+            continue
+        rid_ = r["race_id"]
+        _expected[rid_] = _expected.get(rid_, 0) + 1
+        if (r.get("confirmed_order") or 0) > 0:
+            _finished[rid_] = _finished.get(rid_, 0) + 1
+    races_with_finish = {
+        rid_ for rid_, n in _expected.items()
+        if n > 0 and _finished.get(rid_, 0) == n
+    }
+    # **レース単位**で単勝の確定払戻が届いたか。各馬に払戻行が要るという意味
+    # ではない (敗戦馬に払戻は無い)。着順と払戻は別のタイミングで届くので、
+    # 着順だけで評価可にすると「勝った買い候補の払戻がまだ 0」→ -100 円に
+    # なる。中止レースと同型の事故。
+    races_with_payout = {
+        race_id_of(p["track_code"], p["race_num"]) for p in payout_rows
+        if p.get("tan_horse_num1") and int(p.get("tan_payout1") or 0) > 0
+    }
+    # **速報払戻で ROI を確定しない**。降着等で金額が変わりうるので、
+    # 着順速報を排除したのと同じ理由で確定を待つ。
+    races_with_final_payout = {
+        race_id_of(p["track_code"], p["race_num"]) for p in payout_rows
+        if is_final_payout(p.get("data_div"))
+    }
     # payout を horse_num に展開
     win_payout_by: dict[tuple[str, str], int] = {}
     place_payout_by: dict[tuple[str, str], int] = {}
     for p in payout_rows:
         rid = race_id_of(p["track_code"], p["race_num"])
-        if p.get("tan_horse_num1"):
-            win_payout_by[(rid, str(p["tan_horse_num1"]).lstrip("0") or "0")] = int(p.get("tan_payout1") or 0)
+        # 同着は 2 頭目・3 頭目にも単勝払戻が出る。1 頭目しか拾わないと、
+        # 同着で勝った買い候補が「払戻 0 = -100 円」になる (実 DB に 67 件)。
+        for i in (1, 2):
+            hn_ = p.get(f"tan_horse_num{i}")
+            if hn_ and str(hn_).strip() not in ("", "00"):
+                win_payout_by[(rid, str(hn_).lstrip("0") or "0")] = int(
+                    p.get(f"tan_payout{i}") or 0)
         for i in range(1, 6):
             hn = p.get(f"fuku_horse_num{i}")
             py = p.get(f"fuku_payout{i}")
@@ -696,8 +743,26 @@ def main() -> int:
         confirmed = rr.get("confirmed_order") or 0
         win_pay = win_payout_by.get((rid, hn), 0)
         place_pay = place_payout_by.get((rid, hn), 0)
+        # 中止レース (data_div='9') は **予想は残すが評価しない**。
+        # 馬券は返還されるので、外れでも負けでもない。ここを落とさないと
+        # 走っていないレースが confirmed_order=0 で「不的中」に数えられ、
+        # 買い候補があれば profit=-100 が計上される (2026-09-21 の中山 12R)。
+        # 3 つに分ける。`evaluable` に多義を持たせると、「中止」と
+        # 「まだ結果が来ていない」が同じ扱いになり、後者が永久に評価から
+        # 落ちたまま気付けなくなる。
+        not_cancelled = is_evaluable_race(race.get("data_div"))
+        result_resolved = rid in races_with_finish
+        payout_resolved = rid in races_with_payout
+        payout_final = rid in races_with_final_payout
+        # 分岐をここに書かない。並び順を変えるだけで中止が「結果待ち」に
+        # なる (中止レースは複数の条件に当てはまる)。
+        exclusion = exclusion_reason(not_cancelled, result_resolved,
+                                     payout_resolved, payout_final=payout_final)
+        evaluable = is_evaluable(not_cancelled, result_resolved,
+                                 payout_resolved, payout_final=payout_final)
+        horse_refunded = is_refunded(rr.get("abnormal_code"))
         # 100 円ベース profit_loss (買い判定 (bet_candidate=True) のとき 100 円賭けた前提で計算)
-        if pred.get("bet_candidate"):
+        if pred.get("bet_candidate") and evaluable and not horse_refunded:
             profit = (win_pay - 100) if win_pay > 0 else -100
         else:
             profit = 0
@@ -729,6 +794,27 @@ def main() -> int:
             "win_payout": win_pay,
             "place_payout": place_pay,
             "profit_loss_yen_100unit": profit,
+            # **予定**と**決済済み**を分ける。予想時に 100 円買うつもりだった
+            # という事実は残しつつ、未決済 (払戻待ち・結果待ち・中止) のレースを
+            # 回収率の分母に入れないため。分母は planned ではなく settled。
+            "planned_stake_yen_100unit": (100 if pred.get("bet_candidate") else 0),
+            "settled_stake_yen_100unit": (
+                100 if (pred.get("bet_candidate") and evaluable
+                        and not horse_refunded) else 0),
+            # 出走取消・除外は **馬券が返還される**。外れではないので損益にも
+            # 回収率の分母にも入れない。レース単位の中止とまったく同型で、
+            # こちらは馬単位。
+            "horse_refunded": horse_refunded,
+            # 「予想を出した」ことと「統計評価に使える」ことは別物として持つ。
+            # 中止・順延・不成立・返還が起きても N だけが水増しされないように。
+            "prediction_issued": True,
+            "race_status": ("CANCELLED" if not not_cancelled else "RUN"),
+            "result_resolved": result_resolved,
+            "payout_resolved": payout_resolved,
+            "payout_final": payout_final,
+            "actual_execution_date": (date if evaluable else None),
+            "evaluable": evaluable,
+            "evaluation_exclusion_reason": exclusion,
         })
 
     quality_errors = validate_output_quality(
@@ -780,6 +866,12 @@ def main() -> int:
         "morning_odds", "morning_popularity", "final_odds", "final_popularity",
         "market_probability", "win_probability", "expected_value_morning",
         "confidence", "bet_candidate", "confirmed_order", "win_payout", "place_payout",
+        "planned_stake_yen_100unit", "settled_stake_yen_100unit",
+        "horse_refunded",
+        "prediction_issued", "race_status", "result_resolved", "payout_resolved",
+        "payout_final",
+        "actual_execution_date", "evaluable",
+        "evaluation_exclusion_reason",
         "profit_loss_yen_100unit",
     ], eval_rows)
 
@@ -794,7 +886,7 @@ def main() -> int:
         "builder_git_dirty": builder_git_dirty,
         "supersedes_manifest_sha256": supersedes_manifest_sha256,
         "warnings": {
-            "schema": 2,
+            "schema": 3,
             "excluded_placeholder_rows": excluded_placeholder_rows,
             "null_odds_fetched_at_rows": sum(
                 not h.get("odds_fetched_at") for h in horse_rows
@@ -810,6 +902,20 @@ def main() -> int:
             ),
         },
         "counts": {
+            # 「予想を出した件数」と「統計評価できた件数」を **同じ数で書かない**。
+            # 中止・順延・不成立・返還が起きたとき、N だけが水増しされるのを防ぐ。
+            "evaluation_rows_total": len(eval_rows),
+            "evaluation_rows_evaluable": sum(
+                1 for r in eval_rows if r.get("evaluable")),
+            "evaluation_rows_excluded": sum(
+                1 for r in eval_rows if not r.get("evaluable")),
+            "evaluation_exclusion_reasons": {
+                reason: sum(1 for r in eval_rows
+                            if r.get("evaluation_exclusion_reason") == reason)
+                for reason in sorted(
+                    {r.get("evaluation_exclusion_reason") for r in eval_rows}
+                    - {None})
+            },
             "html_races_parsed": len(races),
             "html_horses_parsed": sum(len(r["horses"]) for r in races),
             "html_top_picks_parsed": sum(len(r["top_picks"]) for r in races),

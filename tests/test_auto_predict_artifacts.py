@@ -74,7 +74,7 @@ def _entry_db(path, days_with_entries=(), days_scheduled=(), placeholder_days=()
     conn = sqlite3.connect(path)
     conn.execute(
         "CREATE TABLE races (race_year TEXT, race_month_day TEXT, track_code TEXT,"
-        " kaiji TEXT, nichiji TEXT, race_num TEXT)"
+        " kaiji TEXT, nichiji TEXT, race_num TEXT, data_div TEXT)"
     )
     conn.execute(
         "CREATE TABLE horse_races (race_year TEXT, race_month_day TEXT, track_code TEXT,"
@@ -83,7 +83,7 @@ def _entry_db(path, days_with_entries=(), days_scheduled=(), placeholder_days=()
     for day in set(days_scheduled) | set(days_with_entries) | set(placeholder_days):
         for race_num in ("01", "02"):
             conn.execute(
-                "INSERT INTO races VALUES (?,?,'05','01','01',?)",
+                "INSERT INTO races VALUES (?,?,'05','01','01',?,'6')",
                 (day[:4], day[4:], race_num),
             )
             if day in days_with_entries:
@@ -106,8 +106,10 @@ def test_entry_coverage_ignores_placeholder_horse_rows(tmp_path):
     db = tmp_path / "t.db"
     conn = _entry_db(db, days_with_entries=("20260822",), placeholder_days=("20260823",))
 
-    assert auto_predict._entry_coverage(conn, "20260822") == (2, 2)
-    assert auto_predict._entry_coverage(conn, "20260823") == (0, 2)
+    # (covered, eligible, scheduled, cancelled)。中止レースが無い日なので
+    # eligible == scheduled、cancelled == 0。
+    assert auto_predict._entry_coverage(conn, "20260822") == (2, 2, 2, 0)
+    assert auto_predict._entry_coverage(conn, "20260823") == (0, 2, 2, 0)
     conn.close()
 
 
@@ -309,7 +311,9 @@ def test_main_resends_the_abort_notice_when_coverage_changes(tmp_path, monkeypat
     assert auto_predict.main() == 2
 
     assert len(sent) == 2, "取り込みが進んだのに再送していない"
-    assert "with_entries: 0 -> 1" in sent[1]
+    # payload のキーは covered/eligible/cancelled (中止を除いた分母に
+    # 変えたときに with_entries/total から改名した)
+    assert "covered: 0 -> 1" in sent[1]
 
 
 def test_a_full_abort_day_sends_two_messages(tmp_path, monkeypatch, capsys):

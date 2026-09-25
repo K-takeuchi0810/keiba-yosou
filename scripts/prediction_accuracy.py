@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from db import sql_cancelled_race
 from config import guard_analysis_window, sealed_notice  # noqa: E402
 from db import open_db  # noqa: E402
 
@@ -70,7 +71,15 @@ def main() -> int:
                AND p.track_code=l.track_code AND p.kaiji=l.kaiji
                AND p.nichiji=l.nichiji AND p.race_num=l.race_num
              WHERE l.rn = 1 AND hr.confirmed_order > 0
-            """,
+               AND NOT EXISTS (
+                   SELECT 1 FROM races r
+                    WHERE r.race_year=hr.race_year
+                      AND r.race_month_day=hr.race_month_day
+                      AND r.track_code=hr.track_code AND r.kaiji=hr.kaiji
+                      AND r.nichiji=hr.nichiji AND r.race_num=hr.race_num
+                      AND {cancelled}
+               )
+            """.format(cancelled=sql_cancelled_race("r.data_div")),
             (from_date, to_date, args.mark),   # 封印窓で打ち切った窓を使う
         ).fetchall()
 

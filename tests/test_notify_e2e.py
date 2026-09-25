@@ -74,12 +74,13 @@ def abort_day(tmp_path, monkeypatch, webhook):
     db = tmp_path / "t.db"
     conn = sqlite3.connect(db)
     conn.execute("CREATE TABLE races (race_year TEXT, race_month_day TEXT,"
-                 " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT)")
+                 " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT,"
+                 " data_div TEXT)")
     conn.execute("CREATE TABLE horse_races (race_year TEXT, race_month_day TEXT,"
                  " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT,"
                  " horse_num TEXT)")
     for rn in ("01", "02", "03"):
-        conn.execute("INSERT INTO races VALUES (?,?,'05','01','01',?)",
+        conn.execute("INSERT INTO races VALUES (?,?,'05','01','01',?,'6')",
                      (today[:4], today[4:], rn))
     conn.commit()
     conn.close()
@@ -192,12 +193,14 @@ def test_a_repeatedly_failing_generation_gets_a_final_confirmation(
     db = tmp_path / "t.db"
     import sqlite3
     conn = sqlite3.connect(db)
+    # data_div は中止判定 (main 8a91d73) で必須。'6' = 実施予定。
     conn.execute("CREATE TABLE races (race_year TEXT, race_month_day TEXT,"
-                 " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT)")
+                 " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT,"
+                 " data_div TEXT)")
     conn.execute("CREATE TABLE horse_races (race_year TEXT, race_month_day TEXT,"
                  " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT,"
                  " horse_num TEXT)")
-    conn.execute("INSERT INTO races VALUES (?,?,'05','01','01','01')",
+    conn.execute("INSERT INTO races VALUES (?,?,'05','01','01','01','6')",
                  (today[:4], today[4:]))
     conn.execute("INSERT INTO horse_races VALUES (?,?,'05','01','01','01','01')",
                  (today[:4], today[4:]))

@@ -33,7 +33,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from db import open_db_readonly
+from db import open_db_readonly, sql_evaluable_race
 
 
 COVERAGE_LOG_PATH = Path(__file__).resolve().parent.parent / "data" / "logs" / "fresh_odds_coverage.jsonl"
@@ -166,7 +166,8 @@ def _load_open_dates(
               FROM races
              WHERE track_code BETWEEN '01' AND '10'
                AND (race_year || race_month_day) BETWEEN ? AND ?
-            """,
+               AND {evaluable}
+            """.format(evaluable=sql_evaluable_race()),
             (start_date, end_date),
         ).fetchall()
     dates = {str(row[0]) for row in rows}

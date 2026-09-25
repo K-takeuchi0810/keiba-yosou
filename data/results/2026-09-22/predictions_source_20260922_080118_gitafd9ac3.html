@@ -1,0 +1,3317 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#181818" media="(prefers-color-scheme: dark)">
+<meta name="empty-race-ratio" content="0.000000">
+<meta name="completeness-alert" content="0">
+<title>競馬予想 2026/09/22（火）</title>
+<style>
+  :root {
+    --fg: #111;
+    --fg-mute: #666;
+    --bg: #fafafa;
+    --bg-mute: rgba(127,127,127,.08);
+    --card: #ffffff;
+    --border: #e0e0e0;
+    --accent: #1a5fb4;
+    /* 白文字を載せる塗り背景用。dark では --accent が明色 (#6aa6ff) になり
+       白文字 2.47:1 で AA fail するため、塗り用は別トークンで濃色を維持する
+       (2026-06-13 v2 監査でコントラスト全ペア実測し是正)。 */
+    --accent-bg: #1a5fb4;
+    --turf: #2a8a4f;
+    --dirt: #b07b3a;
+    --jump: #6a3eb0;
+    --grade: #c0392b;
+    /* ハードコード色を変数化 (P2-1)。ダークモード時は下で再定義。 */
+    --buy-board-bg: #fff8f7;
+    --buy-board-fg: #c0392b;
+    --buy-card-border: rgba(192,57,43,.25);
+    --tag-bg: #eef2f7;
+    --tag-fg: #444;
+    --top-picks-bg: rgba(26,95,180,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg: #eaeaea;
+      --fg-mute: #a0a0a0;
+      --bg: #181818;
+      --bg-mute: rgba(255,255,255,.06);
+      --card: #232323;
+      --border: #383838;
+      --accent: #6aa6ff;
+      --accent-bg: #1f5aa8;
+      /* ダークモードでも見える「買い」アクセント。背景が黒系なので
+         pinkish 背景は捨て、グレー枠 + 強アクセント文字で表現。 */
+      --buy-board-bg: #2b1c1c;
+      --buy-board-fg: #ff8a7a;
+      --buy-card-border: rgba(255,138,122,.35);
+      --tag-bg: #2d2d2d;
+      --tag-fg: #cfd4dc;
+      --top-picks-bg: rgba(106,166,255,.10);
+      /* --grade の dark 上書き (#ff8a7a) は 2026-06-13 に削除。
+         --grade は全箇所が「白文字を載せる塗り」用途で、明色化すると
+         買い候補ボード等 6 種が 白/2.29:1 の AA fail になっていた。
+         dark でも #c0392b のまま (白文字 5.4:1 / 背景との分離 3.3:1)。
+         テキスト用の赤は --buy-board-fg が担う。 */
+      --turf: #4cb96f;
+      --dirt: #d0975a;
+      --jump: #b591f0;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, "Hiragino Sans", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  header {
+    padding: 1rem 1rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 10;
+  }
+  header h1 { margin: 0 0 0.15rem; font-size: 1.1rem; display: inline-block; margin-right: 0.6rem; }
+  /* 対象日 (2026-09-13 日別化)。h1 と同じ行に出して、下の「更新 <生成時刻>」と
+     混同しないよう少し小さく見せる。 */
+  .target-day { font-size: 0.8em; font-weight: 600; opacity: 0.85; white-space: nowrap; }
+  .updated {
+    display: inline-block;
+    background: var(--accent-bg); color: #fff;
+    padding: 0.15rem 0.5rem; border-radius: 4px;
+    font-size: 0.85rem; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .meta { color: var(--fg-mute); font-size: 0.8rem; margin-top: 0.25rem; }
+  /* 開催日ナビ: 複数開催のとき各セクションへワンタップで飛ぶ。
+     横スクロール 1 行に収め、sticky ヘッダの高さ増を最小化 */
+  .day-nav {
+    display: flex;
+    gap: 0.35rem;
+    margin-top: 0.4rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    padding-bottom: 0.15rem;
+    /* スクロールバーは隠す (チップの見切れでスクロール可能なことは伝わる) */
+    scrollbar-width: none;
+  }
+  .day-nav::-webkit-scrollbar { display: none; }
+  .day-nav a {
+    flex: 0 0 auto;
+    /* Apple HIG 44pt = 44px をタップ領域として担保。padding と min-height を
+       同時指定し、テキスト長が短くても押せる幅を確保する。font-size も若干
+       拡大して可読性とタップ精度を同時に上げる (モバイル監査 2 周目の指摘) */
+    min-height: 44px;
+    padding: 0.55rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card);
+    color: var(--fg);
+    font-size: 0.82rem;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .day-nav a .nav-buy {
+    /* AA: light #c0392b on #ffffff = 5.4:1, dark #ff8a7a on #232323 = 6.40:1 (実測、2026-06-17 mobile auditor 指摘で訂正) */
+    color: var(--buy-board-fg);
+    font-weight: 700;
+    font-size: 0.82rem;
+  }
+  /* 常設 observation-notice を含む sticky header のモバイル高を吸収する。 */
+  .day-section, details.race { scroll-margin-top: 17.5rem; }
+  /* 検証モードは verification-banner の分をさらに確保する。 */
+  body.verification-mode .day-section,
+  body.verification-mode details.race { scroll-margin-top: 21rem; }
+  main { padding: 0.5rem; max-width: 720px; margin: 0 auto; }
+  .buy-board {
+    margin: 0.5rem 0 1rem;
+    border: 2px solid var(--grade);
+    background: var(--buy-board-bg);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .buy-board h2 {
+    margin: 0;
+    padding: 0.55rem 0.75rem;
+    background: var(--grade);
+    color: #fff;
+    font-size: 1rem;
+  }
+  /* P22: 推奨投資率 (実際に賭ける数字) を右側ブロックに大きく分離。
+     左 = レース/馬の識別情報、右 = 行動につながる数値、で視線移動を最短化 */
+  .buy-card {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.65rem 0.75rem;
+    color: var(--fg);
+    text-decoration: none;
+    border-top: 1px solid var(--buy-card-border);
+  }
+  .buy-card-main { flex: 1 1 auto; min-width: 0; }
+  .buy-card strong { font-size: 1rem; }
+  .buy-meta { color: var(--fg-mute); font-size: 0.82rem; margin-top: 0.15rem; }
+  .buy-metrics { margin-top: 0.25rem; font-size: 0.82rem; font-weight: 700; color: var(--buy-board-fg); }
+  .buy-reco {
+    flex: 0 0 auto;
+    text-align: right;
+    min-width: 4.6rem;
+  }
+  .buy-reco-num {
+    display: block;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--buy-board-fg);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+  .buy-reco-label {
+    display: block;
+    /* 0.66rem (≈10.5px) は小さすぎてラベルの可読性が落ち、fg-mute と組合せ
+       ると AA 境界。小バッジ可読性のためサイズを 0.72rem (≈11.5px) に上げ、
+       色も fg-mute から少しコントラストの強い tag-fg に切替える。 */
+    font-size: 0.72rem;
+    color: var(--tag-fg);
+  }
+  /* P20: full Kelly は副次情報に降格 (推奨投資率を主表示に) */
+  .full-kelly-note { color: var(--fg-mute); font-weight: 400; font-size: 0.92em; margin-left: 0.3em; }
+  /* P20: モデル over-confidence の常時開示 caveat */
+  .calib-caveat {
+    padding: 0.45rem 0.75rem;
+    font-size: 0.74rem;
+    line-height: 1.45;
+    color: var(--buy-board-fg);
+    background: var(--buy-board-bg);
+    border-top: 1px solid var(--buy-card-border);
+  }
+  .calib-caveat strong { font-weight: 700; }
+  /* P20: ポートフォリオ合計の推奨投資率 + 1 日上限超過警告 */
+  .portfolio-note {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.78rem;
+    color: var(--fg-mute);
+    border-top: 1px solid var(--buy-card-border);
+    border-bottom: 1px solid var(--buy-card-border);
+    background: var(--top-picks-bg);
+  }
+  .portfolio-note.over-cap {
+    color: var(--buy-board-fg);
+    font-weight: 700;
+    background: var(--buy-board-bg);
+  }
+  .race-tickets {
+    padding: 0.55rem 0.75rem;
+    border-top: 1px solid var(--buy-card-border);
+    background: var(--buy-board-bg);
+  }
+  .race-ticket {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.55rem;
+    color: var(--buy-board-fg);
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+  .race-ticket + .race-ticket { margin-top: 0.35rem; }
+  .race-ticket .ticket-meta {
+    color: var(--fg-mute);
+    font-weight: 500;
+    font-size: 0.76rem;
+  }
+  .ticket-section-title {
+    color: var(--fg-mute);
+    font-weight: 800;
+    font-size: 0.76rem;
+    margin-bottom: 0.35rem;
+  }
+  .race-ticket.hit .ticket-meta { color: #166534; font-weight: 800; }
+  .race-ticket.miss .ticket-meta { color: #7f1d1d; }
+  @media (prefers-color-scheme: dark) {
+    .race-ticket.hit .ticket-meta { color: #86efac; }
+    .race-ticket.miss .ticket-meta { color: #fca5a5; }
+  }
+  /* S7-β-3: Kelly>=10% で「★強い買い」バッジ。買い候補内の重要度を一目で示す */
+  .strong-buy-badge {
+    display: inline-block;
+    padding: 0.1em 0.4em;
+    margin-right: 0.3em;
+    background: var(--buy-board-fg);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border-radius: 3px;
+    vertical-align: middle;
+  }
+  /* S7-β-4: ヘッダーのフィルタ条件表示 */
+  .filter-summary {
+    margin-top: 0.3rem;
+    padding: 0.2rem 0.5rem;
+    background: var(--bg-mute);
+    border-left: 3px solid var(--buy-board-fg);
+    font-size: 0.72rem;
+    color: var(--fg-mute);
+    font-family: ui-monospace, monospace;
+  }
+  .observation-notice,
+  .completeness-warning {
+    margin: 0.4rem 0 0.2rem;
+    padding: 0.5rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+  .observation-notice {
+    background: #fff3cd;
+    color: #4b3800;
+    border: 1px solid #8a6500;
+  }
+  .completeness-warning {
+    background: #ffe4cc;
+    color: #552600;
+    border: 1px solid #a54600;
+  }
+  .model-legend {
+    margin: 0.5rem 0;
+    padding: 0.55rem 0.7rem;
+    background: var(--bg-mute);
+    border-left: 4px solid var(--accent);
+    color: var(--fg-mute);
+    font-size: 0.78rem;
+    line-height: 1.45;
+  }
+  @media (prefers-color-scheme: dark) {
+    .observation-notice { background: #3d3005; color: #fff2b2; border-color: #d4a72c; }
+    .completeness-warning { background: #472000; color: #ffd9b8; border-color: #e57619; }
+  }
+  /* 検証モード (オッズ鮮度無視) の警告バナー。filter-summary より強いコントラストで
+     「これは実弾運用のための買い目ではない」を一目で伝える。WCAG AA 想定で
+     白文字 + 赤背景 (4.5:1 以上)、role=alert と aria-label で SR にも伝える */
+  .verification-banner {
+    margin: 0.4rem 0 0.2rem 0;
+    padding: 0.55rem 0.7rem;
+    background: #b3261e;
+    color: #ffffff;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.35;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+  }
+  .verification-banner .vb-icon {
+    font-size: 1.0rem;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-top: 0.05rem;
+  }
+  .verification-banner .vb-sub {
+    display: block;
+    /* 「実弾運用には使えません」は banner 中で最重要の safety message。
+       2026-06-17 監査で 0.72rem(11.5px)/weight 400 が最小フォント逆転と指摘。
+       0.82rem(13.1px)/weight 600 に引き上げ、Apple HIG キャプション下限
+       (11pt=14.7px) を超えるサイズに近づけつつ banner 主文との階層も維持。
+       opacity 0.95 撤廃 (実測コントラストを純粋な #ffffff on #b3261e=5.94:1 に揃える) */
+    font-weight: 600;
+    font-size: 0.82rem;
+    margin-top: 0.2rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    .verification-banner { background: #9b1a13; }
+  }
+  /* S7-β-5: footer の version snapshot 表示 */
+  footer .version-snapshot {
+    margin-top: 0.3rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.7rem;
+    color: var(--fg-mute);
+    opacity: 0.7;
+  }
+  /* S7-β-1: 買い候補ボードの折りたたみ用 (details/summary)。
+     P22: 展開時の h2 と同じ赤バーに統一 + min-height 44px (Apple HIG
+     タップ領域、mobile-html-reviewer 2 回持ち越し分) */
+  details.buy-board > summary {
+    list-style: none;
+    cursor: pointer;
+    font-weight: 700;
+    background: var(--grade);
+    color: #fff;
+    font-size: 1rem;
+    padding: 0.55rem 0.75rem;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  details.buy-board > summary::-webkit-details-marker { display: none; }
+  details.buy-board > summary::after {
+    content: "▼";
+    font-size: 0.8rem;
+    color: rgba(255,255,255,.85);
+    transition: transform .2s ease;
+  }
+  details.buy-board[open] > summary::after { transform: rotate(180deg); }
+  .no-buy {
+    margin: 0.5rem 0 1rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
+    color: var(--fg-mute);
+    font-size: 0.9rem;
+  }
+  .day-section { margin: 1rem 0; }
+  .day-section h2 {
+    font-size: 1rem;
+    margin: 0 0 0.5rem;
+    padding: 0.4rem 0.6rem;
+    background: var(--accent-bg);
+    color: #fff;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .day-buy-count {
+    font-size: 0.78rem;
+    font-weight: 700;
+    /* 暗色チップ: accent 背景上で白文字のコントラストを確保
+       (dark モードの rgba(255,255,255,.18) は ~2:1 で AA fail だった) */
+    background: rgba(0,0,0,.28);
+    border-radius: 999px;
+    padding: 0.08rem 0.55rem;
+    white-space: nowrap;
+  }
+  details.race {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  details.race.buy-race { border-color: var(--grade); box-shadow: 0 0 0 1px var(--buy-card-border); }
+  details.race[open] { border-color: var(--accent); }
+  summary.race-head {
+    padding: 0.6rem 0.8rem;
+    cursor: pointer;
+    list-style: none;
+    display: grid;
+    /* 3 列目に開閉インジケータ用の固定幅を確保 */
+    grid-template-columns: 3rem 1fr auto 1.2rem;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  summary.race-head::-webkit-details-marker { display: none; }
+  /* タップ可能であることを視覚で示す矢印インジケータ。
+     details[open] で 180° 回転して「閉じる」を示唆 */
+  summary.race-head::after {
+    content: "▼";
+    color: var(--fg-mute);
+    font-size: 0.7rem;
+    transition: transform .2s ease;
+    text-align: center;
+  }
+  details.race[open] > summary.race-head::after {
+    transform: rotate(180deg);
+  }
+  .race-num { font-weight: 700; font-size: 1.1rem; color: var(--accent); }
+  .race-info-line { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
+  .race-name { font-weight: 600; }
+  /* P22: 閉じたレース行でも本命が見えるプレビュー行。
+     全レースを開かずに「どの馬を推しているか」を一覧スキャンできる */
+  .head-pick {
+    margin-top: 0.1rem;
+    font-size: 0.78rem;
+    color: var(--fg-mute);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .head-pick .mark { font-size: 0.85rem; margin-right: 0.15rem; }
+  .head-pick .head-pick-tent {
+    color: var(--buy-board-fg);
+    font-weight: 600;
+    margin-left: 0.3rem;
+  }
+  .badge {
+    display: inline-block;
+    padding: 0.05rem 0.4rem;
+    font-size: 0.75rem;
+    border-radius: 3px;
+    background: var(--border);
+    color: var(--fg-mute);
+  }
+  .badge.turf  { background: var(--turf);  color: #fff; }
+  .badge.dirt  { background: var(--dirt);  color: #fff; }
+  .badge.jump  { background: var(--jump);  color: #fff; }
+  .badge.grade { background: var(--grade); color: #fff; }
+  .race-time { color: var(--fg-mute); font-size: 0.85rem; white-space: nowrap; text-align: right; }
+  /* grid 子要素の min-width:auto (=min-content) を解除。head-pick が nowrap で
+     縮まず race-time (auto 列) を画面外へ押し出し、発走時刻が見切れる問題の是正。 */
+  summary.race-head > * { min-width: 0; }
+  /* オッズ取得時刻は発走時刻の下段へ (race-time 列幅を抑え、見切れをさらに防ぐ) */
+  .odds-time { display: block; font-size: 0.72rem; }
+  /* キーボード操作時のフォーカスリング (details/summary は Tab で開閉可能) */
+  summary.race-head:focus-visible,
+  details.buy-board > summary:focus-visible,
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .bet-head { background: var(--grade); color: #fff; border-radius: 3px; padding: 0.05rem 0.35rem; font-size: 0.75rem; font-weight: 700; }
+  /* テーブルは横幅が足りないとき横スクロール可能にし、狭画面では
+     優先度の低い列 (調教師 / 性齢 / 斤量) を畳む。 */
+  .entries-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table.entries {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  table.entries th, table.entries td {
+    padding: 0.3rem 0.4rem;
+    text-align: left;
+    border-top: 1px solid var(--border);
+    word-break: break-word;
+  }
+  table.entries th {
+    background: var(--bg);
+    font-weight: 500;
+    color: var(--fg-mute);
+    font-size: 0.75rem;
+  }
+  td.num { text-align: right; }
+  td.mark-cell { width: 1.6rem; text-align: center; font-weight: 700; color: var(--accent); }
+  /* P22: 印のついた馬の行をうっすら強調 (出馬表スキャン時に予想対象が浮く)。
+     枠番カラーセル (.horse-num) は上書きしない (waku-* の方が specificity が
+     低く、馬番が背景色を失って読めなくなるため除外) */
+  tr.marked td:not(.horse-num) { background: var(--top-picks-bg); }
+  /* 馬名は狭画面で省略 */
+  td.horse-name { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* スマホ (480px 以下) では調教師・性齢・斤量を畳む */
+  @media (max-width: 480px) {
+    main { padding: 0.35rem; }
+    table.entries { font-size: 0.8rem; }
+    table.entries th, table.entries td { padding: 0.28rem 0.3rem; }
+    table.entries .col-trainer,
+    table.entries .col-sex,
+    table.entries .col-burden { display: none; }
+    td.horse-name { max-width: 7rem; }
+    /* タップ領域確保 */
+    summary.race-head { padding: 0.75rem 0.7rem; min-height: 44px; }
+    .buy-card { padding: 0.85rem 0.75rem; min-height: 44px; }
+    .race-ticket { display: block; }
+    .race-ticket .ticket-meta { display: block; margin-top: 0.15rem; }
+    /* P20: 狭画面では推奨/full Kelly を改行配置し 1 行の数字密度を下げる */
+    .full-kelly-note { display: block; margin-left: 0; margin-top: 0.1rem; }
+    .portfolio-note { padding: 0.4rem 0.5rem; line-height: 1.45; }
+    .buy-reco { min-width: 4rem; }
+    .buy-reco-num { font-size: 1.05rem; }
+  }
+  /* タブレット (~600px) では調教師だけ畳む */
+  @media (max-width: 600px) and (min-width: 481px) {
+    table.entries .col-trainer { display: none; }
+  }
+  .top-picks {
+    padding: 0.5rem 0.8rem; background: var(--top-picks-bg);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+    display: flex; flex-direction: column; gap: 0.35rem;
+  }
+  .top-pick {
+    border-left: 3px solid var(--accent);
+    padding: 0.15rem 0 0.15rem 0.5rem;
+  }
+  .pick-line { font-weight: 600; }
+  .bet-tag { background: var(--grade); color: #fff; border-radius: 3px; padding: 0.05rem 0.35rem; margin-left: 0.35rem; font-size: 0.75rem; }
+  .conf-tag { background: var(--tag-bg); color: var(--tag-fg); border-radius: 3px; padding: 0.05rem 0.35rem; margin-left: 0.35rem; font-size: 0.75rem; }
+  .odds-note { color: var(--fg-mute); font-size: 0.78rem; margin-left: 0.35rem; }
+  .pick-num { display: inline-block; min-width: 1.4rem; }
+  .pick-reason {
+    font-size: 0.78rem; color: var(--fg-mute);
+    margin-top: 0.05rem; line-height: 1.35;
+  }
+  .head-pick-reason {
+    display: block;
+    max-width: 28rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--fg-mute);
+    font-size: 0.72rem;
+    line-height: 1.25;
+  }
+  .top-p {
+    display: inline-block;
+    margin-bottom: 0.15rem;
+    padding: 0.05rem 0.28rem;
+    border-radius: 3px;
+    background: var(--accent-bg);
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  tr.top-probability td:not(.horse-num) { border-top: 1px solid var(--accent); border-bottom: 1px solid var(--accent); }
+  .mark { font-weight: 700; color: var(--accent); margin-right: 0.25rem; font-size: 1rem; }
+  .top-picks.tentative { background: var(--buy-board-bg); }
+  .top-picks.tentative .top-pick { border-left-color: var(--grade); }
+  .tent-tag-line { font-size: 0.78rem; color: var(--fg-mute); margin-bottom: 0.1rem; }
+  .tent-tag {
+    background: var(--grade); color: #fff;
+    padding: 0.05rem 0.4rem; border-radius: 3px; font-size: 0.75rem;
+    margin-right: 0.3rem; font-weight: 600;
+  }
+  td.horse-num {
+    font-weight: 700;
+    width: 1.8rem;
+    text-align: center;
+    border-radius: 3px;
+  }
+  /* 枠番カラー（簡易） */
+  .waku-1 { background: #fff;     color: #000; border: 1px solid #888; }
+  .waku-2 { background: #000;     color: #fff; }
+  .waku-3 { background: #d00;     color: #fff; }
+  .waku-4 { background: #28a;     color: #fff; }
+  .waku-5 { background: #fc0;     color: #000; }
+  .waku-6 { background: #4b3;     color: #fff; }
+  .waku-7 { background: #f63;     color: #fff; }
+  .waku-8 { background: #d6e;     color: #fff; }
+  footer {
+    padding: 1rem;
+    text-align: center;
+    color: var(--fg-mute);
+    font-size: 0.75rem;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>競馬予想 <span class="target-day">2026/09/22（火）</span></h1>
+  <div class="updated">更新 2026-09-22 08:01:18</div>
+  <div class="meta">予想 12 レース / 出走馬未確定 0 / 買い候補 0 件</div>
+  
+  
+  <div class="filter-summary">買い候補フィルタ: サスペンド中 (2026-08-22〜) / 点推定が全窓で ◎ベタ買いを下回り便益の証拠が無いため停止 / 再選定 (filter_sweep --recent-3fold) 完了まで 0 件</div>
+  
+  <div class="observation-notice" role="note">⚠ 本ページは観察専用です。OOS 検証で利益エッジは確認されていません (回収率 CI 上限 &lt;100%)。表示中の EV・印は購入推奨ではなく、実際の馬券購入には使用できません。</div>
+  
+  
+  
+  
+</header>
+<main>
+<div class="model-legend" role="note">
+  <div>◎○▲△☆ = 総合本命度 (ルール+人気の合成順)。P = 校正済み勝率 (LGBM v6 ブレンド、別指標)。両者は一致しないことがあります。</div>
+  <div>オッズ確定前の P はモデル単独値です。</div>
+  <div>EV は検証で的中回収と結びつかないと確認済 (2026-06)。表示値は観察用です。</div>
+</div>
+
+  <section class="no-buy">買い候補は<strong>サスペンド中</strong>です (2026-08-22〜)。絞り込み (1-3 番人気 かつ 予測勝率≤40%) の回収率が全検証窓で ◎ベタ買いを下回り、便益の証拠が無いため停止しています。再選定が終わるまで 0 件です。下の EV・印は観察用で購入推奨ではありません。</section>
+
+
+  <section class="day-section" id="day-1">
+    <h2><span>2026/09/22（火）中山</span></h2>
+    
+    <details id="race-20260922-06-1" class="race ">
+      <summary class="race-head">
+        <div class="race-num">R1</div>
+        <div>
+          <div class="race-info-line">
+            
+            
+            <span class="badge jump">障害</span>
+            <span class="badge">2880m</span>
+            
+          </div>
+          
+          
+          
+          <div class="head-pick"><span class="mark">◎</span>14 グランナヴィール<span class="head-pick-reason">直近3着内2回; 近走上昇; 同種T複勝3回; 同距離複勝3回; 信頼度=接戦(2位差14.0)</span></div>
+          
+        </div>
+        <div class="race-time">09:45</div>
+      </summary>
+      
+        
+        <div class="top-picks ">
+          
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">◎</span><span class="pick-num">14</span> グランナヴィール<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 24.2%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">直近3着内2回; 近走上昇; 同種T複勝3回; 同距離複勝3回; 信頼度=接戦(2位差14.0)</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">○</span><span class="pick-num">5</span> ゴーツウキリシマ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 8.3%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">近走上昇; 同種T複勝3回; 同距離複勝3回; 長距離複勝3回</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">▲</span><span class="pick-num">9</span> アバットゥータ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 8.3%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">近走下降; 同種T複勝2回; 同距離複勝2回; 長距離複勝2回</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">△</span><span class="pick-num">10</span> ブランフォルテ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 13.8%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">近走上昇; 同距離複勝1回; 長距離複勝あり; 騎手勝率1%</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">☆</span><span class="pick-num">2</span> カルマンフィルター<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 10.4%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">近走下降; 同種T複勝2回; 同距離複勝2回; 長距離複勝3回</div>
+            </div>
+          
+        </div>
+        
+        
+        
+      <div class="entries-wrap">
+      <table class="entries">
+        <thead>
+          <tr>
+            <th scope="col">印</th>
+            <th scope="col">馬</th>
+            <th scope="col">馬名</th>
+            <th scope="col">オッズ</th>
+            <th scope="col" class="col-sex">性齢</th>
+            <th scope="col" class="col-burden">斤量</th>
+            <th scope="col">騎手</th>
+            <th scope="col" class="col-trainer">調教師</th>
+          </tr>
+        </thead>
+        <tbody>
+        
+          <tr>
+            <td class="mark-cell" title="同距離4走; 長距離不振4走; 騎手勝率12%; マイニング10位" aria-label=" 根拠: 同距離4走; 長距離不振4走; 騎手勝率12%; マイニング10位"></td>
+            <td class="horse-num waku-1">1</td>
+            <td class="horse-name">アドアプローズ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡5</td>
+            <td class="num col-burden">60.0</td>
+            <td>上野翔</td>
+            <td class="col-trainer">小手川準</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="近走下降; 同種T複勝2回; 同距離複勝2回; 長距離複勝3回" aria-label="☆ 根拠: 近走下降; 同種T複勝2回; 同距離複勝2回; 長距離複勝3回">☆</td>
+            <td class="horse-num waku-2">2</td>
+            <td class="horse-name">カルマンフィルター</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡5</td>
+            <td class="num col-burden">60.0</td>
+            <td>草野太郎</td>
+            <td class="col-trainer">戸田博文</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="同距離4走; 長距離不振5走; 前走8着; マイニング12位" aria-label=" 根拠: 同距離4走; 長距離不振5走; 前走8着; マイニング12位"></td>
+            <td class="horse-num waku-3">3</td>
+            <td class="horse-name">コトブキヘスペラス</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡6</td>
+            <td class="num col-burden">60.0</td>
+            <td>小野寺祐</td>
+            <td class="col-trainer">金成貴史</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走下降; 長距離未経験; 相手関係緩和; 間隔長め87日" aria-label=" 根拠: 近走下降; 長距離未経験; 相手関係緩和; 間隔長め87日"></td>
+            <td class="horse-num waku-3">4</td>
+            <td class="horse-name">テンプーシャオン</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡6</td>
+            <td class="num col-burden">60.0</td>
+            <td>金子光希</td>
+            <td class="col-trainer">和田勇介</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="近走上昇; 同種T複勝3回; 同距離複勝3回; 長距離複勝3回" aria-label="○ 根拠: 近走上昇; 同種T複勝3回; 同距離複勝3回; 長距離複勝3回">○</td>
+            <td class="horse-num waku-4">5</td>
+            <td class="horse-name">ゴーツウキリシマ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝6</td>
+            <td class="num col-burden">58.0</td>
+            <td>黒岩悠</td>
+            <td class="col-trainer">牧田和弥</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="同距離複勝1回; 長距離複勝あり; 長距離向き脚質(推定5走); 同場距離帯複勝1回" aria-label=" 根拠: 同距離複勝1回; 長距離複勝あり; 長距離向き脚質(推定5走); 同場距離帯複勝1回"></td>
+            <td class="horse-num waku-4">6</td>
+            <td class="horse-name">シュハリ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡6</td>
+            <td class="num col-burden">60.0</td>
+            <td>大江原圭</td>
+            <td class="col-trainer">粕谷昌央</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走上昇; 長距離不振3走; 相手関係緩和; 間隔長め93日" aria-label=" 根拠: 近走上昇; 長距離不振3走; 相手関係緩和; 間隔長め93日"></td>
+            <td class="horse-num waku-5">7</td>
+            <td class="horse-name">アルシミスト</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">騸5</td>
+            <td class="num col-burden">58.0</td>
+            <td>坂口智康</td>
+            <td class="col-trainer">浅利英明</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走上昇; 相手関係緩和; 前走10着; マイニング5位" aria-label=" 根拠: 近走上昇; 相手関係緩和; 前走10着; マイニング5位"></td>
+            <td class="horse-num waku-5">8</td>
+            <td class="horse-name">バンデルオーラ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡7</td>
+            <td class="num col-burden">60.0</td>
+            <td>伴啓太</td>
+            <td class="col-trainer">岩戸孝樹</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="近走下降; 同種T複勝2回; 同距離複勝2回; 長距離複勝2回" aria-label="▲ 根拠: 近走下降; 同種T複勝2回; 同距離複勝2回; 長距離複勝2回">▲</td>
+            <td class="horse-num waku-6">9</td>
+            <td class="horse-name">アバットゥータ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡4</td>
+            <td class="num col-burden">57.0</td>
+            <td>井上敏樹</td>
+            <td class="col-trainer">中竹和也</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="近走上昇; 同距離複勝1回; 長距離複勝あり; 騎手勝率1%" aria-label="△ 根拠: 近走上昇; 同距離複勝1回; 長距離複勝あり; 騎手勝率1%">△</td>
+            <td class="horse-num waku-6">10</td>
+            <td class="horse-name">ブランフォルテ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡4</td>
+            <td class="num col-burden">57.0</td>
+            <td>水沼元輝</td>
+            <td class="col-trainer">辻哲英</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="相手関係緩和; 休み明け115日; 前走9着; 調教師勝率11%" aria-label=" 根拠: 相手関係緩和; 休み明け115日; 前走9着; 調教師勝率11%"></td>
+            <td class="horse-num waku-7">11</td>
+            <td class="horse-name">ロイガヴェーグル</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡6</td>
+            <td class="num col-burden">60.0</td>
+            <td>中村将之</td>
+            <td class="col-trainer">浜田多実</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="長距離向き脚質(推定5走); 相手関係緩和; 前走11着; 騎手勝率12%" aria-label=" 根拠: 長距離向き脚質(推定5走); 相手関係緩和; 前走11着; 騎手勝率12%"></td>
+            <td class="horse-num waku-7">12</td>
+            <td class="horse-name">ニシノブレイゼスト</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡4</td>
+            <td class="num col-burden">60.0</td>
+            <td>五十嵐雄</td>
+            <td class="col-trainer">高木登</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走上昇; 長距離向き脚質(推定5走); マイニング11位; 先行競合7頭" aria-label=" 根拠: 近走上昇; 長距離向き脚質(推定5走); マイニング11位; 先行競合7頭"></td>
+            <td class="horse-num waku-8">13</td>
+            <td class="horse-name">サトノドルチェ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">騸7</td>
+            <td class="num col-burden">60.0</td>
+            <td>江田勇亮</td>
+            <td class="col-trainer">蛯名利弘</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="直近3着内2回; 近走上昇; 同種T複勝3回; 同距離複勝3回; 信頼度=接戦(2位差14.0)" aria-label="◎ 根拠: 直近3着内2回; 近走上昇; 同種T複勝3回; 同距離複勝3回; 信頼度=接戦(2位差14.0)">◎</td>
+            <td class="horse-num waku-8">14</td>
+            <td class="horse-name">グランナヴィール</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡5</td>
+            <td class="num col-burden">60.0</td>
+            <td>難波剛健</td>
+            <td class="col-trainer">堀内岳志</td>
+          </tr>
+        
+        </tbody>
+      </table>
+      </div>
+      
+    </details>
+    
+    <details id="race-20260922-06-2" class="race ">
+      <summary class="race-head">
+        <div class="race-num">R2</div>
+        <div>
+          <div class="race-info-line">
+            
+            
+            <span class="badge turf">芝</span>
+            <span class="badge">1200m</span>
+            
+          </div>
+          
+          
+          
+          <div class="head-pick"><span class="mark">◎</span>13 トーセンルルド<span class="head-pick-reason">直近3着内2回; 同距離複勝2回; 相手関係緩和; マイニング1位; 信頼度=標準(2位差11.2)</span></div>
+          
+        </div>
+        <div class="race-time">10:20</div>
+      </summary>
+      
+        
+        <div class="top-picks ">
+          
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">◎</span><span class="pick-num">13</span> トーセンルルド<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 27.2%</span><span class="conf-tag">標準</span></div>
+              <div class="pick-reason">直近3着内2回; 同距離複勝2回; 相手関係緩和; マイニング1位; 信頼度=標準(2位差11.2)</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">○</span><span class="pick-num">9</span> ニシノムホウモノ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 6.7%</span><span class="conf-tag">標準</span></div>
+              <div class="pick-reason">前走大敗12着; 騎手勝率18%; 調教師勝率13%; マイニング7位</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">▲</span><span class="pick-num">4</span> スペシャルサンクス<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 13.7%</span><span class="conf-tag">標準</span></div>
+              <div class="pick-reason">同距離複勝1回; 相手関係緩和; マイニング3位; 先行競合7頭</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">△</span><span class="pick-num">11</span> ハミングリップス<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 3.5%</span><span class="conf-tag">標準</span></div>
+              <div class="pick-reason">前走8着; マイニング9位; 差し向き展開; 上がり最速級34.5</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">☆</span><span class="pick-num">8</span> バタフライ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 17.7%</span><span class="conf-tag">標準</span></div>
+              <div class="pick-reason">近走上昇; 相手関係緩和; 騎手勝率2%; マイニング2位</div>
+            </div>
+          
+        </div>
+        
+        
+        
+      <div class="entries-wrap">
+      <table class="entries">
+        <thead>
+          <tr>
+            <th scope="col">印</th>
+            <th scope="col">馬</th>
+            <th scope="col">馬名</th>
+            <th scope="col">オッズ</th>
+            <th scope="col" class="col-sex">性齢</th>
+            <th scope="col" class="col-burden">斤量</th>
+            <th scope="col">騎手</th>
+            <th scope="col" class="col-trainer">調教師</th>
+          </tr>
+        </thead>
+        <tbody>
+        
+          <tr>
+            <td class="mark-cell" title="前走10着; 騎手勝率1%; マイニング4位; 差し向き展開" aria-label=" 根拠: 前走10着; 騎手勝率1%; マイニング4位; 差し向き展開"></td>
+            <td class="horse-num waku-1">1</td>
+            <td class="horse-name">スノーキャップ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>柴田大知</td>
+            <td class="col-trainer">嘉藤貴行</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="前走9着; マイニング14位; 差し向き展開; 上がり良好35.8" aria-label=" 根拠: 前走9着; マイニング14位; 差し向き展開; 上がり良好35.8"></td>
+            <td class="horse-num waku-2">2</td>
+            <td class="horse-name">ゴータマ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>丹内祐次</td>
+            <td class="col-trainer">池上昌和</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="間隔長め94日; 前走9着; 騎手勝率3%; マイニング10位" aria-label=" 根拠: 間隔長め94日; 前走9着; 騎手勝率3%; マイニング10位"></td>
+            <td class="horse-num waku-3">3</td>
+            <td class="horse-name">ナナレイ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>丸山元気</td>
+            <td class="col-trainer">小野次郎</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="同距離複勝1回; 相手関係緩和; マイニング3位; 先行競合7頭" aria-label="▲ 根拠: 同距離複勝1回; 相手関係緩和; マイニング3位; 先行競合7頭">▲</td>
+            <td class="horse-num waku-3">4</td>
+            <td class="horse-name">スペシャルサンクス</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>嶋田純次</td>
+            <td class="col-trainer">矢嶋大樹</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="前走大敗12着; 騎手勝率3%; 調教師勝率11%; マイニング11位" aria-label=" 根拠: 前走大敗12着; 騎手勝率3%; 調教師勝率11%; マイニング11位"></td>
+            <td class="horse-num waku-4">5</td>
+            <td class="horse-name">ナリタライズ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">53.0</td>
+            <td>石田拓郎</td>
+            <td class="col-trainer">高橋亮</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="前走10着; 騎手勝率0%; マイニング8位; 先行競合7頭" aria-label=" 根拠: 前走10着; 騎手勝率0%; マイニング8位; 先行競合7頭"></td>
+            <td class="horse-num waku-4">6</td>
+            <td class="horse-name">ニシノタカオ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>野中悠太</td>
+            <td class="col-trainer">堀内岳志</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="騎手勝率13%; マイニング13位; 先行競合7頭; 上がり良好35.4" aria-label=" 根拠: 騎手勝率13%; マイニング13位; 先行競合7頭; 上がり良好35.4"></td>
+            <td class="horse-num waku-5">7</td>
+            <td class="horse-name">シジマ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>三浦皇成</td>
+            <td class="col-trainer">池上昌和</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="近走上昇; 相手関係緩和; 騎手勝率2%; マイニング2位" aria-label="☆ 根拠: 近走上昇; 相手関係緩和; 騎手勝率2%; マイニング2位">☆</td>
+            <td class="horse-num waku-5">8</td>
+            <td class="horse-name">バタフライ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>原田和真</td>
+            <td class="col-trainer">松山将樹</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="前走大敗12着; 騎手勝率18%; 調教師勝率13%; マイニング7位" aria-label="○ 根拠: 前走大敗12着; 騎手勝率18%; 調教師勝率13%; マイニング7位">○</td>
+            <td class="horse-num waku-6">9</td>
+            <td class="horse-name">ニシノムホウモノ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>横山和生</td>
+            <td class="col-trainer">村田一誠</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="前走大敗12着; マイニング6位; 先行競合7頭; sprint risk" aria-label=" 根拠: 前走大敗12着; マイニング6位; 先行競合7頭; sprint risk"></td>
+            <td class="horse-num waku-6">10</td>
+            <td class="horse-name">ニシノアトール</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>杉原誠人</td>
+            <td class="col-trainer">武市康男</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="前走8着; マイニング9位; 差し向き展開; 上がり最速級34.5" aria-label="△ 根拠: 前走8着; マイニング9位; 差し向き展開; 上がり最速級34.5">△</td>
+            <td class="horse-num waku-7">11</td>
+            <td class="horse-name">ハミングリップス</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>菊沢一樹</td>
+            <td class="col-trainer">青木孝文</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="間隔長め79日; 騎手勝率0%; マイニング5位; 差し向き展開" aria-label=" 根拠: 間隔長め79日; 騎手勝率0%; マイニング5位; 差し向き展開"></td>
+            <td class="horse-num waku-7">12</td>
+            <td class="horse-name">ダンシングアワー</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>小林脩斗</td>
+            <td class="col-trainer">室井潔</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="直近3着内2回; 同距離複勝2回; 相手関係緩和; マイニング1位; 信頼度=標準(2位差11.2)" aria-label="◎ 根拠: 直近3着内2回; 同距離複勝2回; 相手関係緩和; マイニング1位; 信頼度=標準(2位差11.2)">◎</td>
+            <td class="horse-num waku-8">13</td>
+            <td class="horse-name">トーセンルルド</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>佐々木大</td>
+            <td class="col-trainer">杉浦宏昭</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="前走大敗15着; 騎手勝率3%; マイニング12位; 先行競合7頭" aria-label=" 根拠: 前走大敗15着; 騎手勝率3%; マイニング12位; 先行競合7頭"></td>
+            <td class="horse-num waku-8">14</td>
+            <td class="horse-name">タワーウマザンマイ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>原優介</td>
+            <td class="col-trainer">青木孝文</td>
+          </tr>
+        
+        </tbody>
+      </table>
+      </div>
+      
+    </details>
+    
+    <details id="race-20260922-06-3" class="race ">
+      <summary class="race-head">
+        <div class="race-num">R3</div>
+        <div>
+          <div class="race-info-line">
+            
+            
+            <span class="badge dirt">ダート</span>
+            <span class="badge">1200m</span>
+            
+          </div>
+          
+          
+          
+          <div class="head-pick"><span class="mark">◎</span>5 ドナビッグベン<span class="head-pick-reason">頭数補正上位17%; 同距離複勝1回; 相手関係緩和; マイニング1位; 信頼度=標準(2位差21.0)</span></div>
+          
+        </div>
+        <div class="race-time">10:50</div>
+      </summary>
+      
+        
+        <div class="top-picks ">
+          
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">◎</span><span class="pick-num">5</span> ドナビッグベン<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 37.6%</span><span class="conf-tag">標準</span></div>
+              <div class="pick-reason">頭数補正上位17%; 同距離複勝1回; 相手関係緩和; マイニング1位; 信頼度=標準(2位差21.0)</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">○</span><span class="pick-num">1</span> ビスクヴィート<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 4.5%</span><span class="conf-tag">標準</span></div>
+              <div class="pick-reason">近走上昇; 騎手勝率3%; 調教師勝率10%; マイニング6位</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">▲</span><span class="pick-num">4</span> シュアシング<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 7.3%</span><span class="conf-tag">標準</span></div>
+              <div class="pick-reason">マイニング3位; 先行競合5頭; sprint risk; 母父距離帯複勝40%</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">△</span><span class="pick-num">3</span> ソウラスフロス<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 8.7%</span><span class="conf-tag">標準</span></div>
+              <div class="pick-reason">前走9着; 騎手勝率13%; マイニング4位; 先行競合5頭</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">☆</span><span class="pick-num">8</span> ギムナシオン<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 12.8%</span><span class="conf-tag">標準</span></div>
+              <div class="pick-reason">マイニング2位; 差し向き展開; sprint risk</div>
+            </div>
+          
+        </div>
+        
+        
+        
+      <div class="entries-wrap">
+      <table class="entries">
+        <thead>
+          <tr>
+            <th scope="col">印</th>
+            <th scope="col">馬</th>
+            <th scope="col">馬名</th>
+            <th scope="col">オッズ</th>
+            <th scope="col" class="col-sex">性齢</th>
+            <th scope="col" class="col-burden">斤量</th>
+            <th scope="col">騎手</th>
+            <th scope="col" class="col-trainer">調教師</th>
+          </tr>
+        </thead>
+        <tbody>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="近走上昇; 騎手勝率3%; 調教師勝率10%; マイニング6位" aria-label="○ 根拠: 近走上昇; 騎手勝率3%; 調教師勝率10%; マイニング6位">○</td>
+            <td class="horse-num waku-1">1</td>
+            <td class="horse-name">ビスクヴィート</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>内田博幸</td>
+            <td class="col-trainer">中舘英二</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="前走8着; 斤量増2.0kg; マイニング10位; 差し向き展開" aria-label=" 根拠: 前走8着; 斤量増2.0kg; マイニング10位; 差し向き展開"></td>
+            <td class="horse-num waku-2">2</td>
+            <td class="horse-name">モミスケ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">54.0</td>
+            <td>長浜鴻緒</td>
+            <td class="col-trainer">水野貴広</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="前走9着; 騎手勝率13%; マイニング4位; 先行競合5頭" aria-label="△ 根拠: 前走9着; 騎手勝率13%; マイニング4位; 先行競合5頭">△</td>
+            <td class="horse-num waku-3">3</td>
+            <td class="horse-name">ソウラスフロス</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>三浦皇成</td>
+            <td class="col-trainer">金成貴史</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="マイニング3位; 先行競合5頭; sprint risk; 母父距離帯複勝40%" aria-label="▲ 根拠: マイニング3位; 先行競合5頭; sprint risk; 母父距離帯複勝40%">▲</td>
+            <td class="horse-num waku-4">4</td>
+            <td class="horse-name">シュアシング</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>武藤雅</td>
+            <td class="col-trainer">相沢郁</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="頭数補正上位17%; 同距離複勝1回; 相手関係緩和; マイニング1位; 信頼度=標準(2位差21.0)" aria-label="◎ 根拠: 頭数補正上位17%; 同距離複勝1回; 相手関係緩和; マイニング1位; 信頼度=標準(2位差21.0)">◎</td>
+            <td class="horse-num waku-5">5</td>
+            <td class="horse-name">ドナビッグベン</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>佐々木大</td>
+            <td class="col-trainer">秋本大介</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="間隔長め86日; 斤量増3.0kg; 騎手勝率2%; マイニング11位" aria-label=" 根拠: 間隔長め86日; 斤量増3.0kg; 騎手勝率2%; マイニング11位"></td>
+            <td class="horse-num waku-6">6</td>
+            <td class="horse-name">ベアアミーチ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>松岡正海</td>
+            <td class="col-trainer">杉浦宏昭</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="騎手勝率1%; マイニング5位; 先行競合5頭; sprint risk" aria-label=" 根拠: 騎手勝率1%; マイニング5位; 先行競合5頭; sprint risk"></td>
+            <td class="horse-num waku-6">7</td>
+            <td class="horse-name">スウィット</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>木幡巧也</td>
+            <td class="col-trainer">牧光二</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="マイニング2位; 差し向き展開; sprint risk" aria-label="☆ 根拠: マイニング2位; 差し向き展開; sprint risk">☆</td>
+            <td class="horse-num waku-7">8</td>
+            <td class="horse-name">ギムナシオン</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>横山武史</td>
+            <td class="col-trainer">嘉藤貴行</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="前走10着; 騎手勝率3%; マイニング7位; 差し向き展開" aria-label=" 根拠: 前走10着; 騎手勝率3%; マイニング7位; 差し向き展開"></td>
+            <td class="horse-num waku-7">9</td>
+            <td class="horse-name">ヤマニンスペッキオ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>江田照男</td>
+            <td class="col-trainer">田中勝春</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="騎手勝率2%; マイニング8位; 差し向き展開; sprint risk" aria-label=" 根拠: 騎手勝率2%; マイニング8位; 差し向き展開; sprint risk"></td>
+            <td class="horse-num waku-8">10</td>
+            <td class="horse-name">ダンシングリリー</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>小崎綾也</td>
+            <td class="col-trainer">佐藤吉勝</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="前走大敗13着; 騎手勝率1%; マイニング9位; 差し向き展開" aria-label=" 根拠: 前走大敗13着; 騎手勝率1%; マイニング9位; 差し向き展開"></td>
+            <td class="horse-num waku-8">11</td>
+            <td class="horse-name">ヒーローシー</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>丸田恭介</td>
+            <td class="col-trainer">石栗龍彦</td>
+          </tr>
+        
+        </tbody>
+      </table>
+      </div>
+      
+    </details>
+    
+    <details id="race-20260922-06-4" class="race ">
+      <summary class="race-head">
+        <div class="race-num">R4</div>
+        <div>
+          <div class="race-info-line">
+            
+            
+            <span class="badge turf">芝</span>
+            <span class="badge">1800m</span>
+            
+          </div>
+          
+          
+          
+          <div class="head-pick"><span class="mark">◎</span>4 キャピタルストーン<span class="head-pick-reason">頭数補正上位8%; 直近3着内2回; 同距離複勝2回; 相手関係緩和; 信頼度=接戦(2位差6.8)</span></div>
+          
+        </div>
+        <div class="race-time">11:20</div>
+      </summary>
+      
+        
+        <div class="top-picks ">
+          
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">◎</span><span class="pick-num">4</span> キャピタルストーン<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 23.2%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">頭数補正上位8%; 直近3着内2回; 同距離複勝2回; 相手関係緩和; 信頼度=接戦(2位差6.8)</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">○</span><span class="pick-num">7</span> ドナリー<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 16.8%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">頭数補正上位7%; 同距離複勝1回; 相手関係緩和; 調教師勝率10%</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">▲</span><span class="pick-num">6</span> クシェドゥソレイユ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 18.9%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">相手関係緩和; 休み明け108日; マイニング1位; 先行競合7頭</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">△</span><span class="pick-num">3</span> アニエーネ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 9.0%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">同距離複勝1回; 相手関係緩和; 騎手勝率1%; マイニング3位</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">☆</span><span class="pick-num">5</span> トーセンシントラ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 8.8%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">調教師勝率10%; マイニング2位; 先行競合7頭; 上がり最速級34.5</div>
+            </div>
+          
+        </div>
+        
+        
+        
+      <div class="entries-wrap">
+      <table class="entries">
+        <thead>
+          <tr>
+            <th scope="col">印</th>
+            <th scope="col">馬</th>
+            <th scope="col">馬名</th>
+            <th scope="col">オッズ</th>
+            <th scope="col" class="col-sex">性齢</th>
+            <th scope="col" class="col-burden">斤量</th>
+            <th scope="col">騎手</th>
+            <th scope="col" class="col-trainer">調教師</th>
+          </tr>
+        </thead>
+        <tbody>
+        
+          <tr>
+            <td class="mark-cell" title="前走11着; 騎手勝率17%; マイニング10位; 先行競合7頭" aria-label=" 根拠: 前走11着; 騎手勝率17%; マイニング10位; 先行競合7頭"></td>
+            <td class="horse-num waku-1">1</td>
+            <td class="horse-name">サンアンドスターズ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">53.0</td>
+            <td>小林美駒</td>
+            <td class="col-trainer">畠山吉宏</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="間隔長め93日; 前走大敗13着; 斤量増3.0kg; マイニング7位" aria-label=" 根拠: 間隔長め93日; 前走大敗13着; 斤量増3.0kg; マイニング7位"></td>
+            <td class="horse-num waku-2">2</td>
+            <td class="horse-name">マイネルアルディ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>佐々木大</td>
+            <td class="col-trainer">菊川正達</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="同距離複勝1回; 相手関係緩和; 騎手勝率1%; マイニング3位" aria-label="△ 根拠: 同距離複勝1回; 相手関係緩和; 騎手勝率1%; マイニング3位">△</td>
+            <td class="horse-num waku-3">3</td>
+            <td class="horse-name">アニエーネ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>柴田大知</td>
+            <td class="col-trainer">和田勇介</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="頭数補正上位8%; 直近3着内2回; 同距離複勝2回; 相手関係緩和; 信頼度=接戦(2位差6.8)" aria-label="◎ 根拠: 頭数補正上位8%; 直近3着内2回; 同距離複勝2回; 相手関係緩和; 信頼度=接戦(2位差6.8)">◎</td>
+            <td class="horse-num waku-4">4</td>
+            <td class="horse-name">キャピタルストーン</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>大野拓弥</td>
+            <td class="col-trainer">久保田貴</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="調教師勝率10%; マイニング2位; 先行競合7頭; 上がり最速級34.5" aria-label="☆ 根拠: 調教師勝率10%; マイニング2位; 先行競合7頭; 上がり最速級34.5">☆</td>
+            <td class="horse-num waku-5">5</td>
+            <td class="horse-name">トーセンシントラ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>丹内祐次</td>
+            <td class="col-trainer">中舘英二</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="相手関係緩和; 休み明け108日; マイニング1位; 先行競合7頭" aria-label="▲ 根拠: 相手関係緩和; 休み明け108日; マイニング1位; 先行競合7頭">▲</td>
+            <td class="horse-num waku-6">6</td>
+            <td class="horse-name">クシェドゥソレイユ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>横山武史</td>
+            <td class="col-trainer">辻哲英</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="頭数補正上位7%; 同距離複勝1回; 相手関係緩和; 調教師勝率10%" aria-label="○ 根拠: 頭数補正上位7%; 同距離複勝1回; 相手関係緩和; 調教師勝率10%">○</td>
+            <td class="horse-num waku-7">7</td>
+            <td class="horse-name">ドナリー</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">53.0</td>
+            <td>石神深道</td>
+            <td class="col-trainer">林徹</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走上昇; 重賞経験あり; 騎手勝率1%; マイニング9位" aria-label=" 根拠: 近走上昇; 重賞経験あり; 騎手勝率1%; マイニング9位"></td>
+            <td class="horse-num waku-7">8</td>
+            <td class="horse-name">エレスレイプニル</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>木幡巧也</td>
+            <td class="col-trainer">杉浦宏昭</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="マイニング6位; 差し向き展開; 上がり最速級33.5" aria-label=" 根拠: マイニング6位; 差し向き展開; 上がり最速級33.5"></td>
+            <td class="horse-num waku-8">9</td>
+            <td class="horse-name">コスモバルムンク</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>菊沢一樹</td>
+            <td class="col-trainer">小手川準</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="前走11着; マイニング8位; 差し向き展開; 上がり良好35.7" aria-label=" 根拠: 前走11着; マイニング8位; 差し向き展開; 上がり良好35.7"></td>
+            <td class="horse-num waku-8">10</td>
+            <td class="horse-name">キャッチアップ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>武藤雅</td>
+            <td class="col-trainer">小野次郎</td>
+          </tr>
+        
+        </tbody>
+      </table>
+      </div>
+      
+    </details>
+    
+    <details id="race-20260922-06-5" class="race ">
+      <summary class="race-head">
+        <div class="race-num">R5</div>
+        <div>
+          <div class="race-info-line">
+            
+            
+            <span class="badge turf">芝</span>
+            <span class="badge">1600m</span>
+            
+          </div>
+          
+          
+          
+          <div class="head-pick"><span class="mark">◎</span>7 ジェイエルターボ<span class="head-pick-reason">調教師勝率11%; マイニング8位; 父系同馬場複勝55%; 父系距離帯複勝57%; 信頼度=混戦(2位差-1.0)</span></div>
+          
+        </div>
+        <div class="race-time">12:10</div>
+      </summary>
+      
+        
+        <div class="top-picks ">
+          
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">◎</span><span class="pick-num">7</span> ジェイエルターボ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 7.9%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">調教師勝率11%; マイニング8位; 父系同馬場複勝55%; 父系距離帯複勝57%; 信頼度=混戦(2位差-1.0)</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">○</span><span class="pick-num">10</span> ロックドダイアリー<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 10.2%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">騎手勝率16%; 調教師勝率14%; マイニング2位</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">▲</span><span class="pick-num">15</span> セレネリオン<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 10.2%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">マイニング1位</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">△</span><span class="pick-num">8</span> リネンエトワール<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 8.3%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">騎手勝率13%; マイニング4位</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">☆</span><span class="pick-num">6</span> ナイトオブマース<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 19.5%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">調教師勝率10%; マイニング3位</div>
+            </div>
+          
+        </div>
+        
+        
+        
+      <div class="entries-wrap">
+      <table class="entries">
+        <thead>
+          <tr>
+            <th scope="col">印</th>
+            <th scope="col">馬</th>
+            <th scope="col">馬名</th>
+            <th scope="col">オッズ</th>
+            <th scope="col" class="col-sex">性齢</th>
+            <th scope="col" class="col-burden">斤量</th>
+            <th scope="col">騎手</th>
+            <th scope="col" class="col-trainer">調教師</th>
+          </tr>
+        </thead>
+        <tbody>
+        
+          <tr>
+            <td class="mark-cell" title="マイニング9位" aria-label=" 根拠: マイニング9位"></td>
+            <td class="horse-num waku-1">1</td>
+            <td class="horse-name">ビーハッピーデイ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>ミシェル</td>
+            <td class="col-trainer">西田雄一</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="騎手勝率2%; マイニング5位" aria-label=" 根拠: 騎手勝率2%; マイニング5位"></td>
+            <td class="horse-num waku-2">2</td>
+            <td class="horse-name">ローズサルーテ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>小崎綾也</td>
+            <td class="col-trainer">松永康利</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="騎手勝率2%; マイニング13位" aria-label=" 根拠: 騎手勝率2%; マイニング13位"></td>
+            <td class="horse-num waku-2">3</td>
+            <td class="horse-name">アイファーエリース</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>松岡正海</td>
+            <td class="col-trainer">蛯名利弘</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="騎手勝率1%; マイニング10位" aria-label=" 根拠: 騎手勝率1%; マイニング10位"></td>
+            <td class="horse-num waku-3">4</td>
+            <td class="horse-name">コスモグリュー</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>柴田大知</td>
+            <td class="col-trainer">田島俊明</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="騎手勝率0%; マイニング14位" aria-label=" 根拠: 騎手勝率0%; マイニング14位"></td>
+            <td class="horse-num waku-3">5</td>
+            <td class="horse-name">ナツハゼ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">52.0</td>
+            <td>遠藤汰月</td>
+            <td class="col-trainer">武市康男</td>
+          </tr>
+        
+          <tr class="marked top-probability">
+            <td class="mark-cell" title="調教師勝率10%; マイニング3位" aria-label="☆ 根拠: 調教師勝率10%; マイニング3位">☆</td>
+            <td class="horse-num waku-4">6</td>
+            <td class="horse-name">ナイトオブマース</td>
+            <td class="col-odds"><span class="top-p">最高勝率</span><br>—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>津村明秀</td>
+            <td class="col-trainer">林徹</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="調教師勝率11%; マイニング8位; 父系同馬場複勝55%; 父系距離帯複勝57%; 信頼度=混戦(2位差-1.0)" aria-label="◎ 根拠: 調教師勝率11%; マイニング8位; 父系同馬場複勝55%; 父系距離帯複勝57%; 信頼度=混戦(2位差-1.0)">◎</td>
+            <td class="horse-num waku-4">7</td>
+            <td class="horse-name">ジェイエルターボ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>菊沢一樹</td>
+            <td class="col-trainer">鈴木慎太</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="騎手勝率13%; マイニング4位" aria-label="△ 根拠: 騎手勝率13%; マイニング4位">△</td>
+            <td class="horse-num waku-5">8</td>
+            <td class="horse-name">リネンエトワール</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>横山典弘</td>
+            <td class="col-trainer">平岩大典</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="騎手勝率1%; マイニング15位" aria-label=" 根拠: 騎手勝率1%; マイニング15位"></td>
+            <td class="horse-num waku-5">9</td>
+            <td class="horse-name">コールオンユー</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>木幡巧也</td>
+            <td class="col-trainer">牧光二</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="騎手勝率16%; 調教師勝率14%; マイニング2位" aria-label="○ 根拠: 騎手勝率16%; 調教師勝率14%; マイニング2位">○</td>
+            <td class="horse-num waku-6">10</td>
+            <td class="horse-name">ロックドダイアリー</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>田辺裕信</td>
+            <td class="col-trainer">久保田貴</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="騎手勝率3%; マイニング6位" aria-label=" 根拠: 騎手勝率3%; マイニング6位"></td>
+            <td class="horse-num waku-6">11</td>
+            <td class="horse-name">アマンドショコラ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>江田照男</td>
+            <td class="col-trainer">田中剛</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="調教師勝率12%; マイニング7位" aria-label=" 根拠: 調教師勝率12%; マイニング7位"></td>
+            <td class="horse-num waku-7">12</td>
+            <td class="horse-name">フェスタベラ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>杉原誠人</td>
+            <td class="col-trainer">木村哲也</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="騎手勝率3%; 調教師勝率12%; マイニング11位; 父系同馬場複勝38%" aria-label=" 根拠: 騎手勝率3%; 調教師勝率12%; マイニング11位; 父系同馬場複勝38%"></td>
+            <td class="horse-num waku-7">13</td>
+            <td class="horse-name">ポテ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>内田博幸</td>
+            <td class="col-trainer">尾形和幸</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="騎手勝率3%; 調教師勝率12%; マイニング12位" aria-label=" 根拠: 騎手勝率3%; 調教師勝率12%; マイニング12位"></td>
+            <td class="horse-num waku-8">14</td>
+            <td class="horse-name">ステラストリーム</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">53.0</td>
+            <td>石田拓郎</td>
+            <td class="col-trainer">尾形和幸</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="マイニング1位" aria-label="▲ 根拠: マイニング1位">▲</td>
+            <td class="horse-num waku-8">15</td>
+            <td class="horse-name">セレネリオン</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>佐々木大</td>
+            <td class="col-trainer">浅利英明</td>
+          </tr>
+        
+        </tbody>
+      </table>
+      </div>
+      
+    </details>
+    
+    <details id="race-20260922-06-6" class="race ">
+      <summary class="race-head">
+        <div class="race-num">R6</div>
+        <div>
+          <div class="race-info-line">
+            
+            
+            <span class="badge turf">芝</span>
+            <span class="badge">2000m</span>
+            
+          </div>
+          
+          
+          
+          <div class="head-pick"><span class="mark">◎</span>8 スリーボンド<span class="head-pick-reason">騎手勝率13%; マイニング1位; 信頼度=混戦(2位差3.1)</span></div>
+          
+        </div>
+        <div class="race-time">12:40</div>
+      </summary>
+      
+        
+        <div class="top-picks ">
+          
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">◎</span><span class="pick-num">8</span> スリーボンド<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 17.6%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">騎手勝率13%; マイニング1位; 信頼度=混戦(2位差3.1)</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">○</span><span class="pick-num">6</span> メダルボーイ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 17.6%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">騎手勝率16%; 調教師勝率12%; マイニング3位</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">▲</span><span class="pick-num">5</span> テンポアニマート<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 17.6%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">調教師勝率10%; マイニング2位</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">△</span><span class="pick-num">3</span> ヤマメゴリュウ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 8.4%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">騎手勝率17%; 調教師勝率14%; マイニング8位</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">☆</span><span class="pick-num">2</span> シンヒダカムーン<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 11.1%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">調教師勝率10%; マイニング4位</div>
+            </div>
+          
+        </div>
+        
+        
+        
+      <div class="entries-wrap">
+      <table class="entries">
+        <thead>
+          <tr>
+            <th scope="col">印</th>
+            <th scope="col">馬</th>
+            <th scope="col">馬名</th>
+            <th scope="col">オッズ</th>
+            <th scope="col" class="col-sex">性齢</th>
+            <th scope="col" class="col-burden">斤量</th>
+            <th scope="col">騎手</th>
+            <th scope="col" class="col-trainer">調教師</th>
+          </tr>
+        </thead>
+        <tbody>
+        
+          <tr>
+            <td class="mark-cell" title="マイニング5位" aria-label=" 根拠: マイニング5位"></td>
+            <td class="horse-num waku-1">1</td>
+            <td class="horse-name">ネオロマーネ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>横山武史</td>
+            <td class="col-trainer">松尾卓哉</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="調教師勝率10%; マイニング4位" aria-label="☆ 根拠: 調教師勝率10%; マイニング4位">☆</td>
+            <td class="horse-num waku-2">2</td>
+            <td class="horse-name">シンヒダカムーン</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>佐々木大</td>
+            <td class="col-trainer">上原佑紀</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="騎手勝率17%; 調教師勝率14%; マイニング8位" aria-label="△ 根拠: 騎手勝率17%; 調教師勝率14%; マイニング8位">△</td>
+            <td class="horse-num waku-3">3</td>
+            <td class="horse-name">ヤマメゴリュウ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">53.0</td>
+            <td>小林美駒</td>
+            <td class="col-trainer">久保田貴</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="マイニング7位" aria-label=" 根拠: マイニング7位"></td>
+            <td class="horse-num waku-4">4</td>
+            <td class="horse-name">パッションノーヴァ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>武藤雅</td>
+            <td class="col-trainer">武藤善則</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="調教師勝率10%; マイニング2位" aria-label="▲ 根拠: 調教師勝率10%; マイニング2位">▲</td>
+            <td class="horse-num waku-5">5</td>
+            <td class="horse-name">テンポアニマート</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>津村明秀</td>
+            <td class="col-trainer">手塚貴久</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="騎手勝率16%; 調教師勝率12%; マイニング3位" aria-label="○ 根拠: 騎手勝率16%; 調教師勝率12%; マイニング3位">○</td>
+            <td class="horse-num waku-6">6</td>
+            <td class="horse-name">メダルボーイ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡2</td>
+            <td class="num col-burden">55.0</td>
+            <td>田辺裕信</td>
+            <td class="col-trainer">蛯名正義</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="騎手勝率1%; マイニング6位" aria-label=" 根拠: 騎手勝率1%; マイニング6位"></td>
+            <td class="horse-num waku-7">7</td>
+            <td class="horse-name">ゴクラクチョウカ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>柴田大知</td>
+            <td class="col-trainer">和田雄二</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="騎手勝率13%; マイニング1位; 信頼度=混戦(2位差3.1)" aria-label="◎ 根拠: 騎手勝率13%; マイニング1位; 信頼度=混戦(2位差3.1)">◎</td>
+            <td class="horse-num waku-8">8</td>
+            <td class="horse-name">スリーボンド</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝2</td>
+            <td class="num col-burden">55.0</td>
+            <td>三浦皇成</td>
+            <td class="col-trainer">橋田宜長</td>
+          </tr>
+        
+        </tbody>
+      </table>
+      </div>
+      
+    </details>
+    
+    <details id="race-20260922-06-7" class="race ">
+      <summary class="race-head">
+        <div class="race-num">R7</div>
+        <div>
+          <div class="race-info-line">
+            
+            
+            <span class="badge dirt">ダート</span>
+            <span class="badge">1800m</span>
+            
+          </div>
+          
+          
+          
+          <div class="head-pick"><span class="mark">◎</span>7 ユアフェリシティ<span class="head-pick-reason">頭数補正上位12%; 直近3着内3回; 同種T1勝; 同距離複勝4回; 信頼度=混戦(2位差1.4)</span></div>
+          
+        </div>
+        <div class="race-time">13:10</div>
+      </summary>
+      
+        
+        <div class="top-picks ">
+          
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">◎</span><span class="pick-num">7</span> ユアフェリシティ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 33.1%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">頭数補正上位12%; 直近3着内3回; 同種T1勝; 同距離複勝4回; 信頼度=混戦(2位差1.4)</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">○</span><span class="pick-num">14</span> アンシュウマト<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 10.5%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">直近で1着あり; 直近3着内2回; 近走下降; 同種T複勝2回</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">▲</span><span class="pick-num">2</span> ブレスドナイル<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 9.5%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">近走上昇; 同種T2勝; 同距離複勝4回; 相手関係緩和</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">△</span><span class="pick-num">3</span> タケルムサシ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 10.5%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">近走上昇; 同種T1勝; 同距離複勝1回; 同場1勝</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">☆</span><span class="pick-num">1</span> サムシングニュー<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 9.5%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">直近3着内2回; 近走上昇; 同種T1勝; 同距離複勝4回</div>
+            </div>
+          
+        </div>
+        
+        
+        
+      <div class="entries-wrap">
+      <table class="entries">
+        <thead>
+          <tr>
+            <th scope="col">印</th>
+            <th scope="col">馬</th>
+            <th scope="col">馬名</th>
+            <th scope="col">オッズ</th>
+            <th scope="col" class="col-sex">性齢</th>
+            <th scope="col" class="col-burden">斤量</th>
+            <th scope="col">騎手</th>
+            <th scope="col" class="col-trainer">調教師</th>
+          </tr>
+        </thead>
+        <tbody>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="直近3着内2回; 近走上昇; 同種T1勝; 同距離複勝4回" aria-label="☆ 根拠: 直近3着内2回; 近走上昇; 同種T1勝; 同距離複勝4回">☆</td>
+            <td class="horse-num waku-1">1</td>
+            <td class="horse-name">サムシングニュー</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">55.0</td>
+            <td>ミシェル</td>
+            <td class="col-trainer">鹿戸雄一</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="近走上昇; 同種T2勝; 同距離複勝4回; 相手関係緩和" aria-label="▲ 根拠: 近走上昇; 同種T2勝; 同距離複勝4回; 相手関係緩和">▲</td>
+            <td class="horse-num waku-2">2</td>
+            <td class="horse-name">ブレスドナイル</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">56.0</td>
+            <td>佐々木大</td>
+            <td class="col-trainer">金成貴史</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="近走上昇; 同種T1勝; 同距離複勝1回; 同場1勝" aria-label="△ 根拠: 近走上昇; 同種T1勝; 同距離複勝1回; 同場1勝">△</td>
+            <td class="horse-num waku-3">3</td>
+            <td class="horse-name">タケルムサシ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">55.0</td>
+            <td>斎藤新</td>
+            <td class="col-trainer">斎藤誠</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="直近で1着あり; 直近3着内2回; 近走下降; 同種T1勝" aria-label=" 根拠: 直近で1着あり; 直近3着内2回; 近走下降; 同種T1勝"></td>
+            <td class="horse-num waku-3">4</td>
+            <td class="horse-name">ビリオネアボーイ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡4</td>
+            <td class="num col-burden">58.0</td>
+            <td>木幡巧也</td>
+            <td class="col-trainer">武市康男</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="前走大敗12着; 斤量減2.0kg; 騎手勝率2%; マイニング14位" aria-label=" 根拠: 前走大敗12着; 斤量減2.0kg; 騎手勝率2%; マイニング14位"></td>
+            <td class="horse-num waku-4">5</td>
+            <td class="horse-name">ペルヴォルム</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝3</td>
+            <td class="num col-burden">50.0</td>
+            <td>上里直汰</td>
+            <td class="col-trainer">加藤和宏</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="同種T2勝; 同距離7走; 同場不振4走; 同場距離帯不振4走" aria-label=" 根拠: 同種T2勝; 同距離7走; 同場不振4走; 同場距離帯不振4走"></td>
+            <td class="horse-num waku-4">6</td>
+            <td class="horse-name">メトロポリターナ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝5</td>
+            <td class="num col-burden">56.0</td>
+            <td>丸田恭介</td>
+            <td class="col-trainer">粕谷昌央</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="頭数補正上位12%; 直近3着内3回; 同種T1勝; 同距離複勝4回; 信頼度=混戦(2位差1.4)" aria-label="◎ 根拠: 頭数補正上位12%; 直近3着内3回; 同種T1勝; 同距離複勝4回; 信頼度=混戦(2位差1.4)">◎</td>
+            <td class="horse-num waku-5">7</td>
+            <td class="horse-name">ユアフェリシティ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">55.0</td>
+            <td>原田和真</td>
+            <td class="col-trainer">千葉直人</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="直近で1着あり; 近走下降; 同種T1勝; 同距離複勝1回" aria-label=" 根拠: 直近で1着あり; 近走下降; 同種T1勝; 同距離複勝1回"></td>
+            <td class="horse-num waku-5">8</td>
+            <td class="horse-name">ホーナー</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">55.0</td>
+            <td>菊沢一樹</td>
+            <td class="col-trainer">栗田徹</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走上昇; 同距離6走; 休み明け185日; 前走9着" aria-label=" 根拠: 近走上昇; 同距離6走; 休み明け185日; 前走9着"></td>
+            <td class="horse-num waku-6">9</td>
+            <td class="horse-name">オウケンヴィーナス</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝5</td>
+            <td class="num col-burden">56.0</td>
+            <td>木幡育也</td>
+            <td class="col-trainer">松永康利</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走下降; 相手関係緩和; 間隔長め94日; 前走9着" aria-label=" 根拠: 近走下降; 相手関係緩和; 間隔長め94日; 前走9着"></td>
+            <td class="horse-num waku-6">10</td>
+            <td class="horse-name">サムワンライクユー</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡6</td>
+            <td class="num col-burden">58.0</td>
+            <td>内田博幸</td>
+            <td class="col-trainer">佐藤吉勝</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="前走大敗16着; 斤量増2.0kg; 騎手勝率1%; マイニング13位" aria-label=" 根拠: 前走大敗16着; 斤量増2.0kg; 騎手勝率1%; マイニング13位"></td>
+            <td class="horse-num waku-7">11</td>
+            <td class="horse-name">クリノゴッホ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">騸6</td>
+            <td class="num col-burden">58.0</td>
+            <td>黛弘人</td>
+            <td class="col-trainer">新開幸一</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="同種T1勝; 同距離複勝1回; 相手関係緩和; 騎手勝率3%" aria-label=" 根拠: 同種T1勝; 同距離複勝1回; 相手関係緩和; 騎手勝率3%"></td>
+            <td class="horse-num waku-7">12</td>
+            <td class="horse-name">レボルシオン</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡5</td>
+            <td class="num col-burden">58.0</td>
+            <td>江田照男</td>
+            <td class="col-trainer">蛯名正義</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="頭数補正上位11%; 直近3着内3回; 同種T複勝2回; 同距離複勝1回" aria-label=" 根拠: 頭数補正上位11%; 直近3着内3回; 同種T複勝2回; 同距離複勝1回"></td>
+            <td class="horse-num waku-8">13</td>
+            <td class="horse-name">ナックスプレンダー</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">55.0</td>
+            <td>吉田豊</td>
+            <td class="col-trainer">小野次郎</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="直近で1着あり; 直近3着内2回; 近走下降; 同種T複勝2回" aria-label="○ 根拠: 直近で1着あり; 直近3着内2回; 近走下降; 同種T複勝2回">○</td>
+            <td class="horse-num waku-8">14</td>
+            <td class="horse-name">アンシュウマト</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">55.0</td>
+            <td>三浦皇成</td>
+            <td class="col-trainer">中川公成</td>
+          </tr>
+        
+        </tbody>
+      </table>
+      </div>
+      
+    </details>
+    
+    <details id="race-20260922-06-8" class="race ">
+      <summary class="race-head">
+        <div class="race-num">R8</div>
+        <div>
+          <div class="race-info-line">
+            
+            
+            <span class="badge turf">芝</span>
+            <span class="badge">2200m</span>
+            
+          </div>
+          
+          
+          
+          <div class="head-pick"><span class="mark">◎</span>12 イモータリス<span class="head-pick-reason">直近3着内2回; 同距離複勝1回; 同場1勝; 同場距離帯複勝3回; 信頼度=標準(2位差18.0)</span></div>
+          
+        </div>
+        <div class="race-time">13:40</div>
+      </summary>
+      
+        
+        <div class="top-picks ">
+          
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">◎</span><span class="pick-num">12</span> イモータリス<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 28.7%</span><span class="conf-tag">標準</span></div>
+              <div class="pick-reason">直近3着内2回; 同距離複勝1回; 同場1勝; 同場距離帯複勝3回; 信頼度=標準(2位差18.0)</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">○</span><span class="pick-num">11</span> テイキットイージー<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 5.7%</span><span class="conf-tag">標準</span></div>
+              <div class="pick-reason">同距離3走; マイニング6位; 差し向き展開; 上がり最速級32.9</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">▲</span><span class="pick-num">9</span> ピースヒロフェイス<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 3.7%</span><span class="conf-tag">標準</span></div>
+              <div class="pick-reason">近走上昇; 相手関係緩和; 前走8着; マイニング7位</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">△</span><span class="pick-num">16</span> ベルウッドクレド<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 16.9%</span><span class="conf-tag">標準</span></div>
+              <div class="pick-reason">直近で1着あり; 近走下降; 相手関係緩和; マイニング3位</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">☆</span><span class="pick-num">15</span> サフランルージュ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 7.1%</span><span class="conf-tag">標準</span></div>
+              <div class="pick-reason">近走上昇; 相手関係緩和; 騎手勝率1%; マイニング2位</div>
+            </div>
+          
+        </div>
+        
+        
+        
+      <div class="entries-wrap">
+      <table class="entries">
+        <thead>
+          <tr>
+            <th scope="col">印</th>
+            <th scope="col">馬</th>
+            <th scope="col">馬名</th>
+            <th scope="col">オッズ</th>
+            <th scope="col" class="col-sex">性齢</th>
+            <th scope="col" class="col-burden">斤量</th>
+            <th scope="col">騎手</th>
+            <th scope="col" class="col-trainer">調教師</th>
+          </tr>
+        </thead>
+        <tbody>
+        
+          <tr>
+            <td class="mark-cell" title="相手関係緩和; 休み明け108日; 前走8着; 調教師勝率10%" aria-label=" 根拠: 相手関係緩和; 休み明け108日; 前走8着; 調教師勝率10%"></td>
+            <td class="horse-num waku-1">1</td>
+            <td class="horse-name">プルーヴンウィナー</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝5</td>
+            <td class="num col-burden">56.0</td>
+            <td>佐々木大</td>
+            <td class="col-trainer">林徹</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="前走11着; 騎手勝率2%; マイニング4位; 先行競合8頭" aria-label=" 根拠: 前走11着; 騎手勝率2%; マイニング4位; 先行競合8頭"></td>
+            <td class="horse-num waku-1">2</td>
+            <td class="horse-name">リリエンフェルト</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝5</td>
+            <td class="num col-burden">56.0</td>
+            <td>原田和真</td>
+            <td class="col-trainer">上原博之</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="同場不振3走; 同場距離帯不振3走; 前走大敗13着; 斤量増3.0kg" aria-label=" 根拠: 同場不振3走; 同場距離帯不振3走; 前走大敗13着; 斤量増3.0kg"></td>
+            <td class="horse-num waku-2">3</td>
+            <td class="horse-name">コウセイケンタロス</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">騸4</td>
+            <td class="num col-burden">58.0</td>
+            <td>柴田大知</td>
+            <td class="col-trainer">和田雄二</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走下降; 相手関係緩和; 間隔長め93日; 前走10着" aria-label=" 根拠: 近走下降; 相手関係緩和; 間隔長め93日; 前走10着"></td>
+            <td class="horse-num waku-2">4</td>
+            <td class="horse-name">ラルガメンテ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">56.0</td>
+            <td>津村明秀</td>
+            <td class="col-trainer">尾関知人</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走下降; 相手関係緩和; 間隔長め80日; 前走9着" aria-label=" 根拠: 近走下降; 相手関係緩和; 間隔長め80日; 前走9着"></td>
+            <td class="horse-num waku-3">5</td>
+            <td class="horse-name">メアヴィア</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝5</td>
+            <td class="num col-burden">56.0</td>
+            <td>岩田康誠</td>
+            <td class="col-trainer">金成貴史</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="頭数補正上位0%; 直近で1着あり; 直近勝利3回; 休み明け242日" aria-label=" 根拠: 頭数補正上位0%; 直近で1着あり; 直近勝利3回; 休み明け242日"></td>
+            <td class="horse-num waku-3">6</td>
+            <td class="horse-name">リュウジンマル</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡4</td>
+            <td class="num col-burden">58.0</td>
+            <td>横山和生</td>
+            <td class="col-trainer">村田一誠</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="相手関係緩和; 騎手勝率13%; 調教師勝率10%; マイニング5位" aria-label=" 根拠: 相手関係緩和; 騎手勝率13%; 調教師勝率10%; マイニング5位"></td>
+            <td class="horse-num waku-4">7</td>
+            <td class="horse-name">マーゴットソラーレ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">騸5</td>
+            <td class="num col-burden">58.0</td>
+            <td>斎藤新</td>
+            <td class="col-trainer">伊坂重信</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="前走大敗17着; 斤量減5.0kg; 騎手勝率0%; マイニング12位" aria-label=" 根拠: 前走大敗17着; 斤量減5.0kg; 騎手勝率0%; マイニング12位"></td>
+            <td class="horse-num waku-4">8</td>
+            <td class="horse-name">ウイントリベルガ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">52.0</td>
+            <td>遠藤汰月</td>
+            <td class="col-trainer">深山雅史</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="近走上昇; 相手関係緩和; 前走8着; マイニング7位" aria-label="▲ 根拠: 近走上昇; 相手関係緩和; 前走8着; マイニング7位">▲</td>
+            <td class="horse-num waku-5">9</td>
+            <td class="horse-name">ピースヒロフェイス</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝5</td>
+            <td class="num col-burden">56.0</td>
+            <td>石橋脩</td>
+            <td class="col-trainer">牧光二</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走下降; 同距離4走; 相手関係緩和; 前走大敗12着" aria-label=" 根拠: 近走下降; 同距離4走; 相手関係緩和; 前走大敗12着"></td>
+            <td class="horse-num waku-5">10</td>
+            <td class="horse-name">フォーグッド</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">騸7</td>
+            <td class="num col-burden">58.0</td>
+            <td>原優介</td>
+            <td class="col-trainer">平岩大典</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="同距離3走; マイニング6位; 差し向き展開; 上がり最速級32.9" aria-label="○ 根拠: 同距離3走; マイニング6位; 差し向き展開; 上がり最速級32.9">○</td>
+            <td class="horse-num waku-6">11</td>
+            <td class="horse-name">テイキットイージー</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡5</td>
+            <td class="num col-burden">58.0</td>
+            <td>丹内祐次</td>
+            <td class="col-trainer">萱野浩二</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="直近3着内2回; 同距離複勝1回; 同場1勝; 同場距離帯複勝3回; 信頼度=標準(2位差18.0)" aria-label="◎ 根拠: 直近3着内2回; 同距離複勝1回; 同場1勝; 同場距離帯複勝3回; 信頼度=標準(2位差18.0)">◎</td>
+            <td class="horse-num waku-6">12</td>
+            <td class="horse-name">イモータリス</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">55.0</td>
+            <td>嶋田純次</td>
+            <td class="col-trainer">手塚貴久</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走上昇; 相手関係緩和; 斤量減3.0kg; 騎手勝率3%" aria-label=" 根拠: 近走上昇; 相手関係緩和; 斤量減3.0kg; 騎手勝率3%"></td>
+            <td class="horse-num waku-7">13</td>
+            <td class="horse-name">ブリックアブラック</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">52.0</td>
+            <td>佐藤翔馬</td>
+            <td class="col-trainer">高木登</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="直近3着内2回; 近走下降; 前走11着; 騎手勝率0%" aria-label=" 根拠: 直近3着内2回; 近走下降; 前走11着; 騎手勝率0%"></td>
+            <td class="horse-num waku-7">14</td>
+            <td class="horse-name">マルカベント</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡4</td>
+            <td class="num col-burden">58.0</td>
+            <td>小林脩斗</td>
+            <td class="col-trainer">浅利英明</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="近走上昇; 相手関係緩和; 騎手勝率1%; マイニング2位" aria-label="☆ 根拠: 近走上昇; 相手関係緩和; 騎手勝率1%; マイニング2位">☆</td>
+            <td class="horse-num waku-8">15</td>
+            <td class="horse-name">サフランルージュ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝3</td>
+            <td class="num col-burden">53.0</td>
+            <td>木幡巧也</td>
+            <td class="col-trainer">室井潔</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="直近で1着あり; 近走下降; 相手関係緩和; マイニング3位" aria-label="△ 根拠: 直近で1着あり; 近走下降; 相手関係緩和; マイニング3位">△</td>
+            <td class="horse-num waku-8">16</td>
+            <td class="horse-name">ベルウッドクレド</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">55.0</td>
+            <td>大野拓弥</td>
+            <td class="col-trainer">辻哲英</td>
+          </tr>
+        
+        </tbody>
+      </table>
+      </div>
+      
+    </details>
+    
+    <details id="race-20260922-06-9" class="race ">
+      <summary class="race-head">
+        <div class="race-num">R9</div>
+        <div>
+          <div class="race-info-line">
+            <span class="race-name">鋸山特別</span>
+            <span class="badge grade">L</span>
+            <span class="badge dirt">ダート</span>
+            <span class="badge">1800m</span>
+            
+          </div>
+          
+          
+          
+          <div class="head-pick"><span class="mark">◎</span>3 パースウェイド<span class="head-pick-reason">直近で1着あり; 直近3着内2回; 同種T2勝; 同距離複勝3回; 信頼度=接戦(2位差6.0)</span></div>
+          
+        </div>
+        <div class="race-time">14:10</div>
+      </summary>
+      
+        
+        <div class="top-picks ">
+          
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">◎</span><span class="pick-num">3</span> パースウェイド<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 24.7%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">直近で1着あり; 直近3着内2回; 同種T2勝; 同距離複勝3回; 信頼度=接戦(2位差6.0)</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">○</span><span class="pick-num">4</span> エアトベーレ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 8.5%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">頭数補正上位16%; 直近で1着あり; 直近3着内2回; 近走上昇</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">▲</span><span class="pick-num">6</span> フィールオーサム<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 16.5%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">頭数補正上位14%; 直近3着内2回; 同種T1勝; 同距離複勝7回</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">△</span><span class="pick-num">14</span> ヴンダーバール<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 18.5%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">頭数補正上位11%; 直近で1着あり; 直近3着内2回; 近走上昇</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">☆</span><span class="pick-num">1</span> コンアフェット<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 5.5%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">近走下降; 同種T1勝; 同距離複勝4回; 同場1勝</div>
+            </div>
+          
+        </div>
+        
+        
+        
+      <div class="entries-wrap">
+      <table class="entries">
+        <thead>
+          <tr>
+            <th scope="col">印</th>
+            <th scope="col">馬</th>
+            <th scope="col">馬名</th>
+            <th scope="col">オッズ</th>
+            <th scope="col" class="col-sex">性齢</th>
+            <th scope="col" class="col-burden">斤量</th>
+            <th scope="col">騎手</th>
+            <th scope="col" class="col-trainer">調教師</th>
+          </tr>
+        </thead>
+        <tbody>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="近走下降; 同種T1勝; 同距離複勝4回; 同場1勝" aria-label="☆ 根拠: 近走下降; 同種T1勝; 同距離複勝4回; 同場1勝">☆</td>
+            <td class="horse-num waku-1">1</td>
+            <td class="horse-name">コンアフェット</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">56.0</td>
+            <td>丹内祐次</td>
+            <td class="col-trainer">斎藤誠</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="頭数補正上位16%; 直近で1着あり; 直近3着内2回; 同距離複勝5回" aria-label=" 根拠: 頭数補正上位16%; 直近で1着あり; 直近3着内2回; 同距離複勝5回"></td>
+            <td class="horse-num waku-1">2</td>
+            <td class="horse-name">ヴァズレーヌ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝5</td>
+            <td class="num col-burden">56.0</td>
+            <td>小崎綾也</td>
+            <td class="col-trainer">嘉藤貴行</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="直近で1着あり; 直近3着内2回; 同種T2勝; 同距離複勝3回; 信頼度=接戦(2位差6.0)" aria-label="◎ 根拠: 直近で1着あり; 直近3着内2回; 同種T2勝; 同距離複勝3回; 信頼度=接戦(2位差6.0)">◎</td>
+            <td class="horse-num waku-2">3</td>
+            <td class="horse-name">パースウェイド</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">56.0</td>
+            <td>田辺裕信</td>
+            <td class="col-trainer">中舘英二</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="頭数補正上位16%; 直近で1着あり; 直近3着内2回; 近走上昇" aria-label="○ 根拠: 頭数補正上位16%; 直近で1着あり; 直近3着内2回; 近走上昇">○</td>
+            <td class="horse-num waku-2">4</td>
+            <td class="horse-name">エアトベーレ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝3</td>
+            <td class="num col-burden">53.0</td>
+            <td>嶋田純次</td>
+            <td class="col-trainer">手塚貴久</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="直近で1着あり; 直近勝利2回; 近走上昇; 相手関係緩和" aria-label=" 根拠: 直近で1着あり; 直近勝利2回; 近走上昇; 相手関係緩和"></td>
+            <td class="horse-num waku-3">5</td>
+            <td class="horse-name">サファイアテソーロ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝3</td>
+            <td class="num col-burden">53.0</td>
+            <td>木幡巧也</td>
+            <td class="col-trainer">高木登</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="頭数補正上位14%; 直近3着内2回; 同種T1勝; 同距離複勝7回" aria-label="▲ 根拠: 頭数補正上位14%; 直近3着内2回; 同種T1勝; 同距離複勝7回">▲</td>
+            <td class="horse-num waku-3">6</td>
+            <td class="horse-name">フィールオーサム</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">56.0</td>
+            <td>横山武史</td>
+            <td class="col-trainer">岩戸孝樹</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走上昇; 同種T1勝; 同距離複勝2回; 相手関係緩和" aria-label=" 根拠: 近走上昇; 同種T1勝; 同距離複勝2回; 相手関係緩和"></td>
+            <td class="horse-num waku-4">7</td>
+            <td class="horse-name">コパノエビータ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝5</td>
+            <td class="num col-burden">56.0</td>
+            <td>長浜鴻緒</td>
+            <td class="col-trainer">手塚貴久</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="同種T2勝; 同距離複勝7回; 相手関係緩和; 前走10着" aria-label=" 根拠: 同種T2勝; 同距離複勝7回; 相手関係緩和; 前走10着"></td>
+            <td class="horse-num waku-4">8</td>
+            <td class="horse-name">カスバートテソーロ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">56.0</td>
+            <td>原優介</td>
+            <td class="col-trainer">畠山吉宏</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走下降; 同種T1勝; 同距離複勝2回; 前走大敗12着" aria-label=" 根拠: 近走下降; 同種T1勝; 同距離複勝2回; 前走大敗12着"></td>
+            <td class="horse-num waku-5">9</td>
+            <td class="horse-name">ルージュマローネ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">56.0</td>
+            <td>佐々木大</td>
+            <td class="col-trainer">栗田徹</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="同種T1勝; 同距離複勝4回; 同場距離帯複勝1回; 相手関係緩和" aria-label=" 根拠: 同種T1勝; 同距離複勝4回; 同場距離帯複勝1回; 相手関係緩和"></td>
+            <td class="horse-num waku-5">10</td>
+            <td class="horse-name">ヴァリオーサ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">56.0</td>
+            <td>大野拓弥</td>
+            <td class="col-trainer">新開幸一</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="直近で1着あり; 直近勝利2回; 近走下降; 同種T2勝" aria-label=" 根拠: 直近で1着あり; 直近勝利2回; 近走下降; 同種T2勝"></td>
+            <td class="horse-num waku-6">11</td>
+            <td class="horse-name">ロイスター</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝3</td>
+            <td class="num col-burden">53.0</td>
+            <td>西塚洸二</td>
+            <td class="col-trainer">笹田和秀</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走下降; 同距離複勝2回; 相手関係緩和; 前走11着" aria-label=" 根拠: 近走下降; 同距離複勝2回; 相手関係緩和; 前走11着"></td>
+            <td class="horse-num waku-6">12</td>
+            <td class="horse-name">レーヴドレフォン</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝5</td>
+            <td class="num col-burden">56.0</td>
+            <td>丸田恭介</td>
+            <td class="col-trainer">橋田宜長</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="直近で1着あり; 直近勝利2回; 同距離複勝3回; 相手関係緩和" aria-label=" 根拠: 直近で1着あり; 直近勝利2回; 同距離複勝3回; 相手関係緩和"></td>
+            <td class="horse-num waku-7">13</td>
+            <td class="horse-name">セレーノ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝3</td>
+            <td class="num col-burden">53.0</td>
+            <td>丸山元気</td>
+            <td class="col-trainer">高橋亮</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="頭数補正上位11%; 直近で1着あり; 直近3着内2回; 近走上昇" aria-label="△ 根拠: 頭数補正上位11%; 直近で1着あり; 直近3着内2回; 近走上昇">△</td>
+            <td class="horse-num waku-7">14</td>
+            <td class="horse-name">ヴンダーバール</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝3</td>
+            <td class="num col-burden">53.0</td>
+            <td>斎藤新</td>
+            <td class="col-trainer">斎藤誠</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="同種T1勝; 同距離複勝4回; 相手関係緩和; 前走大敗15着" aria-label=" 根拠: 同種T1勝; 同距離複勝4回; 相手関係緩和; 前走大敗15着"></td>
+            <td class="horse-num waku-8">15</td>
+            <td class="horse-name">ステラスプレンダー</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝5</td>
+            <td class="num col-burden">56.0</td>
+            <td>ミシェル</td>
+            <td class="col-trainer">石坂公一</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="直近で1着あり; 近走上昇; 同種T3勝; 前走8着" aria-label=" 根拠: 直近で1着あり; 近走上昇; 同種T3勝; 前走8着"></td>
+            <td class="horse-num waku-8">16</td>
+            <td class="horse-name">ユーヴェリア</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝5</td>
+            <td class="num col-burden">56.0</td>
+            <td>国分恭介</td>
+            <td class="col-trainer">中尾秀正</td>
+          </tr>
+        
+        </tbody>
+      </table>
+      </div>
+      
+    </details>
+    
+    <details id="race-20260922-06-10" class="race ">
+      <summary class="race-head">
+        <div class="race-num">R10</div>
+        <div>
+          <div class="race-info-line">
+            <span class="race-name">２００６メモリアル　ディープインパクトカップ</span>
+            <span class="badge grade">L</span>
+            <span class="badge turf">芝</span>
+            <span class="badge">1600m</span>
+            
+          </div>
+          
+          
+          
+          <div class="head-pick"><span class="mark">◎</span>11 プリムツァール<span class="head-pick-reason">頭数補正上位11%; 直近で1着あり; 直近3着内3回; 同種T1勝; 信頼度=接戦(2位差9.0)</span></div>
+          
+        </div>
+        <div class="race-time">14:50</div>
+      </summary>
+      
+        
+        <div class="top-picks ">
+          
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">◎</span><span class="pick-num">11</span> プリムツァール<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 21.1%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">頭数補正上位11%; 直近で1着あり; 直近3着内3回; 同種T1勝; 信頼度=接戦(2位差9.0)</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">○</span><span class="pick-num">5</span> デイトナチャンプ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 30.4%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">頭数補正上位18%; 直近で1着あり; 直近3着内2回; 同種T1勝</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">▲</span><span class="pick-num">3</span> ジャルディニエ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 4.2%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">近走下降; 同種T1勝; 同距離複勝1回; 同場1勝</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">△</span><span class="pick-num">2</span> レッドレナート<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 4.7%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">同種T1勝; 同距離複勝5回; 同場1勝; 同場距離帯複勝2回</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">☆</span><span class="pick-num">7</span> アロンソア<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 6.9%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">直近で1着あり; 近走下降; 同種T1勝; 同距離複勝2回</div>
+            </div>
+          
+        </div>
+        
+        
+        
+      <div class="entries-wrap">
+      <table class="entries">
+        <thead>
+          <tr>
+            <th scope="col">印</th>
+            <th scope="col">馬</th>
+            <th scope="col">馬名</th>
+            <th scope="col">オッズ</th>
+            <th scope="col" class="col-sex">性齢</th>
+            <th scope="col" class="col-burden">斤量</th>
+            <th scope="col">騎手</th>
+            <th scope="col" class="col-trainer">調教師</th>
+          </tr>
+        </thead>
+        <tbody>
+        
+          <tr>
+            <td class="mark-cell" title="相手関係緩和; 前走8着; 斤量増3.0kg; 騎手勝率13%" aria-label=" 根拠: 相手関係緩和; 前走8着; 斤量増3.0kg; 騎手勝率13%"></td>
+            <td class="horse-num waku-1">1</td>
+            <td class="horse-name">フミサウンド</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡6</td>
+            <td class="num col-burden">58.0</td>
+            <td>三浦皇成</td>
+            <td class="col-trainer">鹿戸雄一</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="同種T1勝; 同距離複勝5回; 同場1勝; 同場距離帯複勝2回" aria-label="△ 根拠: 同種T1勝; 同距離複勝5回; 同場1勝; 同場距離帯複勝2回">△</td>
+            <td class="horse-num waku-2">2</td>
+            <td class="horse-name">レッドレナート</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡5</td>
+            <td class="num col-burden">58.0</td>
+            <td>横山和生</td>
+            <td class="col-trainer">手塚貴徳</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="近走下降; 同種T1勝; 同距離複勝1回; 同場1勝" aria-label="▲ 根拠: 近走下降; 同種T1勝; 同距離複勝1回; 同場1勝">▲</td>
+            <td class="horse-num waku-3">3</td>
+            <td class="horse-name">ジャルディニエ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">56.0</td>
+            <td>斎藤新</td>
+            <td class="col-trainer">奥村豊</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走上昇; 同場不振3走; 相手関係緩和; 騎手勝率2%" aria-label=" 根拠: 近走上昇; 同場不振3走; 相手関係緩和; 騎手勝率2%"></td>
+            <td class="horse-num waku-4">4</td>
+            <td class="horse-name">エリム</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝6</td>
+            <td class="num col-burden">56.0</td>
+            <td>原田和真</td>
+            <td class="col-trainer">上原博之</td>
+          </tr>
+        
+          <tr class="marked top-probability">
+            <td class="mark-cell" title="頭数補正上位18%; 直近で1着あり; 直近3着内2回; 同種T1勝" aria-label="○ 根拠: 頭数補正上位18%; 直近で1着あり; 直近3着内2回; 同種T1勝">○</td>
+            <td class="horse-num waku-5">5</td>
+            <td class="horse-name">デイトナチャンプ</td>
+            <td class="col-odds"><span class="top-p">最高勝率</span><br>—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">56.0</td>
+            <td>横山武史</td>
+            <td class="col-trainer">加藤征弘</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="直近で1着あり; 近走下降; 同距離複勝6回; 相手関係緩和" aria-label=" 根拠: 直近で1着あり; 近走下降; 同距離複勝6回; 相手関係緩和"></td>
+            <td class="horse-num waku-6">6</td>
+            <td class="horse-name">セブンマイスター</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡5</td>
+            <td class="num col-burden">58.0</td>
+            <td>佐々木大</td>
+            <td class="col-trainer">千葉直人</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="直近で1着あり; 近走下降; 同種T1勝; 同距離複勝2回" aria-label="☆ 根拠: 直近で1着あり; 近走下降; 同種T1勝; 同距離複勝2回">☆</td>
+            <td class="horse-num waku-6">7</td>
+            <td class="horse-name">アロンソア</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">56.0</td>
+            <td>川又賢治</td>
+            <td class="col-trainer">牧田和弥</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="同距離複勝1回; 同場距離帯複勝1回; 相手関係緩和; 間隔長め79日" aria-label=" 根拠: 同距離複勝1回; 同場距離帯複勝1回; 相手関係緩和; 間隔長め79日"></td>
+            <td class="horse-num waku-7">8</td>
+            <td class="horse-name">ロゼル</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡6</td>
+            <td class="num col-burden">58.0</td>
+            <td>丸山元気</td>
+            <td class="col-trainer">大和田成</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="同距離複勝1回; 重賞経験あり; 相手関係緩和; マイニング2位" aria-label=" 根拠: 同距離複勝1回; 重賞経験あり; 相手関係緩和; マイニング2位"></td>
+            <td class="horse-num waku-7">9</td>
+            <td class="horse-name">アルデトップガン</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">56.0</td>
+            <td>丹内祐次</td>
+            <td class="col-trainer">田中剛</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走下降; 同距離8走; 前走大敗13着; マイニング6位" aria-label=" 根拠: 近走下降; 同距離8走; 前走大敗13着; マイニング6位"></td>
+            <td class="horse-num waku-8">10</td>
+            <td class="horse-name">サヴァビアン</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡8</td>
+            <td class="num col-burden">58.0</td>
+            <td>菊沢一樹</td>
+            <td class="col-trainer">新開幸一</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="頭数補正上位11%; 直近で1着あり; 直近3着内3回; 同種T1勝; 信頼度=接戦(2位差9.0)" aria-label="◎ 根拠: 頭数補正上位11%; 直近で1着あり; 直近3着内3回; 同種T1勝; 信頼度=接戦(2位差9.0)">◎</td>
+            <td class="horse-num waku-8">11</td>
+            <td class="horse-name">プリムツァール</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">56.0</td>
+            <td>田辺裕信</td>
+            <td class="col-trainer">蛯名正義</td>
+          </tr>
+        
+        </tbody>
+      </table>
+      </div>
+      
+    </details>
+    
+    <details id="race-20260922-06-11" class="race ">
+      <summary class="race-head">
+        <div class="race-num">R11</div>
+        <div>
+          <div class="race-info-line">
+            <span class="race-name">ＪＲＡアニバーサリーステークス</span>
+            <span class="badge grade">L</span>
+            <span class="badge dirt">ダート</span>
+            <span class="badge">1800m</span>
+            
+          </div>
+          
+          
+          
+          <div class="head-pick"><span class="mark">◎</span>10 ブルータス<span class="head-pick-reason">直近で1着あり; 直近3着内2回; 近走下降; 同種T3勝; 信頼度=接戦(2位差15.0)</span></div>
+          
+        </div>
+        <div class="race-time">15:30</div>
+      </summary>
+      
+        
+        <div class="top-picks ">
+          
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">◎</span><span class="pick-num">10</span> ブルータス<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 7.0%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">直近で1着あり; 直近3着内2回; 近走下降; 同種T3勝; 信頼度=接戦(2位差15.0)</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">○</span><span class="pick-num">3</span> ディーズゴールド<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 22.9%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">頭数補正上位15%; 直近で1着あり; 近走上昇; 同種T2勝</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">▲</span><span class="pick-num">12</span> リフレックス<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 20.4%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">頭数補正上位3%; 直近で1着あり; 直近勝利2回; 同種T1勝</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">△</span><span class="pick-num">2</span> キョウエイフロイデ<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 8.3%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">頭数補正上位9%; 直近で1着あり; 直近3着内2回; 同種T1勝</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">☆</span><span class="pick-num">14</span> レディーフランシス<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 3.7%</span><span class="conf-tag">接戦</span></div>
+              <div class="pick-reason">直近で1着あり; 近走下降; 同種T3勝; 同距離複勝4回</div>
+            </div>
+          
+        </div>
+        
+        
+        
+      <div class="entries-wrap">
+      <table class="entries">
+        <thead>
+          <tr>
+            <th scope="col">印</th>
+            <th scope="col">馬</th>
+            <th scope="col">馬名</th>
+            <th scope="col">オッズ</th>
+            <th scope="col" class="col-sex">性齢</th>
+            <th scope="col" class="col-burden">斤量</th>
+            <th scope="col">騎手</th>
+            <th scope="col" class="col-trainer">調教師</th>
+          </tr>
+        </thead>
+        <tbody>
+        
+          <tr>
+            <td class="mark-cell" title="直近で1着あり; 直近3着内2回; 近走上昇; 同種T1勝" aria-label=" 根拠: 直近で1着あり; 直近3着内2回; 近走上昇; 同種T1勝"></td>
+            <td class="horse-num waku-1">1</td>
+            <td class="horse-name">マーシヴィガラス</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡6</td>
+            <td class="num col-burden">54.0</td>
+            <td>佐々木大</td>
+            <td class="col-trainer">的場均</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="頭数補正上位9%; 直近で1着あり; 直近3着内2回; 同種T1勝" aria-label="△ 根拠: 頭数補正上位9%; 直近で1着あり; 直近3着内2回; 同種T1勝">△</td>
+            <td class="horse-num waku-1">2</td>
+            <td class="horse-name">キョウエイフロイデ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝5</td>
+            <td class="num col-burden">54.0</td>
+            <td>原優介</td>
+            <td class="col-trainer">中川公成</td>
+          </tr>
+        
+          <tr class="marked top-probability">
+            <td class="mark-cell" title="頭数補正上位15%; 直近で1着あり; 近走上昇; 同種T2勝" aria-label="○ 根拠: 頭数補正上位15%; 直近で1着あり; 近走上昇; 同種T2勝">○</td>
+            <td class="horse-num waku-2">3</td>
+            <td class="horse-name">ディーズゴールド</td>
+            <td class="col-odds"><span class="top-p">最高勝率</span><br>—</td>
+            <td class="col-sex">牡4</td>
+            <td class="num col-burden">55.0</td>
+            <td>津村明秀</td>
+            <td class="col-trainer">中舘英二</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="同種T3勝; 同距離複勝5回; 同場1勝; 同場距離帯複勝3回" aria-label=" 根拠: 同種T3勝; 同距離複勝5回; 同場1勝; 同場距離帯複勝3回"></td>
+            <td class="horse-num waku-2">4</td>
+            <td class="horse-name">グレイテストソング</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡4</td>
+            <td class="num col-burden">54.0</td>
+            <td>国分恭介</td>
+            <td class="col-trainer">小笠倫弘</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="直近で1着あり; 近走下降; 同種T1勝; 同距離複勝3回" aria-label=" 根拠: 直近で1着あり; 近走下降; 同種T1勝; 同距離複勝3回"></td>
+            <td class="horse-num waku-3">5</td>
+            <td class="horse-name">サノノワンダー</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡4</td>
+            <td class="num col-burden">55.0</td>
+            <td>田辺裕信</td>
+            <td class="col-trainer">栗田徹</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="同種T1勝; 同距離複勝1回; 同場不振4走; 同場距離帯不振4走" aria-label=" 根拠: 同種T1勝; 同距離複勝1回; 同場不振4走; 同場距離帯不振4走"></td>
+            <td class="horse-num waku-3">6</td>
+            <td class="horse-name">タンゴバイラリン</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">騸5</td>
+            <td class="num col-burden">54.0</td>
+            <td>原田和真</td>
+            <td class="col-trainer">栗田徹</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走上昇; 同距離10走; 同場不振8走; 同場距離帯不振8走" aria-label=" 根拠: 近走上昇; 同距離10走; 同場不振8走; 同場距離帯不振8走"></td>
+            <td class="horse-num waku-4">7</td>
+            <td class="horse-name">オレデイイノカ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡8</td>
+            <td class="num col-burden">52.0</td>
+            <td>内田博幸</td>
+            <td class="col-trainer">古賀慎明</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="直近で1着あり; 近走下降; 相手関係緩和; 休み明け493日" aria-label=" 根拠: 直近で1着あり; 近走下降; 相手関係緩和; 休み明け493日"></td>
+            <td class="horse-num waku-4">8</td>
+            <td class="horse-name">ブロッケンボウ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡5</td>
+            <td class="num col-burden">55.0</td>
+            <td>ミシェル</td>
+            <td class="col-trainer">松永康利</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="直近で1着あり; 近走下降; 同種T1勝; 同距離複勝3回" aria-label=" 根拠: 直近で1着あり; 近走下降; 同種T1勝; 同距離複勝3回"></td>
+            <td class="horse-num waku-5">9</td>
+            <td class="horse-name">ラオラシオン</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">騸5</td>
+            <td class="num col-burden">55.0</td>
+            <td>斎藤新</td>
+            <td class="col-trainer">斎藤誠</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="直近で1着あり; 直近3着内2回; 近走下降; 同種T3勝; 信頼度=接戦(2位差15.0)" aria-label="◎ 根拠: 直近で1着あり; 直近3着内2回; 近走下降; 同種T3勝; 信頼度=接戦(2位差15.0)">◎</td>
+            <td class="horse-num waku-5">10</td>
+            <td class="horse-name">ブルータス</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡4</td>
+            <td class="num col-burden">56.0</td>
+            <td>石橋脩</td>
+            <td class="col-trainer">高柳瑞樹</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走上昇; 同種T2勝; 同距離複勝1回; 同場2勝" aria-label=" 根拠: 近走上昇; 同種T2勝; 同距離複勝1回; 同場2勝"></td>
+            <td class="horse-num waku-6">11</td>
+            <td class="horse-name">ダカラフェスティヴ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">53.0</td>
+            <td>長浜鴻緒</td>
+            <td class="col-trainer">奥平雅士</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="頭数補正上位3%; 直近で1着あり; 直近勝利2回; 同種T1勝" aria-label="▲ 根拠: 頭数補正上位3%; 直近で1着あり; 直近勝利2回; 同種T1勝">▲</td>
+            <td class="horse-num waku-6">12</td>
+            <td class="horse-name">リフレックス</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">54.0</td>
+            <td>三浦皇成</td>
+            <td class="col-trainer">金成貴史</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走下降; 同距離複勝1回; 同場距離帯複勝1回; 相手関係緩和" aria-label=" 根拠: 近走下降; 同距離複勝1回; 同場距離帯複勝1回; 相手関係緩和"></td>
+            <td class="horse-num waku-7">13</td>
+            <td class="horse-name">ハッスルダンク</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">騸6</td>
+            <td class="num col-burden">54.0</td>
+            <td>江田照男</td>
+            <td class="col-trainer">中川公成</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="直近で1着あり; 近走下降; 同種T3勝; 同距離複勝4回" aria-label="☆ 根拠: 直近で1着あり; 近走下降; 同種T3勝; 同距離複勝4回">☆</td>
+            <td class="horse-num waku-7">14</td>
+            <td class="horse-name">レディーフランシス</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">53.0</td>
+            <td>大野拓弥</td>
+            <td class="col-trainer">和田勇介</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走上昇; 同種T複勝2回; 同距離複勝1回; 相手関係緩和" aria-label=" 根拠: 近走上昇; 同種T複勝2回; 同距離複勝1回; 相手関係緩和"></td>
+            <td class="horse-num waku-8">15</td>
+            <td class="horse-name">ゲキザル</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡7</td>
+            <td class="num col-burden">55.0</td>
+            <td>小林脩斗</td>
+            <td class="col-trainer">青木孝文</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="直近で1着あり; 近走上昇; 同距離複勝1回; 同場不振4走" aria-label=" 根拠: 直近で1着あり; 近走上昇; 同距離複勝1回; 同場不振4走"></td>
+            <td class="horse-num waku-8">16</td>
+            <td class="horse-name">ルーラーリッチ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">騸6</td>
+            <td class="num col-burden">54.0</td>
+            <td>武藤雅</td>
+            <td class="col-trainer">小島茂之</td>
+          </tr>
+        
+        </tbody>
+      </table>
+      </div>
+      
+    </details>
+    
+    <details id="race-20260922-06-12" class="race ">
+      <summary class="race-head">
+        <div class="race-num">R12</div>
+        <div>
+          <div class="race-info-line">
+            
+            
+            <span class="badge dirt">ダート</span>
+            <span class="badge">1200m</span>
+            
+          </div>
+          
+          
+          
+          <div class="head-pick"><span class="mark">◎</span>11 エコロバロン<span class="head-pick-reason">直近で1着あり; 近走下降; 同種T1勝; 同距離複勝4回; 信頼度=混戦(2位差2.2)</span></div>
+          
+        </div>
+        <div class="race-time">16:10</div>
+      </summary>
+      
+        
+        <div class="top-picks ">
+          
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">◎</span><span class="pick-num">11</span> エコロバロン<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 8.2%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">直近で1着あり; 近走下降; 同種T1勝; 同距離複勝4回; 信頼度=混戦(2位差2.2)</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">○</span><span class="pick-num">3</span> フュルスティン<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 9.8%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">直近で1着あり; 近走下降; 同種T1勝; 同距離複勝2回</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">▲</span><span class="pick-num">14</span> エフエイト<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 10.8%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">同種T複勝2回; 同距離複勝1回; 同場距離帯複勝1回; 相手関係緩和</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">△</span><span class="pick-num">15</span> シルバードン<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 14.3%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">近走上昇; 同距離複勝2回; 同場距離帯複勝1回; 相手関係緩和</div>
+            </div>
+          
+            <div class="top-pick">
+              <div class="pick-line"><span class="mark">☆</span><span class="pick-num">12</span> ソードスレイプニル<span class="odds-note">オッズ未確定</span><span class="conf-tag">P 8.2%</span><span class="conf-tag">混戦</span></div>
+              <div class="pick-reason">直近で1着あり; 同距離複勝1回; 相手関係緩和; 斤量増2.0kg</div>
+            </div>
+          
+        </div>
+        
+        
+        
+      <div class="entries-wrap">
+      <table class="entries">
+        <thead>
+          <tr>
+            <th scope="col">印</th>
+            <th scope="col">馬</th>
+            <th scope="col">馬名</th>
+            <th scope="col">オッズ</th>
+            <th scope="col" class="col-sex">性齢</th>
+            <th scope="col" class="col-burden">斤量</th>
+            <th scope="col">騎手</th>
+            <th scope="col" class="col-trainer">調教師</th>
+          </tr>
+        </thead>
+        <tbody>
+        
+          <tr>
+            <td class="mark-cell" title="直近で1着あり; 直近3着内2回; 同場不振3走; 騎手勝率3%" aria-label=" 根拠: 直近で1着あり; 直近3着内2回; 同場不振3走; 騎手勝率3%"></td>
+            <td class="horse-num waku-1">1</td>
+            <td class="horse-name">キイチムーブメント</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">騸3</td>
+            <td class="num col-burden">56.0</td>
+            <td>原優介</td>
+            <td class="col-trainer">青木孝文</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走下降; 同距離複勝1回; 相手関係緩和; 前走大敗17着" aria-label=" 根拠: 近走下降; 同距離複勝1回; 相手関係緩和; 前走大敗17着"></td>
+            <td class="horse-num waku-1">2</td>
+            <td class="horse-name">ロードストラダーレ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">56.0</td>
+            <td>丸田恭介</td>
+            <td class="col-trainer">本間忍</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="直近で1着あり; 近走下降; 同種T1勝; 同距離複勝2回" aria-label="○ 根拠: 直近で1着あり; 近走下降; 同種T1勝; 同距離複勝2回">○</td>
+            <td class="horse-num waku-2">3</td>
+            <td class="horse-name">フュルスティン</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝3</td>
+            <td class="num col-burden">51.0</td>
+            <td>上里直汰</td>
+            <td class="col-trainer">加藤士津</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走下降; 同距離複勝1回; 相手関係緩和; 前走11着" aria-label=" 根拠: 近走下降; 同距離複勝1回; 相手関係緩和; 前走11着"></td>
+            <td class="horse-num waku-2">4</td>
+            <td class="horse-name">デルマエアロール</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">56.0</td>
+            <td>ミシェル</td>
+            <td class="col-trainer">大和田成</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="同種T1勝; 相手関係緩和; 前走大敗12着; 騎手勝率3%" aria-label=" 根拠: 同種T1勝; 相手関係緩和; 前走大敗12着; 騎手勝率3%"></td>
+            <td class="horse-num waku-3">5</td>
+            <td class="horse-name">アレーティア</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">53.0</td>
+            <td>佐藤翔馬</td>
+            <td class="col-trainer">上原博之</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走下降; 同距離複勝1回; 前走大敗18着; 騎手勝率0%" aria-label=" 根拠: 近走下降; 同距離複勝1回; 前走大敗18着; 騎手勝率0%"></td>
+            <td class="horse-num waku-3">6</td>
+            <td class="horse-name">カシノリアーナ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝3</td>
+            <td class="num col-burden">51.0</td>
+            <td>遠藤汰月</td>
+            <td class="col-trainer">天間昭一</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走上昇; 同距離3走; 前走大敗12着; マイニング9位" aria-label=" 根拠: 近走上昇; 同距離3走; 前走大敗12着; マイニング9位"></td>
+            <td class="horse-num waku-4">7</td>
+            <td class="horse-name">アルマグラース</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">56.0</td>
+            <td>武藤雅</td>
+            <td class="col-trainer">水野貴広</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走下降; 同距離複勝1回; 重賞経験あり; 相手関係緩和" aria-label=" 根拠: 近走下降; 同距離複勝1回; 重賞経験あり; 相手関係緩和"></td>
+            <td class="horse-num waku-4">8</td>
+            <td class="horse-name">ホウオウガイア</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">56.0</td>
+            <td>丹内祐次</td>
+            <td class="col-trainer">大竹正博</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走上昇; 相手関係緩和; 前走大敗12着; 騎手勝率3%" aria-label=" 根拠: 近走上昇; 相手関係緩和; 前走大敗12着; 騎手勝率3%"></td>
+            <td class="horse-num waku-5">9</td>
+            <td class="horse-name">アルシャンティ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝4</td>
+            <td class="num col-burden">56.0</td>
+            <td>木幡初也</td>
+            <td class="col-trainer">室井潔</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="近走下降; 同距離複勝1回; 同場不振3走; 同場距離帯不振3走" aria-label=" 根拠: 近走下降; 同距離複勝1回; 同場不振3走; 同場距離帯不振3走"></td>
+            <td class="horse-num waku-5">10</td>
+            <td class="horse-name">カサブランカキッド</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡6</td>
+            <td class="num col-burden">58.0</td>
+            <td>岩田康誠</td>
+            <td class="col-trainer">和田勇介</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="直近で1着あり; 近走下降; 同種T1勝; 同距離複勝4回; 信頼度=混戦(2位差2.2)" aria-label="◎ 根拠: 直近で1着あり; 近走下降; 同種T1勝; 同距離複勝4回; 信頼度=混戦(2位差2.2)">◎</td>
+            <td class="horse-num waku-6">11</td>
+            <td class="horse-name">エコロバロン</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">56.0</td>
+            <td>菊沢一樹</td>
+            <td class="col-trainer">菊沢隆徳</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="直近で1着あり; 同距離複勝1回; 相手関係緩和; 斤量増2.0kg" aria-label="☆ 根拠: 直近で1着あり; 同距離複勝1回; 相手関係緩和; 斤量増2.0kg">☆</td>
+            <td class="horse-num waku-6">12</td>
+            <td class="horse-name">ソードスレイプニル</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝3</td>
+            <td class="num col-burden">53.0</td>
+            <td>長浜鴻緒</td>
+            <td class="col-trainer">鈴木慎太</td>
+          </tr>
+        
+          <tr class="top-probability">
+            <td class="mark-cell" title="近走上昇; 同距離複勝1回; 相手関係緩和; 間隔長め73日" aria-label=" 根拠: 近走上昇; 同距離複勝1回; 相手関係緩和; 間隔長め73日"></td>
+            <td class="horse-num waku-7">13</td>
+            <td class="horse-name">ジェイエルキャリア</td>
+            <td class="col-odds"><span class="top-p">最高勝率</span><br>—</td>
+            <td class="col-sex">牡3</td>
+            <td class="num col-burden">56.0</td>
+            <td>丸山元気</td>
+            <td class="col-trainer">松尾卓哉</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="同種T複勝2回; 同距離複勝1回; 同場距離帯複勝1回; 相手関係緩和" aria-label="▲ 根拠: 同種T複勝2回; 同距離複勝1回; 同場距離帯複勝1回; 相手関係緩和">▲</td>
+            <td class="horse-num waku-7">14</td>
+            <td class="horse-name">エフエイト</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡5</td>
+            <td class="num col-burden">58.0</td>
+            <td>横山和生</td>
+            <td class="col-trainer">小野次郎</td>
+          </tr>
+        
+          <tr class="marked">
+            <td class="mark-cell" title="近走上昇; 同距離複勝2回; 同場距離帯複勝1回; 相手関係緩和" aria-label="△ 根拠: 近走上昇; 同距離複勝2回; 同場距離帯複勝1回; 相手関係緩和">△</td>
+            <td class="horse-num waku-8">15</td>
+            <td class="horse-name">シルバードン</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牡4</td>
+            <td class="num col-burden">58.0</td>
+            <td>木幡巧也</td>
+            <td class="col-trainer">牧光二</td>
+          </tr>
+        
+          <tr>
+            <td class="mark-cell" title="直近で1着あり; 近走下降; 相手関係緩和; 休み明け199日" aria-label=" 根拠: 直近で1着あり; 近走下降; 相手関係緩和; 休み明け199日"></td>
+            <td class="horse-num waku-8">16</td>
+            <td class="horse-name">ノースブルースカイ</td>
+            <td class="col-odds">—</td>
+            <td class="col-sex">牝3</td>
+            <td class="num col-burden">54.0</td>
+            <td>佐々木大</td>
+            <td class="col-trainer">堀内岳志</td>
+          </tr>
+        
+        </tbody>
+      </table>
+      </div>
+      
+    </details>
+    
+  </section>
+
+</main>
+<footer>
+  JRA-VAN Data Lab. 提供データに基づく個人用ローカル予想表
+  
+  
+  <div class="version-snapshot">
+    calibrator: isotonic (p26-lgbm-v6-calibfit-2025_isotonic, 2026-07-03) /
+    lgbm: lgbm-v6-rel-draw-clean-tuned-fixed (2026-07-02) /
+    git: afd9ac3
+  </div>
+  
+</footer>
+</body>
+</html>

@@ -64,6 +64,163 @@ def is_valid_horse_num(value: object) -> bool:
     return bool(text) and text != "00"
 
 
+# --- 中止レース ---------------------------------------------------------
+# JV-Data の data_div='9' は「中止」。台風などで開催が飛ぶとこの値になり、
+# 確定着順も払戻も存在しない。**馬券は返還される**ので、的中率の分母にも
+# 購入件数にも利益にも入れてはいけない。
+#
+# 2026-09-21 の中山 12R (台風で 9/22 へ順延) で、これを除外していない経路が
+# 1 つ見つかった: `build_daily_results.py` は日付だけで引くため、中止レースの
+# confirmed_order が 0 になって「◎ が外れた」と数えられ、買い候補があれば
+# `profit = -100` に計上されていた。走っていないレースの負けである。
+#
+# 他の経路 (backtest / prediction_accuracy / monitor) は `confirmed_order > 0`
+# の副作用で **たまたま**落ちていた。その条件が将来緩むと中止が再流入するので、
+# 暗黙に頼らず下の述語で明示する。
+CANCELLED_DATA_DIV = "9"
+
+#: 評価対象から外した理由。`evaluation_exclusion_reason` に入れる。
+#
+# **この 2 つを同じ「評価対象外」で潰してはいけない。**
+#   cancelled              = 永久除外。レースが行われず馬券は返還された
+#   result_not_yet_available = 一時的。結果が取り込まれれば評価可能へ遷移する
+# 一緒くたにすると、「まだ結果が来ていないだけ」のレースを永久に評価から
+# 落としたまま気付けなくなる。逆に結果未取得を評価対象に入れると、
+# confirmed_order=0 が「不的中」に数えられて的中率が下がる。
+EXCLUSION_CANCELLED = "cancelled"
+EXCLUSION_RESULT_PENDING = "result_not_yet_available"
+#: 着順は来たが払戻がまだ。**これを負けにも 0 円決済にもしてはいけない**。
+# 「着順だけ先に入る → 払戻未取得 → 勝った買い候補を -100 円」は、今回の
+# 中止レースと同型の事故。着順の到着と払戻の到着は別のタイミングで来る。
+EXCLUSION_PAYOUT_PENDING = "payout_not_yet_available"
+#: 払戻は届いたが **速報値**。降着等で金額が変わりうるので ROI を確定しない。
+# 着順速報を排除したのと同じ理由。`payouts.data_div` が '1' のあいだはこれ。
+EXCLUSION_PAYOUT_NOT_FINAL = "payout_not_yet_final"
+
+#: 確定した払戻レコードの区分。
+#
+# ★ **これは 2026 年の実データで確認した運用契約であって、一次資料で裏を取った
+# 仕様ではない**。確認した事実は次の 2 点:
+#   - 2026 年の payouts は '2' が 2,490 行 / '1' が 72 行
+#   - 開催の 1-2 日後に '1' (速報) の行が '2' (確定) へ置き換わる
+#     (9/13 開催 -> 9/14 着、9/12 -> 9/14、9/06 -> 9/07)
+# JRA-VAN / JV-Link の公式仕様で意味を確認できたら、ここを一次資料へ差し替える。
+FINAL_PAYOUT_DATA_DIV = "2"
+
+
+def is_final_payout(data_div: object) -> bool:
+    """確定した払戻か (速報値で ROI を確定しないため)。"""
+    return str(data_div or "").strip() == FINAL_PAYOUT_DATA_DIV
+
+
+def sql_evaluable_race(column: str = "data_div") -> str:
+    """統計評価に使えるレースだけを残す SQL 述語。
+
+    `column` には `races` 側の data_div を修飾名で渡す (例 "r.data_div")。
+    NULL は中止と判定できないので残す (取り込み途中の行を黙って捨てない)。
+    """
+    return f"({column} IS NULL OR {column} <> '{CANCELLED_DATA_DIV}')"
+
+
+SQL_EVALUABLE_RACE = sql_evaluable_race()
+
+
+#: 馬券が **返還** される異常区分 (出走取消・除外)。走っていないので外れでもない。
+# `scripts/fundamental_model.py` の `NOT_A_START` と同じ集合
+# (あちらは「1 戦」に数えない基準)。値がずれたらテストで落ちる。
+REFUNDED_ABNORMAL_CODES = frozenset({"1", "2", "3"})
+
+#: 着順が付かない異常区分。上記に加えて競走中止 (4) と失格 (5) を含む。
+# **競走中止・失格は馬券が返還されない** (出走はしている) ので返還集合とは別。
+# 「結果が確定したか」を判定するとき、この馬たちに着順を要求してはいけない。
+# 失格 (5) を入れ忘れると、失格馬が 1 頭いるだけでそのレースが**永久に**
+# `result_not_yet_available` になる (着順が付く日は来ない)。実データでは
+# 2024 年の地方 1 頭 (着順 0) のみ。降着 (7) は着順が付くので入れない。
+NON_FINISHER_ABNORMAL_CODES = REFUNDED_ABNORMAL_CODES | frozenset({"4", "5"})
+
+
+def is_refunded(abnormal_code: object) -> bool:
+    """この馬の馬券が返還されるか (出走取消・除外)。
+
+    返還された馬券を「外れ = -100 円」に数えるのは、中止レースを負けに
+    数えるのとまったく同じ誤り。
+    """
+    return str(abnormal_code or "").strip() in REFUNDED_ABNORMAL_CODES
+
+
+def expects_a_finishing_order(abnormal_code: object) -> bool:
+    """この馬に確定着順が付くはずか (速報と確定の区別に使う)。"""
+    return str(abnormal_code or "").strip() not in NON_FINISHER_ABNORMAL_CODES
+
+
+def exclusion_reason(not_cancelled: bool, has_finish: bool,
+                     has_payout: bool, *, payout_final: bool) -> str | None:
+    """評価対象外の理由を決める **唯一の場所**。
+
+    呼び出し側で if/elif を並べると、**順序を入れ替えるだけで中止レースが
+    `result_not_yet_available` として記録される** (中止レースは結果も無いので
+    複数の条件に当てはまる)。2026-09-22 の監査で、分岐の並びを入れ替える変異が
+    テストを全部素通りし、実データで中止 161 行が「結果待ち」になることが
+    実証された。ここに集約して全通りをテストで固定する。
+
+        中止                       -> cancelled                (永久除外。馬券は返還)
+        実施 / 着順なし            -> result_not_yet_available (結果が来れば評価可へ)
+        実施 / 着順あり / 払戻なし -> payout_not_yet_available (払戻が来れば評価可へ)
+        実施 / 着順あり / 速報払戻 -> payout_not_yet_final     (確定すれば評価可へ)
+        実施 / 着順あり / 確定払戻 -> None                     (評価する)
+
+    段階は `レース実施 -> 着順確定 -> 払戻最終確定 -> evaluable`。
+    「着順が入ったから評価できる」「払戻行があるから評価できる」という
+    **単一条件には戻さないこと**。
+
+    `has_payout` は **レース単位**で「その馬券種の払戻データが届いたか」
+    (速報でもよい)。各馬に払戻行が要るという意味ではない (敗戦馬に払戻は無い)。
+
+    `payout_final` は **キーワード専用・必須**。既定値を持たせると、渡し忘れた
+    呼び出し側が黙って「確定済み」扱いになる (fail-open)。速報払戻で ROI を
+    確定させないための段なので、既定で開いていては意味がない。
+    """
+    if not not_cancelled:
+        return EXCLUSION_CANCELLED
+    if not has_finish:
+        return EXCLUSION_RESULT_PENDING
+    if not has_payout:
+        return EXCLUSION_PAYOUT_PENDING
+    if not payout_final:
+        return EXCLUSION_PAYOUT_NOT_FINAL
+    return None
+
+
+def is_evaluable(not_cancelled: bool, has_finish: bool, has_payout: bool,
+                 *, payout_final: bool) -> bool:
+    """評価に使えるか。`exclusion_reason` と必ず一致すること。"""
+    return exclusion_reason(not_cancelled, has_finish, has_payout,
+                            payout_final=payout_final) is None
+
+
+def sql_cancelled_race(column: str = "data_div") -> str:
+    """**中止と分かっている**行だけを指す述語。
+
+    `races` を外部結合や EXISTS で参照するときは、こちらを `NOT EXISTS` で
+    使う。`EXISTS (evaluable)` にすると、`races` 行がまだ取り込まれていない
+    レースまで黙って落ちてしまい、件数が理由も分からず減る。
+    「中止と積極的に判明したものだけ除く」方が安全側。
+    """
+    return f"{column} = '{CANCELLED_DATA_DIV}'"
+
+
+def is_evaluable_race(data_div: object) -> bool:
+    """Python 側の判定。`sql_evaluable_race` と同じ答えを返すこと。"""
+    if data_div is None:
+        return True
+    return str(data_div).strip() != CANCELLED_DATA_DIV
+
+
+def is_cancelled_race(data_div: object) -> bool:
+    """中止レースか (`is_evaluable_race` の裏)。"""
+    return not is_evaluable_race(data_div)
+
+
 def sql_invalid_horse_num(column: str = "horse_num") -> str:
     """SQL inverse of sql_valid_horse_num, including NULL explicitly."""
     return f"NOT COALESCE(({sql_valid_horse_num(column)}), 0)"

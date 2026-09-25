@@ -20,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from db import sql_cancelled_race
 from config import PROJECT_ROOT, SEALED_FROM, sealed_window_active
 from db import horse_num_violation_counts, open_db_readonly
 from predictor.calibration import calibration_report
@@ -166,6 +167,9 @@ def measure_mining_coverage(days: int) -> dict:
     to_date = today.strftime("%Y%m%d")
     frozen = False
     ph = ",".join("?" * len(_JRA_TRACKS))
+    # 中止レース (data_div='9') を明示除外する。confirmed_order > 0 の副作用で
+    # たまたま落ちている状態に頼らない (条件が緩んだら再流入するため)。
+    cancelled = sql_cancelled_race("r.data_div")
     with open_db_readonly() as conn:
         row = conn.execute(
             f"""
@@ -181,6 +185,14 @@ def measure_mining_coverage(days: int) -> dict:
              WHERE hr.track_code IN ({ph})
                AND hr.confirmed_order > 0
                AND (hr.race_year || hr.race_month_day) BETWEEN ? AND ?
+               AND NOT EXISTS (
+                   SELECT 1 FROM races r
+                    WHERE r.race_year=hr.race_year
+                      AND r.race_month_day=hr.race_month_day
+                      AND r.track_code=hr.track_code AND r.kaiji=hr.kaiji
+                      AND r.nichiji=hr.nichiji AND r.race_num=hr.race_num
+                      AND {cancelled}
+               )
             """,
             (*_JRA_TRACKS, from_date, to_date),
         ).fetchone()

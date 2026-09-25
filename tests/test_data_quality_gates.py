@@ -20,7 +20,8 @@ def _conn() -> sqlite3.Connection:
         """
         CREATE TABLE races (
             race_year TEXT, race_month_day TEXT, track_code TEXT,
-            kaiji TEXT, nichiji TEXT, race_num TEXT, distance INTEGER
+            kaiji TEXT, nichiji TEXT, race_num TEXT, distance INTEGER,
+            data_div TEXT
         )
         """
     )
