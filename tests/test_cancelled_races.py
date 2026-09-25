@@ -624,9 +624,9 @@ def test_exclusion_reason_truth_table(not_cancelled, has_finish, has_payout,
     from db import exclusion_reason, is_evaluable
 
     assert exclusion_reason(not_cancelled, has_finish, has_payout,
-                            payout_final) == want_reason
+                            payout_final=payout_final) == want_reason
     assert is_evaluable(not_cancelled, has_finish, has_payout,
-                        payout_final) is want_eval
+                        payout_final=payout_final) is want_eval
 
 
 def test_evaluable_and_reason_never_disagree():
@@ -637,8 +637,26 @@ def test_evaluable_and_reason_never_disagree():
         for f in (True, False):
             for pay in (True, False):
                 for fin in (True, False):
-                    assert is_evaluable(nc, f, pay, fin) is (
-                        exclusion_reason(nc, f, pay, fin) is None)
+                    assert is_evaluable(nc, f, pay, payout_final=fin) is (
+                        exclusion_reason(nc, f, pay, payout_final=fin) is None)
+
+
+@pytest.mark.parametrize("fn", ["exclusion_reason", "is_evaluable"])
+def test_payout_final_has_no_fail_open_default(fn):
+    """`payout_final` を渡し忘れたら **落ちる** こと。
+
+    既定値 `True` があった頃は、渡し忘れた呼び出し側が黙って「確定払戻あり」
+    扱いになった。速報払戻で ROI を確定させないための段が、既定で開いて
+    いたことになる (2026-09-23 最終ゲートの指摘)。位置引数でも渡せない
+    (キーワード専用) ので、引数の並びを取り違える事故も起きない。
+    """
+    import db
+
+    f = getattr(db, fn)
+    with pytest.raises(TypeError):
+        f(True, True, True)                 # 渡し忘れ
+    with pytest.raises(TypeError):
+        f(True, True, True, True)           # 位置引数
 
 
 def test_payout_pending_is_its_own_state():
@@ -648,7 +666,8 @@ def test_payout_pending_is_its_own_state():
 
     assert len({EXCLUSION_CANCELLED, EXCLUSION_RESULT_PENDING,
                 EXCLUSION_PAYOUT_PENDING}) == 3
-    assert exclusion_reason(True, True, False) == EXCLUSION_PAYOUT_PENDING
+    assert exclusion_reason(True, True, False,
+                            payout_final=False) == EXCLUSION_PAYOUT_PENDING
     assert EXCLUSION_PAYOUT_PENDING == "payout_not_yet_available"
 
 
@@ -807,6 +826,24 @@ def test_a_race_abandonment_is_not_a_refund():
     assert expects_a_finishing_order("0") is True
     assert "4" in NON_FINISHER_ABNORMAL_CODES
     assert "4" not in REFUNDED_ABNORMAL_CODES
+
+
+def test_a_disqualification_has_no_order_and_no_refund():
+    """失格 (5) は着順が付かず、馬券も返還されないこと。
+
+    着順を要求すると、失格馬が 1 頭いるレースは **永久に** 結果待ちになる
+    (着順が付く日は来ない)。しかも滞留監視は結果待ちを見ないので黙る
+    (2026-09-23 最終ゲート)。降着 (7) は着順が付くので要求してよい。
+    """
+    from db import (NON_FINISHER_ABNORMAL_CODES, REFUNDED_ABNORMAL_CODES,
+                    expects_a_finishing_order, is_refunded)
+
+    assert expects_a_finishing_order("5") is False, "失格に着順を要求している"
+    assert is_refunded("5") is False, "失格を返還扱いしている (損失の過少計上)"
+    assert "5" in NON_FINISHER_ABNORMAL_CODES
+    assert "5" not in REFUNDED_ABNORMAL_CODES
+    assert expects_a_finishing_order("7") is True, "降着には着順が付く"
+    assert is_refunded("7") is False
 
 
 def test_the_refund_codes_match_the_research_pipeline():

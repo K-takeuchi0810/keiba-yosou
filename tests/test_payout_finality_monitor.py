@@ -9,7 +9,10 @@
 """
 from __future__ import annotations
 
+import json
+import re
 import sqlite3
+import sys
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -285,8 +288,150 @@ def test_the_report_never_leaks_race_outcomes(tmp_path):
     walk(r)
     assert not leaked, f"監視の出力に成績が混ざっている: {sorted(leaked)}"
 
-    # 出しているのは件数とレース ID と時刻だけ
-    assert set(r["days"][0]) == {
-        "date", "scheduled", "cancelled", "executed", "result_final",
-        "payout_preliminary", "payout_final", "evaluable", "pending_race_ids",
-    }
+    # キー名だけでは足りない。値に成績を埋め込む変異 (pending_race_ids に
+    # 1 着馬番を付ける) と、blacklist 外の語のキー (first_place_by_race) を
+    # 追加する変異が素通りした (2026-09-23 最終ゲート G1 / G2)。
+    # **キー集合を完全一致で固定し、値の形も全部検査する**。
+    _assert_report_is_counts_only(r)
+
+
+# --- 免除の根拠 (成績を出さない) を値と text 出力で固定 --------------------
+
+_RACE_ID = re.compile(r"^\d{8}-\d{2}-\d{2}$")          # 開催日-場-R だけ
+_DAYSTAMP = re.compile(r"^\d{8}$")
+
+_TOP_KEYS = {
+    "generated_at", "status", "oldest_pending_race_date", "pending_race_count",
+    "pending_race_ids", "pending_reason", "age_hours",
+    "latest_race_source_timestamp", "pending_scan_from", "days",
+}
+_DAY_KEYS = {
+    "date", "scheduled", "cancelled", "executed", "result_final",
+    "payout_preliminary", "payout_final", "evaluable", "pending_race_ids",
+}
+
+
+def _assert_report_is_counts_only(r):
+    """出力が「件数・レース ID・時刻・状態」だけであること。"""
+    assert set(r) == _TOP_KEYS, f"top-level のキーが増減した: {set(r) ^ _TOP_KEYS}"
+    datetime.fromisoformat(r["generated_at"])
+    assert r["status"] in mon.STATUS_ORDER
+    assert r["oldest_pending_race_date"] is None or _DAYSTAMP.match(
+        r["oldest_pending_race_date"])
+    assert type(r["pending_race_count"]) is int
+    assert r["pending_reason"] in (None, mon.PENDING_REASON)
+    assert type(r["age_hours"]) is float
+    ts = r["latest_race_source_timestamp"]
+    assert ts is None or re.fullmatch(r"\d{8,14}", ts), ts
+    assert _DAYSTAMP.match(r["pending_scan_from"])
+    for rid in r["pending_race_ids"]:
+        assert _RACE_ID.match(rid), f"レース ID の形でない (成績の混入?): {rid!r}"
+    assert len(r["pending_race_ids"]) == r["pending_race_count"]
+    assert isinstance(r["days"], list)
+    for d in r["days"]:
+        assert set(d) == _DAY_KEYS, f"days のキーが増減した: {set(d) ^ _DAY_KEYS}"
+        assert _DAYSTAMP.match(d["date"])
+        for k in _DAY_KEYS - {"date", "pending_race_ids"}:
+            assert type(d[k]) is int, f"days.{k} が件数でない: {d[k]!r}"
+        for rid in d["pending_race_ids"]:
+            assert _RACE_ID.match(rid), f"レース ID の形でない: {rid!r}"
+
+
+#: text 出力で許す行。これ以外の行が出たら落とす (出力の形を増やすときは
+#: ここも増やす = 免除の根拠を見直す機会になる)。
+_TEXT_LINES = [
+    re.compile(r"^payout finality: (OK|INFO|WARN|ERROR)$"),
+    re.compile(r"^  \d{8}  予定 *\d+ 中止 *\d+ 実施 *\d+ 着順確定 *\d+"
+               r" 払戻速報 *\d+ 払戻確定 *\d+ 評価可 *\d+( ←滞留)?$"),
+    re.compile(r"^  最古の滞留: \d{8} 開催分から payout_not_yet_final、\d+ 時間経過 "
+               r"\(\d+ レース\)( ※表示窓の外)?$"),
+    re.compile(r"^  滞留の検出範囲: \d{8} 以降の全開催日 \(表示窓 --days とは独立\)$"),
+    re.compile(r"^  JV-Link RACE last_timestamp: (None|\d{8,14})$"),
+]
+
+
+def _run_cli(monkeypatch, capsys, db, now, *args):
+    monkeypatch.setattr(mon, "DB_PATH", db)
+    real_build = mon.build
+    monkeypatch.setattr(mon, "build", lambda days: real_build(days=days, now=now))
+    monkeypatch.setattr(sys, "argv", ["payout_finality_monitor", *args])
+    rc = mon.main()
+    return rc, capsys.readouterr().out
+
+
+def test_the_text_output_carries_no_outcomes(tmp_path, monkeypatch, capsys):
+    """★ text 出力も「件数だけ」であること (G1 / G2 の text 版)。
+
+    dict だけ検査しても、`main()` の print に 1 着馬番を足せば素通りする。
+    許可した行の形以外が 1 行でも出たら落とす。
+    """
+    db = _db(tmp_path, executed=3, finished=2, payout_final=1)
+
+    rc, out = _run_cli(monkeypatch, capsys, db, _at("20260919", 72), "--days", "3650")
+
+    assert rc == mon.EXIT_CODES["ERROR"]
+    lines = out.splitlines()
+    assert lines, "何も出ていない"
+    for line in lines:
+        assert any(p.match(line) for p in _TEXT_LINES), (
+            f"許可していない形の行が出ている (成績の混入?): {line!r}")
+    assert any("←滞留" in l for l in lines), "滞留の行が出ていない (対照)"
+
+
+def test_the_json_output_carries_no_outcomes(tmp_path, monkeypatch, capsys):
+    """`--json` 出力にも同じ検査を掛けること。"""
+    db = _db(tmp_path, executed=3, finished=2, payout_final=1)
+
+    rc, out = _run_cli(monkeypatch, capsys, db, _at("20260919", 72),
+                       "--days", "3650", "--json")
+
+    assert rc == mon.EXIT_CODES["ERROR"]
+    _assert_report_is_counts_only(json.loads(out))
+
+
+# --- 表示の窓と検出の範囲 -------------------------------------------------
+
+def test_an_old_pending_day_stays_loud_outside_the_window(tmp_path):
+    """★ 表示窓を過ぎた滞留が **OK に戻らない** こと。
+
+    検出を `--days` の窓に縛っていた頃は、15 日放置すると滞留日が窓から
+    外れて OK に戻った (実 DB で `--days 14` → OK / `--days 30` → ERROR)。
+    黙って落ちないための監視が、放置するほど黙るのでは逆になる。
+    """
+    db = _db(tmp_path, day="20260919", executed=2, payout_final=0)
+    now = _at("20260919", 20 * 24)                    # 20 日放置
+
+    r = mon.build(days=14, db_path=db, now=now)
+
+    assert r["status"] == "ERROR", "窓を過ぎた滞留が黙っている"
+    assert r["oldest_pending_race_date"] == "20260919"
+    assert r["pending_race_count"] == 2
+    assert r["days"] == [], "表は窓の中だけ (表示と検出は別)"
+
+
+def test_the_text_output_says_the_oldest_is_outside_the_window(
+        tmp_path, monkeypatch, capsys):
+    """表に出ていない日の滞留だと分かる印が付くこと (表だけ見て見逃さない)。"""
+    db = _db(tmp_path, day="20260919", executed=2, payout_final=0)
+
+    rc, out = _run_cli(monkeypatch, capsys, db, _at("20260919", 20 * 24),
+                       "--days", "14")
+
+    assert rc == mon.EXIT_CODES["ERROR"]
+    assert "最古の滞留: 20260919" in out
+    assert "※表示窓の外" in out
+
+
+def test_days_before_the_scan_floor_are_not_pending(tmp_path):
+    """下限より前は検出しないこと (除外しすぎ・鳴らしすぎの対照)。
+
+    2020 年より前は払戻を取り込んでいないので、見ると永久に ERROR になる
+    (実 DB で 1954-1985 の 58 レース)。鳴りっぱなしの監視は無視される。
+    """
+    db = _db(tmp_path, day="20191228", executed=2, payout_final=0)
+
+    r = mon.build(days=3650, db_path=db, now=_at("20191228", 72))
+
+    assert r["status"] == "OK"
+    assert r["pending_race_count"] == 0
+    assert r["days"][0]["pending_race_ids"], "日別の表には滞留として残す (隠さない)"

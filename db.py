@@ -130,10 +130,13 @@ SQL_EVALUABLE_RACE = sql_evaluable_race()
 # (あちらは「1 戦」に数えない基準)。値がずれたらテストで落ちる。
 REFUNDED_ABNORMAL_CODES = frozenset({"1", "2", "3"})
 
-#: 着順が付かない異常区分。上記に加えて競走中止 (4) を含む。
-# **競走中止は馬券が返還されない** (出走はしている) ので返還集合とは別。
+#: 着順が付かない異常区分。上記に加えて競走中止 (4) と失格 (5) を含む。
+# **競走中止・失格は馬券が返還されない** (出走はしている) ので返還集合とは別。
 # 「結果が確定したか」を判定するとき、この馬たちに着順を要求してはいけない。
-NON_FINISHER_ABNORMAL_CODES = REFUNDED_ABNORMAL_CODES | frozenset({"4"})
+# 失格 (5) を入れ忘れると、失格馬が 1 頭いるだけでそのレースが**永久に**
+# `result_not_yet_available` になる (着順が付く日は来ない)。実データでは
+# 2024 年の地方 1 頭 (着順 0) のみ。降着 (7) は着順が付くので入れない。
+NON_FINISHER_ABNORMAL_CODES = REFUNDED_ABNORMAL_CODES | frozenset({"4", "5"})
 
 
 def is_refunded(abnormal_code: object) -> bool:
@@ -151,7 +154,7 @@ def expects_a_finishing_order(abnormal_code: object) -> bool:
 
 
 def exclusion_reason(not_cancelled: bool, has_finish: bool,
-                     has_payout: bool, payout_final: bool = True) -> str | None:
+                     has_payout: bool, *, payout_final: bool) -> str | None:
     """評価対象外の理由を決める **唯一の場所**。
 
     呼び出し側で if/elif を並べると、**順序を入れ替えるだけで中止レースが
@@ -170,8 +173,12 @@ def exclusion_reason(not_cancelled: bool, has_finish: bool,
     「着順が入ったから評価できる」「払戻行があるから評価できる」という
     **単一条件には戻さないこと**。
 
-    `has_payout` は **レース単位**で「その馬券種の確定払戻データが届いたか」。
-    各馬に払戻行が要るという意味ではない (敗戦馬に払戻は無い)。
+    `has_payout` は **レース単位**で「その馬券種の払戻データが届いたか」
+    (速報でもよい)。各馬に払戻行が要るという意味ではない (敗戦馬に払戻は無い)。
+
+    `payout_final` は **キーワード専用・必須**。既定値を持たせると、渡し忘れた
+    呼び出し側が黙って「確定済み」扱いになる (fail-open)。速報払戻で ROI を
+    確定させないための段なので、既定で開いていては意味がない。
     """
     if not not_cancelled:
         return EXCLUSION_CANCELLED
@@ -185,10 +192,10 @@ def exclusion_reason(not_cancelled: bool, has_finish: bool,
 
 
 def is_evaluable(not_cancelled: bool, has_finish: bool, has_payout: bool,
-                 payout_final: bool = True) -> bool:
+                 *, payout_final: bool) -> bool:
     """評価に使えるか。`exclusion_reason` と必ず一致すること。"""
     return exclusion_reason(not_cancelled, has_finish, has_payout,
-                            payout_final) is None
+                            payout_final=payout_final) is None
 
 
 def sql_cancelled_race(column: str = "data_div") -> str:

@@ -32,10 +32,21 @@
 
 到着したら **自動で解消**する。手動でフラグを消す設計にはしない。
 
+## 表示の窓と検出の範囲を分ける
+
+`--days` は **表の行数**だけを決める。滞留の検出は `PENDING_SCAN_FROM` 以降の
+全開催日を毎回見る。最初は検出も `--days` の窓に縛っていたため、15 日放置すると
+滞留日が窓から外れて **OK に戻った** (2026-09-23 最終ゲートの指摘)。黙って落ちない
+ための監視が、放置するほど黙るのでは存在理由と逆になる。
+
+下限を置くのは、2020 年より前は払戻を取り込んでいない (1986 年より前は 0 件、
+1986-1992 は一部だけ) ため。そこまで見ると永久に ERROR が鳴り、鳴りっぱなしの
+監視は無視されて終わる。
+
 ## 使い方
 
-    python -m scripts.payout_finality_monitor            # 直近 14 日
-    python -m scripts.payout_finality_monitor --days 30
+    python -m scripts.payout_finality_monitor            # 表は直近 14 日
+    python -m scripts.payout_finality_monitor --days 30  # 表を 30 日に (検出範囲は同じ)
     python -m scripts.payout_finality_monitor --json     # 1 行 JSON
 
 exit code: 0=OK/INFO, 1=WARN, 2=ERROR (Task Scheduler から検知できるように)
@@ -67,6 +78,9 @@ STATUS_ORDER = {"OK": 0, "INFO": 1, "WARN": 2, "ERROR": 3}
 EXIT_CODES = {"OK": 0, "INFO": 0, "WARN": 1, "ERROR": 2}
 
 PENDING_REASON = "payout_not_yet_final"
+
+#: 滞留を探す下限 (開催日)。表示窓 `--days` とは独立。理由は冒頭の docstring。
+PENDING_SCAN_FROM = "20200101"
 
 
 def _severity(age_hours: float) -> str:
@@ -162,24 +176,29 @@ def race_day_counts(conn: sqlite3.Connection, day: str) -> dict:
     }
 
 
-def build(days: int = 14, db_path: str | None = None, now: datetime | None = None
-          ) -> dict:
+def build(days: int = 14, db_path: str | None = None, now: datetime | None = None,
+          scan_from: str = PENDING_SCAN_FROM) -> dict:
+    """`days` は表示する表の窓。滞留の検出は `scan_from` 以降の全開催日。"""
     now = (now or datetime.now(JST)).astimezone(JST)
+    today = now.strftime("%Y%m%d")
+    shown_from = (now - timedelta(days=days)).strftime("%Y%m%d")
     conn = sqlite3.connect(f"file:{db_path or DB_PATH}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
-        since = (now - timedelta(days=days)).strftime("%Y%m%d")
         race_days = [r[0] + r[1] for r in conn.execute(
             """SELECT DISTINCT race_year, race_month_day FROM races
                 WHERE (race_year || race_month_day) BETWEEN ? AND ?
                   AND CAST(track_code AS INTEGER) BETWEEN 1 AND 10
                 ORDER BY 1, 2""",
-            (since, now.strftime("%Y%m%d")))]
-        per_day = [race_day_counts(conn, d) for d in race_days]
+            (min(scan_from, shown_from), today))]
+        scanned = [race_day_counts(conn, d) for d in race_days]
     finally:
         conn.close()
 
-    pending_days = [d for d in per_day if d["pending_race_ids"]]
+    # ★ 検出は窓に縛らない。縛ると放置するほど黙る。
+    pending_days = [d for d in scanned
+                    if d["pending_race_ids"] and d["date"] >= scan_from]
+    per_day = [d for d in scanned if d["date"] >= shown_from]
     status, oldest, age_hours = "OK", None, 0.0
     if pending_days:
         oldest = min(d["date"] for d in pending_days)
@@ -198,6 +217,7 @@ def build(days: int = 14, db_path: str | None = None, now: datetime | None = Non
         "pending_reason": PENDING_REASON if pending_days else None,
         "age_hours": round(age_hours, 1),
         "latest_race_source_timestamp": latest_race_source_timestamp(),
+        "pending_scan_from": scan_from,
         "days": per_day,
     }
 
@@ -221,9 +241,13 @@ def main() -> int:
               f" 払戻速報{d['payout_preliminary']:3d} 払戻確定{d['payout_final']:3d}"
               f" 評価可{d['evaluable']:3d}{mark}")
     if report["oldest_pending_race_date"]:
+        shown = {d["date"] for d in report["days"]}
+        outside = " ※表示窓の外" if report["oldest_pending_race_date"] not in shown else ""
         print(f"  最古の滞留: {report['oldest_pending_race_date']} 開催分から "
               f"{report['pending_reason']}、{report['age_hours']:.0f} 時間経過 "
-              f"({report['pending_race_count']} レース)")
+              f"({report['pending_race_count']} レース){outside}")
+    print(f"  滞留の検出範囲: {report['pending_scan_from']} 以降の全開催日 "
+          f"(表示窓 --days とは独立)")
     print(f"  JV-Link RACE last_timestamp: "
           f"{report['latest_race_source_timestamp']}")
     return EXIT_CODES[report["status"]]

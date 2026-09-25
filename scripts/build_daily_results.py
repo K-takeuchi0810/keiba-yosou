@@ -757,9 +757,9 @@ def main() -> int:
         # 分岐をここに書かない。並び順を変えるだけで中止が「結果待ち」に
         # なる (中止レースは複数の条件に当てはまる)。
         exclusion = exclusion_reason(not_cancelled, result_resolved,
-                                     payout_resolved, payout_final)
+                                     payout_resolved, payout_final=payout_final)
         evaluable = is_evaluable(not_cancelled, result_resolved,
-                                 payout_resolved, payout_final)
+                                 payout_resolved, payout_final=payout_final)
         horse_refunded = is_refunded(rr.get("abnormal_code"))
         # 100 円ベース profit_loss (買い判定 (bet_candidate=True) のとき 100 円賭けた前提で計算)
         if pred.get("bet_candidate") and evaluable and not horse_refunded:

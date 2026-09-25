@@ -15,6 +15,8 @@ fixture には 5 種類を混ぜる。1 種類ずつ別々に試すと「たま�
     RUN + 結果待ち            -> 数えない (一時)
     RUN + 払戻待ち            -> 数えない (一時)
     CANCELLED                 -> 数えない (永久)
+    RUN + resolved で ◎ が返還 -> 数えない (◎ の答え合わせにならない)
+    RUN + resolved で ◎ が競走中止 -> miss として数える (走ったので返還なし)
 """
 from __future__ import annotations
 
@@ -31,16 +33,16 @@ _COLUMNS = [
     "model_rank_by_mark", "morning_odds", "morning_popularity", "final_odds",
     "final_popularity", "market_probability", "win_probability",
     "expected_value_morning", "confidence", "bet_candidate",
-    "planned_stake_yen_100unit", "settled_stake_yen_100unit",
+    "planned_stake_yen_100unit", "settled_stake_yen_100unit", "horse_refunded",
     "prediction_issued", "race_status", "result_resolved", "payout_resolved",
-    "actual_execution_date", "evaluable", "evaluation_exclusion_reason",
+    "payout_final", "actual_execution_date", "evaluable", "evaluation_exclusion_reason",
     "confirmed_order", "win_payout", "place_payout", "profit_loss_yen_100unit",
     "rationale",
 ]
 
 
 def _row(race_num, horse_num, mark, confirmed, *, evaluable, reason,
-         status="RUN", resolved="True", payout="True"):
+         status="RUN", resolved="True", payout="True", refunded=False):
     return {c: "" for c in _COLUMNS} | {
         "race_id": f"20260921-09-{race_num}",
         "track_code": "09", "race_num": race_num, "race_name": "テスト",
@@ -52,6 +54,7 @@ def _row(race_num, horse_num, mark, confirmed, *, evaluable, reason,
         "prediction_issued": "True", "race_status": status,
         "result_resolved": resolved, "payout_resolved": payout,
         "evaluable": str(evaluable), "evaluation_exclusion_reason": reason,
+        "horse_refunded": str(refunded), "payout_final": payout,
         "confirmed_order": str(confirmed), "rationale": "テスト;",
     }
 
@@ -80,6 +83,13 @@ def results_dir(tmp_path, monkeypatch):
     # 05: 中止 -> 数えない
     rows += [_row("05", "1", "◎", 0, evaluable=False, reason="cancelled",
                   status="CANCELLED", resolved="False", payout="False")]
+    # 06: 評価可だが ◎ が出走取消 (返還) -> 数えない
+    #     レースは他馬で確定しているので evaluable=True、◎ は confirmed_order=0。
+    rows += [_row("06", "1", "◎", 0, evaluable=True, reason="", refunded=True),
+             _row("06", "2", "○", 1, evaluable=True, reason="")]
+    # 07: 評価可で ◎ が競走中止 (走ったので返還なし) -> miss として数える
+    rows += [_row("07", "1", "◎", 0, evaluable=True, reason="", refunded=False),
+             _row("07", "2", "○", 1, evaluable=True, reason="")]
 
     with (day / "evaluation_summary.csv").open("w", encoding="utf-8",
                                                newline="") as f:
@@ -95,7 +105,7 @@ def results_dir(tmp_path, monkeypatch):
     conn = sqlite3.connect(db)
     conn.executescript(
         (PROJECT_ROOT / "data" / "schema.sql").read_text(encoding="utf-8"))
-    for rn in ("01", "02", "03", "04", "05"):
+    for rn in ("01", "02", "03", "04", "05", "06", "07"):
         conn.execute(
             "INSERT INTO races (race_year, race_month_day, track_code, kaiji,"
             " nichiji, race_num, race_name, distance, starter_count, data_div)"
@@ -119,11 +129,11 @@ def test_only_evaluable_races_reach_the_analysis(results_dir):
     skipped = stats["skipped"]
 
     analysed = {r["race_id"].rsplit("-", 1)[-1] for r in rows}
-    # 評価可の 2 レース (不的中 01 / 的中 02) だけが分析に入る。
-    # 03 結果待ち / 04 払戻待ち / 05 中止 は分母に入らない。
-    assert analysed == {"01", "02"}, (
+    # 評価可の 3 レース (不的中 01 / 的中 02 / ◎ 競走中止 07) だけが分析に入る。
+    # 03 結果待ち / 04 払戻待ち / 05 中止 / 06 ◎ 返還 は分母に入らない。
+    assert analysed == {"01", "02", "07"}, (
         f"評価対象外のレースが分析に入っている: {sorted(analysed)}")
-    assert stats["races"] == 2, f"分母が合わない: {stats['races']}"
+    assert stats["races"] == 3, f"分母が合わない: {stats['races']}"
     assert stats["hits"] == 1, "的中が数えられていない"
 
 
@@ -135,6 +145,32 @@ def test_each_exclusion_reason_is_counted_separately(results_dir):
     assert skipped["excluded_cancelled"] == 1
     assert skipped["excluded_result_not_yet_available"] == 1
     assert skipped["excluded_payout_not_yet_available"] == 1
+    assert skipped["excluded_pick_refunded"] == 1
+
+
+def test_a_refunded_pick_is_not_a_miss(results_dir):
+    """★ ◎ が返還された (出走取消・除外) レースを不的中に数えないこと。
+
+    レースは他馬で確定するので evaluable=True のまま、◎ は confirmed_order=0。
+    ここを落とさないと「◎ が走っていないのに外れ」が的中率の分母に入る。
+    """
+    rows, _stats = analyze_misses.build(db_path=results_dir)
+
+    races = {r["race_id"].rsplit("-", 1)[-1] for r in rows}
+    assert "06" not in races, "返還された ◎ を不的中に数えている"
+
+
+def test_a_pick_that_ran_but_did_not_finish_is_still_a_miss(results_dir):
+    """競走中止 (走ったが完走せず) の ◎ は miss のまま数えること (除外しすぎの対照)。
+
+    競走中止は馬券が返還されない。返還と混ぜると、外れを分母から消して
+    的中率を良く見せることになる。
+    """
+    rows, _stats = analyze_misses.build(db_path=results_dir)
+
+    r07 = [r for r in rows if r["race_id"].endswith("-07")]
+    assert r07, "競走中止の ◎ まで分母から消している"
+    assert not r07[0]["hit"]
 
 
 def test_a_cancelled_race_is_not_a_miss(results_dir):
@@ -157,10 +193,9 @@ def test_the_reason_breakdown_is_not_collapsed(results_dir):
 
     reasons = {k: v for k, v in skipped.items()
                if k.startswith("excluded_") and v}
-    assert len(reasons) == 3, f"理由がまとめられている: {reasons}"
-    assert set(reasons) == {
-        "excluded_cancelled",
-        "excluded_result_not_yet_available",
-        "excluded_payout_not_yet_available",
-    }
-    assert sum(reasons.values()) == 3
+    assert reasons == {
+        "excluded_cancelled": 1,
+        "excluded_result_not_yet_available": 1,
+        "excluded_payout_not_yet_available": 1,
+        "excluded_pick_refunded": 1,
+    }, f"理由がまとめられている: {reasons}"

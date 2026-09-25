@@ -181,6 +181,14 @@ def build(era_filter: str | None = None, db_path: str | None = None) -> tuple[li
             if str(pick.get("evaluable", "")).strip().lower() in ("false", "0"):
                 skipped["excluded_not_evaluable"] += 1
                 continue
+            # ◎ が出走取消・除外 (馬券は返還) なら、そのレースは ◎ の答え合わせに
+            # ならない。レースは評価可 (他馬は走って確定) なので上の 2 つを通り抜け、
+            # confirmed_order=0 のまま「不的中」に数えられていた (2026-09-23
+            # 最終ゲート)。金額は返還で 0 だが、的中率の分母だけ水増しされる。
+            # 競走中止 (4) は走っているので返還されず、ここでは落とさない。
+            if str(pick.get("horse_refunded", "")).strip().lower() in ("true", "1"):
+                skipped["excluded_pick_refunded"] += 1
+                continue
             winner = next((h for h in horses if _i(h["confirmed_order"]) == 1), None)
             if winner is None:
                 skipped["no_result"] += 1
