@@ -192,3 +192,51 @@ def test_a_red_baseline_runs_no_mutant(tmp_path, prod):
     with pytest.raises(ms.SandboxError, match="変異なしでテストが赤い"):
         ms.run_mutants(copy, [("M1", "calc.py", "return a + b", "return a - b")],
                        ["tests/test_red.py", "tests/test_calc.py"], production_root=prod)
+
+
+def test_a_leak_caused_only_by_the_mutant_aborts(tmp_path, prod):
+    """★ 変異を植えたときだけ本番に書く場合も止めること (変異の後の検査)。
+
+    変異なしの実行で漏れる形は事前の検査が先に捕まえるので、変異の後の検査を
+    試すには「変異が入ったときだけ漏れる」テストが要る (変異 X3 が生存した)。
+    植える文字列には本番のパスを含めない (含めると REFUSED で止まってしまう)。
+    """
+    copy = _project(tmp_path / "copy")
+    leak = prod / "data" / "logs" / "leak.log"
+    (copy / "tests" / "test_calc.py").write_text(
+        "import sys, pathlib\n"
+        "sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))\n"
+        "from calc import add\n\n"
+        "def test_add():\n"
+        "    r = add(2, 3)\n"
+        f"    if r != 5:\n        pathlib.Path({str(leak)!r}).write_text('leaked')\n"
+        "    assert r == 5\n")
+
+    with pytest.raises(ms.SandboxError, match="変異 'M1' の実行で本番が変わった"):
+        ms.run_mutants(copy, [("M1", "calc.py", "return a + b", "return a - b")],
+                       ["tests/test_calc.py"], production_root=prod)
+
+
+def test_every_run_gets_a_fresh_bytecode_cache(tmp_path, prod):
+    """★ 実行ごとに .pyc の置き場が設定され、毎回違うこと。
+
+    同じ置き場を使い回すと、サイズの変わらない変異が古い .pyc で「生存」に
+    見えうる。時間の偶然に頼らず、置き場そのものを記録して確かめる。
+    """
+    copy = _project(tmp_path / "copy")
+    seen = tmp_path / "prefixes.txt"
+    (copy / "tests" / "test_prefix.py").write_text(
+        "import os\n\n"
+        "def test_prefix():\n"
+        f"    with open({str(seen)!r}, 'a') as f:\n"
+        "        f.write(os.environ.get('PYTHONPYCACHEPREFIX', '') + chr(10))\n")
+    mutants = [("M1", "calc.py", "return a + b", "return a - b"),
+               ("M2", "calc.py", "return a + b", "return a * b")]
+
+    ms.run_mutants(copy, mutants, ["tests/test_prefix.py", "tests/test_calc.py"],
+                   production_root=prod)
+
+    prefixes = seen.read_text().splitlines()
+    assert len(prefixes) == 3, prefixes          # 変異なし + 変異 2 つ
+    assert all(prefixes), f"置き場が設定されていない実行がある: {prefixes}"
+    assert len(set(prefixes)) == 3, f"置き場を使い回している: {prefixes}"
