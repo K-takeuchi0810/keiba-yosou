@@ -257,6 +257,24 @@ SEALED_ARTIFACTS: dict[str, str] = {
 }
 
 
+def _require_daystamp(label: str, value: object) -> str:
+    """YYYYMMDD (実在する日付) でなければ ValueError。
+
+    封印の判定は文字列の大小で比べるので、形式が違う値を黙って受けると
+    静かに誤判定する。実測: "2026-10-01" は "-" < "1" のため "20261001" より
+    小さいと判定され、開始済みの封印を「まだ」と答えた。
+    """
+    from datetime import datetime as _dt
+
+    if not (isinstance(value, str) and len(value) == 8 and value.isdigit()):
+        raise ValueError(f"{label} は YYYYMMDD の文字列で渡すこと (got {value!r})")
+    try:
+        _dt.strptime(value, "%Y%m%d")
+    except ValueError:
+        raise ValueError(f"{label} が実在しない日付 (got {value!r})") from None
+    return value
+
+
 def sealed_window_started(today: str | None = None, *, now=None) -> bool:
     """封印窓が **もう始まっているか** (判定未実施 かつ 今日が SEALED_FROM 以降)。
 
@@ -268,12 +286,23 @@ def sealed_window_started(today: str | None = None, *, now=None) -> bool:
     まだ 9/30 と判定され、封印窓の最初の 9 時間を dev 窓として扱っていた。
     `today` (YYYYMMDD) か `now` (tz 付き datetime) で固定できる。両方省略すると
     JST の現在日付。
+
+    **不正な引数はその場で ValueError** (封印が未定でも)。`today` と `now` の同時指定、
+    `today` / `SEALED_FROM` の形式違い (YYYYMMDD 以外・実在しない日付) を黙って
+    受けると、どちらが勝ったか・どう比べたかが呼び出し側から見えない。
     """
     from jst import current_jst_daystamp
 
+    if today is not None and now is not None:
+        raise ValueError("sealed_window_started: today と now は同時に渡せない "
+                         f"(today={today!r}, now={now!r})")
+    if today is not None:
+        _require_daystamp("today", today)
+    if SEALED_FROM is not None:
+        _require_daystamp("SEALED_FROM", SEALED_FROM)
     if not sealed_window_active():
         return False
-    day = today or current_jst_daystamp(now)
+    day = today if today is not None else current_jst_daystamp(now)
     return SEALED_FROM is not None and day >= SEALED_FROM
 
 

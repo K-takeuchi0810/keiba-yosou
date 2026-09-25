@@ -200,3 +200,84 @@ def test_the_os_timezone_does_not_change_the_answer():
     for tz, r in runs.items():
         assert r["results"] == [False, True, True], (
             f"OS のタイムゾーン {tz} で封印の判定が変わる: {r['results']}")
+
+
+# --- 月の途中の開始日 (日単位で比べていること) ----------------------------
+
+@pytest.fixture()
+def sealed_from_1015(monkeypatch):
+    """封印開始日を月の途中 (2026-10-15) にした状態。
+
+    開始日が月初 (10/01) だけだと、「月単位で比べる」ように壊れても
+    10/01 の境界では結果が変わらず気付けない (変異 S-f が生存)。
+    """
+    monkeypatch.setattr(config, "SEALED_FROM", "20261015")
+    monkeypatch.setattr(config, "SEALED_UNTIL", "20261014")
+    monkeypatch.setattr(config, "SEALED_JUDGMENT_DONE", False)
+
+
+@pytest.mark.parametrize("now,want", [
+    (datetime(2026, 10, 1, 0, 0, 0, tzinfo=JST), False),        # 同じ月の月初
+    (datetime(2026, 10, 14, 0, 0, 0, tzinfo=JST), False),
+    (datetime(2026, 10, 14, 23, 59, 59, tzinfo=JST), False),     # 開始前の最後の 1 秒
+    (datetime(2026, 10, 15, 0, 0, 0, tzinfo=JST), True),         # 開始ちょうど
+    (datetime(2026, 10, 14, 14, 59, 59, tzinfo=UTC), False),     # = JST 10/14 23:59:59
+    (datetime(2026, 10, 14, 15, 0, 0, tzinfo=UTC), True),        # = JST 10/15 00:00:00
+    (datetime(2026, 10, 31, 12, 0, 0, tzinfo=JST), True),
+    (datetime(2026, 9, 30, 12, 0, 0, tzinfo=JST), False),        # 前の月
+])
+def test_a_mid_month_start_is_compared_by_day(sealed_from_1015, now, want):
+    """★ 開始日が月の途中でも日単位で判定すること (10/14 は前、10/15 から)。"""
+    assert config.sealed_window_started(now=now) is want, now.isoformat()
+
+
+def test_a_mid_month_start_on_the_default_path(sealed_from_1015, monkeypatch):
+    """月の途中の境界を既定経路 (now なし) でも見る。"""
+    _freeze_jst_clock(monkeypatch, datetime(2026, 10, 14, 14, 59, 59, tzinfo=UTC))
+    assert config.sealed_window_started() is False
+    _freeze_jst_clock(monkeypatch, datetime(2026, 10, 14, 15, 0, 0, tzinfo=UTC))
+    assert config.sealed_window_started() is True
+
+
+# --- 不正な引数はその場で落とす (fail-fast) --------------------------------
+
+def test_today_and_now_together_are_rejected(sealed_from_1001):
+    """today と now を同時に渡したら ValueError (どちらが勝ったか見えないため)。"""
+    with pytest.raises(ValueError, match="同時"):
+        config.sealed_window_started(
+            "20260930", now=datetime(2026, 10, 1, 0, 0, 0, tzinfo=JST))
+
+
+@pytest.mark.parametrize("bad", [
+    "2026-10-01",      # "-" < "1" で静かに False になっていた形
+    "2026/10/01",
+    "261001",
+    "202610011",
+    "",
+    "20261332",        # 実在しない日付
+    "20260230",
+    20261001,          # 文字列でない
+])
+def test_a_malformed_today_is_rejected(sealed_from_1001, bad):
+    """YYYYMMDD でない / 実在しない日付の today は ValueError。"""
+    with pytest.raises(ValueError):
+        config.sealed_window_started(bad)
+
+
+def test_a_malformed_today_is_rejected_even_when_unset(sealed_unset):
+    """封印が未定でも不正な引数は通さないこと (未定のあいだ隠れて、開始後に出る)。"""
+    with pytest.raises(ValueError):
+        config.sealed_window_started("2026-10-01")
+    with pytest.raises(ValueError):
+        config.sealed_window_started(
+            "20261001", now=datetime(2026, 10, 1, 0, 0, 0, tzinfo=JST))
+
+
+@pytest.mark.parametrize("bad_from", ["2026-10-01", "20261301", "261001"])
+def test_a_malformed_sealed_from_is_rejected(monkeypatch, bad_from):
+    """設定の SEALED_FROM が YYYYMMDD でなければ ValueError (静かに比べない)。"""
+    monkeypatch.setattr(config, "SEALED_FROM", bad_from)
+    monkeypatch.setattr(config, "SEALED_JUDGMENT_DONE", False)
+
+    with pytest.raises(ValueError, match="SEALED_FROM"):
+        config.sealed_window_started(now=datetime(2026, 10, 1, 0, 0, 0, tzinfo=JST))
