@@ -151,7 +151,12 @@ def test_a_leak_into_production_aborts_the_run(tmp_path, prod):
 
 
 def test_a_normal_run_kills_and_restores(tmp_path, prod):
-    """対照: 本番に触れない変異は普通に流れ、撃墜され、元に戻る。"""
+    """対照: 本番に触れない変異は普通に流れ、撃墜され、元に戻る。
+
+    `+` → `-` は **ソースのサイズが変わらない** 変異で、変異なしの実行の直後
+    (同じ 1 秒のうち) に植わる。古い .pyc を使い回すと「生存」に見える
+    (2026-09-25 に実際に起きた)。ここが緑であることがその再発防止になる。
+    """
     copy = _project(tmp_path / "copy")
     before = (copy / "calc.py").read_bytes()
     mutants = [("M1", "calc.py", "return a + b", "return a - b"),
@@ -173,3 +178,17 @@ def test_an_unsafe_copy_runs_nothing(tmp_path, prod):
         ms.run_mutants(copy, [("M1", "calc.py", "return a + b", "return a - b")],
                        ["tests/test_calc.py"], production_root=prod)
     assert (copy / "calc.py").read_bytes() == before
+
+
+def test_a_red_baseline_runs_no_mutant(tmp_path, prod):
+    """★ 変異なしでテストが赤ければ、変異を 1 つも流さない。
+
+    赤いテストが 1 本あると、どの変異も「撃墜」に見え、その後ろのテストは
+    一度も走らない (2026-09-25 実例: 9 変異の結果が偽の撃墜だった)。
+    """
+    copy = _project(tmp_path / "copy")
+    (copy / "tests" / "test_red.py").write_text("def test_red():\n    assert False\n")
+
+    with pytest.raises(ms.SandboxError, match="変異なしでテストが赤い"):
+        ms.run_mutants(copy, [("M1", "calc.py", "return a + b", "return a - b")],
+                       ["tests/test_red.py", "tests/test_calc.py"], production_root=prod)

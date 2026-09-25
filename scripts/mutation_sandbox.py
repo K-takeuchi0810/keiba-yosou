@@ -171,6 +171,35 @@ def run_mutants(copy_root: Path, mutants, tests, *,
     if problems:
         raise SandboxError("隔離コピーとして使えない: " + " / ".join(problems))
     py = python or sys.executable
+
+    def _pytest():
+        # バイトコードは実行ごとに新しい置き場へ。Python は .pyc の有効性を
+        # 「ソースの更新時刻 (秒) とサイズ」で見るので、`+` → `-` のように
+        # サイズの変わらない変異を同じ 1 秒のうちに植えると、古い .pyc が
+        # そのまま使われて変異が「生存」に見える (2026-09-25 に実際に起きた)。
+        import tempfile
+
+        with tempfile.TemporaryDirectory(prefix="mut-pyc-") as pyc:
+            env = {**os.environ, "PYTHONPYCACHEPREFIX": pyc,
+                   "PYTHONIOENCODING": "utf-8"}
+            return subprocess.run(
+                [py, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", *tests],
+                cwd=copy_root, capture_output=True, text=True, encoding="utf-8",
+                errors="replace", env=env)
+
+    # 変異を植える前に、同じ環境で緑であることを確かめる。赤いテストがあると
+    # どの変異も「撃墜」に見え、後ろのテストが 1 本も走らない (2026-09-25 実例:
+    # 出力のエンコーディング依存で落ちる 1 本が、後ろの 9 変異の結果を隠した)。
+    before = snapshot_production(production_root)
+    baseline = _pytest()
+    changed = diff_snapshots(before, snapshot_production(production_root))
+    if changed:
+        raise SandboxError(f"変異なしの実行で本番が変わった: {changed}")
+    if baseline.returncode != 0:
+        failed = [l for l in baseline.stdout.splitlines()
+                  if l.startswith(("FAILED", "ERROR"))]
+        raise SandboxError(f"変異なしでテストが赤い (結果が信用できない): {failed[:3]}")
+
     originals = {f: _digest(copy_root / f) for f in {m[1] for m in mutants}
                  if (copy_root / f).exists()}
     results: list[Result] = []
@@ -190,9 +219,7 @@ def run_mutants(copy_root: Path, mutants, tests, *,
         before = snapshot_production(production_root)
         try:
             p.write_bytes(text.replace(old, new).encode("utf-8"))
-            r = subprocess.run([py, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider",
-                                *tests], cwd=copy_root, capture_output=True, text=True,
-                               encoding="utf-8", errors="replace")
+            r = _pytest()
         finally:
             p.write_bytes(orig)
         changed = diff_snapshots(before, snapshot_production(production_root))
