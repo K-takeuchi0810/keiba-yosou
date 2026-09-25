@@ -411,3 +411,21 @@ def test_a_leak_in_the_baseline_run_is_reported_as_such(tmp_path, prod):
     with pytest.raises(ms.SandboxError, match="変異なしの実行で本番が変わった"):
         ms.run_mutants(copy, [("M1", "calc.py", "return a + b", "return a - b")],
                        ["tests/test_calc.py"], production_root=prod)
+
+
+@pytest.mark.parametrize("rel", ["sub/../calc.py", "./sub/../calc.py", "calc.py/../calc.py"])
+def test_dotdot_is_refused_even_if_it_stays_inside(tmp_path, prod, rel):
+    """`..` は、解決後にコピーの中に収まる場合でも拒否すること (指示どおり「.. 禁止」)。
+
+    外へ出る `..` は「解決後にコピーの中か」の検査でも捕まるが、それだけに頼ると
+    `..` の検査を外す変異 (R2) が見えない。`..` は書き方そのものを拒否する。
+    """
+    copy = _project(tmp_path / "copy")
+    (copy / "sub").mkdir()
+    before = (copy / "calc.py").read_bytes()
+
+    assert ms.refuses_target(rel, copy) is not None
+    results = ms.run_mutants(copy, [("DD", rel, "return a + b", "return a - b")],
+                             ["tests/test_calc.py"], production_root=prod)
+    assert results[0].status == "REFUSED", results
+    assert (copy / "calc.py").read_bytes() == before
