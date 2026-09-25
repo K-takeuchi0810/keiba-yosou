@@ -30,6 +30,8 @@ def test_watchdog_preserves_child_exit_code(tmp_path: Path) -> None:
             "-CommandPath",
             str(fixture),
             "-SkipNotification",
+            "-LogDir",
+            str(tmp_path / "logs"),
         ],
         cwd=ROOT,
         check=False,
@@ -57,6 +59,8 @@ def test_watchdog_times_out_and_returns_124(tmp_path: Path) -> None:
             "-CommandPath",
             str(fixture),
             "-SkipNotification",
+            "-LogDir",
+            str(tmp_path / "logs"),
         ],
         cwd=ROOT,
         check=False,
@@ -92,6 +96,8 @@ def test_watchdog_removes_a_grandchild_process(tmp_path: Path) -> None:
             "-CommandPath",
             str(fixture),
             "-SkipNotification",
+            "-LogDir",
+            str(tmp_path / "logs"),
         ],
         cwd=ROOT,
         check=False,
@@ -337,12 +343,14 @@ def _args_probe(tmp_path: Path) -> tuple[Path, Path]:
     return fixture, seen
 
 
-def _run_runner(fixture: Path, *extra: str) -> int:
+def _run_runner(fixture: Path, *extra: str, timeout: str = "20") -> int:
+    # ログは必ず子コマンドの隣の一時ディレクトリへ (本番の watchdog log を触らない)
     return subprocess.run(
         ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive",
          "-ExecutionPolicy", "Bypass", "-File", str(RUNNER),
-         "-TimeoutSeconds", "20", "-CommandPath", str(fixture), *extra],
-        cwd=ROOT, check=False, timeout=40,
+         "-TimeoutSeconds", timeout, "-CommandPath", str(fixture),
+         "-LogDir", str(fixture.parent / "logs"), *extra],
+        cwd=ROOT, check=False, timeout=60,
     ).returncode
 
 
@@ -388,10 +396,72 @@ def test_dry_run_through_the_scheduler_launcher(tmp_path: Path) -> None:
     ps = (
         f"$p = Start-Process -FilePath \"$env:SystemRoot\\System32\\wscript.exe\" "
         f"-ArgumentList '//B //NoLogo \"{vbs}\" ps1 \"{RUNNER}\" -CommandPath "
-        f"\"{fixture}\" -DryRun' -PassThru; $null = $p.Handle; "
+        f"\"{fixture}\" -LogDir \"{tmp_path / 'logs'}\" -DryRun' -PassThru; "
+        f"$null = $p.Handle; "
         f"$p.WaitForExit(40000) | Out-Null; exit $p.ExitCode"
     )
     rc = subprocess.run(["powershell.exe", "-NoLogo", "-NoProfile", "-Command", ps],
                         cwd=ROOT, check=False, timeout=60).returncode
     assert rc == 0
     assert seen.read_text(encoding="ascii").strip() == "[--dry-run]"
+
+
+def _notify_stub(tmp_path: Path) -> tuple[Path, Path]:
+    """watchdog の通知に使うプログラムの代わり。呼ばれたら引数を書き残す。"""
+    marker = tmp_path / "notified.txt"
+    stub = tmp_path / "notify-stub.cmd"
+    stub.write_text(f'@echo %*>> "{marker}"\r\n@exit /b 0\r\n', encoding="ascii")
+    return stub, marker
+
+
+def _hang(tmp_path: Path) -> Path:
+    fixture = tmp_path / "hang.cmd"
+    fixture.write_text("@ping 127.0.0.1 -n 30 >nul\r\n", encoding="ascii")
+    return fixture
+
+
+def test_a_dry_run_timeout_never_notifies(tmp_path: Path) -> None:
+    """★ -DryRun ならタイムアウトしても Discord へ送らないこと (2026-09-25)。
+
+    以前は -DryRun で SkipNotification を立てるだけで、それを固定するテストが
+    無かった (変異 P-4 が生存)。通知関数の中でも DryRun を見て止める。
+    """
+    stub, marker = _notify_stub(tmp_path)
+
+    rc = _run_runner(_hang(tmp_path), "-DryRun", "-NotifyPython", str(stub),
+                     timeout="1")
+
+    assert rc == 124
+    assert not marker.exists(), f"dry-run で通知した: {marker.read_text()}"
+    log = (tmp_path / "logs" / "auto_predict_watchdog.log").read_text(encoding="ascii")
+    assert "notification suppressed: dry-run" in log
+
+
+def test_a_real_timeout_does_notify(tmp_path: Path) -> None:
+    """対照: dry-run でない起動のタイムアウトは通知すること (止めすぎていない)。"""
+    stub, marker = _notify_stub(tmp_path)
+
+    rc = _run_runner(_hang(tmp_path), "-NotifyPython", str(stub), timeout="1")
+
+    assert rc == 124
+    assert marker.exists(), "本番のタイムアウトで通知していない"
+    assert "scripts.notify_discord" in marker.read_text(encoding="ascii")
+
+
+def test_runner_tests_leave_the_production_log_alone() -> None:
+    """このファイルの runner 呼び出しが、すべてログを一時ディレクトリへ向けていること。
+
+    runner は既定で「自分のリポジトリの data/logs」に書く。main でテストを
+    回すと、本番の watchdog log (「沈黙 = 未起動」を読む運用ログ) にテストの
+    行が混ざる (実測 1,396 行中 426 行)。実行時の確認は conftest の
+    セッション fixture が行う。
+    """
+    import ast
+
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.List):
+            items = [ast.unparse(e) for e in node.elts]
+            if "str(RUNNER)" in items:
+                assert "'-LogDir'" in items, (
+                    f"-LogDir の無い runner 呼び出し (line {node.lineno})")
