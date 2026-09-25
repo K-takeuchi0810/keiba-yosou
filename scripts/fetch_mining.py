@@ -5,13 +5,13 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from datetime import datetime
-
-from jst import current_jst_daystamp
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# repo ルートを sys.path に入れてから import する (2026-09-25)。前にあると
+# `python scripts/fetch_mining.py` の形で起動したとき jst が見つからない。
+from jst import current_jst_daystamp  # noqa: E402
 from db import open_db
 from jvlink_client import JVLinkClient
 from jvlink_client.ingest import ingest_all
