@@ -11,15 +11,24 @@ def _html_fragment(
     *,
     horse_name_html: str = "テストホース",
     odds_html: str = '22.9<br><span class="pick-reason">6人気</span>',
+    top_pick: str = "",
+    race_num: int = 1,
 ) -> str:
+    """`top_pick` に本命行を渡すと bet_candidate 付きの予想を作れる。
+
+    中止レースで損益が計上されないことを見るには **買い候補が立っている行**が
+    要る。立っていないと profit は元から 0 で、`and evaluable` を外しても
+    何も変わらず、テストが変異を捕まえられない。
+    """
     return f"""
-    <details id="race-20260712-02-1" class="race">
+    <details id="race-20260712-02-{race_num}" class="race">
       <table class="entries"><tbody><tr>
         <td class="mark-cell" title="テスト"></td>
         <td class="horse-num waku-1">1</td>
         <td class="horse-name">{horse_name_html}</td>
         <td>{odds_html}</td>
       </tr></tbody></table>
+      {top_pick}
     </details>
     """
 
@@ -32,7 +41,27 @@ def _run_main(
     expected_rc: int = 0,
     starter_count: int = 18,
     registered_count: int = 18,
+    data_div: str = "6",
+    confirmed_order: int = 1,
+    with_payout: bool = True,
+    abnormal_code: str = "0",
+    extra_horses: tuple = (),
+    dead_heat: bool = False,
+    payout_final: bool = True,
+    extra_races: tuple = (),
+    tan_winner: str = "01",
 ) -> Path:
+    """`extra_horses` は (horse_num, confirmed_order, abnormal_code) の並び。
+
+    検査したいセルが fixture に無いと、変異を植えても何も変わらず
+    テストが素通りする (実際に 6 種を逃した)。返還馬・速報・同着はいずれも
+    **同じレースに別の馬が居ること**が前提なので、足せるようにしておく。
+
+    `extra_races` は (race_num, data_div, confirmed_order, payout_div) の並び。
+    `payout_div` は None (払戻なし) / '1' (速報) / '2' (確定)。各レースに
+    1 番の馬を 1 頭だけ置く。**1 回の実行に複数の除外理由を同居させる**ために
+    要る (理由が 1 種類しか無い fixture では、内訳を潰す変異が見えない)。
+    """
     db_path = tmp_path / "daily_results.sqlite3"
     if db_path.exists():
         db_path.unlink()
@@ -44,16 +73,17 @@ def _run_main(
           race_year TEXT, race_month_day TEXT, track_code TEXT, kaiji TEXT,
           nichiji TEXT, race_num TEXT, horse_num TEXT, horse_name TEXT,
           win_odds INTEGER, win_popularity INTEGER, confirmed_order INTEGER,
-          odds_fetched_at TEXT
+          odds_fetched_at TEXT, abnormal_code TEXT
         );
         CREATE TABLE payouts (
           race_year TEXT, race_month_day TEXT, track_code TEXT, kaiji TEXT,
           nichiji TEXT, race_num TEXT, tan_horse_num1 TEXT, tan_payout1 INTEGER,
+          tan_horse_num2 TEXT, tan_payout2 INTEGER,
           fuku_horse_num1 TEXT, fuku_payout1 INTEGER,
           fuku_horse_num2 TEXT, fuku_payout2 INTEGER,
           fuku_horse_num3 TEXT, fuku_payout3 INTEGER,
           fuku_horse_num4 TEXT, fuku_payout4 INTEGER,
-          fuku_horse_num5 TEXT, fuku_payout5 INTEGER
+          fuku_horse_num5 TEXT, fuku_payout5 INTEGER, data_div TEXT
         );
         CREATE TABLE races (
           race_year TEXT, race_month_day TEXT, track_code TEXT, kaiji TEXT,
@@ -61,30 +91,61 @@ def _run_main(
           track_type_code TEXT, grade_code TEXT, registered_count INTEGER,
           starter_count INTEGER,
           turf_condition TEXT, dirt_condition TEXT, weather_code TEXT,
-          start_time TEXT
+          start_time TEXT, data_div TEXT
         );
         """
     )
     common = ("2026", "0712", "02", "01", "01", "1")
     conn.execute(
-        "INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-        (*common, "00", "プレースホルダ", 0, 0, 0, None),
+        "INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (*common, "00", "プレースホルダ", 0, 0, 0, None, "0"),
     )
     conn.execute(
-        "INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-        (*common, "01", "テストホース", 229, 6, 1, "2026-07-12T10:00:00"),
+        "INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (*common, "01", "テストホース", 229, 6, confirmed_order,
+         "2026-07-12T10:00:00", abnormal_code),
     )
+    for hn, order, abn in extra_horses:
+        conn.execute(
+            "INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (*common, hn, f"馬{hn}", 100, 1, order, "2026-07-12T10:00:00", abn),
+        )
+    if with_payout:
+        conn.execute(
+            "INSERT INTO payouts VALUES"
+            " (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (*common,
+             ("02" if dead_heat else tan_winner), 500,
+             ("01" if dead_heat else None), (700 if dead_heat else None),
+             "01", 200, None, None, "00", 0, None, None, None, None,
+             # '2' = 確定払戻、'1' = 速報 (降着等で金額が変わりうる)
+             ("2" if payout_final else "1")),
+        )
     conn.execute(
-        "INSERT INTO payouts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (*common, "01", 500, "01", 200, None, None, "00", 0, None, None, None, None),
-    )
-    conn.execute(
-        "INSERT INTO races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             *common, "テスト競走", 1200, "24", "",
-            registered_count, starter_count, "", "1", "1", "1100",
+            registered_count, starter_count, "", "1", "1", "1100", data_div,
         ),
     )
+    for rn, r_div, r_order, r_pay in extra_races:
+        key = (*common[:5], str(rn))
+        conn.execute(
+            "INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (*key, "01", f"馬R{rn}", 229, 6, r_order, "2026-07-12T10:00:00", "0"),
+        )
+        if r_pay is not None:
+            conn.execute(
+                "INSERT INTO payouts VALUES"
+                " (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (*key, "01", 500, None, None, "01", 200,
+                 None, None, None, None, None, None, None, None, r_pay),
+            )
+        conn.execute(
+            "INSERT INTO races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (*key, f"テスト競走{rn}", 1200, "24", "",
+             registered_count, starter_count, "", "1", "1", "1100", r_div),
+        )
     conn.commit()
     conn.close()
 
@@ -215,7 +276,8 @@ def test_manifest_records_builder_provenance_and_superseded_hash(tmp_path, monke
     assert isinstance(first["builder_git_dirty"], bool)
     assert first["supersedes_manifest_sha256"] is None
     assert first["warnings"] == {
-        "schema": 2,
+        # 列を 12 個足したので版数を上げた
+        "schema": 3,
         "excluded_placeholder_rows": 1,
         "null_odds_fetched_at_rows": 0,
         "post_start_stamped_rows": 0,
@@ -307,3 +369,412 @@ def test_would_be_candidate_derivation():
     assert derive_would_be_candidate({**base, "expected_value": 0.9}) is False
     assert derive_would_be_candidate({**base, "win_probability": None}) is None
     assert derive_would_be_candidate({**base, "morning_popularity": None}) is False
+
+
+# --- 中止レース: 予想は残すが評価しない -------------------------------
+# ここは **production の main() を実際に走らせて出力 CSV を読む**。
+# 式を自前で再現して自分と比べる形だと、実装側で `and evaluable` を外しても
+# テストは通ってしまう (検証プロセス監査で実証された)。
+
+_BET_PICK = (
+    '<div class="pick-line">'
+    '<span class="pick-mark">◎</span>'
+    '<span class="pick-num">1</span>'
+    '<span class="conf-tag">P 30.0%</span>'
+    '<span class="conf-tag">EV 1.20</span>'
+    '<span class="conf-tag">標準</span>'
+    '<span class="bet-tag">買い候補</span>'
+    '</div>'
+)
+
+
+def _summary_rows(output_dir):
+    return _read_csv(output_dir / "evaluation_summary.csv")
+
+
+def test_a_cancelled_race_books_no_loss_through_main(tmp_path, monkeypatch):
+    """中止レースの買い候補に損益と賭け金が立たないこと (main() 経由)。
+
+    この改修が直した当のバグ。買い候補が立っている行で確かめないと、
+    profit は元から 0 で変異を捕まえられない。
+    """
+    # **中止レースに着順は無い**。confirmed_order=1 の中止レースという
+    # 非現実な組合せで試していたため、「中止 かつ 結果なし」という現実の
+    # セルが未検査で、分岐の並びを入れ替える変異を逃していた (監査で実証)。
+    output_dir = _run_main(
+        tmp_path, monkeypatch, data_div="9", confirmed_order=0,
+        html_text=_html_fragment(top_pick=_BET_PICK))
+
+    rows = _summary_rows(output_dir)
+    assert rows, "行ごと消してはいけない (予想を出した記録は残す)"
+    for row in rows:
+        assert row["bet_candidate"] in ("True", "true", "1"), (
+            "買い候補が立っていないと、この変異を捕まえられない")
+        assert row["profit_loss_yen_100unit"] == "0", (
+            f"走っていないレースで損益が計上されている: {row}")
+        assert row["settled_stake_yen_100unit"] == "0", (
+            f"走っていないレースに決済ぶんの賭け金が立っている: {row}")
+        assert row["planned_stake_yen_100unit"] == "100", (
+            "予想時に買う予定だったという事実まで消してはいけない")
+        assert row["evaluable"] == "False"
+        assert row["race_status"] == "CANCELLED"
+        assert row["evaluation_exclusion_reason"] == "cancelled"
+        # 走っていないので「実施日」は空。ここを日付で埋めると、順延先の
+        # 結果へ紐付ける誤用 (9/21 予想 → 9/22 結果) の入口になる。
+        assert row["actual_execution_date"] in ("", "None"), (
+            f"中止レースに実施日が入っている: {row['actual_execution_date']}")
+
+
+def test_a_running_race_still_books_its_loss_through_main(tmp_path, monkeypatch):
+    """実施レースでは従来どおり損益が立つこと (除外しすぎていない対照)。"""
+    output_dir = _run_main(
+        tmp_path, monkeypatch, data_div="6",
+        html_text=_html_fragment(top_pick=_BET_PICK))
+
+    rows = _summary_rows(output_dir)
+    bet_rows = [r for r in rows if r["bet_candidate"] in ("True", "true", "1")]
+    assert bet_rows, "対照が成立していない (買い候補が無い)"
+    for row in bet_rows:
+        assert row["settled_stake_yen_100unit"] == "100"
+        assert row["planned_stake_yen_100unit"] == "100"
+        assert row["profit_loss_yen_100unit"] != "0", (
+            "実施レースの損益まで 0 にしている")
+        assert row["evaluable"] == "True"
+        assert row["race_status"] == "RUN"
+        assert row["evaluation_exclusion_reason"] in ("", "None")
+
+
+def test_manifest_counts_split_evaluable_from_issued(tmp_path, monkeypatch):
+    """manifest が発行 N と評価可 N を分けて書くこと (main() 経由)。"""
+    import json
+
+    output_dir = _run_main(
+        tmp_path, monkeypatch, data_div="9",
+        html_text=_html_fragment(top_pick=_BET_PICK))
+
+    manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+    counts = manifest["counts"]
+
+    assert counts["evaluation_rows_total"] >= 1
+    assert counts["evaluation_rows_evaluable"] == 0, (
+        f"中止しかない日に評価可の行がある: {counts}")
+    assert counts["evaluation_rows_excluded"] == counts["evaluation_rows_total"]
+    assert counts["evaluation_exclusion_reasons"].get("cancelled") == (
+        counts["evaluation_rows_excluded"])
+
+
+# 1 回の実行に 5 状態を同居させる fixture。
+#   R1 中止                      -> cancelled
+#   R2 実施 / 着順なし           -> result_not_yet_available
+#   R3 実施 / 着順 / 払戻なし    -> payout_not_yet_available
+#   R4 実施 / 着順 / 速報払戻    -> payout_not_yet_final
+#   R5 実施 / 着順 / 確定払戻    -> 評価可
+_FIVE_STATES = dict(
+    data_div="9", confirmed_order=0, with_payout=False,
+    extra_races=((2, "6", 0, None), (3, "6", 1, None),
+                 (4, "6", 1, "1"), (5, "6", 1, "2")),
+    html_text="".join(_html_fragment(top_pick=_BET_PICK, race_num=n)
+                      for n in range(1, 6)),
+)
+_FIVE_STATES_WANT = {
+    "1": "cancelled",
+    "2": "result_not_yet_available",
+    "3": "payout_not_yet_available",
+    "4": "payout_not_yet_final",
+    "5": "",
+}
+
+
+def _by_race(rows):
+    return {r["race_num"].lstrip("0"): r for r in rows}
+
+
+def test_the_fixture_really_holds_five_states(tmp_path, monkeypatch):
+    """fixture が 5 状態を本当に含んでいること (下 2 本の前提)。"""
+    rows = _by_race(_summary_rows(_run_main(tmp_path, monkeypatch, **_FIVE_STATES)))
+
+    assert sorted(rows) == sorted(_FIVE_STATES_WANT), f"レースが欠けている: {sorted(rows)}"
+    for rn, want in _FIVE_STATES_WANT.items():
+        got = rows[rn]["evaluation_exclusion_reason"]
+        assert got in ((want,) if want else ("", "None")), f"R{rn}: {got!r}"
+        assert rows[rn]["bet_candidate"] in ("True", "true", "1"), (
+            f"R{rn} に買い候補が立っていない")
+
+
+def test_manifest_keeps_every_exclusion_reason_apart(tmp_path, monkeypatch):
+    """★ manifest の除外内訳を **理由ごとに** 書くこと (M25)。
+
+    「除外 4 件」とだけ書くと、中止 (永久) と払戻待ち (一時) の区別が
+    manifest から消え、滞留に気付く手掛かりが無くなる。理由が 1 種類しか
+    無い fixture では内訳を潰す変異が見えない (3 回見逃した) ので、
+    4 理由 + 評価可 1 を同じ実行に入れて **値まで完全一致** で見る。
+    """
+    import json
+
+    output_dir = _run_main(tmp_path, monkeypatch, **_FIVE_STATES)
+    counts = json.loads(
+        (output_dir / "manifest.json").read_text(encoding="utf-8"))["counts"]
+
+    assert counts["evaluation_exclusion_reasons"] == {
+        "cancelled": 1,
+        "result_not_yet_available": 1,
+        "payout_not_yet_available": 1,
+        "payout_not_yet_final": 1,
+    }, f"除外理由の内訳が潰れている: {counts['evaluation_exclusion_reasons']}"
+    assert counts["evaluation_rows_total"] == 5
+    assert counts["evaluation_rows_evaluable"] == 1
+    assert counts["evaluation_rows_excluded"] == 4
+
+
+def test_only_an_evaluable_race_gets_an_execution_date(tmp_path, monkeypatch):
+    """★ 実施日は **評価可の行にだけ** 入ること (M54)。
+
+    中止だけでなく保留 3 状態 (結果待ち / 払戻待ち / 速報払戻) も空にする。
+    保留行に日付が入ると「その日に実施・確定したレース」として後段で
+    突き合わせられ、未確定の行が確定済みの顔をする。
+    """
+    rows = _by_race(_summary_rows(_run_main(tmp_path, monkeypatch, **_FIVE_STATES)))
+
+    for rn in ("1", "2", "3", "4"):
+        assert rows[rn]["actual_execution_date"] in ("", "None"), (
+            f"R{rn} ({_FIVE_STATES_WANT[rn]}) に実施日が入っている: "
+            f"{rows[rn]['actual_execution_date']}")
+    assert rows["5"]["actual_execution_date"] == "20260712", (
+        "評価可の行に実施日が入っていない (空にしすぎの対照)")
+
+
+def test_a_race_without_results_is_pending_not_a_loss(tmp_path, monkeypatch):
+    """結果がまだ来ていないレースを「不的中・負け」にしないこと。
+
+    中止 (永久除外) と結果未取得 (一時的) を同じ扱いにすると、前者は
+    永久に評価から落ち、後者は結果が来ても戻らないまま気付けなくなる。
+    ここでは **走ったが結果がまだ取り込まれていない** 状態を作る。
+    """
+    output_dir = _run_main(
+        tmp_path, monkeypatch, data_div="6", confirmed_order=0,
+        html_text=_html_fragment(top_pick=_BET_PICK))
+
+    rows = _summary_rows(output_dir)
+    assert rows
+    for row in rows:
+        assert row["race_status"] == "RUN", "中止ではない (走る予定のレース)"
+        assert row["result_resolved"] == "False"
+        assert row["evaluable"] == "False"
+        assert row["evaluation_exclusion_reason"] == "result_not_yet_available", (
+            f"中止と同じ理由で潰している: {row['evaluation_exclusion_reason']}")
+        assert row["profit_loss_yen_100unit"] == "0", "結果待ちを負けにしている"
+        assert row["settled_stake_yen_100unit"] == "0"
+
+
+def test_a_finished_race_without_payouts_is_not_a_loss(tmp_path, monkeypatch):
+    """★ 着順は来たが払戻がまだ、の中間状態を負けにしないこと。
+
+    **ここが次に事故になりやすい境界**。着順と払戻は別のタイミングで届く。
+    着順だけで評価可にすると、勝った買い候補の払戻がまだ 0 なので
+    `profit = -100` が計上される — 中止レースとまったく同型の事故。
+    """
+    output_dir = _run_main(
+        tmp_path, monkeypatch, data_div="6", confirmed_order=1,
+        with_payout=False, html_text=_html_fragment(top_pick=_BET_PICK))
+
+    rows = _summary_rows(output_dir)
+    assert rows
+    for row in rows:
+        assert row["race_status"] == "RUN"
+        assert row["result_resolved"] == "True", "着順は届いている"
+        assert row["payout_resolved"] == "False", "払戻はまだ"
+        assert row["evaluable"] == "False"
+        assert row["evaluation_exclusion_reason"] == "payout_not_yet_available", (
+            f"結果待ちや中止と同じ理由で潰している: "
+            f"{row['evaluation_exclusion_reason']}")
+        assert row["profit_loss_yen_100unit"] == "0", (
+            "払戻待ちを負けにしている (勝っていても -100 になる経路)")
+        assert row["settled_stake_yen_100unit"] == "0", "未決済を分母に入れている"
+        assert row["planned_stake_yen_100unit"] == "100", (
+            "買う予定だったという事実まで消してはいけない")
+
+
+def test_payout_arrival_moves_the_race_to_resolved(tmp_path, monkeypatch):
+    """払戻が届けば同じレースが resolved へ遷移すること (一時状態であることの確認)。"""
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    pending = _summary_rows(_run_main(
+        tmp_path / "a", monkeypatch, data_div="6", confirmed_order=1,
+        with_payout=False, html_text=_html_fragment(top_pick=_BET_PICK)))
+    arrived = _summary_rows(_run_main(
+        tmp_path / "b", monkeypatch, data_div="6", confirmed_order=1,
+        with_payout=True, html_text=_html_fragment(top_pick=_BET_PICK)))
+
+    assert pending[0]["evaluation_exclusion_reason"] == "payout_not_yet_available"
+    assert pending[0]["evaluable"] == "False"
+    assert arrived[0]["evaluation_exclusion_reason"] in ("", "None")
+    assert arrived[0]["evaluable"] == "True", "払戻が来ても評価可へ遷移しない"
+
+
+def test_a_cancelled_race_never_becomes_resolved(tmp_path, monkeypatch):
+    """中止は払戻が来ても評価可にならないこと (永久除外)。"""
+    rows = _summary_rows(_run_main(
+        tmp_path, monkeypatch, data_div="9", confirmed_order=1,
+        with_payout=True, html_text=_html_fragment(top_pick=_BET_PICK)))
+
+    assert rows[0]["evaluation_exclusion_reason"] == "cancelled"
+    assert rows[0]["evaluable"] == "False"
+
+
+def test_a_refunded_horse_is_not_a_loss(tmp_path, monkeypatch):
+    """出走取消・除外の馬を「外れ −100 円」に数えないこと。
+
+    **馬券は返還される**。レース単位の中止とまったく同型で、こちらは馬単位。
+    ★ レースが確定していないと評価対象外になって返還ゲートを一度も通らない。
+    別の馬を完走させてレースを確定させる (最初これを忘れて変異を 2 種逃した)。
+    """
+    output_dir = _run_main(
+        tmp_path, monkeypatch, data_div="6", confirmed_order=0,
+        abnormal_code="1",                       # ◎ は出走取消
+        extra_horses=(("02", 1, "0"), ("03", 2, "0")),  # 他は完走 = レース確定
+        tan_winner="02",                         # 払戻表も 02 勝ちに揃える
+        html_text=_html_fragment(top_pick=_BET_PICK))
+
+    rows = _summary_rows(output_dir)
+    bet = [r for r in rows if r["bet_candidate"] in ("True", "true", "1")]
+    assert bet, "買い候補が立っていないと、この変異を捕まえられない"
+    for row in bet:
+        assert row["evaluable"] == "True", (
+            "レースが確定していないと返還ゲートを通らずテストが無意味になる")
+        assert row["horse_refunded"] == "True"
+        assert row["profit_loss_yen_100unit"] == "0", (
+            "返還された馬券を負けに計上している")
+        assert row["settled_stake_yen_100unit"] == "0", (
+            "返還ぶんが回収率の分母に入っている")
+        assert row["planned_stake_yen_100unit"] == "100", (
+            "買う予定だったという事実は残す")
+
+
+def test_a_provisional_result_is_not_final(tmp_path, monkeypatch):
+    """速報 (一部だけ着順) を「結果あり」にしないこと。
+
+    1 頭でも着順があれば resolved としていたため、3-5 着までの速報レースが
+    evaluable になり、◎ が 4 着以下だと confirmed_order=0 のまま
+    「評価済み」と記録された (実データで確認された設計欠陥)。
+    """
+    # 3 頭中 1 頭だけ着順が入っている = 速報段階
+    output_dir = _run_main(
+        tmp_path, monkeypatch, data_div="6", confirmed_order=0,
+        extra_horses=(("02", 1, "0"), ("03", 0, "0")),
+        html_text=_html_fragment(top_pick=_BET_PICK))
+
+    rows = _summary_rows(output_dir)
+    assert rows
+    for row in rows:
+        assert row["result_resolved"] == "False", (
+            "着順がそろっていないのに確定扱いしている")
+        assert row["evaluation_exclusion_reason"] == "result_not_yet_available"
+        assert row["profit_loss_yen_100unit"] == "0"
+
+
+def test_a_race_with_a_scratch_still_becomes_final(tmp_path, monkeypatch):
+    """取消馬が居ても、走った馬が全員そろえば確定になること。
+
+    取消・除外・競走中止の馬にまで着順を要求すると、そのレースは永久に
+    「結果待ち」のまま評価されない。除外しすぎの対照。
+    """
+    output_dir = _run_main(
+        tmp_path, monkeypatch, data_div="6", confirmed_order=1,
+        extra_horses=(("02", 2, "0"), ("03", 0, "1")),  # 03 は出走取消
+        html_text=_html_fragment(top_pick=_BET_PICK))
+
+    rows = _summary_rows(output_dir)
+    for row in rows:
+        assert row["result_resolved"] == "True", (
+            "取消馬に着順を要求して永久に確定しなくなっている")
+
+
+def test_a_disqualified_pick_is_a_loss_and_the_race_still_finalises(
+        tmp_path, monkeypatch):
+    """◎ が失格 (5) でも、レースは確定し、◎ は負けとして計上されること。
+
+    失格に着順を要求するとレースが永久に結果待ちになる。返還扱いにすると
+    外れを 0 円にして損失を隠す。両方を 1 本で見る。
+    """
+    output_dir = _run_main(
+        tmp_path, monkeypatch, data_div="6", confirmed_order=0,
+        abnormal_code="5",                              # ◎ は失格
+        extra_horses=(("02", 1, "0"), ("03", 2, "0")),
+        tan_winner="02",                                # 払戻表も 02 勝ちに揃える
+        html_text=_html_fragment(top_pick=_BET_PICK))
+
+    rows = _summary_rows(output_dir)
+    bet = [r for r in rows if r["bet_candidate"] in ("True", "true", "1")]
+    assert bet, "買い候補が立っていないと、この変異を捕まえられない"
+    for row in bet:
+        assert row["result_resolved"] == "True", (
+            "失格馬に着順を要求して永久に確定しなくなっている")
+        assert row["evaluable"] == "True"
+        assert row["horse_refunded"] == "False", "失格を返還扱いしている"
+        assert row["profit_loss_yen_100unit"] == "-100", "失格の負けを隠している"
+        assert row["settled_stake_yen_100unit"] == "100"
+
+
+def test_a_dead_heat_winner_is_paid(tmp_path, monkeypatch):
+    """同着の 2 頭目にも払戻が付くこと。
+
+    1 頭目しか拾わないと、同着で勝った買い候補が「払戻 0 = −100 円」になる
+    (実 DB に 67 件)。
+    """
+    output_dir = _run_main(
+        tmp_path, monkeypatch, data_div="6", confirmed_order=1,
+        extra_horses=(("02", 1, "0"),), dead_heat=True,
+        html_text=_html_fragment(top_pick=_BET_PICK))
+
+    # ◎ (1 番) を **同着の 2 頭目** にしてある。1 頭目しか拾わないと
+    # 払戻 0 になり、勝っているのに -100 円が計上される。
+    by_num = {r["horse_num"]: r for r in _summary_rows(output_dir)}
+    assert by_num["1"]["win_payout"] == "700", (
+        f"同着 2 頭目の払戻を拾えていない: {by_num['1']['win_payout']}")
+    assert by_num["1"]["profit_loss_yen_100unit"] == "600", (
+        "同着で勝ったのに損益が正しくない")
+
+
+def test_a_provisional_payout_is_not_evaluable(tmp_path, monkeypatch):
+    """★ 速報払戻で ROI を確定しないこと。
+
+    着順速報を排除したのと同じ理由。降着等で金額が変わりうるので、
+    払戻が最終確定するまで評価対象にしない。
+    段階は レース実施 → 着順確定 → **払戻最終確定** → evaluable。
+    """
+    output_dir = _run_main(
+        tmp_path, monkeypatch, data_div="6", confirmed_order=1,
+        extra_horses=(("02", 2, "0"),), payout_final=False,
+        html_text=_html_fragment(top_pick=_BET_PICK))
+
+    rows = _summary_rows(output_dir)
+    for row in rows:
+        assert row["result_resolved"] == "True", "着順は確定している"
+        assert row["payout_resolved"] == "True", "払戻自体は届いている"
+        assert row["payout_final"] == "False", "速報のはず"
+        assert row["evaluable"] == "False", "速報払戻で評価を確定している"
+        assert row["evaluation_exclusion_reason"] == "payout_not_yet_final"
+        assert row["profit_loss_yen_100unit"] == "0"
+        assert row["settled_stake_yen_100unit"] == "0"
+
+
+def test_the_three_stages_are_distinct(tmp_path, monkeypatch):
+    """結果確定前 → 非評価、着順確定・払戻速報 → 非評価、最終払戻 → evaluable。
+
+    指示された 3 段階が実際に分かれていることを 1 本で見る。
+    """
+    for i, (order, final, want_reason, want_eval) in enumerate([
+        (0, True,  "result_not_yet_available", "False"),
+        (1, False, "payout_not_yet_final",     "False"),
+        (1, True,  "",                          "True"),
+    ]):
+        d = tmp_path / f"s{i}"
+        d.mkdir()
+        rows = _summary_rows(_run_main(
+            d, monkeypatch, data_div="6", confirmed_order=order,
+            extra_horses=(("02", 2 if order else 0, "0"),),
+            payout_final=final, html_text=_html_fragment(top_pick=_BET_PICK)))
+        got = rows[0]["evaluation_exclusion_reason"]
+        assert got in (want_reason, "None" if not want_reason else want_reason), (
+            f"段階 {i}: 期待 {want_reason!r} だが {got!r}")
+        assert rows[0]["evaluable"] == want_eval, f"段階 {i} の evaluable"

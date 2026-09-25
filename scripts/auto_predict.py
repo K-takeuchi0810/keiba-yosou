@@ -26,7 +26,9 @@ from config import (  # noqa: E402
     PROJECT_ROOT,
     artifact_drift,
 )
-from db import SQL_VALID_HORSE_NUM  # noqa: E402
+from db import (  # noqa: E402
+    SQL_VALID_HORSE_NUM, is_cancelled_race, sql_evaluable_race,
+)
 from scripts.notify_dedup import JST, decide, jst_today, record  # noqa: E402
 from scripts.notify_discord import notify_discord  # noqa: E402
 import os  # noqa: E402
@@ -72,10 +74,19 @@ def _stage_publish_artifacts(
 
 
 def _race_days(conn, days: list[str]) -> list[tuple[str, int]]:
+    """開催日と、**予想対象にできるレース数**を返す。
+
+    中止 (data_div='9') は数えない。2026-09-21 は台風で中山 12R が中止に
+    なっていたのに 24 レースとして数え、**既に中止と分かっているレースの予想を
+    公開**していた (JRA は前日 9/20 11:28 に中止を発行済で、当日 08:00 の
+    fetch_full が取り込んでいた)。
+    """
     out = []
     for d in days:
         n = conn.execute(
-            "SELECT COUNT(*) FROM races WHERE race_year=? AND race_month_day=?",
+            f"""SELECT COUNT(*) FROM races
+                 WHERE race_year=? AND race_month_day=?
+                   AND {sql_evaluable_race()}""",
             (d[:4], d[4:]),
         ).fetchone()[0]
         if n > 0:
@@ -83,29 +94,48 @@ def _race_days(conn, days: list[str]) -> list[tuple[str, int]]:
     return out
 
 
-def _entry_coverage(conn, day: str) -> tuple[int, int]:
+def _entry_coverage(conn, day: str) -> tuple[int, int, int, int]:
     """その日の (出走馬が入っているレース数, レース総数) を返す。
 
     `races` 行はレース定義 (schedule) が来た時点で作られるため、出走馬 (SE) が
     未取り込みでも 36 レース分そろって見える。この差を見ずに生成すると
     「全 36 レース 出走馬未取得」の空ページを publish してしまう
     (2026-07-25 / 08-01 に実際に発生。v6 期 12 開催日のうち 2 日が空振り)。
+
+    **分母は中止を除いた eligible**。中止込みで数えると、2026-09-21 のように
+    半分が中止の日に「24/24 で正常」と出てしまう。監査のため 4 値すべてを返す:
+    `(covered, eligible, scheduled, cancelled)`。
     """
-    total = conn.execute(
+    scheduled = conn.execute(
+        # 予定レース数なので中止も数える (監査用の 4 値のうちの 1 つ)。
+        # この例外は tests/test_cancelled_races.py の allowed に登録してある。
         "SELECT COUNT(*) FROM races WHERE race_year=? AND race_month_day=?",
         (day[:4], day[4:]),
     ).fetchone()[0]
-    with_entries = conn.execute(
+    eligible = conn.execute(
+        f"""SELECT COUNT(*) FROM races
+             WHERE race_year=? AND race_month_day=? AND {sql_evaluable_race()}""",
+        (day[:4], day[4:]),
+    ).fetchone()[0]
+    covered = conn.execute(
         f"""
         SELECT COUNT(*) FROM (
-            SELECT 1 FROM horse_races
-             WHERE race_year=? AND race_month_day=? AND {SQL_VALID_HORSE_NUM}
-             GROUP BY track_code, kaiji, nichiji, race_num
+            SELECT 1 FROM horse_races h
+             WHERE h.race_year=? AND h.race_month_day=? AND {SQL_VALID_HORSE_NUM}
+               AND EXISTS (
+                   SELECT 1 FROM races r
+                    WHERE r.race_year=h.race_year
+                      AND r.race_month_day=h.race_month_day
+                      AND r.track_code=h.track_code AND r.kaiji=h.kaiji
+                      AND r.nichiji=h.nichiji AND r.race_num=h.race_num
+                      AND {sql_evaluable_race("r.data_div")}
+               )
+             GROUP BY h.track_code, h.kaiji, h.nichiji, h.race_num
         )
         """,
         (day[:4], day[4:]),
     ).fetchone()[0]
-    return with_entries, total
+    return covered, eligible, scheduled, scheduled - eligible
 
 
 def _notify(text: str) -> bool:
@@ -277,7 +307,30 @@ def main() -> int:
     targets = _race_days(conn, cand)
     conn.close()
     if not targets:
-        print(f"skip: {cand} に出馬表なし (開催日でない)")
+        # 「開催日でない」と「開催日だが全レース中止」は別物。後者を
+        # 前者として片付けると、順延の日にログを見ても何が起きたか分からない。
+        conn = sqlite3.connect(DB_PATH)
+        try:
+            scheduled_all = sum(
+                conn.execute(
+                    "SELECT COUNT(*) FROM races"
+                    " WHERE race_year=? AND race_month_day=?",
+                    (d[:4], d[4:])).fetchone()[0]
+                for d in cand)
+        finally:
+            conn.close()
+        if scheduled_all:
+            print(f"skip: {cand} は評価対象レースなし "
+                  f"(予定 {scheduled_all} レースすべて中止)")
+            # 全レース中止の日を完全無音にしない。heartbeat を入れた目的は
+            # 「沈黙 = タスクが起動しなかった」を読めるようにすることなので、
+            # ここだけ黙ると開催日に何も来ず、未起動と区別できなくなる。
+            if not args.dry_run:
+                _final_confirmation(
+                    args, cand[0],
+                    f"予定 {scheduled_all} レースすべて中止")
+        else:
+            print(f"skip: {cand} に出馬表なし (開催日でない)")
         return 0
     # 対象は常に 1 日 (cand が今日だけなので targets も高々 1 件)。
     day, n_races = targets[0]
@@ -290,25 +343,36 @@ def main() -> int:
     # しまい、その日の予想が丸ごと失われた)。閾値は env で調整可。
     conn = sqlite3.connect(DB_PATH)
     try:
-        with_entries, total = _entry_coverage(conn, day)
+        covered, eligible, scheduled, cancelled = _entry_coverage(conn, day)
     finally:
         conn.close()
-    coverage = (with_entries / total) if total else 0.0
-    print(f"entry coverage {day}: {with_entries}/{total} ({coverage:.0%})")
+    # 4 値すべてを残す。「24/24 だったものが 12/12 に変わった理由」を後から
+    # 追えるようにするため (2026-09-21 の中山順延で必要になった)。
+    print(f"entry coverage {day}: scheduled={scheduled} cancelled={cancelled} "
+          f"eligible={eligible} covered={covered}")
+    if eligible == 0:
+        # 中止だけの日を「出走馬が足りない」と扱わない。再試行しても
+        # 出走馬は増えないし、中止通知を毎回出しても意味がない。
+        print(f"skip: {day} は評価対象レースなし "
+              f"(予定 {scheduled} レースすべて中止)")
+        return 0
+    coverage = covered / eligible
     if coverage < min_coverage:
         msg = (
             f"⚠ 予想生成を中止: {day} の出走馬が未取り込み "
-            f"({with_entries}/{total} = {coverage:.0%} < {min_coverage:.0%})。"
-            "次の起動で再試行します (空ページは publish しません)。"
+            f"({covered}/{eligible} = {coverage:.0%} < {min_coverage:.0%}"
+            + (f"、中止 {cancelled} レースを除く" if cancelled else "")
+            + ")。次の起動で再試行します (空ページは publish しません)。"
         )
         print(msg)
         if not args.dry_run:
             _notify_once("coverage_abort", day,
-                         {"with_entries": with_entries, "total": total,
+                         {"covered": covered, "eligible": eligible,
+                          "cancelled": cancelled,
                           "min_coverage": min_coverage},
                          msg, force=args.force_notify)
             _final_confirmation(args, day,
-                                f"{with_entries}/{total} 出走馬未取り込み")
+                                f"{covered}/{eligible} 出走馬未取り込み")
         return 2
     # F3 封印中はモデルを変えない (2026-09-14)。12 月の判定は「封印窓のあいだ
     # 同じモデルが予想し続けた」ことを前提にしており、途中で重み・calibrator・

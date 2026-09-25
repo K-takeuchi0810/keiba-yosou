@@ -136,7 +136,11 @@ def build(era_filter: str | None = None, db_path: str | None = None) -> tuple[li
     conn = sqlite3.connect(f"file:{db_path or DB_PATH}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     rows: list[dict] = []
-    skipped = {"no_summary": 0, "no_mark": 0, "no_result": 0, "era_filtered": 0}
+    # 理由ごとに数える。`excluded_cancelled` (永久) と
+    # `excluded_result_not_yet_available` (一時) を分けて見えるようにする。
+    from collections import defaultdict
+    skipped = defaultdict(int, {"no_summary": 0, "no_mark": 0,
+                                "no_result": 0, "era_filtered": 0})
 
     for date_dir in sorted(RESULTS_DIR.iterdir()):
         if not date_dir.is_dir():
@@ -164,6 +168,26 @@ def build(era_filter: str | None = None, db_path: str | None = None) -> tuple[li
             pick = next((h for h in horses if h["mark"] == "◎"), None)
             if pick is None:
                 skipped["no_mark"] += 1
+                continue
+            # 評価対象外のレースは分析にも入れない。主要集計だけで除外しても、
+            # ここが素通りだと分析系で中止レースが復活する。
+            # **理由ごとに数える**: cancelled は永久除外、
+            # result_not_yet_available は結果が来れば評価可へ戻る一時状態なので、
+            # 同じ「除外」で潰すと前者と後者の区別が付かなくなる。
+            reason = (pick.get("evaluation_exclusion_reason") or "").strip()
+            if reason:
+                skipped[f"excluded_{reason}"] += 1
+                continue
+            if str(pick.get("evaluable", "")).strip().lower() in ("false", "0"):
+                skipped["excluded_not_evaluable"] += 1
+                continue
+            # ◎ が出走取消・除外 (馬券は返還) なら、そのレースは ◎ の答え合わせに
+            # ならない。レースは評価可 (他馬は走って確定) なので上の 2 つを通り抜け、
+            # confirmed_order=0 のまま「不的中」に数えられていた (2026-09-23
+            # 最終ゲート)。金額は返還で 0 だが、的中率の分母だけ水増しされる。
+            # 競走中止 (4) は走っているので返還されず、ここでは落とさない。
+            if str(pick.get("horse_refunded", "")).strip().lower() in ("true", "1"):
+                skipped["excluded_pick_refunded"] += 1
                 continue
             winner = next((h for h in horses if _i(h["confirmed_order"]) == 1), None)
             if winner is None:

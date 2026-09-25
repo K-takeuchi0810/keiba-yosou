@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from db import sql_cancelled_race, sql_evaluable_race
 from config import (
     BET_KELLY_MAX_PCT,
     BET_KELLY_MODE,
@@ -319,18 +320,33 @@ def build_view_model(
             """
             SELECT * FROM races
             WHERE (race_year || race_month_day) BETWEEN ? AND ?
+              AND {evaluable}
             ORDER BY race_year, race_month_day, track_code, race_num
-            """,
+            """.format(evaluable=sql_evaluable_race()),
             (from_y + from_md, to_y + to_md),
         ).fetchall()
+        # **予想はここから回る** (raw_horses_by_race)。races 側だけ絞っても
+        # 描画が消えるだけで predict_race は走り続け、--log-predictions では
+        # 中止レースぶんの prediction_log 書き込みが毎 run 失敗していた。
+        # 中止と分かっているものだけ落とす (races 行が未取込のレースは残す)。
         horse_rows = conn.execute(
             """
-            SELECT * FROM horse_races
-            WHERE (race_year || race_month_day) BETWEEN ? AND ?
+            SELECT * FROM horse_races h
+            WHERE (h.race_year || h.race_month_day) BETWEEN ? AND ?
               AND {SQL_VALID_HORSE_NUM}
-            ORDER BY race_year, race_month_day, track_code, race_num,
-                     CAST(horse_num AS INTEGER)
-            """.format(SQL_VALID_HORSE_NUM=SQL_VALID_HORSE_NUM),
+              AND NOT EXISTS (
+                  SELECT 1 FROM races r
+                   WHERE r.race_year=h.race_year
+                     AND r.race_month_day=h.race_month_day
+                     AND r.track_code=h.track_code AND r.kaiji=h.kaiji
+                     AND r.nichiji=h.nichiji AND r.race_num=h.race_num
+                     AND {cancelled}
+              )
+            ORDER BY h.race_year, h.race_month_day, h.track_code, h.race_num,
+                     CAST(h.horse_num AS INTEGER)
+            """.format(SQL_VALID_HORSE_NUM=SQL_VALID_HORSE_NUM.replace(
+                           "horse_num", "h.horse_num"),
+                       cancelled=sql_cancelled_race("r.data_div")),
             (from_y + from_md, to_y + to_md),
         ).fetchall()
         payout_rows = conn.execute(

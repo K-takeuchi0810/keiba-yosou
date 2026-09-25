@@ -74,12 +74,13 @@ def abort_day(tmp_path, monkeypatch, webhook):
     db = tmp_path / "t.db"
     conn = sqlite3.connect(db)
     conn.execute("CREATE TABLE races (race_year TEXT, race_month_day TEXT,"
-                 " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT)")
+                 " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT,"
+                 " data_div TEXT)")
     conn.execute("CREATE TABLE horse_races (race_year TEXT, race_month_day TEXT,"
                  " track_code TEXT, kaiji TEXT, nichiji TEXT, race_num TEXT,"
                  " horse_num TEXT)")
     for rn in ("01", "02", "03"):
-        conn.execute("INSERT INTO races VALUES (?,?,'05','01','01',?)",
+        conn.execute("INSERT INTO races VALUES (?,?,'05','01','01',?,'6')",
                      (today[:4], today[4:], rn))
     conn.commit()
     conn.close()

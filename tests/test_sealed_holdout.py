@@ -161,9 +161,10 @@ def _db_with_races(dates) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute(
         "CREATE TABLE races (race_year TEXT, race_month_day TEXT, track_code TEXT,"
-        " kaiji TEXT, nichiji TEXT, race_num TEXT, distance INTEGER)")
+        " kaiji TEXT, nichiji TEXT, race_num TEXT, distance INTEGER,"
+        " data_div TEXT)")
     for d in dates:
-        conn.execute("INSERT INTO races VALUES (?,?,?,?,?,?,?)",
+        conn.execute("INSERT INTO races VALUES (?,?,?,?,?,?,?,'6')",
                      (d[:4], d[4:], "05", "01", "01", "01", 1600))
     conn.commit()
     return conn
@@ -448,6 +449,11 @@ GATE_EXEMPT = {
     # 運用監視 (入力が揃っているかを見るだけで、当たり外れは見ない)
     "scripts/monitor.py", "scripts/check_fresh_odds_health.py",
     "scripts/fresh_odds_coverage.py",
+    # 確定払戻の滞留監視。confirmed_order / payouts を読むが **件数だけ**で、
+    # 誰が勝ったか・配当がいくらかは一切出さない。免除を口約束にしないよう、
+    # 出力に成績が混ざらないことを
+    # tests/test_payout_finality_monitor.py で固定してある。
+    "scripts/payout_finality_monitor.py",
     # 門そのもの
     "scripts/backtest.py",
     # PIT 監査・取得率の偏り調査 (成績ではなく「データが取れているか」を見る)
