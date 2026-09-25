@@ -240,3 +240,53 @@ def test_every_run_gets_a_fresh_bytecode_cache(tmp_path, prod):
     assert len(prefixes) == 3, prefixes          # 変異なし + 変異 2 つ
     assert all(prefixes), f"置き場が設定されていない実行がある: {prefixes}"
     assert len(set(prefixes)) == 3, f"置き場を使い回している: {prefixes}"
+
+
+def test_a_reader_touching_the_wal_is_not_a_change(prod):
+    """DB を読むだけの接続で WAL の更新時刻が動いても「本番が変わった」にしない。
+
+    2026-09-26 00:05 に、別プロジェクトの常駐プロセスが DB を開いただけで
+    WAL の時刻が動き、無関係の変異で全体が ABORT した。
+    """
+    wal = prod / "data" / "keiba.db-wal"
+    wal.write_bytes(b"")
+    before = ms.snapshot_production(prod)
+    os.utime(wal, (1_900_000_000, 1_900_000_000))           # 時刻だけ動く
+
+    assert ms.diff_snapshots(before, ms.snapshot_production(prod)) == []
+
+
+@pytest.mark.parametrize("write", ["db", "wal"])
+def test_a_db_write_is_a_change(prod, write):
+    """対照: 本体の更新や WAL の増加 (= 書き込み) は検出すること。"""
+    wal = prod / "data" / "keiba.db-wal"
+    wal.write_bytes(b"")
+    before = ms.snapshot_production(prod)
+    if write == "db":
+        (prod / "data" / "keiba.db").write_bytes(b"db2")
+    else:
+        wal.write_bytes(b"page")
+
+    assert ms.diff_snapshots(before, ms.snapshot_production(prod))
+
+
+def test_an_abort_keeps_the_results_so_far(tmp_path, prod):
+    """途中で止めても、それまでの変異の結果は捨てないこと。"""
+    copy = _project(tmp_path / "copy")
+    leak = prod / "data" / "logs" / "leak.log"
+    (copy / "tests" / "test_calc.py").write_text(
+        "import sys, pathlib\n"
+        "sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))\n"
+        "from calc import add\n\n"
+        "def test_add():\n"
+        "    r = add(2, 3)\n"
+        f"    if r == 6:\n        pathlib.Path({str(leak)!r}).write_text('leaked')\n"
+        "    assert r == 5\n")
+    mutants = [("M1", "calc.py", "return a + b", "return a - b"),     # 撃墜 (漏れない)
+               ("M2", "calc.py", "return a + b", "return a + b + 1")]  # 漏れる
+
+    with pytest.raises(ms.SandboxError) as e:
+        ms.run_mutants(copy, mutants, ["tests/test_calc.py"], production_root=prod)
+
+    assert [(r.name, r.status) for r in e.value.results] == [
+        ("M1", "KILLED"), ("M2", "ABORTED")]

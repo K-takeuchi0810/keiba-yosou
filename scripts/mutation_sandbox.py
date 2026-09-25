@@ -132,11 +132,16 @@ def snapshot_production(production_root: Path = PRODUCTION_ROOT) -> dict:
                     st = p.stat()
                     snap[p.relative_to(production_root).as_posix()] = (
                         st.st_size, st.st_mtime_ns)
-    for rel in ("data/keiba.db", "data/keiba.db-wal"):
-        p = production_root / rel
-        if p.exists():
-            st = p.stat()
-            snap[rel] = (st.st_size, st.st_mtime_ns)
+    # DB は「書き込まれたか」だけを見る。本体はサイズと更新時刻、WAL はサイズだけ。
+    # WAL の更新時刻は **読むだけ** の接続でも動く (2026-09-26 00:05、別プロジェクトの
+    # 常駐プロセスが DB を開いただけで WAL の時刻が変わり、無関係の変異で ABORT した)。
+    db = production_root / "data" / "keiba.db"
+    if db.exists():
+        st = db.stat()
+        snap["data/keiba.db"] = (st.st_size, st.st_mtime_ns)
+    wal = production_root / "data" / "keiba.db-wal"
+    if wal.exists():
+        snap["data/keiba.db-wal"] = (wal.stat().st_size, 0)
     return snap
 
 
@@ -152,7 +157,11 @@ class Result:
 
 
 class SandboxError(RuntimeError):
-    pass
+    """止めた理由。`results` はそこまでに流した変異の結果 (途中経過を捨てない)。"""
+
+    def __init__(self, message: str, results: list | None = None):
+        super().__init__(message)
+        self.results = list(results or [])
 
 
 def _digest(p: Path) -> str:
@@ -225,7 +234,7 @@ def run_mutants(copy_root: Path, mutants, tests, *,
         changed = diff_snapshots(before, snapshot_production(production_root))
         if changed:
             results.append(Result(name, "ABORTED", changed))
-            raise SandboxError(f"変異 {name!r} の実行で本番が変わった: {changed}")
+            raise SandboxError(f"変異 {name!r} の実行で本番が変わった: {changed}", results)
         failed = [l for l in r.stdout.splitlines() if l.startswith(("FAILED", "ERROR"))]
         results.append(Result(name, "KILLED" if r.returncode else "SURVIVED", failed[:1]))
     after = {f: _digest(copy_root / f) for f in originals}
@@ -245,6 +254,8 @@ def main() -> int:
     try:
         results = run_mutants(Path(args.copy), spec["MUTANTS"], spec["TESTS"])
     except SandboxError as e:
+        for r in e.results:
+            print(r.status, r.name, *r.detail)
         print(f"ABORT: {e}", file=sys.stderr)
         return 2
     for r in results:
