@@ -281,3 +281,55 @@ def test_a_malformed_sealed_from_is_rejected(monkeypatch, bad_from):
 
     with pytest.raises(ValueError, match="SEALED_FROM"):
         config.sealed_window_started(now=datetime(2026, 10, 1, 0, 0, 0, tzinfo=JST))
+
+
+@pytest.mark.parametrize("bad_from", ["2026-10-01", "20261301"])
+def test_a_malformed_sealed_from_is_rejected_even_with_today(monkeypatch, bad_from):
+    """today を渡した呼び出しでも、SEALED_FROM の形式違いを通さないこと。
+
+    検査を「today を省略したときだけ」に弱めると、today を渡す呼び出し
+    (artifact の判定・テスト) で壊れた設定が素通りする (変異 V-F7 が生存)。
+    """
+    monkeypatch.setattr(config, "SEALED_FROM", bad_from)
+    monkeypatch.setattr(config, "SEALED_JUDGMENT_DONE", False)
+
+    with pytest.raises(ValueError, match="SEALED_FROM"):
+        config.sealed_window_started("20261015")
+
+
+# --- 日付の検査は 1 つ (封印の門と共通) ------------------------------------
+
+@pytest.mark.parametrize("bad", ["20261332", "20260230", "2026-12-31", "261231", 20261231])
+def test_the_analysis_gate_uses_the_same_strict_check(sealed_from_1001, bad):
+    """★ guard_analysis_window も同じ厳格な検査を使うこと (実在しない日付も弾く)。
+
+    以前は独自に「8 桁の数字か」だけを見ていたので 20261332 が通った。
+    """
+    with pytest.raises(ValueError, match="YYYYMMDD|実在しない"):
+        config.guard_analysis_window("20260101", bad)
+    with pytest.raises(ValueError, match="YYYYMMDD|実在しない"):
+        config.guard_analysis_window(bad, "20261231")
+
+
+def test_the_open_window_bounds_still_work(sealed_from_1001):
+    """対照: 全期間の既定 (00000000〜99999999) は従来どおり使え、封印の手前で切られる。"""
+    frm, to, info = config.guard_analysis_window("00000000", "99999999")
+
+    assert (frm, to) == ("00000000", "20260930")
+    assert info["clamped"] is True
+
+
+def test_the_open_bounds_are_not_a_valid_today(sealed_from_1001):
+    """集計窓の端の印は「今日」としては通さないこと (封印の判定には使えない)。"""
+    for bound in ("00000000", "99999999"):
+        with pytest.raises(ValueError):
+            config.sealed_window_started(bound)
+
+
+def test_both_checks_share_one_validator():
+    """検査が 1 か所にあること (2 か所だと片方だけ緩む)。"""
+    import inspect
+
+    src = inspect.getsource(config.guard_analysis_window)
+    assert "_require_daystamp(" in src
+    assert ".isdigit()" not in src, "guard_analysis_window が独自の検査を持っている"

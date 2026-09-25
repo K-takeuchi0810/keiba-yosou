@@ -257,17 +257,28 @@ SEALED_ARTIFACTS: dict[str, str] = {
 }
 
 
-def _require_daystamp(label: str, value: object) -> str:
+#: 集計窓の「端を開いたまま」にする印。`prediction_accuracy` などの既定の全期間
+#: (00000000〜99999999) で使う。封印の門はまさにこの全期間の窓を打ち切るための
+#: ものなので、ここだけは実在する日付でなくても通す。
+OPEN_WINDOW_BOUNDS = frozenset({"00000000", "99999999"})
+
+
+def _require_daystamp(label: str, value: object, *,
+                      allow_open_bounds: bool = False) -> str:
     """YYYYMMDD (実在する日付) でなければ ValueError。
 
     封印の判定は文字列の大小で比べるので、形式が違う値を黙って受けると
     静かに誤判定する。実測: "2026-10-01" は "-" < "1" のため "20261001" より
     小さいと判定され、開始済みの封印を「まだ」と答えた。
+
+    `allow_open_bounds=True` のときだけ OPEN_WINDOW_BOUNDS も通す (集計窓の端)。
     """
     from datetime import datetime as _dt
 
     if not (isinstance(value, str) and len(value) == 8 and value.isdigit()):
         raise ValueError(f"{label} は YYYYMMDD の文字列で渡すこと (got {value!r})")
+    if allow_open_bounds and value in OPEN_WINDOW_BOUNDS:
+        return value
     try:
         _dt.strptime(value, "%Y%m%d")
     except ValueError:
@@ -361,11 +372,12 @@ def guard_analysis_window(
     *見る* 側ではないため。
     """
     for label, value in (("from_date", from_date), ("to_date", to_date)):
-        if not (len(value) == 8 and value.isdigit()):
-            # YYYYMMDD 以外を渡されると文字列比較が破綻する。実測: "2026-12-31" は
-            # "-" < "1" のため SEALED_FROM より小さいと判定され、門を素通りした。
-            raise ValueError(
-                f"guard_analysis_window: {label} は YYYYMMDD で渡すこと (got {value!r})")
+        # YYYYMMDD 以外を渡されると文字列比較が破綻する。実測: "2026-12-31" は
+        # "-" < "1" のため SEALED_FROM より小さいと判定され、門を素通りした。
+        # 検査は sealed_window_started と同じ 1 つ (2026-09-26 に統一。以前の
+        # 独自の検査は 8 桁の数字なら通したので、実在しない 20261332 が通った)。
+        _require_daystamp(f"guard_analysis_window: {label}", value,
+                          allow_open_bounds=True)
     info: dict = {
         "sealed_from": SEALED_FROM,
         "sealed_active": sealed_window_active(),
