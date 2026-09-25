@@ -5,10 +5,14 @@ param(
     [ValidateRange(1, 86400)]
     [int]$TimeoutSeconds = 1200,
     [string]$CommandPath = "",
-    [switch]$SkipNotification
+    [switch]$SkipNotification,
+    # Same path as the scheduler, but the bat skips DB writes, Discord and
+    # the Pages push (auto_predict --dry-run) and logs to *_dryrun.log.
+    [switch]$DryRun
 )
 
 $ErrorActionPreference = "Stop"
+if ($DryRun) { $SkipNotification = $true }
 $repo = Split-Path -Parent $PSScriptRoot
 if (-not $CommandPath) {
     $CommandPath = Join-Path $PSScriptRoot "auto_predict_daily.bat"
@@ -47,11 +51,14 @@ function Send-WatchdogAlert([string]$Reason) {
     Write-WatchdogLog "notification exit=$($notify.ExitCode)"
 }
 
-$arguments = @("/d", "/c", ('"{0}"' -f $CommandPath))
+# cmd strips the outermost quotes of the /c string, so wrap once more.
+$batArgs = ""
+if ($DryRun) { $batArgs = " --dry-run" }
+$arguments = @("/d", "/c", ('""{0}"{1}"' -f $CommandPath, $batArgs))
 $process = Start-Process -FilePath $env:ComSpec -ArgumentList $arguments `
     -WorkingDirectory $repo -WindowStyle Hidden -PassThru
 $null = $process.Handle
-Write-WatchdogLog "start pid=$($process.Id) timeout_sec=$TimeoutSeconds command=$CommandPath"
+Write-WatchdogLog "start pid=$($process.Id) timeout_sec=$TimeoutSeconds command=$CommandPath dryrun=$DryRun"
 
 if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
     Write-WatchdogLog "timeout pid=$($process.Id); terminating process tree"

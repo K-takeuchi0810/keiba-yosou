@@ -191,7 +191,9 @@ def test_the_batch_log_uses_the_same_source():
     """
     bat = (REPO / "scripts" / "auto_predict_daily.bat").read_text(
         encoding="utf-8", errors="replace")
-    runline = next(l for l in bat.splitlines() if "set RUNDATE" in l)
+    # Python の出力を受け取って RUNDATE に入れている行 (`set "RUNDATE="` の初期化行ではない)。
+    # 失敗時の振る舞いは tests/test_daily_bat_rundate.py が実際に cmd で動かして見る。
+    runline = next(l for l in bat.splitlines() if "RUNDATE=%%D" in l)
 
     assert "current_jst_daystamp" in runline, f"bat が独自に日付を作っている: {runline}"
     assert "date.today()" not in runline
