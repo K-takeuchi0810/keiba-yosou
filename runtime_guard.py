@@ -59,8 +59,7 @@ def child_pytest_env(base: Mapping[str, str] | None = None, **extra: str) -> dic
     子に渡したいテスト (fail-fast の確認など) は、返り値を自分で書き換えること。
     """
     env = dict(os.environ if base is None else base)
-    env.pop("PYTHONPATH", None)
-    for key in [k for k in env if k.upper() == "PYTHONPATH"]:
+    for key in [k for k in env if k.upper() == "PYTHONPATH"]:   # 大文字小文字を問わず
         env.pop(key)
     env["PYTHONIOENCODING"] = "utf-8"
     env.update(extra)
