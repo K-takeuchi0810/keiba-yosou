@@ -249,11 +249,14 @@ def run_manifest_tests() -> dict:
     """
     import subprocess
 
+    from runtime_guard import child_pytest_env
+
+    # 子 pytest の環境は runtime_guard で作る (見張りは常に strict。2026-09-26)
     proc = subprocess.run(
         [sys.executable, "-m", "pytest", "tests/test_feature_manifest.py",
          "-q", "--no-header"],
         capture_output=True, text=True, cwd=str(Path(__file__).resolve().parent.parent),
-        timeout=600)
+        env=child_pytest_env(), timeout=600)
     tail = (proc.stdout or "").strip().splitlines()[-1:] or [""]
     passed = tail[0].count("passed") and int(
         tail[0].split(" passed")[0].split()[-1]) or 0

@@ -6,8 +6,6 @@
 このファイルは tests/ を pytest のテストパッケージとして明示する役割のみ。
 """
 
-import os
-
 import pytest
 
 
@@ -40,21 +38,19 @@ def _snapshot_runtime_dirs(root):
     return snap
 
 
-#: 見張りのモードを決める環境変数。値は 2 つだけ (2026-09-26)。
-#:   strict (既定) : 開発・worktree・変異テスト。変化があれば失敗
-#:   off           : 週次監視 (weekly_monitor.bat) 専用。この見張りだけを止める
-RUNTIME_GUARD_ENV = "KEIBA_RUNTIME_GUARD"
-RUNTIME_GUARD_MODES = ("strict", "off")
+# 見張りのモードは runtime_guard.py が唯一の出典 (環境変数名・値・子 pytest の環境)。
+#   strict (既定) : 開発・worktree・変異テスト。変化があれば失敗
+#   off           : 週次監視 (weekly_monitor.bat) の外側の pytest だけ
+from runtime_guard import OFF, RUNTIME_GUARD_ENV  # noqa: E402
+from runtime_guard import runtime_guard_mode as _runtime_guard_mode  # noqa: E402
 
 
 def runtime_guard_mode() -> str:
     """見張りのモード。未知の値は黙って off にせず、その場で止める。"""
-    mode = os.environ.get(RUNTIME_GUARD_ENV, "strict").strip().lower() or "strict"
-    if mode not in RUNTIME_GUARD_MODES:
-        raise pytest.UsageError(
-            f"{RUNTIME_GUARD_ENV}={os.environ.get(RUNTIME_GUARD_ENV)!r} は使えない "
-            f"(使えるのは {', '.join(RUNTIME_GUARD_MODES)})")
-    return mode
+    try:
+        return _runtime_guard_mode()
+    except ValueError as e:
+        raise pytest.UsageError(str(e)) from None
 
 
 def pytest_configure(config):
@@ -85,7 +81,7 @@ def _tests_do_not_touch_runtime_logs():
     """
     from pathlib import Path
 
-    if runtime_guard_mode() == "off":
+    if runtime_guard_mode() == OFF:
         print(f"\n[{RUNTIME_GUARD_ENV}=off] 運用ログ置き場の前後比較を止めています "
               "(週次監視専用)")
         yield

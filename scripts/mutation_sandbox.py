@@ -42,6 +42,9 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from runtime_guard import child_pytest_env  # noqa: E402
+
 #: 本番 checkout。Task Scheduler が毎朝読むツリー。
 PRODUCTION_ROOT = Path(r"C:\Users\kizun\dev\keiba-yosou")
 
@@ -231,11 +234,10 @@ def run_mutants(copy_root: Path, mutants, tests, *,
         import tempfile
 
         with tempfile.TemporaryDirectory(prefix="mut-pyc-") as pyc:
-            # conftest の見張りは常に strict で流す。呼び出し元が週次監視用の
-            # KEIBA_RUNTIME_GUARD=off を持っていても、変異の実行には持ち込まない
-            # (環境変数 1 つで枠の内側の防御線まで外れないように)。
-            env = {**os.environ, "PYTHONPYCACHEPREFIX": pyc,
-                   "PYTHONIOENCODING": "utf-8", "KEIBA_RUNTIME_GUARD": "strict"}
+            # 子 pytest の環境は runtime_guard.child_pytest_env で作る (見張りは常に
+            # strict)。呼び出し元が週次監視用の off を持っていても、変異の実行には
+            # 持ち込まない (環境変数 1 つで枠の内側の防御線まで外れないように)。
+            env = child_pytest_env(PYTHONPYCACHEPREFIX=pyc)
             return subprocess.run(
                 [py, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", *tests],
                 cwd=copy_root, capture_output=True, text=True, encoding="utf-8",
