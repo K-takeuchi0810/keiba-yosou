@@ -56,6 +56,7 @@ GUARDED = [
     "web/publish_safety.py",
     "scripts/fetch_mining.py",
     "gui/app.py",
+    "config.py",            # sealed_window_started: 封印の開始日判定
 ]
 
 

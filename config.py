@@ -257,18 +257,24 @@ SEALED_ARTIFACTS: dict[str, str] = {
 }
 
 
-def sealed_window_started(today: str | None = None) -> bool:
+def sealed_window_started(today: str | None = None, *, now=None) -> bool:
     """封印窓が **もう始まっているか** (判定未実施 かつ 今日が SEALED_FROM 以降)。
 
     `sealed_window_active()` (= 判定がまだ) との違いに注意。封印開始日より前は
     まだ dev 窓なので、モデルの改修は自由でなければならない。
+
+    「今日」は **`jst.current_jst_daystamp` だけ**から作る (2026-09-25)。以前は
+    `date.today()` = OS のローカル日付で、UTC のホストでは JST 10/01 00:00-08:59 が
+    まだ 9/30 と判定され、封印窓の最初の 9 時間を dev 窓として扱っていた。
+    `today` (YYYYMMDD) か `now` (tz 付き datetime) で固定できる。両方省略すると
+    JST の現在日付。
     """
-    from datetime import date
+    from jst import current_jst_daystamp
 
     if not sealed_window_active():
         return False
-    now = today or date.today().strftime("%Y%m%d")
-    return SEALED_FROM is not None and now >= SEALED_FROM
+    day = today or current_jst_daystamp(now)
+    return SEALED_FROM is not None and day >= SEALED_FROM
 
 
 def artifact_drift() -> list[str]:
