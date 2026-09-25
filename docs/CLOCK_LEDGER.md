@@ -83,6 +83,37 @@ branch `jst-date-unify-20260920` で対応済。main には未反映。
 5. B 群は JST 基盤が main に入ってからまとめて
 6. C 群は急がない
 
+## マージ後の最初の起動で確認すること (runbook)
+
+`jst-date-unify-20260920` は **ff merge か merge commit で** main に入れる
+(`jst.py` と新しい bat / ps1 を同じマージで入れる)。bat だけを cherry-pick すると、
+main に `jst.py` が無いため全起動が exit 8 + Discord ERROR になる。
+
+マージ後、**最初の定期起動 (08:00) の後**に次の 4 点を確認し、下の表に記録する。
+
+1. `data/logs/auto_predict_daily_<JST日付>.log` ができていて、先頭行が
+   `run date <JST日付> (JST) dryrun=[]` になっている (dry-run ではない)
+2. `data/logs/auto_predict_daily_DATE_FAILURE.log` が **新しく** できていない
+   (マージ前から有れば、その後に行が増えていないこと)
+3. `data/logs/auto_predict_watchdog.log` の最後の `finish` 行が `exit=0`
+   (非開催日なら「出馬表なし」で 0。開催日で予想生成に失敗していれば 2 など、
+   bat の終了コードのビットの意味は `scripts/auto_predict_daily.bat` の末尾)
+4. `Get-ScheduledTaskInfo -TaskName keiba-auto-predict` の `LastTaskResult` が 0
+
+確認コマンドの例 (PowerShell):
+
+    Get-Content data\logs\auto_predict_daily_<JST日付>.log -TotalCount 1
+    Test-Path data\logs\auto_predict_daily_DATE_FAILURE.log
+    Get-Content data\logs\auto_predict_watchdog.log -Tail 2
+    Get-ScheduledTaskInfo -TaskName keiba-auto-predict | Select LastRunTime, LastTaskResult
+
+| 確認日時 (JST) | main SHA | 1 日付入りログ | 2 DATE_FAILURE 新規なし | 3 watchdog exit | 4 LastTaskResult | 確認者 |
+|---|---|---|---|---|---|---|
+| (マージ後に記入) | | | | | | |
+
+どれか 1 つでも満たさなければ、その日の予想が出ていない可能性がある。まず
+`auto_predict_daily_DATE_FAILURE.log` と `auto_predict_daily_rundate_stderr.txt` を見る。
+
 ## この台帳の使い方
 
 新しく「今日」を作るコードを書くときは、まず `jst.current_jst_date` /
