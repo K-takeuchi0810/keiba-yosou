@@ -105,10 +105,15 @@ main に `jst.py` が無いため全起動が exit 8 + Discord ERROR になる�
    の行が出て exit 124)。最後の行が `start` のままなら、まだ動いているかタイムアウト
 4. `Get-ScheduledTaskInfo -TaskName keiba-auto-predict` の `LastTaskResult` が 0
 5. 週次監視: `Get-ScheduledTaskInfo -TaskName keiba-yosou-weekly-monitor` の
-   `LastTaskResult` が 0、`data/logs/weekly_monitor_<日付>.log` に `pytest exit 0` があり、
-   pytest の出力は `data/monitor_runs/weekly_pytest_<日付>.log` にある (data/logs には無い)。
-   週次監視は `KEIBA_RUNTIME_GUARD=off` で pytest を回す (同じ時間帯に fresh odds などが
-   data/logs に書くので、tests/conftest.py の前後比較の見張りが成り立たないため)
+   `LastTaskResult` が 0、`data/logs/weekly_monitor_<日付>.log` に
+   `runtime_guard=off pytest_exit=0 full_output=data\monitor_runs\weekly_pytest_<日付>.log`
+   の行がある。pytest の出力 (stdout と stderr) はその 1 ファイルにまとまっている
+   (data/logs には無い。stderr があれば `--- stderr ---` の後に続く)。
+   週次監視は **外側の pytest だけ** `KEIBA_RUNTIME_GUARD=off` で回す (同じ時間帯に
+   fresh odds などが data/logs に書くので、tests/conftest.py の前後比較の見張りが
+   成り立たないため)。テストの中から起動する子 pytest は `runtime_guard.child_pytest_env()`
+   で常に strict になる。`pytest_exit` が 0 でなければ終了コードのビット 2 が立ち、
+   Discord に `WARN: weekly monitor alert (... pytest=N ...)` が届く
 
 確認コマンドの例 (PowerShell):
 
@@ -117,7 +122,7 @@ main に `jst.py` が無いため全起動が exit 8 + Discord ERROR になる�
     Get-Content data\logs\auto_predict_watchdog.log -Tail 2
     Get-ScheduledTaskInfo -TaskName keiba-auto-predict | Select LastRunTime, LastTaskResult
     Get-ScheduledTaskInfo -TaskName keiba-yosou-weekly-monitor | Select LastRunTime, LastTaskResult
-    Select-String -Path data\logs\weekly_monitor_<日付>.log -Pattern "pytest exit"
+    Select-String -Path data\logs\weekly_monitor_<日付>.log -Pattern "runtime_guard=off pytest_exit="
 
 | 確認日時 (JST) | main SHA | 1 日付入りログ | 2 DATE_FAILURE 新規なし | 3 watchdog exit | 4 LastTaskResult | 5 週次監視 | 確認者 |
 |---|---|---|---|---|---|---|---|
