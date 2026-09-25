@@ -66,6 +66,7 @@ branch `jst-date-unify-20260920` で対応済。main には未反映。
 |---|---|---|---|---|---|
 | C1 | `predictor/rules.py` :124 | `today or datetime.now().strftime("%Y-%m-%d")` | calibrator 互換表の `expires_on` 判定 | **C** | 現行は `expected_rules_version == RULES_VERSION` で一致するため **到達しない**。到達してもログのみ。`today` 引数あり |
 | C2 | 各 `analyze_*.py` / `backtest.py` / `monitor.py` の `generated_at` 等 | `datetime.now()` | 生成時刻の刻印 | **C** | 対象日ではないので統一の対象外。ただし「日付は JST / 時刻はローカル」の混在は読み手を混乱させるので、いずれ揃える |
+| C4 | `weekly_monitor.bat` :5 | `date.today()` (local) | 週次監視のログ名 (`weekly_monitor_<日付>.log`、`weekly_pytest_<日付>.log`) | **C** | 対象日ではなく刻印。日次 bat と違い日付取得の失敗時の扱いも無い (空日付のログ名になる)。JST 基盤の main 反映後に日次 bat と同じ形へ |
 | C3 | `scripts/payout_finality_monitor.py` :70 | 独自の `JST = timezone(timedelta(hours=9))` | 確定払戻の滞留監視 (経過時間の起点) | **C** | 値は `jst.JST` と同じだが、単一出典から外れた定数 (data_div 対応で main に入ったもの)。評価系は凍結中なので、凍結解除後に `from jst import JST` へ |
 
 ## 進め方 (2026-09-22 時点の合意)
@@ -89,16 +90,25 @@ branch `jst-date-unify-20260920` で対応済。main には未反映。
 (`jst.py` と新しい bat / ps1 を同じマージで入れる)。bat だけを cherry-pick すると、
 main に `jst.py` が無いため全起動が exit 8 + Discord ERROR になる。
 
-マージ後、**最初の定期起動 (08:00) の後**に次の 4 点を確認し、下の表に記録する。
+マージ後、**最初の定期起動 (08:00) の後**に 1〜4 を、**最初の日曜 10:00 の週次監視の後**に
+5 を確認し、下の表に記録する。
 
-1. `data/logs/auto_predict_daily_<JST日付>.log` ができていて、先頭行が
-   `run date <JST日付> (JST) dryrun=[]` になっている (dry-run ではない)
+1. `data/logs/auto_predict_daily_<JST日付>.log` ができていて、先頭行に
+   `run date <JST日付> (JST) dryrun=[]` が含まれる (dry-run ではない。行頭は
+   `[日付 時刻]`、行末に `cwd=...` が付く)
 2. `data/logs/auto_predict_daily_DATE_FAILURE.log` が **新しく** できていない
    (マージ前から有れば、その後に行が増えていないこと)
 3. `data/logs/auto_predict_watchdog.log` の最後の `finish` 行が `exit=0`
    (非開催日なら「出馬表なし」で 0。開催日で予想生成に失敗していれば 2 など、
-   bat の終了コードのビットの意味は `scripts/auto_predict_daily.bat` の末尾)
+   bat の終了コードのビットの意味は `scripts/auto_predict_daily.bat` の末尾)。
+   **タイムアウトした起動には `finish` 行が出ない** (`timeout ...` / `tree terminated`
+   の行が出て exit 124)。最後の行が `start` のままなら、まだ動いているかタイムアウト
 4. `Get-ScheduledTaskInfo -TaskName keiba-auto-predict` の `LastTaskResult` が 0
+5. 週次監視: `Get-ScheduledTaskInfo -TaskName keiba-yosou-weekly-monitor` の
+   `LastTaskResult` が 0、`data/logs/weekly_monitor_<日付>.log` に `pytest exit 0` があり、
+   pytest の出力は `data/monitor_runs/weekly_pytest_<日付>.log` にある (data/logs には無い)。
+   週次監視は `KEIBA_RUNTIME_GUARD=off` で pytest を回す (同じ時間帯に fresh odds などが
+   data/logs に書くので、tests/conftest.py の前後比較の見張りが成り立たないため)
 
 確認コマンドの例 (PowerShell):
 
@@ -106,10 +116,12 @@ main に `jst.py` が無いため全起動が exit 8 + Discord ERROR になる�
     Test-Path data\logs\auto_predict_daily_DATE_FAILURE.log
     Get-Content data\logs\auto_predict_watchdog.log -Tail 2
     Get-ScheduledTaskInfo -TaskName keiba-auto-predict | Select LastRunTime, LastTaskResult
+    Get-ScheduledTaskInfo -TaskName keiba-yosou-weekly-monitor | Select LastRunTime, LastTaskResult
+    Select-String -Path data\logs\weekly_monitor_<日付>.log -Pattern "pytest exit"
 
-| 確認日時 (JST) | main SHA | 1 日付入りログ | 2 DATE_FAILURE 新規なし | 3 watchdog exit | 4 LastTaskResult | 確認者 |
-|---|---|---|---|---|---|---|
-| (マージ後に記入) | | | | | | |
+| 確認日時 (JST) | main SHA | 1 日付入りログ | 2 DATE_FAILURE 新規なし | 3 watchdog exit | 4 LastTaskResult | 5 週次監視 | 確認者 |
+|---|---|---|---|---|---|---|---|
+| (マージ後に記入) | | | | | | | |
 
 どれか 1 つでも満たさなければ、その日の予想が出ていない可能性がある。まず
 `auto_predict_daily_DATE_FAILURE.log` と `auto_predict_daily_rundate_stderr.txt` を見る。
