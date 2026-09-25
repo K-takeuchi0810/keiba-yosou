@@ -35,11 +35,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import re
 import runpy
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 #: 本番 checkout。Task Scheduler が毎朝読むツリー。
 PRODUCTION_ROOT = Path(r"C:\Users\kizun\dev\keiba-yosou")
@@ -102,6 +103,44 @@ def check_sandbox(copy_root: Path, production_root: Path = PRODUCTION_ROOT) -> l
             if name in dirnames:
                 dirnames.remove(name)
     return problems
+
+
+#: 本番側で必ず存在するはずの監視対象。無ければ「監視対象 0 件 = 安全」に化ける。
+PRODUCTION_WATCH = ("data/logs", "data/runtime", "data/keiba.db")
+
+
+def check_production(production_root: Path = PRODUCTION_ROOT) -> list[str]:
+    """本番 checkout と監視対象が実在するか。問題があれば理由のリスト。
+
+    本番の場所を取り違えた (checkout を移した・設定がずれた) まま流すと、
+    事前検査は合格し、本番の記録は空になり、**枠が黙って何も守らない**
+    (2026-09-26 のレビューで実測)。
+    """
+    production_root = Path(production_root)
+    if not production_root.is_dir():
+        return [f"本番 checkout が見つからない: {production_root}"]
+    return [f"本番の監視対象が無い: {production_root / rel}"
+            for rel in PRODUCTION_WATCH if not (production_root / rel).exists()]
+
+
+def refuses_target(rel: object, copy_root: Path) -> str | None:
+    """変異を植えるファイルがコピーの中に収まらなければ、その理由を返す。
+
+    絶対パスや `..` を渡すと、隔離コピーの **外** のファイルを実際に書き換える
+    (2026-09-26 のレビューで偽の本番に対して実測。終了後に戻すので静かに通った)。
+    「書いてから戻す」は安全策にしない。**書く前に**拒否する。
+    """
+    if not isinstance(rel, str) or not rel.strip():
+        return f"対象パスが空か文字列でない: {rel!r}"
+    win = PureWindowsPath(rel)
+    if win.drive or win.root or rel.startswith(("/", "\\")) or os.path.isabs(rel):
+        return f"対象パスが絶対パス: {rel!r}"
+    if any(part == ".." for part in re.split(r"[\\/]+", rel)):
+        return f"対象パスに .. がある: {rel!r}"
+    target = (Path(copy_root) / rel).resolve()          # ジャンクション越しも解決する
+    if not _inside(target, Path(copy_root).resolve()):
+        return f"対象パスがコピーの外を指す: {rel!r} -> {target}"
+    return None
 
 
 def production_markers(production_root: Path = PRODUCTION_ROOT) -> list[str]:
@@ -176,6 +215,9 @@ def run_mutants(copy_root: Path, mutants, tests, *,
     本番に変化が出たら SandboxError で止める (残りは流さない)。
     """
     copy_root = Path(copy_root)
+    problems = check_production(production_root)
+    if problems:
+        raise SandboxError("本番の監視を始められない: " + " / ".join(problems))
     problems = check_sandbox(copy_root, production_root)
     if problems:
         raise SandboxError("隔離コピーとして使えない: " + " / ".join(problems))
@@ -210,10 +252,10 @@ def run_mutants(copy_root: Path, mutants, tests, *,
         raise SandboxError(f"変異なしでテストが赤い (結果が信用できない): {failed[:3]}")
 
     originals = {f: _digest(copy_root / f) for f in {m[1] for m in mutants}
-                 if (copy_root / f).exists()}
+                 if refuses_target(f, copy_root) is None and (copy_root / f).exists()}
     results: list[Result] = []
     for name, rel, old, new in mutants:
-        reason = refuses(new, production_root)
+        reason = refuses_target(rel, copy_root) or refuses(new, production_root)
         if reason:
             results.append(Result(name, "REFUSED", [reason]))
             continue

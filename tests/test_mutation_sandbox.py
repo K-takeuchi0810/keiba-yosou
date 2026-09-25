@@ -290,3 +290,124 @@ def test_an_abort_keeps_the_results_so_far(tmp_path, prod):
 
     assert [(r.name, r.status) for r in e.value.results] == [
         ("M1", "KILLED"), ("M2", "ABORTED")]
+
+
+# --- 変異の対象パス (書く前に拒否) -----------------------------------------
+
+@pytest.mark.parametrize("make_rel", [
+    lambda outside: str(outside),                                   # 絶対パス
+    lambda outside: str(outside).replace("\\", "/"),                # 区切り文字違い
+    lambda outside: str(outside).upper(),                           # 大文字小文字違い
+    lambda outside: "../" + outside.parent.name + "/" + outside.name,   # ..
+    lambda outside: "sub/../../" + outside.parent.name + "/" + outside.name,
+    lambda outside: "..\\" + outside.parent.name + "\\" + outside.name,
+    lambda outside: "/" + outside.name,                             # ルート始まり
+    lambda outside: "\\\\server\\share\\" + outside.name,        # UNC
+    lambda outside: outside.drive + outside.name,                   # ドライブ付き相対
+])
+def test_a_target_outside_the_copy_is_refused_before_writing(tmp_path, prod, make_rel):
+    """★ コピーの外を指す対象パスは、書き込む前に REFUSED にすること。
+
+    「書いてから戻す」は安全策にしない。外のファイルは 1 バイトも変わらないこと。
+    """
+    copy = _project(tmp_path / "copy")
+    outside = tmp_path / "outside.py"
+    outside.write_text("def add(a, b):\n    return a + b\n")
+    before = outside.read_bytes(), outside.stat().st_mtime_ns
+
+    results = ms.run_mutants(copy, [("OUT", make_rel(outside), "return a + b", "return a - b")],
+                             ["tests/test_calc.py"], production_root=prod)
+
+    assert results[0].status == "REFUSED", results
+    assert (outside.read_bytes(), outside.stat().st_mtime_ns) == before, "外のファイルに書いた"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="ジャンクションは Windows のみ")
+def test_a_target_through_the_venv_junction_is_refused(tmp_path, prod):
+    """`.venv64` はジャンクション (実体はコピーの外) なので、その中は対象にさせない。"""
+    copy = _project(tmp_path / "copy")
+    real_venv = tmp_path / "real-venv"
+    real_venv.mkdir()
+    (real_venv / "site.py").write_text("x = 1\n")
+    subprocess.run(["cmd", "/c", "mklink", "/J", str(copy / ".venv64"), str(real_venv)],
+                   check=True, capture_output=True)
+    try:
+        results = ms.run_mutants(copy, [("V", ".venv64/site.py", "x = 1", "x = 2")],
+                                 ["tests/test_calc.py"], production_root=prod)
+        assert results[0].status == "REFUSED", results
+        assert (real_venv / "site.py").read_text() == "x = 1\n"
+    finally:
+        os.rmdir(copy / ".venv64")
+
+
+def test_a_target_inside_the_copy_is_accepted(tmp_path, prod):
+    """対照: コピーの中の相対パス (区切り文字はどちらでも) は流す。"""
+    copy = _project(tmp_path / "copy")
+    (copy / "pkg").mkdir()
+    (copy / "pkg" / "m.py").write_text("V = 1\n")
+    assert ms.refuses_target("pkg/m.py", copy) is None
+    assert ms.refuses_target("pkg\\m.py", copy) is None
+    assert ms.refuses_target("calc.py", copy) is None
+
+
+# --- 本番の監視を始められないなら流さない -----------------------------------
+
+def _marker_project(tmp_path):
+    """テストが 1 回でも走ったら印を残すプロジェクト (流していないことの確認用)。"""
+    copy = _project(tmp_path / "copy")
+    ran = tmp_path / "ran.txt"
+    (copy / "tests" / "test_marker.py").write_text(
+        f"def test_marker():\n    open({str(ran)!r}, 'a').write('x')\n")
+    return copy, ran
+
+
+def test_a_missing_production_root_refuses_to_start(tmp_path):
+    """★ 本番 checkout が見つからなければ、変異なしの実行より前に止まること。
+
+    見つからないまま進むと「監視対象 0 件 = 安全」に化け、枠が黙って何も守らない。
+    """
+    copy, ran = _marker_project(tmp_path)
+
+    with pytest.raises(ms.SandboxError, match="本番 checkout が見つからない"):
+        ms.run_mutants(copy, [("M1", "calc.py", "return a + b", "return a - b")],
+                       ["tests/test_marker.py"], production_root=tmp_path / "no-such-root")
+    assert not ran.exists(), "本番の監視を始められないのにテストを流した"
+
+
+@pytest.mark.parametrize("missing", ["data/logs", "data/runtime", "data/keiba.db"])
+def test_a_missing_watch_target_refuses_to_start(tmp_path, prod, missing):
+    """監視対象 (ログ置き場・runtime・DB) のどれかが無ければ止まること。"""
+    import shutil
+
+    target = prod / missing
+    shutil.rmtree(target) if target.is_dir() else target.unlink()
+    copy, ran = _marker_project(tmp_path)
+
+    with pytest.raises(ms.SandboxError, match="本番の監視対象が無い"):
+        ms.run_mutants(copy, [("M1", "calc.py", "return a + b", "return a - b")],
+                       ["tests/test_marker.py"], production_root=prod)
+    assert not ran.exists()
+
+
+# --- 監視対象を外す変異を落とす ---------------------------------------------
+
+def test_a_leak_into_runtime_is_detected(tmp_path, prod):
+    """data/runtime への漏れも止めること (監視から runtime を外す変異 V-Xc を落とす)。"""
+    copy = _project(tmp_path / "copy", writes_to=prod / "data" / "runtime")
+
+    with pytest.raises(ms.SandboxError, match="本番が変わった"):
+        ms.run_mutants(copy, [("M1", "calc.py", "return a + b", "return a - b")],
+                       ["tests/test_calc.py"], production_root=prod)
+
+
+def test_a_leak_in_the_baseline_run_is_reported_as_such(tmp_path, prod):
+    """変異なしの実行で漏れたら、その時点で「変異なしの実行で」と止めること。
+
+    事前実行の差分を無視する変異 (V-Xj) は、漏れを最初の変異のせいにして
+    しまう。どの段で漏れたかを取り違えないことを見る。
+    """
+    copy = _project(tmp_path / "copy", writes_to=prod / "data" / "logs")
+
+    with pytest.raises(ms.SandboxError, match="変異なしの実行で本番が変わった"):
+        ms.run_mutants(copy, [("M1", "calc.py", "return a + b", "return a - b")],
+                       ["tests/test_calc.py"], production_root=prod)
