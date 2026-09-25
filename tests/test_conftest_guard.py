@@ -65,3 +65,24 @@ def test_a_clean_session_passes(tmp_path):
     r = _pytest(root)
 
     assert r.returncode == 0, r.stdout[-800:]
+
+
+def test_a_same_size_overwrite_fails_the_session(tmp_path):
+    """★ 既存のログを **同じサイズで** 上書きするテストも検出すること。
+
+    サイズだけを見る見張りに壊すと (変異 K19 / E3c)、中身を書き換えても通ってしまう。
+    `existing.log` は "before" + 改行。同じ長さの "BEFORE" + 改行で上書きする
+    (どちらもテキストモードで書くので、改行の変換を含めてサイズは同じ)。
+    """
+    root = _mini_repo(tmp_path / "r", (
+        "import time\n"
+        "from pathlib import Path\n"
+        "ROOT = Path(__file__).resolve().parents[1]\n\n"
+        "def test_overwrites():\n"
+        "    time.sleep(0.05)\n"
+        "    (ROOT / 'data' / 'logs' / 'existing.log').write_text('BEFORE' + chr(10))\n"))
+
+    r = _pytest(root)
+
+    assert r.returncode != 0, r.stdout[-800:]
+    assert "運用ログ置き場を変更した" in r.stdout

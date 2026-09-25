@@ -333,3 +333,17 @@ def test_both_checks_share_one_validator():
     src = inspect.getsource(config.guard_analysis_window)
     assert "_require_daystamp(" in src
     assert ".isdigit()" not in src, "guard_analysis_window が独自の検査を持っている"
+
+
+def test_a_malformed_sealed_from_is_rejected_on_the_default_path(monkeypatch):
+    """引数なし (本番の artifact_drift から呼ばれる形) でも SEALED_FROM の形式違いを弾くこと。
+
+    now / today を渡すテストだけだと、既定の経路で検査を外す変異 (V-F7b) が見えない。
+    """
+    monkeypatch.setattr(config, "SEALED_FROM", "2026-10-01")
+    monkeypatch.setattr(config, "SEALED_JUDGMENT_DONE", False)
+
+    with pytest.raises(ValueError, match="SEALED_FROM"):
+        config.sealed_window_started()
+    with pytest.raises(ValueError, match="SEALED_FROM"):
+        config.artifact_drift()
