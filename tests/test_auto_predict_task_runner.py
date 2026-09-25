@@ -349,13 +349,14 @@ def _run_runner(fixture: Path, *extra: str) -> int:
 import pytest  # noqa: E402
 
 
-@pytest.mark.parametrize("subdir", ["plain", "with space (x86)"])
+@pytest.mark.parametrize("subdir", ["plain", "with space (x86)", "a&b"])
 def test_watchdog_forwards_dry_run_to_the_batch(tmp_path: Path, subdir: str) -> None:
     """-DryRun を付けたときだけ子の bat に --dry-run が渡ること (2026-09-25)。
 
     渡らないと「dry-run のつもりで本番の取り込み・通知・push が走る」。
-    空白と括弧を含むパスでも見る (`Program Files (x86)` のような場所)。cmd は
-    /c の文字列の引用符を条件次第で剥がすので、二重に包まないとここで壊れる。
+    空白・括弧・`&` を含むパスでも見る。cmd は /c の文字列の引用符を条件次第で
+    剥がすので、二重に包まないと `&` のところでコマンドが分断される
+    (空白と括弧だけなら cmd が推測でたどれてしまい、壊れていても気付けない)。
     """
     d = tmp_path / subdir
     d.mkdir()
