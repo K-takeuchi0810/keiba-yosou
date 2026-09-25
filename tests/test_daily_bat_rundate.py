@@ -36,10 +36,12 @@ BAT = REPO / "scripts" / "auto_predict_daily.bat"
 VENV = Path(sys.executable).resolve().parents[1]      # .venv64
 
 #: bat が呼ぶモジュール。呼ばれたら argv を calls.txt に 1 行書く。
-_STUB = """import sys, pathlib
+#: 終了コードは環境変数 STUB_EXIT_<module> で指定できる (既定 0)。
+_STUB = """import os, sys, pathlib
 p = pathlib.Path(__file__).resolve().parents[1] / "calls.txt"
 with p.open("a", encoding="utf-8") as f:
     f.write(__name__ + " " + " ".join(sys.argv[1:]) + "\\n")
+sys.exit(int(os.environ.get("STUB_EXIT_" + __name__, "0")))
 """
 _MODULES = ("fetch_full", "fetch_mining", "fresh_odds_coverage",
             "auto_predict", "notify_discord")
@@ -194,3 +196,79 @@ def test_the_failure_is_notified_only_outside_dry_run(fake_repo):
     _run(fake_repo)
     assert any(c.startswith("notify_discord") for c in _calls(fake_repo)), (
         "本番起動で日付が取れなかったことを通知していない")
+
+
+# --- 終了コードの伝搬 (日付取得の後で Python が失敗する場合) --------------
+
+@pytest.mark.parametrize("dry,fails,want", [
+    (True, {"auto_predict": "1"}, 2),                       # 予想生成の失敗
+    (True, {"fresh_odds_coverage": "1"}, 1),                # fresh odds の欠落
+    (True, {"auto_predict": "3", "fresh_odds_coverage": "1"}, 3),
+    (False, {"fetch_full": "1"}, 4),                        # 取り込みの失敗
+    (False, {"fetch_full": "1", "auto_predict": "2"}, 6),
+    (True, {}, 0),                                          # 対照: 全部成功
+])
+def test_a_later_python_failure_reaches_the_bat_exit_code(fake_repo, dry, fails, want):
+    """★ 日付が取れた後の Python の非 0 が、bat の終了コードに載ること。
+
+    スタブが全部 exit 0 だと、bat が最後に 0 を返すよう壊れても気付けない
+    (変異 B-10 が生存)。ビットは 1=fresh odds / 2=予想 / 4=取り込み。
+    """
+    _set_jst(fake_repo, _OK)
+    env = {f"STUB_EXIT_{m}": code for m, code in fails.items()}
+
+    rc = _run(fake_repo, *(["--dry-run"] if dry else []), env_extra=env)
+
+    assert rc == want, f"{fails} で exit {rc} (期待 {want})"
+
+
+RUNNER = REPO / "scripts" / "run_auto_predict_daily.ps1"
+
+
+def _run_via_runner(root: Path, env_extra: dict, *, through_wscript: bool) -> int:
+    """本番と同じ起動器 (ps1、または wscript → vbs → ps1) から bat を動かす。"""
+    env = {k: v for k, v in os.environ.items() if k.upper() != "RUNDATE"}
+    env.update(env_extra)
+    bat = root / "scripts" / BAT.name
+    logs = root.parent / "watchdog-logs"
+    ps1_args = ["-CommandPath", str(bat), "-LogDir", str(logs), "-DryRun"]
+    if not through_wscript:
+        return subprocess.run(
+            ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive",
+             "-ExecutionPolicy", "Bypass", "-File", str(RUNNER), *ps1_args],
+            env=env, cwd=root.parent, check=False, timeout=120).returncode
+    vbs = Path(os.environ.get("LOCALAPPDATA", "")) / "ScheduledTaskRunner" / \
+        "run-scheduled-task-hidden.vbs"
+    if not vbs.exists():
+        pytest.skip("この環境には hidden runner (vbs) が無い")
+    wscript = Path(os.environ["SystemRoot"]) / "System32" / "wscript.exe"
+    arglist = " ".join(["//B", "//NoLogo", f'"{vbs}"', "ps1", f'"{RUNNER}"',
+                        *(f'"{a}"' if " " in a else a for a in ps1_args)])
+    ps = (f"$p = Start-Process -FilePath '{wscript}' -ArgumentList '{arglist}' "
+          f"-PassThru; $null = $p.Handle; $p.WaitForExit(120000) | Out-Null; "
+          f"exit $p.ExitCode")
+    return subprocess.run(["powershell.exe", "-NoLogo", "-NoProfile", "-Command", ps],
+                          env=env, cwd=root.parent, check=False, timeout=180).returncode
+
+
+@pytest.mark.parametrize("through_wscript", [False, True])
+def test_the_exit_code_reaches_the_scheduler(fake_repo, through_wscript):
+    """★ Python の非 0 が bat → ps1 → (vbs / wscript) の最後まで届くこと。
+
+    Task Scheduler の LastTaskResult で失敗を読めるかどうかはここで決まる。
+    """
+    _set_jst(fake_repo, _OK)
+
+    rc = _run_via_runner(fake_repo, {"STUB_EXIT_auto_predict": "1"},
+                         through_wscript=through_wscript)
+
+    assert rc == 2, f"予想生成の失敗 (bat exit 2) が {rc} になった"
+
+
+def test_the_date_failure_reaches_the_scheduler(fake_repo):
+    """日付取得の失敗 (exit 8) も wscript まで届くこと。"""
+    _set_jst(fake_repo, "raise ImportError('injected')\n")
+
+    rc = _run_via_runner(fake_repo, {}, through_wscript=True)
+
+    assert rc == 8
