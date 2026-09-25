@@ -327,3 +327,62 @@ def test_fetch_full_fails_when_catchup_still_has_no_race(monkeypatch) -> None:
     monkeypatch.setattr(sys, "argv", ["fetch_full", "--dataspecs", "RACE"])
 
     assert fetch_full.main() == 1
+
+
+def _args_probe(tmp_path: Path) -> tuple[Path, Path]:
+    """受け取った引数をファイルに書くだけの子コマンド。"""
+    seen = tmp_path / "seen.txt"
+    fixture = tmp_path / "record-args.cmd"
+    fixture.write_text(f'@echo [%*]> "{seen}"\r\n@exit /b 0\r\n', encoding="ascii")
+    return fixture, seen
+
+
+def _run_runner(fixture: Path, *extra: str) -> int:
+    return subprocess.run(
+        ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive",
+         "-ExecutionPolicy", "Bypass", "-File", str(RUNNER),
+         "-TimeoutSeconds", "20", "-CommandPath", str(fixture), *extra],
+        cwd=ROOT, check=False, timeout=40,
+    ).returncode
+
+
+def test_watchdog_forwards_dry_run_to_the_batch(tmp_path: Path) -> None:
+    """-DryRun を付けたときだけ子の bat に --dry-run が渡ること (2026-09-25)。
+
+    渡らないと「dry-run のつもりで本番の取り込み・通知・push が走る」。
+    """
+    fixture, seen = _args_probe(tmp_path)
+
+    assert _run_runner(fixture, "-DryRun") == 0
+    assert seen.read_text(encoding="ascii").strip() == "[--dry-run]"
+
+    assert _run_runner(fixture, "-SkipNotification") == 0
+    assert seen.read_text(encoding="ascii").strip() == "[]", (
+        "-DryRun なしの起動に --dry-run が混ざっている")
+
+
+def test_dry_run_through_the_scheduler_launcher(tmp_path: Path) -> None:
+    """タスクスケジューラと同じ wscript → vbs 経由でも -DryRun が届くこと。
+
+    vbs は引数を 1 つずつ引用符で包む。PowerShell がそれをスイッチとして
+    解釈するかを、実際の起動経路で確かめる。
+    """
+    import os
+
+    vbs = Path(os.environ.get("LOCALAPPDATA", "")) / "ScheduledTaskRunner" / \
+        "run-scheduled-task-hidden.vbs"
+    if not vbs.exists():
+        import pytest
+        pytest.skip("この環境には hidden runner (vbs) が無い")
+    fixture, seen = _args_probe(tmp_path)
+    # wscript は GUI サブシステムなので、終了コードは Start-Process で待って取る。
+    ps = (
+        f"$p = Start-Process -FilePath \"$env:SystemRoot\\System32\\wscript.exe\" "
+        f"-ArgumentList '//B //NoLogo \"{vbs}\" ps1 \"{RUNNER}\" -CommandPath "
+        f"\"{fixture}\" -DryRun' -PassThru; $null = $p.Handle; "
+        f"$p.WaitForExit(40000) | Out-Null; exit $p.ExitCode"
+    )
+    rc = subprocess.run(["powershell.exe", "-NoLogo", "-NoProfile", "-Command", ps],
+                        cwd=ROOT, check=False, timeout=60).returncode
+    assert rc == 0
+    assert seen.read_text(encoding="ascii").strip() == "[--dry-run]"
