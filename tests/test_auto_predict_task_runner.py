@@ -465,3 +465,20 @@ def test_runner_tests_leave_the_production_log_alone() -> None:
             if "str(RUNNER)" in items:
                 assert "'-LogDir'" in items, (
                     f"-LogDir の無い runner 呼び出し (line {node.lineno})")
+
+
+def test_skip_notification_is_honoured_on_timeout(tmp_path: Path) -> None:
+    """-SkipNotification (dry-run ではない) でもタイムアウト時に通知しないこと。
+
+    既存のタイムアウトのテストは -SkipNotification を付けていたが、通知が
+    実際に止まったかは見ていなかった (変異 A3 が見えなかった)。
+    """
+    stub, marker = _notify_stub(tmp_path)
+
+    rc = _run_runner(_hang(tmp_path), "-SkipNotification", "-NotifyPython", str(stub),
+                     timeout="1")
+
+    assert rc == 124
+    assert not marker.exists(), "-SkipNotification なのに通知した"
+    log = (tmp_path / "logs" / "auto_predict_watchdog.log").read_text(encoding="ascii")
+    assert "notification suppressed: -SkipNotification" in log
