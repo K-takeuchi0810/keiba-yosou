@@ -45,16 +45,18 @@ branch `jst-date-unify-20260920` で対応済。main には未反映。
 |---|---|---|---|---|---|---|---|
 | A1 | `scripts/predict_t10.py` `run()` :120 | `now = now or datetime.now()` (naive local) | T−10 ゲートの基準時刻。`actionable = mins > 0` を決める | **直撃**。F3 の正本を書く時計そのもの。ずれると発走前/後の判定が反転する | なし (日付は別引数) | **A** | `now` 注入で境界 (T−10 ちょうど / 発走時刻ちょうど) を直接検証。DB の `start_time` が naive なので **aware をそのまま渡すと TypeError**。`jst_now_naive()` のような明示ヘルパを先に用意し、比較の両辺が同じ意味であることをテストで固定する |
 | A2 | `scripts/predict_t10.py` `main()` :249 | `args.date or datetime.now().strftime("%Y%m%d")` | T−10 正本の対象日 | 間接 (日がずれれば別日のレースを処理) | **直撃** | **A** | OS=UTC で JST 日付になること / JST 00:00 境界 / `run()` と同じ日を指すこと |
-| A4 | `scripts/fetch_fresh_odds.py` :186 | `now = datetime.now()` → `target_date` にも使用 | fresh odds 取得の基準時刻と対象日 | **直撃**。発走何分前かの判断に使う | **直撃** (同じ `now` から対象日も作る) | **A** | 対象日と基準時刻が同じ `now` から出ること / 日跨ぎ実行で両者が食い違わないこと |
-| A5 | `scripts/check_fresh_odds_health.py` :516 | `now = datetime.now()` → `date_str` にも使用 | 鮮度の健全性チェックの基準時刻・対象日 | 間接 (警告の要否) | **直撃** | **A** | 同上。`--check-after-time` との比較が JST で行われること |
-| A6 | `gui/app.py` `presetToday()` :2214 (JS `new Date()`) | ブラウザのローカル時刻 | 日付入力欄のプリセット。「今日」ボタン | なし | **直撃**。`setDates` が `from_date` / `to_date` を埋め、その値が `_run_render_in_venv64(from_date, to_date, ...)` にそのまま渡って生成窓になる | **A** | 「表示だけか、処理対象日を決めているか」で優先度が変わると指示されたので**実際に追跡して確認した**結果、後者だった。ただし値は入力欄に見えており利用者が直せるので、黙って決まる A1-A5 よりは弱い。修正案はサーバ応答に `today_jst` を載せて JS はそれを使う。テスト: UTC ホストを模したブラウザ時刻でプリセットが JST 日付になること |
+| A4 | `scripts/fetch_fresh_odds.py` :186 (と :279 の `mins_now`) | `now = datetime.now()` → `target_date` にも使用 | fresh odds 取得の基準時刻と対象日。**毎日 09:00 起動** | **直撃**。発走何分前かの判断に使う | **直撃** (同じ `now` から対象日も作る) | **A** ★ **ホスト / OS の TZ を変える前に必須** (変えた瞬間に発走前/後の判定がずれ、post-start 汚染が再発する)。A1 と同じ `jst_now_naive()` 型ヘルパで直すのがよい | 対象日と基準時刻が同じ `now` から出ること / 日跨ぎ実行で両者が食い違わないこと |
+| A5 | `scripts/check_fresh_odds_health.py` :516 | `now = datetime.now()` → `date_str` にも使用 | 鮮度の健全性チェックの基準時刻・対象日。**毎日 09:15 起動** | 間接 (警告の要否) | **直撃** | **A** ★ **ホスト / OS の TZ を変える前に必須**。A4 に同乗 | 同上。`--check-after-time` との比較が JST で行われること |
+| A6 | `gui/app.py` `presetToday()` :2219, :2223 (JS `new Date()`) | ブラウザのローカル時刻 | 日付入力欄のプリセット。「今日」ボタン | なし | **直撃**。`setDates` が `from_date` / `to_date` を埋め、その値が `_run_render_in_venv64(from_date, to_date, ...)` にそのまま渡って生成窓になる | **A** | 「表示だけか、処理対象日を決めているか」で優先度が変わると指示されたので**実際に追跡して確認した**結果、後者だった。ただし値は入力欄に見えており利用者が直せるので、黙って決まる A1-A5 よりは弱い。修正案はサーバ応答に `today_jst` を載せて JS はそれを使う。テスト: UTC ホストを模したブラウザ時刻でプリセットが JST 日付になること |
+| A7 | `web/generator.py` :491 (`is_buy_candidate(..., now=datetime.now())`) | naive local | 買い候補判定のオッズ鮮度 (`max_odds_age_min`)。`odds_fetched_at` との差で「古いオッズ」を落とす | **直撃**。鮮度の判定そのもの。`odds_fetched_at` も naive local で書かれているので TZ が変わらない限り両辺は揃うが、TZ を変えると取得時と判定時で意味がずれる | なし | **A** (2026-09-25 のレビューで漏れを指摘) | A4 と同じヘルパで両辺を揃える。取得時 TZ ≠ 判定時 TZ のケースを注入で |
+| A8 | `gui/app.py` :437, :441 (`now=datetime.now()` / `odds_age_minutes(fetched_at, datetime.now())`) | naive local | GUI の買い候補判定と「オッズ何分前」表示 | A7 と同じ (GUI 側) | なし | **A** (同上) | A7 と同時に |
 
 ## 未対応 — 優先度 B (対象日を決める)
 
 | # | file / function | いまの取得方法 | 用途 | PIT 影響 | 対象日決定への影響 | 優先 | 修正前に必要なテスト |
 |---|---|---|---|---|---|---|---|
 | B1 | `scripts/fetch_results.py` `normalize_date` :24,26 | `datetime.now()` / `- 1 日` | `--date today` / `yesterday` の解決 | なし (結果取得) | **直撃**。`yesterday` は境界で 2 日ずれうる | **B** | `today` / `yesterday` の両方を注入で。JST 00:00 直後に `yesterday` が一昨日にならないこと |
-| B2 | `scripts/fresh_odds_coverage.py` :80, :150 | `datetime.now() - timedelta(days=n)` | `--last N` の窓の下限 | なし | 窓の端が 1 日ずれる | **B** | 注入で窓の下限を検証。`--last 1` が「今日」を含むこと |
+| B2 | `scripts/fresh_odds_coverage.py` :80, :151-152 | `datetime.now() - timedelta(days=n)` | `--last N` の窓の下限 | なし | 窓の端が 1 日ずれる | **B** | 注入で窓の下限を検証。`--last 1` が「今日」を含むこと |
 | B3 | `scripts/cleanup_placeholder_horse_rows.py` :44 | `today or date.today().strftime("%Y%m%d")` | 掃除対象日の既定 | なし | 直撃 (誤った日を掃除しうる) | **B** | 注入テスト。既に `today` 引数があるので容易 |
 | B4 | `scripts/f3_phase1_readiness.py` :362 | `min(date.today()..., "20260930")` | 集計窓の上限 | なし | 直撃 | **B** | 注入テスト |
 
@@ -64,6 +66,7 @@ branch `jst-date-unify-20260920` で対応済。main には未反映。
 |---|---|---|---|---|---|
 | C1 | `predictor/rules.py` :124 | `today or datetime.now().strftime("%Y-%m-%d")` | calibrator 互換表の `expires_on` 判定 | **C** | 現行は `expected_rules_version == RULES_VERSION` で一致するため **到達しない**。到達してもログのみ。`today` 引数あり |
 | C2 | 各 `analyze_*.py` / `backtest.py` / `monitor.py` の `generated_at` 等 | `datetime.now()` | 生成時刻の刻印 | **C** | 対象日ではないので統一の対象外。ただし「日付は JST / 時刻はローカル」の混在は読み手を混乱させるので、いずれ揃える |
+| C3 | `scripts/payout_finality_monitor.py` :70 | 独自の `JST = timezone(timedelta(hours=9))` | 確定払戻の滞留監視 (経過時間の起点) | **C** | 値は `jst.JST` と同じだが、単一出典から外れた定数 (data_div 対応で main に入ったもの)。評価系は凍結中なので、凍結解除後に `from jst import JST` へ |
 
 ## 進め方 (2026-09-22 時点の合意)
 
@@ -84,5 +87,12 @@ branch `jst-date-unify-20260920` で対応済。main には未反映。
 
 新しく「今日」を作るコードを書くときは、まず `jst.current_jst_date` /
 `current_jst_daystamp` を使う。使えない事情があるならこの表に行を足す。
-`tests/test_today_single_source.py` (branch `jst-date-unify-20260920`) の AST ガードが
-主要モジュールを見張っているので、対象を広げるときは同時に台帳も更新する。
+`tests/test_today_single_source.py` の AST ガードが主要モジュールを見張っているので、
+対象を広げるときは同時に台帳も更新する。
+
+**AST ガードの限界 (2026-09-25 のレビューで実測)**: ガードは「`today` / `day` / `date`
+などの名前に、時計から作った値を代入しているか」で見分ける。代入先の名前が違う
+(`now = date.today()...`) か、代入せずに式の中で直接使う形は**素通りする**。したがって
+ガードだけを防御線にしない。見張り対象に足すモジュールには、**挙動のテスト**
+(`now` を固定して日付を確かめる、OS の TZ を変えても同じ答えになる) を必ず一緒に置く。
+`config.py` は `tests/test_sealed_clock.py` がその役目を担う。
