@@ -26,6 +26,10 @@
    "market": 0.21351180680419896,
    "offset": 0.21348138623836102
   },
+  "t10_logloss_all": {
+   "market": 0.21193957914982547,
+   "offset": 0.21189072033885514
+  },
   "beta_group": {
    "coef_market": 0.9560963404440463,
    "coef_correction": 0.4996637467589598,
@@ -42,6 +46,11 @@
     1.7194573042029144
    ],
    "survives": false
+  },
+  "rejection_2_stale_only_win": {
+   "delta_fresh": -3.0420565837935287e-05,
+   "delta_all": -4.88588109703314e-05,
+   "triggered": false
   },
   "p_offset_over_p_market": {
    "n": 8279,
@@ -63,9 +72,7 @@
    "money_untestable_reason": "購入条件に該当 0 頭 (最低 100 頭)",
    "rejected_by": [],
    "overall_pass": false
-  },
-  "judgeable": true,
-  "same_conclusion_as_original_mixed": true
+  }
  },
  "raw_mixed": {
   "coverage": {
@@ -94,6 +101,10 @@
    "market": 0.21320939929157628,
    "offset": 0.21312335199762356
   },
+  "t10_logloss_all": {
+   "market": 0.21191715992908655,
+   "offset": 0.2118315019970335
+  },
   "beta_group": {
    "coef_market": 0.9647856395257834,
    "coef_correction": 0.7241669711264918,
@@ -110,6 +121,11 @@
     1.8854605486411145
    ],
    "survives": false
+  },
+  "rejection_2_stale_only_win": {
+   "delta_fresh": -8.604729395272903e-05,
+   "delta_all": -8.56579320530626e-05,
+   "triggered": false
   },
   "p_offset_over_p_market": {
    "n": 9999,
@@ -131,9 +147,7 @@
    "money_untestable_reason": "購入条件に該当 0 頭 (最低 100 頭)",
    "rejected_by": [],
    "overall_pass": false
-  },
-  "judgeable": true,
-  "same_conclusion_as_original_mixed": true
+  }
  },
  "raw_0B30": {
   "coverage": {
@@ -159,6 +173,10 @@
    "market": 0.21249996936411494,
    "offset": 0.21252251697751928
   },
+  "t10_logloss_all": {
+   "market": 0.21157546060836144,
+   "offset": 0.21157354855465202
+  },
   "beta_group": {
    "coef_market": 0.9521610350022207,
    "coef_correction": 0.35447510795064824,
@@ -175,6 +193,11 @@
     1.9091476609555058
    ],
    "survives": false
+  },
+  "rejection_2_stale_only_win": {
+   "delta_fresh": 2.2547613404338973e-05,
+   "delta_all": -1.912053709418604e-06,
+   "triggered": true
   },
   "p_offset_over_p_market": {
    "n": 3993,
@@ -198,9 +221,7 @@
     "古いオッズにだけ勝っている"
    ],
    "overall_pass": false
-  },
-  "judgeable": false,
-  "same_conclusion_as_original_mixed": null
+  }
  },
  "raw_0B31": {
   "coverage": {
@@ -229,6 +250,10 @@
    "market": 0.21192895518860333,
    "offset": 0.21183258175033337
   },
+  "t10_logloss_all": {
+   "market": 0.21190434987083429,
+   "offset": 0.21183049844629537
+  },
   "beta_group": {
    "coef_market": 0.9849460973312332,
    "coef_correction": 0.7304767104866676,
@@ -245,6 +270,11 @@
     1.9032770362505487
    ],
    "survives": false
+  },
+  "rejection_2_stale_only_win": {
+   "delta_fresh": -9.637343826995881e-05,
+   "delta_all": -7.385142453891769e-05,
+   "triggered": false
   },
   "p_offset_over_p_market": {
    "n": 9583,
@@ -266,9 +296,7 @@
    "money_untestable_reason": "購入条件に該当 0 頭 (最低 100 頭)",
    "rejected_by": [],
    "overall_pass": false
-  },
-  "judgeable": true,
-  "same_conclusion_as_original_mixed": true
+  }
  },
  "matched_same_state": {
   "coverage": {
@@ -293,6 +321,10 @@
    "market": 0.21028596110317524,
    "offset": 0.21079327375172846
   },
+  "t10_logloss_all": {
+   "market": 0.21028596110317524,
+   "offset": 0.21079327375172846
+  },
   "beta_group": {
    "coef_market": 1.0600145876322693,
    "coef_correction": -1.9523012912592168,
@@ -309,6 +341,11 @@
     3.2139435045840807
    ],
    "survives": false
+  },
+  "rejection_2_stale_only_win": {
+   "delta_fresh": 0.0005073126485532209,
+   "delta_all": 0.0005073126485532209,
+   "triggered": false
   },
   "p_offset_over_p_market": {
    "n": 451,
@@ -330,8 +367,6 @@
    "money_untestable_reason": "購入条件に該当 0 頭 (最低 100 頭)",
    "rejected_by": [],
    "overall_pass": false
-  },
-  "judgeable": false,
-  "same_conclusion_as_original_mixed": null
+  }
  }
 }

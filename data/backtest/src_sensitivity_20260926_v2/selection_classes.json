@@ -8,6 +8,7 @@
      "source": "0B30",
      "file": "0B30_2026080201010401_1785631503.jvd",
      "received": "2026-08-02T09:45:03",
+     "received_origin": "mtime_live",
      "announced": "08020944",
      "votes": 86725,
      "n_horses": 14
@@ -16,6 +17,7 @@
      "source": "0B31",
      "file": "0B31_2026080201010401_1785631202.jvd",
      "received": "2026-08-02T09:40:02",
+     "received_origin": "mtime_live",
      "announced": "08020939",
      "votes": 76295,
      "n_horses": 14
@@ -27,6 +29,7 @@
      "source": "0B30",
      "file": "0B30_2026080201010402_1785633302.jvd",
      "received": "2026-08-02T10:15:02",
+     "received_origin": "mtime_live",
      "announced": "08021014",
      "votes": 79794,
      "n_horses": 14
@@ -35,6 +38,7 @@
      "source": "0B31",
      "file": "0B31_2026080201010402_1785633002.jvd",
      "received": "2026-08-02T10:10:02",
+     "received_origin": "mtime_live",
      "announced": "08021009",
      "votes": 68456,
      "n_horses": 14
@@ -46,6 +50,7 @@
      "source": "0B30",
      "file": "0B30_2026080201010403_1785635103.jvd",
      "received": "2026-08-02T10:45:03",
+     "received_origin": "mtime_live",
      "announced": "08021044",
      "votes": 78437,
      "n_horses": 11
@@ -54,6 +59,7 @@
      "source": "0B31",
      "file": "0B31_2026080201010403_1785634803.jvd",
      "received": "2026-08-02T10:40:03",
+     "received_origin": "mtime_live",
      "announced": "08021039",
      "votes": 69519,
      "n_horses": 11
@@ -70,6 +76,7 @@
      "source": "0B30",
      "file": "0B30_2026080804020503_1786152596.jvd",
      "received": "2026-08-08T10:29:56",
+     "received_origin": "mtime_live",
      "announced": "08081029",
      "votes": 161532,
      "n_horses": 12
@@ -78,6 +85,7 @@
      "source": "0B31",
      "file": "0B31_2026080804020503_1786152566.jvd",
      "received": "2026-08-08T10:29:26",
+     "received_origin": "mtime_live",
      "announced": "08081029",
      "votes": 162165,
      "n_horses": 12
@@ -89,6 +97,7 @@
      "source": "0B30",
      "file": "0B30_2026080807020507_1786170602.jvd",
      "received": "2026-08-08T15:30:02",
+     "received_origin": "mtime_live",
      "announced": "08081529",
      "votes": 167654,
      "n_horses": 8
@@ -97,6 +106,7 @@
      "source": "0B31",
      "file": "0B31_2026080807020507_1786170607.jvd",
      "received": "2026-08-08T15:30:07",
+     "received_origin": "mtime_live",
      "announced": "08081529",
      "votes": 170366,
      "n_horses": 8
@@ -108,6 +118,7 @@
      "source": "0B30",
      "file": "0B30_2026081604020808_1786863007.jvd",
      "received": "2026-08-16T15:50:07",
+     "received_origin": "mtime_live",
      "announced": "08161549",
      "votes": 80303,
      "n_horses": 13
@@ -116,6 +127,7 @@
      "source": "0B31",
      "file": "0B31_2026081604020808_1786863002.jvd",
      "received": "2026-08-16T15:50:02",
+     "received_origin": "mtime_live",
      "announced": "08161549",
      "votes": 76897,
      "n_horses": 13
@@ -132,6 +144,7 @@
      "source": "0B30",
      "file": "0B30_2026080801010508_1786164002.jvd",
      "received": "2026-08-08T13:40:02",
+     "received_origin": "mtime_live",
      "announced": "08081339",
      "votes": 191959,
      "n_horses": 16
@@ -140,6 +153,7 @@
      "source": "0B31",
      "file": "0B31_2026080801010508_1786164002.jvd",
      "received": "2026-08-08T13:40:02",
+     "received_origin": "mtime_live",
      "announced": "08081339",
      "votes": 191959,
      "n_horses": 16
@@ -151,6 +165,7 @@
      "source": "0B30",
      "file": "0B30_2026080801010511_1786169402.jvd",
      "received": "2026-08-08T15:10:02",
+     "received_origin": "mtime_live",
      "announced": "08081509",
      "votes": 988031,
      "n_horses": 11
@@ -159,6 +174,7 @@
      "source": "0B31",
      "file": "0B31_2026080801010511_1786169402.jvd",
      "received": "2026-08-08T15:10:02",
+     "received_origin": "mtime_live",
      "announced": "08081509",
      "votes": 988031,
      "n_horses": 11
@@ -170,6 +186,7 @@
      "source": "0B30",
      "file": "0B30_2026080804020505_1786156202.jvd",
      "received": "2026-08-08T11:30:02",
+     "received_origin": "mtime_live",
      "announced": "08081129",
      "votes": 70624,
      "n_horses": 15
@@ -178,6 +195,7 @@
      "source": "0B31",
      "file": "0B31_2026080804020505_1786156202.jvd",
      "received": "2026-08-08T11:30:02",
+     "received_origin": "mtime_live",
      "announced": "08081129",
      "votes": 70624,
      "n_horses": 15
@@ -200,6 +218,7 @@
      "source": "0B31",
      "file": "0B31_2026050904010302_1778288789.jvd",
      "received": "2026-05-09T10:06:29",
+     "received_origin": "epoch_backfill",
      "announced": "05091006",
      "votes": 62727,
      "n_horses": 10
@@ -212,6 +231,7 @@
      "source": "0B31",
      "file": "0B31_2026050904010303_1778290281.jvd",
      "received": "2026-05-09T10:31:21",
+     "received_origin": "epoch_backfill",
      "announced": "05091030",
      "votes": 40137,
      "n_horses": 15

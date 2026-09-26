@@ -1,0 +1,197 @@
+{
+ "base_fresh_races": 626,
+ "base_conclusion": {
+  "primary_pass": false,
+  "money": null,
+  "ratio_ge_1_75_zero": true,
+  "rejected_by": []
+ },
+ "by_threshold": {
+  "40%": {
+   "original_mixed": {
+    "fresh_races": 626,
+    "share": 1.0,
+    "judged": true,
+    "same_conclusion": true,
+    "differs_in": []
+   },
+   "raw_mixed": {
+    "fresh_races": 757,
+    "share": 1.2093,
+    "judged": true,
+    "same_conclusion": true,
+    "differs_in": []
+   },
+   "raw_0B30": {
+    "fresh_races": 300,
+    "share": 0.4792,
+    "judged": true,
+    "same_conclusion": false,
+    "differs_in": [
+     "rejected_by"
+    ]
+   },
+   "raw_0B31": {
+    "fresh_races": 725,
+    "share": 1.1581,
+    "judged": true,
+    "same_conclusion": true,
+    "differs_in": []
+   },
+   "matched_same_state": {
+    "fresh_races": 34,
+    "share": 0.0543,
+    "judged": false,
+    "same_conclusion": null,
+    "differs_in": null
+   }
+  },
+  "45%": {
+   "original_mixed": {
+    "fresh_races": 626,
+    "share": 1.0,
+    "judged": true,
+    "same_conclusion": true,
+    "differs_in": []
+   },
+   "raw_mixed": {
+    "fresh_races": 757,
+    "share": 1.2093,
+    "judged": true,
+    "same_conclusion": true,
+    "differs_in": []
+   },
+   "raw_0B30": {
+    "fresh_races": 300,
+    "share": 0.4792,
+    "judged": true,
+    "same_conclusion": false,
+    "differs_in": [
+     "rejected_by"
+    ]
+   },
+   "raw_0B31": {
+    "fresh_races": 725,
+    "share": 1.1581,
+    "judged": true,
+    "same_conclusion": true,
+    "differs_in": []
+   },
+   "matched_same_state": {
+    "fresh_races": 34,
+    "share": 0.0543,
+    "judged": false,
+    "same_conclusion": null,
+    "differs_in": null
+   }
+  },
+  "50%": {
+   "original_mixed": {
+    "fresh_races": 626,
+    "share": 1.0,
+    "judged": true,
+    "same_conclusion": true,
+    "differs_in": []
+   },
+   "raw_mixed": {
+    "fresh_races": 757,
+    "share": 1.2093,
+    "judged": true,
+    "same_conclusion": true,
+    "differs_in": []
+   },
+   "raw_0B30": {
+    "fresh_races": 300,
+    "share": 0.4792,
+    "judged": false,
+    "same_conclusion": null,
+    "differs_in": null
+   },
+   "raw_0B31": {
+    "fresh_races": 725,
+    "share": 1.1581,
+    "judged": true,
+    "same_conclusion": true,
+    "differs_in": []
+   },
+   "matched_same_state": {
+    "fresh_races": 34,
+    "share": 0.0543,
+    "judged": false,
+    "same_conclusion": null,
+    "differs_in": null
+   }
+  },
+  "55%": {
+   "original_mixed": {
+    "fresh_races": 626,
+    "share": 1.0,
+    "judged": true,
+    "same_conclusion": true,
+    "differs_in": []
+   },
+   "raw_mixed": {
+    "fresh_races": 757,
+    "share": 1.2093,
+    "judged": true,
+    "same_conclusion": true,
+    "differs_in": []
+   },
+   "raw_0B30": {
+    "fresh_races": 300,
+    "share": 0.4792,
+    "judged": false,
+    "same_conclusion": null,
+    "differs_in": null
+   },
+   "raw_0B31": {
+    "fresh_races": 725,
+    "share": 1.1581,
+    "judged": true,
+    "same_conclusion": true,
+    "differs_in": []
+   },
+   "matched_same_state": {
+    "fresh_races": 34,
+    "share": 0.0543,
+    "judged": false,
+    "same_conclusion": null,
+    "differs_in": null
+   }
+  }
+ },
+ "conclusion_parts": {
+  "original_mixed": {
+   "primary_pass": false,
+   "money": null,
+   "ratio_ge_1_75_zero": true,
+   "rejected_by": []
+  },
+  "raw_mixed": {
+   "primary_pass": false,
+   "money": null,
+   "ratio_ge_1_75_zero": true,
+   "rejected_by": []
+  },
+  "raw_0B30": {
+   "primary_pass": false,
+   "money": null,
+   "ratio_ge_1_75_zero": true,
+   "rejected_by": [
+    "古いオッズにだけ勝っている"
+   ]
+  },
+  "raw_0B31": {
+   "primary_pass": false,
+   "money": null,
+   "ratio_ge_1_75_zero": true,
+   "rejected_by": []
+  },
+  "matched_same_state": {
+   "primary_pass": false,
+   "money": null,
+   "ratio_ge_1_75_zero": true,
+   "rejected_by": []
+  }
+ }
+}

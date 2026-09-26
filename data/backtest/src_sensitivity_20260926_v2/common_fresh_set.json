@@ -2,6 +2,17 @@
  "raw_mixed": {
   "n_races": 626,
   "races_with_identical_t10_market": 626,
+  "races_with_different_t10_market": 0,
+  "different_races_by_month": {},
+  "paired_delta_beta": {
+   "delta_beta": 0.0,
+   "ci95": [
+    0.0,
+    0.0
+   ],
+   "n_boot": 300,
+   "method": "race-block bootstrap (eval_stats.block_boot, SEED 固定)"
+  },
   "original_mixed": {
    "n_horses": 8279,
    "beta": 0.4996637467589598,
@@ -44,6 +55,19 @@
  "raw_0B30": {
   "n_races": 299,
   "races_with_identical_t10_market": 257,
+  "races_with_different_t10_market": 42,
+  "different_races_by_month": {
+   "08": 42
+  },
+  "paired_delta_beta": {
+   "delta_beta": -0.006373691046222707,
+   "ci95": [
+    -0.02824283221497037,
+    0.014556667997090988
+   ],
+   "n_boot": 300,
+   "method": "race-block bootstrap (eval_stats.block_boot, SEED 固定)"
+  },
   "original_mixed": {
    "n_horses": 3975,
    "beta": 0.42477732537882024,
@@ -86,6 +110,19 @@
  "raw_0B31": {
   "n_races": 594,
   "races_with_identical_t10_market": 403,
+  "races_with_different_t10_market": 191,
+  "different_races_by_month": {
+   "08": 191
+  },
+  "paired_delta_beta": {
+   "delta_beta": -0.04893578954774447,
+   "ci95": [
+    -0.07938546620656028,
+    -0.009258989406492946
+   ],
+   "n_boot": 300,
+   "method": "race-block bootstrap (eval_stats.block_boot, SEED 固定)"
+  },
   "original_mixed": {
    "n_horses": 7863,
    "beta": 0.537238291707359,
@@ -128,6 +165,17 @@
  "matched_same_state": {
   "n_races": 34,
   "races_with_identical_t10_market": 34,
+  "races_with_different_t10_market": 0,
+  "different_races_by_month": {},
+  "paired_delta_beta": {
+   "delta_beta": 0.0,
+   "ci95": [
+    0.0,
+    0.0
+   ],
+   "n_boot": 300,
+   "method": "race-block bootstrap (eval_stats.block_boot, SEED 固定)"
+  },
   "original_mixed": {
    "n_horses": 451,
    "beta": -1.9523012912592168,
