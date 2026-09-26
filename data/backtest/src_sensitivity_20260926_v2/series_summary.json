@@ -1,0 +1,372 @@
+{
+ "original_mixed": {
+  "coverage": {
+   "counts": {
+    "no_t10": 239,
+    "analysed": 931,
+    "t10_fresh": 626,
+    "runner_set_mismatch": 6
+   },
+   "all": {
+    "n_races": 931,
+    "n_horses": 12533
+   },
+   "fresh_le_30m": {
+    "n_races": 626,
+    "n_horses": 8279
+   },
+   "fresh_horses_by_month": {
+    "202605": 500,
+    "202606": 1878,
+    "202607": 1670,
+    "202608": 4231
+   }
+  },
+  "t10_logloss_fresh": {
+   "market": 0.21351180680419896,
+   "offset": 0.21348138623836102
+  },
+  "t10_logloss_all": {
+   "market": 0.21193957914982547,
+   "offset": 0.21189072033885514
+  },
+  "beta_group": {
+   "coef_market": 0.9560963404440463,
+   "coef_correction": 0.4996637467589598,
+   "ci95": [
+    -0.8279035767100236,
+    1.7258532794886776
+   ],
+   "pass": false
+  },
+  "rejection_1_price_polynomial": {
+   "coef_correction": 0.4923053944814648,
+   "coef_correction_ci95": [
+    -0.8641787466477715,
+    1.7194573042029144
+   ],
+   "survives": false
+  },
+  "rejection_2_stale_only_win": {
+   "delta_fresh": -3.0420565837935287e-05,
+   "delta_all": -4.88588109703314e-05,
+   "triggered": false
+  },
+  "p_offset_over_p_market": {
+   "n": 8279,
+   "max": 1.7379975499361708,
+   "p95": 1.1322708642196104,
+   "p99": 1.2277057421555215,
+   "ge_1_25": 57,
+   "ge_1_75": 0
+  },
+  "purchase_criteria": {
+   "edge_pt": 0.05,
+   "n_bets": 0,
+   "testable": false,
+   "money_pass": null
+  },
+  "verdict": {
+   "primary": false,
+   "money": null,
+   "money_untestable_reason": "購入条件に該当 0 頭 (最低 100 頭)",
+   "rejected_by": [],
+   "overall_pass": false
+  }
+ },
+ "raw_mixed": {
+  "coverage": {
+   "counts": {
+    "no_t10": 107,
+    "analysed": 1062,
+    "t10_fresh": 757,
+    "runner_set_mismatch": 7
+   },
+   "all": {
+    "n_races": 1062,
+    "n_horses": 14253
+   },
+   "fresh_le_30m": {
+    "n_races": 757,
+    "n_horses": 9999
+   },
+   "fresh_horses_by_month": {
+    "202605": 500,
+    "202606": 1878,
+    "202607": 3390,
+    "202608": 4231
+   }
+  },
+  "t10_logloss_fresh": {
+   "market": 0.21320939929157628,
+   "offset": 0.21312335199762356
+  },
+  "t10_logloss_all": {
+   "market": 0.21191715992908655,
+   "offset": 0.2118315019970335
+  },
+  "beta_group": {
+   "coef_market": 0.9647856395257834,
+   "coef_correction": 0.7241669711264918,
+   "ci95": [
+    -0.43879839419433464,
+    1.8751474360650786
+   ],
+   "pass": false
+  },
+  "rejection_1_price_polynomial": {
+   "coef_correction": 0.7192920659819536,
+   "coef_correction_ci95": [
+    -0.4143882769303237,
+    1.8854605486411145
+   ],
+   "survives": false
+  },
+  "rejection_2_stale_only_win": {
+   "delta_fresh": -8.604729395272903e-05,
+   "delta_all": -8.56579320530626e-05,
+   "triggered": false
+  },
+  "p_offset_over_p_market": {
+   "n": 9999,
+   "max": 1.7379975499361708,
+   "p95": 1.1340564049869581,
+   "p99": 1.229591762929774,
+   "ge_1_25": 74,
+   "ge_1_75": 0
+  },
+  "purchase_criteria": {
+   "edge_pt": 0.05,
+   "n_bets": 0,
+   "testable": false,
+   "money_pass": null
+  },
+  "verdict": {
+   "primary": false,
+   "money": null,
+   "money_untestable_reason": "購入条件に該当 0 頭 (最低 100 頭)",
+   "rejected_by": [],
+   "overall_pass": false
+  }
+ },
+ "raw_0B30": {
+  "coverage": {
+   "counts": {
+    "no_t10": 858,
+    "analysed": 315,
+    "t10_fresh": 300,
+    "runner_set_mismatch": 3
+   },
+   "all": {
+    "n_races": 315,
+    "n_horses": 4203
+   },
+   "fresh_le_30m": {
+    "n_races": 300,
+    "n_horses": 3993
+   },
+   "fresh_horses_by_month": {
+    "202608": 3993
+   }
+  },
+  "t10_logloss_fresh": {
+   "market": 0.21249996936411494,
+   "offset": 0.21252251697751928
+  },
+  "t10_logloss_all": {
+   "market": 0.21157546060836144,
+   "offset": 0.21157354855465202
+  },
+  "beta_group": {
+   "coef_market": 0.9521610350022207,
+   "coef_correction": 0.35447510795064824,
+   "ci95": [
+    -1.272529611215048,
+    1.9001653411642694
+   ],
+   "pass": false
+  },
+  "rejection_1_price_polynomial": {
+   "coef_correction": 0.3558487162738267,
+   "coef_correction_ci95": [
+    -1.2244279285649464,
+    1.9091476609555058
+   ],
+   "survives": false
+  },
+  "rejection_2_stale_only_win": {
+   "delta_fresh": 2.2547613404338973e-05,
+   "delta_all": -1.912053709418604e-06,
+   "triggered": true
+  },
+  "p_offset_over_p_market": {
+   "n": 3993,
+   "max": 1.7379975499361708,
+   "p95": 1.138785035699625,
+   "p99": 1.225995198744943,
+   "ge_1_25": 29,
+   "ge_1_75": 0
+  },
+  "purchase_criteria": {
+   "edge_pt": 0.05,
+   "n_bets": 0,
+   "testable": false,
+   "money_pass": null
+  },
+  "verdict": {
+   "primary": false,
+   "money": null,
+   "money_untestable_reason": "購入条件に該当 0 頭 (最低 100 頭)",
+   "rejected_by": [
+    "古いオッズにだけ勝っている"
+   ],
+   "overall_pass": false
+  }
+ },
+ "raw_0B31": {
+  "coverage": {
+   "counts": {
+    "no_t10": 107,
+    "analysed": 1062,
+    "t10_fresh": 725,
+    "runner_set_mismatch": 7
+   },
+   "all": {
+    "n_races": 1062,
+    "n_horses": 14253
+   },
+   "fresh_le_30m": {
+    "n_races": 725,
+    "n_horses": 9583
+   },
+   "fresh_horses_by_month": {
+    "202605": 500,
+    "202606": 1878,
+    "202607": 3390,
+    "202608": 3815
+   }
+  },
+  "t10_logloss_fresh": {
+   "market": 0.21192895518860333,
+   "offset": 0.21183258175033337
+  },
+  "t10_logloss_all": {
+   "market": 0.21190434987083429,
+   "offset": 0.21183049844629537
+  },
+  "beta_group": {
+   "coef_market": 0.9849460973312332,
+   "coef_correction": 0.7304767104866676,
+   "ci95": [
+    -0.42720084233752925,
+    1.9688562162459697
+   ],
+   "pass": false
+  },
+  "rejection_1_price_polynomial": {
+   "coef_correction": 0.7352196456557571,
+   "coef_correction_ci95": [
+    -0.40660398147021026,
+    1.9032770362505487
+   ],
+   "survives": false
+  },
+  "rejection_2_stale_only_win": {
+   "delta_fresh": -9.637343826995881e-05,
+   "delta_all": -7.385142453891769e-05,
+   "triggered": false
+  },
+  "p_offset_over_p_market": {
+   "n": 9583,
+   "max": 1.7432494370583764,
+   "p95": 1.1335198699844515,
+   "p99": 1.2283513844333438,
+   "ge_1_25": 70,
+   "ge_1_75": 0
+  },
+  "purchase_criteria": {
+   "edge_pt": 0.05,
+   "n_bets": 0,
+   "testable": false,
+   "money_pass": null
+  },
+  "verdict": {
+   "primary": false,
+   "money": null,
+   "money_untestable_reason": "購入条件に該当 0 頭 (最低 100 頭)",
+   "rejected_by": [],
+   "overall_pass": false
+  }
+ },
+ "matched_same_state": {
+  "coverage": {
+   "counts": {
+    "no_t10": 1142,
+    "analysed": 34,
+    "t10_fresh": 34
+   },
+   "all": {
+    "n_races": 34,
+    "n_horses": 451
+   },
+   "fresh_le_30m": {
+    "n_races": 34,
+    "n_horses": 451
+   },
+   "fresh_horses_by_month": {
+    "202608": 451
+   }
+  },
+  "t10_logloss_fresh": {
+   "market": 0.21028596110317524,
+   "offset": 0.21079327375172846
+  },
+  "t10_logloss_all": {
+   "market": 0.21028596110317524,
+   "offset": 0.21079327375172846
+  },
+  "beta_group": {
+   "coef_market": 1.0600145876322693,
+   "coef_correction": -1.9523012912592168,
+   "ci95": [
+    -7.275960353852936,
+    3.5666219220075006
+   ],
+   "pass": false
+  },
+  "rejection_1_price_polynomial": {
+   "coef_correction": -2.767480093146209,
+   "coef_correction_ci95": [
+    -8.512310830514664,
+    3.2139435045840807
+   ],
+   "survives": false
+  },
+  "rejection_2_stale_only_win": {
+   "delta_fresh": 0.0005073126485532209,
+   "delta_all": 0.0005073126485532209,
+   "triggered": false
+  },
+  "p_offset_over_p_market": {
+   "n": 451,
+   "max": 1.429486108558794,
+   "p95": 1.1526731366778138,
+   "p99": 1.239852274263456,
+   "ge_1_25": 4,
+   "ge_1_75": 0
+  },
+  "purchase_criteria": {
+   "edge_pt": 0.05,
+   "n_bets": 0,
+   "testable": false,
+   "money_pass": null
+  },
+  "verdict": {
+   "primary": false,
+   "money": null,
+   "money_untestable_reason": "購入条件に該当 0 頭 (最低 100 頭)",
+   "rejected_by": [],
+   "overall_pass": false
+  }
+ }
+}

@@ -1,0 +1,109 @@
+{
+ "created_at": "2026-09-26T22:13:10",
+ "purpose": "Phase 0.5-4B の T−10 市場の取得元に対する感度分析 (再判定でも確認的検定でもない)",
+ "window": [
+  "20260509",
+  "20260831"
+ ],
+ "series": [
+  "original_mixed",
+  "raw_mixed",
+  "raw_0B30",
+  "raw_0B31",
+  "matched_same_state"
+ ],
+ "script": "scripts/t10_source_sensitivity.py",
+ "script_sha256": "6e13f098943d052938581cb5ce81a19dd65420f83356565f3539b381f6306942",
+ "worktree_head_at_run": "de89d32ef4210dfc90f320374af30de58524ec3c",
+ "worktree_porcelain_at_run": "",
+ "production_root": "C:\\Users\\kizun\\dev\\keiba-yosou",
+ "production_module_git_head": "491d2e68f2af196320931dda2693c84209172e31",
+ "production_tracked_changes_at_run": "",
+ "production_module_path": {
+  "market_offset_eval": "C:\\Users\\kizun\\dev\\keiba-yosou\\scripts\\market_offset_eval.py",
+  "pit_t10": "C:\\Users\\kizun\\dev\\keiba-yosou\\predictor\\pit_t10.py",
+  "eval_stats": "C:\\Users\\kizun\\dev\\keiba-yosou\\predictor\\eval_stats.py",
+  "ingest": "C:\\Users\\kizun\\dev\\keiba-yosou\\jvlink_client\\ingest.py",
+  "parser": "C:\\Users\\kizun\\dev\\keiba-yosou\\jvlink_client\\parser.py"
+ },
+ "production_equivalence_checked_races": 1176,
+ "production_equivalence_both_none": 239,
+ "production_equivalence_mismatched_races": 0,
+ "production_equivalence_mismatch_examples": [],
+ "model": {
+  "predictor/market_offset_model.txt": "fd84304d152a40c488d67e721e9f8bd0354b16eb9a29d82860654c3a258d0484",
+  "predictor/market_offset_model.meta.json": "e32abe26e8f7723ca269730c9d413821652b6496176338eef4997b3641cba202",
+  "predictor/fundamental_model.txt": "3eae1403ffa6098792c80aa7cc80b1955ad7ec3acc8d92636527d349eccd6670",
+  "predictor/fundamental_model.meta.json": "943ea9d851029101217bc05ae8df61634ef60dffcb885a056bc33b74dde0c33e"
+ },
+ "db_snapshot": {
+  "git_sha": "491d2e68f2af196320931dda2693c84209172e31",
+  "git_dirty": false,
+  "code_version": "491d2e68f2af",
+  "data_version": "44292:3527feed56",
+  "from_date": "20260509",
+  "to_date": "20260831",
+  "prereg": "docs/PHASE05_PREREG.md",
+  "run_index": 0,
+  "n_boot_primary": 300,
+  "baseline_log_loss": 0.21351,
+  "max_lead_minutes": 30,
+  "sealed": {
+   "sealed_from": null,
+   "sealed_active": false,
+   "requested_to": "20260831",
+   "clamped": false,
+   "allow_sealed": false
+  },
+  "buy_edge_pt": 0.05,
+  "market_features": 0
+ },
+ "raw_received_at_origin": "0B31 で 20260628 以前 = ファイル名の epoch (backfill と同じ)、それ以外 = ファイルの mtime 秒未満切り捨て (ライブの ingest と同じ)",
+ "raw_absent_rule": "odds > 0 の馬が 0 頭の O1 は本番で行を作らないので存在しないとみなす",
+ "raw_info": {
+  "0B30_files": 6489,
+  "0B30_mtime_live": 6489,
+  "0B30_o1_records": 6489,
+  "0B30_mtime_differs_from_name": 78,
+  "0B31_name_not_matched": 1980,
+  "0B31_files": 4032,
+  "0B31_epoch_backfill": 2325,
+  "0B31_o1_records": 4032,
+  "0B31_mtime_differs_from_name": 18,
+  "0B31_mtime_live": 1707
+ },
+ "raw_mixed_tie_rule": "同じ秒に両方の取得元がある場合は単勝票数合計の多い方、同数なら 0B31",
+ "pit_rule": "received <= decision_time (predictor.pit_t10.decision_time、発走時刻変更の既知性込み)",
+ "reading": "coverage 閾値 40/45/50/55% の感度として読む。50% は事前固定を git で証明できないため判定の根拠にしない (2026-09-26 CHAT)",
+ "consumed_windows_note": "strategy_dev 窓 (20260509〜20260831) を追加で観察した。config.CONSUMED_WINDOWS への反映は JST ブランチ解凍後",
+ "selection_audit_counts": {
+  "raw_mixed": {
+   "selected_0B31_epoch_backfill": 440,
+   "selected_0B31_mtime_live": 392,
+   "selected_0B30_mtime_live": 237,
+   "same_second_both_sources": 29
+  },
+  "raw_0B30": {
+   "selected_0B30_mtime_live": 318
+  },
+  "raw_0B31": {
+   "selected_0B31_epoch_backfill": 440,
+   "selected_0B31_mtime_live": 629
+  },
+  "matched_same_state": {
+   "one_source_missing": 858,
+   "different_announced": 281,
+   "different_state": 3,
+   "matched_same_state": 34,
+   "selected_0B30=0B31_mtime_live": 34
+  }
+ },
+ "reproduction_of_4B": {
+  "ref": "data/backtest/20260919_phase05_4B_market_offset.json",
+  "sets_equal": true,
+  "beta_ref": 0.4996637467589598,
+  "beta_now": 0.4996637467589598,
+  "logloss_offset_ref": 0.21348138623836102,
+  "logloss_offset_now": 0.21348138623836102
+ }
+}
