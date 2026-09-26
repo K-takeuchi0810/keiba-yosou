@@ -180,6 +180,23 @@ keiba-yosou のパーサで読む)
   矛盾が無い) / `same_total_discordant` (票数合計は同じでオッズが違う。clean な一致の集合から
   外すが、別表で残す) / `different_state` (同じ発表時刻でも票数合計が違う)
 
+### 3-ter. 7 月前半の 0B31 が odds_snapshots に無い (感度分析 ③ で発見、2026-09-26)
+
+**DATA_PROVENANCE_DEFECT / RAW_RECOVERABLE / REQUIRES_FIX_BEFORE_PIT_DATASET_FREEZE**
+
+| 項目 | 内容 |
+|---|---|
+| 対象日 | 2026-07-04、07-05、07-11、07-12 |
+| raw 0B31 | 368 ファイルある (`data/raw/0B31/`) |
+| DB `odds_snapshots` | この 4 日は 0 行 |
+| 原因の候補 | backfill (`scripts/backfill_odds_snapshots.py`) の在庫が 6/28 まで、ライブの取り込み (0B31 → odds_snapshots) が 7/18 から。その間の raw が一度も取り込まれていない (未確定) |
+| 復元 | raw が残っているので復元できる。**まだ DB には埋め戻していない** |
+| 評価への影響 | 4B の original の結果は、当時の DB の状態を正しく再現している (感度分析の original_mixed が 4B と完全一致)。感度分析では raw の系列として別に評価し、鮮度内の評価に 131 レースが加わった (`docs/PHASE05_4B_SOURCE_SENSITIVITY.md`) |
+
+- 8 月の 0B31 も raw 978 本に対し DB は 697 (同じ秒の上書きと未取り込み)
+- **今すぐ DB を埋め直さない**。PIT データセットの凍結前に、同じ秒の上書き (3-bis) と合わせて、
+  保存の schema・ingest・backfill の方針を設計してから修復する
+
 ## 4. 削除の実害
 
 `reconcile_0b14_snapshot` は、最新の 0B14 の取得に含まれない行を、出走取消・騎手変更・
