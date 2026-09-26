@@ -1,0 +1,92 @@
+{
+ "created_at": "2026-09-26T21:27:38",
+ "purpose": "Phase 0.5-4B の T−10 市場の取得元に対する感度分析 (再判定ではない)",
+ "window": [
+  "20260509",
+  "20260831"
+ ],
+ "series": [
+  "original_mixed",
+  "raw_mixed",
+  "raw_0B30",
+  "raw_0B31",
+  "matched_same_state"
+ ],
+ "script": "scripts/t10_source_sensitivity.py",
+ "script_git_sha": "491d2e68f2af196320931dda2693c84209172e31",
+ "script_sha256": "50ee9d02c181a27d7af6b83de0295060a49fdeb8f47883d4a2fa6f71d6294577",
+ "prod_root": "C:\\Users\\kizun\\dev\\keiba-yosou",
+ "prod_git_sha": "491d2e68f2af196320931dda2693c84209172e31",
+ "model": {
+  "predictor/market_offset_model.txt": "fd84304d152a40c488d67e721e9f8bd0354b16eb9a29d82860654c3a258d0484",
+  "predictor/market_offset_model.meta.json": "e32abe26e8f7723ca269730c9d413821652b6496176338eef4997b3641cba202",
+  "predictor/fundamental_model.txt": "3eae1403ffa6098792c80aa7cc80b1955ad7ec3acc8d92636527d349eccd6670",
+  "predictor/fundamental_model.meta.json": "943ea9d851029101217bc05ae8df61634ef60dffcb885a056bc33b74dde0c33e"
+ },
+ "db_snapshot": {
+  "git_sha": "491d2e68f2af196320931dda2693c84209172e31",
+  "git_dirty": false,
+  "code_version": "491d2e68f2af",
+  "data_version": "44292:3527feed56",
+  "from_date": "20260509",
+  "to_date": "20260831",
+  "prereg": "docs/PHASE05_PREREG.md",
+  "run_index": 0,
+  "n_boot_primary": 300,
+  "baseline_log_loss": 0.21351,
+  "max_lead_minutes": 30,
+  "sealed": {
+   "sealed_from": null,
+   "sealed_active": false,
+   "requested_to": "20260831",
+   "clamped": false,
+   "allow_sealed": false
+  },
+  "buy_edge_pt": 0.05,
+  "market_features": 0
+ },
+ "raw_received_at_origin": "ファイル名の epoch (backfill_odds_snapshots と同じ)。mtime との食い違い件数は raw_info",
+ "raw_info": {
+  "0B30_files": 6489,
+  "0B30_o1_records": 6489,
+  "0B30_mtime_differs_from_name": 78,
+  "0B31_name_not_matched": 1980,
+  "0B31_files": 4032,
+  "0B31_o1_records": 4032,
+  "0B31_mtime_differs_from_name": 18
+ },
+ "raw_mixed_tie_rule": "同じ秒に両方の取得元がある場合は単勝票数合計の多い方、同数なら 0B31",
+ "pit_rule": "received <= decision_time (predictor.pit_t10.decision_time、発走時刻変更の既知性込み)",
+ "fixed_reading_rules": {
+  "judgeable": "鮮度内レース数 >= original_mixed の 50%",
+  "same_conclusion": "主要仮説の合否 / 金額判定 / 比>=1.75 が 0 頭か / 棄却条件 の 4 つが一致"
+ },
+ "selection_audit_counts": {
+  "raw_mixed": {
+   "selected_0B31": 832,
+   "selected_0B30": 237,
+   "same_second_both_sources": 28
+  },
+  "raw_0B30": {
+   "selected_0B30": 318
+  },
+  "raw_0B31": {
+   "selected_0B31": 1069
+  },
+  "matched_same_state": {
+   "one_source_missing": 858,
+   "different_announced": 281,
+   "different_state": 3,
+   "matched_same_state": 34,
+   "selected_0B31": 34
+  }
+ },
+ "reproduction_of_4B": {
+  "ref": "data/backtest/20260919_phase05_4B_market_offset.json",
+  "sets_equal": true,
+  "beta_ref": 0.4996637467589598,
+  "beta_now": 0.4996637467589598,
+  "logloss_offset_ref": 0.21348138623836102,
+  "logloss_offset_now": 0.21348138623836102
+ }
+}
