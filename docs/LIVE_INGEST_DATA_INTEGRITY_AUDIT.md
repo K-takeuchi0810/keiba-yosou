@@ -197,6 +197,22 @@ keiba-yosou のパーサで読む)
 - **今すぐ DB を埋め直さない**。PIT データセットの凍結前に、同じ秒の上書き (3-bis) と合わせて、
   保存の schema・ingest・backfill の方針を設計してから修復する
 
+### 3-quater. `backfill_announced_at.py` が同じ秒の発表時刻を別の取得元の値で上書きする (2026-09-26)
+
+**DATA_PROVENANCE_DEFECT / REQUIRES_FIX_BEFORE_PIT_DATASET_FREEZE** (感度分析のレビューで
+data-pipeline-engineer が発見、私が一次データで確認。コードはまだ直さない)
+
+- `scripts/backfill_announced_at.py` は raw を `0B31 → 0B30 → 0B11 → 0B12` の順に読み、
+  `UPDATE odds_snapshots SET announced_at=? WHERE (レース, 馬番, fetched_at)` で書く。
+  **条件に `source` が無い**ので、同じ取得秒に両方の取得元がある行は、後に読む 0B30 の値になる
+- 実例: 2026-08-23 札幌 9R、14:20:02。DB の行は source=0B31 (オッズも 0B31) だが
+  announced_at は `08231418`。raw の 0B31 は `08231419`、同じ秒の 0B30 は `08231418`
+- 照合キーはファイル名の epoch。fetched_at が mtime で epoch と違う行 (ライブの取り込み、±1 秒) は
+  照合できず、`--reset` 後なら NULL のまま残る
+- 3-bis の「同じ出自・同じ取得秒で発表時刻だけ 1 分違う 462 値」の **有力な仕組み** (全件の照合はしていない)
+- 影響: T−10 の選択は発表時刻を使わない (fetched_at だけ) ので選択は変わらない。ただし
+  `odds_observed_at` の PIT 監査 (発表時刻 ≤ 決定時刻) が、別の取得元の時刻で判定されうる
+
 ## 4. 削除の実害
 
 `reconcile_0b14_snapshot` は、最新の 0B14 の取得に含まれない行を、出走取消・騎手変更・
