@@ -100,6 +100,13 @@ PRODUCTION 2026 hold-out で **45% に大暴落** (収支 -6,310 円)。
 **「TEST robust = PRODUCTION robust」は成立しないことを実証**。月次監視 +
 四半期再選定でしか継続運用は不可能。
 
+### 5. 外部依存 (ai-builder) の互換確認 (2026-09-27)
+
+`db.py`・`jvlink_client/**`・取り込み (ingest)・DB schema・raw / odds の保存形式を変更する前に
+`docs/EXTERNAL_DEPENDENTS.md` を確認し、ai-builder との互換を確かめる。ai-builder は keiba-yosou の
+本番 checkout と DB を直接使っているため、影響を確認せずに変更しない。該当する変更のコミットか
+レビュー記録に `ai_builder_impact: none | tested | requires_followup` を必ず書く。
+
 ## 専門家 7 名
 
 | ID | 担当 |
