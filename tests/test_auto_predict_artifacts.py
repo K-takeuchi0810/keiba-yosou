@@ -119,9 +119,9 @@ def test_main_aborts_without_publishing_when_entries_missing(tmp_path, monkeypat
     2026-07-25 / 08-01 に全 36 レース「出走馬未取得」の空ページを publish して
     その日の予想を失った事故の回帰テスト。
     """
-    from datetime import date
+    from jst import current_jst_daystamp
 
-    today = date.today().strftime("%Y%m%d")
+    today = current_jst_daystamp()
     db = tmp_path / "t.db"
     _entry_db(db, days_scheduled=(today,)).close()
     monkeypatch.setattr(auto_predict, "DB_PATH", str(db))
@@ -143,9 +143,9 @@ def test_main_aborts_without_publishing_when_entries_missing(tmp_path, monkeypat
 
 def test_main_proceeds_when_entries_are_present(tmp_path, monkeypatch):
     """出走馬がそろっていればゲートを通過する (--dry-run で generator 前に停止)。"""
-    from datetime import date
+    from jst import current_jst_daystamp
 
-    today = date.today().strftime("%Y%m%d")
+    today = current_jst_daystamp()
     db = tmp_path / "t.db"
     _entry_db(db, days_with_entries=(today,)).close()
     monkeypatch.setattr(auto_predict, "DB_PATH", str(db))
@@ -169,10 +169,12 @@ def test_generates_today_only_not_tomorrow(tmp_path, monkeypatch):
     で、答え合わせにも使えていない)。翌日分は翌朝の起動で生成されるので
     取りこぼさない。
     """
-    from datetime import date, timedelta
+    from datetime import timedelta
 
-    today = date.today().strftime("%Y%m%d")
-    tomorrow = (date.today() + timedelta(days=1)).strftime("%Y%m%d")
+    from jst import current_jst_date, current_jst_daystamp
+
+    today = current_jst_daystamp()
+    tomorrow = (current_jst_date() + timedelta(days=1)).strftime("%Y%m%d")
     db = tmp_path / "t.db"
     # 今日も明日も開催日 (= 一括生成の条件が揃っている状態)
     _entry_db(db, days_with_entries=(today, tomorrow)).close()
@@ -240,9 +242,9 @@ def test_completion_message_reports_push_failure():
 
 def _abort_day(tmp_path, monkeypatch):
     """出走馬が未取り込みの開催日を仕立て、送信された本文を集める。"""
-    from datetime import date
+    from jst import current_jst_daystamp
 
-    today = date.today().strftime("%Y%m%d")
+    today = current_jst_daystamp()
     db = tmp_path / "t.db"
     _entry_db(db, days_scheduled=(today,)).close()
     monkeypatch.setattr(auto_predict, "DB_PATH", str(db))
@@ -284,9 +286,9 @@ def test_main_force_notify_sends_every_time(tmp_path, monkeypatch):
 
 def test_main_resends_the_abort_notice_when_coverage_changes(tmp_path, monkeypatch):
     """取り込みが進んだら差分付きで再送する (抑止しすぎない)。"""
-    from datetime import date
+    from jst import current_jst_daystamp
 
-    today = date.today().strftime("%Y%m%d")
+    today = current_jst_daystamp()
     db = tmp_path / "t.db"
     _entry_db(db, days_scheduled=(today,)).close()
     monkeypatch.setattr(auto_predict, "DB_PATH", str(db))
@@ -325,9 +327,9 @@ def test_a_full_abort_day_sends_two_messages(tmp_path, monkeypatch, capsys):
       11:00 中止 → 最終確認 1 通 (「起動はした」の生存信号)
     通知が 1 通も来ない = タスクが動いていない、と読めるようになる。
     """
-    from datetime import date
+    from jst import current_jst_daystamp
 
-    today = date.today().strftime("%Y%m%d")
+    today = current_jst_daystamp()
     db = tmp_path / "t.db"
     _entry_db(db, days_scheduled=(today,)).close()
     monkeypatch.setattr(auto_predict, "DB_PATH", str(db))
@@ -360,9 +362,9 @@ def test_a_full_abort_day_sends_two_messages(tmp_path, monkeypatch, capsys):
 
 def test_a_normal_day_sends_no_final_confirmation(tmp_path, monkeypatch):
     """中止していない日に最終確認は出さない (通知を増やさない)。"""
-    from datetime import date
+    from jst import current_jst_daystamp
 
-    today = date.today().strftime("%Y%m%d")
+    today = current_jst_daystamp()
     db = tmp_path / "t.db"
     _entry_db(db, days_with_entries=(today,)).close()
     monkeypatch.setattr(auto_predict, "DB_PATH", str(db))
