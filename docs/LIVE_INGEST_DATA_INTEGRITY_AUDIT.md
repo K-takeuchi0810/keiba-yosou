@@ -282,6 +282,27 @@ SQLite の書き込み待ちではない。JVInit / JVClose / JVRTOpen / JVGets 
 - 残留プロセスには触れていない。停止する場合も、PID・開始時刻・コマンドライン・ロックの状態を
   記録してから、別の作業として行う
 
+### 5-ter. 残留 30 組 (90 プロセス) の停止と、その後の観測 (2026-09-26〜27)
+
+- **停止前の確認 (09-26 23:17〜23:30、読み取りのみ)**: 60 秒あけた 2 回の計測で CPU・I/O の回数・
+  ハンドル数がどれも変化なし。親の wscript は無く、子プロセスも無し。ロックファイル無し。
+  毎分のタスクは 18:05 を最後に Controller が Disabled にしていた。証拠は
+  `data/logs/ai_builder_stale_processes_20260926_before_stop.json`
+- **放置した場合の危険 (コードで確認)**: 止まった実行が再開すると、対象日は起動した当時のまま。
+  提供期間 (1 週間) を過ぎた日付では `JVRTOpen` の −1 が空の成功として返り、
+  `reconcile_0b14_snapshot` がその日の騎手・斤量を元の値に戻して 0B14 系の行を削除する。
+  終了時の `finally` は、動いている別の実行のロックも消す
+- **停止 (09-26 23:55、ユーザー本人が実行)**: `data/logs/stop_stale_ai_builder.ps1`。保存した PID のうち
+  名前と開始時刻 (ミリ秒) が一致するものだけを cmd → launcher → interpreter の順に。
+  結果は cmd 30 stopped / launcher 30 stopped / interpreter 30 already_gone (launcher と同時に終了)。
+  記録は `data/logs/ai_builder_stale_processes_20260926_stop.log`
+- **停止後**: fetch-live-jvdata のプロセス 0。JVLinkAgent は稼働継続 (pid 4584、9/15 から)。
+  DB のサイズ・mtime は停止前と同じ、WAL 0 バイト
+- **09-27 (開催日) の観測 (11:10 時点)**: keiba-yosou の自動予想 08:00 / 09:00 / 11:00 はすべて exit=0、
+  fresh odds (0B31) は 42 本・エラー無し、ai-builder (Controller が有効に戻した) は 0B30 70 本・0B14 104 本
+- **この観測が示すこと**: 停止した stale process は、正常な取得に必要なものではなかった。
+  **JV-Link が止まる根本原因が解消した証拠ではない** (開催日にはまた溜まりうる)
+
 ## 6. 分からなかったこと / 次に確かめること
 
 1. 0B30 と 0B31 で同じ発表時刻の単勝オッズが違う理由 → 3-bis。大部分は別の瞬間。票数が同じでオッズが違う 2 レースは未解明
