@@ -2,10 +2,17 @@ import csv
 import hashlib
 import json
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from scripts import build_daily_results
+
+#: `_run_main` が `git_provenance` の代わりに返す値 (本物の SHA と見分けられる形)
+FAKE_GIT_SHA = "0" * 40
+
 
 def _html_fragment(
     *,
@@ -152,6 +159,11 @@ def _run_main(
     html_path = tmp_path / "predictions.html"
     html_path.write_text(html_text or _html_fragment(), encoding="utf-8")
     output_dir = tmp_path / "out"
+    # 成果物に刻む builder の git 由来は、評価ロジックのテストとは別の契約。
+    # ここで固定しないと、.git の無い隔離コピー (変異テストの枠) では
+    # git rev-parse が失敗して全テストが赤くなり、評価ロジックの変異を流せない
+    # (2026-09-28)。本物の git_provenance は下の専用テストで確かめる。
+    monkeypatch.setattr(build_daily_results, "git_provenance", lambda: (FAKE_GIT_SHA, False))
     monkeypatch.setattr(
         sys,
         "argv",
@@ -272,8 +284,9 @@ def test_manifest_records_builder_provenance_and_superseded_hash(tmp_path, monke
     manifest_path = output_dir / "manifest.json"
     first_bytes = manifest_path.read_bytes()
     first = json.loads(first_bytes)
-    assert first["builder_git_sha"]
-    assert isinstance(first["builder_git_dirty"], bool)
+    # git_provenance が返した値が、そのまま manifest に刻まれること
+    assert first["builder_git_sha"] == FAKE_GIT_SHA
+    assert first["builder_git_dirty"] is False
     assert first["supersedes_manifest_sha256"] is None
     assert first["warnings"] == {
         # 列を 12 個足したので版数を上げた
@@ -778,3 +791,33 @@ def test_the_three_stages_are_distinct(tmp_path, monkeypatch):
         assert got in (want_reason, "None" if not want_reason else want_reason), (
             f"段階 {i}: 期待 {want_reason!r} だが {got!r}")
         assert rows[0]["evaluable"] == want_eval, f"段階 {i} の evaluable"
+
+
+# --- builder の git 由来 (評価ロジックとは別の契約) --------------------------------
+
+def test_git_provenance_matches_the_checkout_head():
+    """本物の git_provenance: 通常の checkout では HEAD と一致し、dirty は bool。
+
+    `.git` の無い隔離コピー (変異テストの枠) では確かめようがないので、理由を付けて skip。
+    """
+    root = build_daily_results.ROOT
+    if not (root / ".git").exists():
+        pytest.skip(f".git の無い環境 (git archive の隔離コピーなど): {root}")
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True,
+                          capture_output=True, text=True).stdout.strip()
+    sha, dirty = build_daily_results.git_provenance()
+    assert sha == head
+    assert isinstance(dirty, bool)
+
+
+def test_git_provenance_fails_instead_of_inventing_a_value(monkeypatch):
+    """git が失敗したら偽の値を返さず失敗すること (fail-closed)。
+
+    ここが黙って空文字などを返すと、どのコードで作った成果物か分からない manifest が
+    できてしまう。
+    """
+    def failing_run(args, **kwargs):
+        raise subprocess.CalledProcessError(128, args, stderr="fatal: not a git repository")
+    monkeypatch.setattr(build_daily_results.subprocess, "run", failing_run)
+    with pytest.raises(subprocess.CalledProcessError):
+        build_daily_results.git_provenance()
