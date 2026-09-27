@@ -126,7 +126,11 @@ main に `jst.py` が無いため全起動が exit 8 + Discord ERROR になる�
 
 | 確認日時 (JST) | main SHA | 1 日付入りログ | 2 DATE_FAILURE 新規なし | 3 watchdog exit | 4 LastTaskResult | 5 週次監視 | 確認者 |
 |---|---|---|---|---|---|---|---|
-| (マージ後に記入) | | | | | | | |
+| 2026-09-28 08:11 | `3a43f93` (merge of `89a3840`) | ○ `run date 20260928 (JST) dryrun=[] cwd=C:\Users\kizun\dev\keiba-yosou` | ○ ファイル無し | ○ `finish pid=10776 exit=0` (非開催日、出馬表なし) | ○ 0 (08:00:01) | 未 (10/04 (日) 10:00 の後に記入) | Claude (読み取りのみ) |
+
+- 2026-09-28 のゲートでの参考値: テストの collect-only は 980 本 (`89a3840`)。main に統合した後の全テストは
+  989 passed / 6 skipped (`3a43f93`)。統合前に、本番と同じ経路 (wscript → vbs → ps1 → bat) で
+  `-DryRun -LogDir <本番の外>` を実行し exit 0 (`data/logs/auto_predict_daily_20260928_dryrun.log`)
 
 どれか 1 つでも満たさなければ、その日の予想が出ていない可能性がある。まず
 `auto_predict_daily_DATE_FAILURE.log` と `auto_predict_daily_rundate_stderr.txt` を見る。
