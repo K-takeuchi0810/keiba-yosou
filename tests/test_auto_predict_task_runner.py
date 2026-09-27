@@ -30,6 +30,8 @@ def test_watchdog_preserves_child_exit_code(tmp_path: Path) -> None:
             "-CommandPath",
             str(fixture),
             "-SkipNotification",
+            "-LogDir",
+            str(tmp_path / "logs"),
         ],
         cwd=ROOT,
         check=False,
@@ -57,6 +59,8 @@ def test_watchdog_times_out_and_returns_124(tmp_path: Path) -> None:
             "-CommandPath",
             str(fixture),
             "-SkipNotification",
+            "-LogDir",
+            str(tmp_path / "logs"),
         ],
         cwd=ROOT,
         check=False,
@@ -92,6 +96,8 @@ def test_watchdog_removes_a_grandchild_process(tmp_path: Path) -> None:
             "-CommandPath",
             str(fixture),
             "-SkipNotification",
+            "-LogDir",
+            str(tmp_path / "logs"),
         ],
         cwd=ROOT,
         check=False,
@@ -327,3 +333,152 @@ def test_fetch_full_fails_when_catchup_still_has_no_race(monkeypatch) -> None:
     monkeypatch.setattr(sys, "argv", ["fetch_full", "--dataspecs", "RACE"])
 
     assert fetch_full.main() == 1
+
+
+def _args_probe(tmp_path: Path) -> tuple[Path, Path]:
+    """受け取った引数をファイルに書くだけの子コマンド。"""
+    seen = tmp_path / "seen.txt"
+    fixture = tmp_path / "record-args.cmd"
+    fixture.write_text(f'@echo [%*]> "{seen}"\r\n@exit /b 0\r\n', encoding="ascii")
+    return fixture, seen
+
+
+def _run_runner(fixture: Path, *extra: str, timeout: str = "20") -> int:
+    # ログは必ず子コマンドの隣の一時ディレクトリへ (本番の watchdog log を触らない)
+    return subprocess.run(
+        ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive",
+         "-ExecutionPolicy", "Bypass", "-File", str(RUNNER),
+         "-TimeoutSeconds", timeout, "-CommandPath", str(fixture),
+         "-LogDir", str(fixture.parent / "logs"), *extra],
+        cwd=ROOT, check=False, timeout=60,
+    ).returncode
+
+
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize("subdir", ["plain", "with space (x86)", "a&b"])
+def test_watchdog_forwards_dry_run_to_the_batch(tmp_path: Path, subdir: str) -> None:
+    """-DryRun を付けたときだけ子の bat に --dry-run が渡ること (2026-09-25)。
+
+    渡らないと「dry-run のつもりで本番の取り込み・通知・push が走る」。
+    空白・括弧・`&` を含むパスでも見る。cmd は /c の文字列の引用符を条件次第で
+    剥がすので、二重に包まないと `&` のところでコマンドが分断される
+    (空白と括弧だけなら cmd が推測でたどれてしまい、壊れていても気付けない)。
+    """
+    d = tmp_path / subdir
+    d.mkdir()
+    fixture, seen = _args_probe(d)
+
+    assert _run_runner(fixture, "-DryRun") == 0
+    assert seen.read_text(encoding="ascii").strip() == "[--dry-run]"
+
+    assert _run_runner(fixture, "-SkipNotification") == 0
+    assert seen.read_text(encoding="ascii").strip() == "[]", (
+        "-DryRun なしの起動に --dry-run が混ざっている")
+
+
+def test_dry_run_through_the_scheduler_launcher(tmp_path: Path) -> None:
+    """タスクスケジューラと同じ wscript → vbs 経由でも -DryRun が届くこと。
+
+    vbs は引数を 1 つずつ引用符で包む。PowerShell がそれをスイッチとして
+    解釈するかを、実際の起動経路で確かめる。
+    """
+    import os
+
+    vbs = Path(os.environ.get("LOCALAPPDATA", "")) / "ScheduledTaskRunner" / \
+        "run-scheduled-task-hidden.vbs"
+    if not vbs.exists():
+        import pytest
+        pytest.skip("この環境には hidden runner (vbs) が無い")
+    fixture, seen = _args_probe(tmp_path)
+    # wscript は GUI サブシステムなので、終了コードは Start-Process で待って取る。
+    ps = (
+        f"$p = Start-Process -FilePath \"$env:SystemRoot\\System32\\wscript.exe\" "
+        f"-ArgumentList '//B //NoLogo \"{vbs}\" ps1 \"{RUNNER}\" -CommandPath "
+        f"\"{fixture}\" -LogDir \"{tmp_path / 'logs'}\" -DryRun' -PassThru; "
+        f"$null = $p.Handle; "
+        f"$p.WaitForExit(40000) | Out-Null; exit $p.ExitCode"
+    )
+    rc = subprocess.run(["powershell.exe", "-NoLogo", "-NoProfile", "-Command", ps],
+                        cwd=ROOT, check=False, timeout=60).returncode
+    assert rc == 0
+    assert seen.read_text(encoding="ascii").strip() == "[--dry-run]"
+
+
+def _notify_stub(tmp_path: Path) -> tuple[Path, Path]:
+    """watchdog の通知に使うプログラムの代わり。呼ばれたら引数を書き残す。"""
+    marker = tmp_path / "notified.txt"
+    stub = tmp_path / "notify-stub.cmd"
+    stub.write_text(f'@echo %*>> "{marker}"\r\n@exit /b 0\r\n', encoding="ascii")
+    return stub, marker
+
+
+def _hang(tmp_path: Path) -> Path:
+    fixture = tmp_path / "hang.cmd"
+    fixture.write_text("@ping 127.0.0.1 -n 30 >nul\r\n", encoding="ascii")
+    return fixture
+
+
+def test_a_dry_run_timeout_never_notifies(tmp_path: Path) -> None:
+    """★ -DryRun ならタイムアウトしても Discord へ送らないこと (2026-09-25)。
+
+    以前は -DryRun で SkipNotification を立てるだけで、それを固定するテストが
+    無かった (変異 P-4 が生存)。通知関数の中でも DryRun を見て止める。
+    """
+    stub, marker = _notify_stub(tmp_path)
+
+    rc = _run_runner(_hang(tmp_path), "-DryRun", "-NotifyPython", str(stub),
+                     timeout="1")
+
+    assert rc == 124
+    assert not marker.exists(), f"dry-run で通知した: {marker.read_text()}"
+    log = (tmp_path / "logs" / "auto_predict_watchdog.log").read_text(encoding="ascii")
+    assert "notification suppressed: dry-run" in log
+
+
+def test_a_real_timeout_does_notify(tmp_path: Path) -> None:
+    """対照: dry-run でない起動のタイムアウトは通知すること (止めすぎていない)。"""
+    stub, marker = _notify_stub(tmp_path)
+
+    rc = _run_runner(_hang(tmp_path), "-NotifyPython", str(stub), timeout="1")
+
+    assert rc == 124
+    assert marker.exists(), "本番のタイムアウトで通知していない"
+    assert "scripts.notify_discord" in marker.read_text(encoding="ascii")
+
+
+def test_runner_tests_leave_the_production_log_alone() -> None:
+    """このファイルの runner 呼び出しが、すべてログを一時ディレクトリへ向けていること。
+
+    runner は既定で「自分のリポジトリの data/logs」に書く。main でテストを
+    回すと、本番の watchdog log (「沈黙 = 未起動」を読む運用ログ) にテストの
+    行が混ざる (実測 1,396 行中 426 行)。実行時の確認は conftest の
+    セッション fixture が行う。
+    """
+    import ast
+
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.List):
+            items = [ast.unparse(e) for e in node.elts]
+            if "str(RUNNER)" in items:
+                assert "'-LogDir'" in items, (
+                    f"-LogDir の無い runner 呼び出し (line {node.lineno})")
+
+
+def test_skip_notification_is_honoured_on_timeout(tmp_path: Path) -> None:
+    """-SkipNotification (dry-run ではない) でもタイムアウト時に通知しないこと。
+
+    既存のタイムアウトのテストは -SkipNotification を付けていたが、通知が
+    実際に止まったかは見ていなかった (変異 A3 が見えなかった)。
+    """
+    stub, marker = _notify_stub(tmp_path)
+
+    rc = _run_runner(_hang(tmp_path), "-SkipNotification", "-NotifyPython", str(stub),
+                     timeout="1")
+
+    assert rc == 124
+    assert not marker.exists(), "-SkipNotification なのに通知した"
+    log = (tmp_path / "logs" / "auto_predict_watchdog.log").read_text(encoding="ascii")
+    assert "notification suppressed: -SkipNotification" in log

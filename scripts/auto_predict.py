@@ -16,7 +16,7 @@ import argparse
 import json
 import subprocess
 import sys
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -29,7 +29,9 @@ from config import (  # noqa: E402
 from db import (  # noqa: E402
     SQL_VALID_HORSE_NUM, is_cancelled_race, sql_evaluable_race,
 )
-from scripts.notify_dedup import JST, decide, jst_today, record  # noqa: E402
+from jst import (current_jst_date, current_jst_datetime,  # noqa: E402
+                 current_jst_daystamp)
+from scripts.notify_dedup import decide, record  # noqa: E402
 from scripts.notify_discord import notify_discord  # noqa: E402
 import os  # noqa: E402
 import sqlite3  # noqa: E402
@@ -199,9 +201,9 @@ def _notify_once(notification_type: str, subject: str, payload: dict,
 FINAL_ATTEMPT_HOUR = 11
 
 
-def _is_final_attempt() -> bool:
+def _is_final_attempt(now=None) -> bool:
     """この起動がその日の最終予定起動か (JST で判断)。"""
-    return datetime.now(JST).hour >= FINAL_ATTEMPT_HOUR
+    return current_jst_datetime(now).hour >= FINAL_ATTEMPT_HOUR
 
 
 def _final_confirmation_message(reason: str) -> str:
@@ -217,7 +219,7 @@ def _final_confirmation_message(reason: str) -> str:
 
     3 つ目を読み取れることが目的なので、**中止が続いたときだけ**送る。
     """
-    d = jst_today()
+    d = current_jst_daystamp()
     return "\n".join([
         f"🕚 **本日の最終確認** ({d[:4]}/{d[4:6]}/{d[6:]})",
         f"中止状態が継続しています ({reason})。最終確認処理は正常に実行されました。",
@@ -294,7 +296,9 @@ def main() -> int:
     args = ap.parse_args()
     min_coverage = args.min_entry_coverage
 
-    today = date.today()
+    # 対象日は jst.py の 1 箇所で決める。ここで date.today() を読むと
+    # OS がローカル時刻次第で別の日を指し、1 日ぶんの予想を落としうる。
+    today = current_jst_date()
     # 生成対象は **今日のみ** (2026-09-13 ユーザ指示で日別化)。
     # 以前は今日+明日を 1 ページに出していたが、JRA の出馬表は前日確定なので
     # 土曜朝の時点で日曜分は大半が「出走馬未取得」の空レースになり、スマホで
@@ -404,6 +408,10 @@ def main() -> int:
         _notify_once("generation_failed", day, {"returncode": r.returncode},
                      f"⚠ 予想生成に失敗 ({day})。ログ確認要。",
                      force=args.force_notify)
+        # 生成失敗も「中止が続いている」ので最終確認の対象にする。
+        # ここを外していたため、3 回とも同じ rc で失敗する日は 1 通のあと
+        # 沈黙し、「タスクが起動しなかった」と区別できなかった。
+        _final_confirmation(args, day, f"生成失敗 rc={r.returncode}")
         print(r.stdout[-500:], r.stderr[-500:])
         return 1
 

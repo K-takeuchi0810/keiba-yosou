@@ -70,10 +70,12 @@ review≠外部検証 / PIT T−n コード強制) はユーザ合意済み (202
 
 | 名前 | 値 | 意味 |
 |---|---|---|
-| `SEALED_FROM` | `20261001` | この日以降が封印対象 |
-| `SEALED_UNTIL` | `20260930` | 分析が見てよい最終日 |
+| `SEALED_FROM` | ~~`20261001`~~ → `None` (2026-09-17 延期) | この日以降が封印対象 |
+| `SEALED_UNTIL` | ~~`20260930`~~ → `None` | 分析が見てよい最終日 |
 | `SEALED_JUDGMENT_DONE` | `False` | 判定を実施したら `True` にして封印解除 |
 | `SEALED_ACCESS_LOG` | `data/runtime/sealed_access_log.jsonl` | 意図的に覗いた記録 |
+
+> **延期済み (2026-09-17, `d52f417`)**: `config.SEALED_FROM = None` (開始日未定)。10/01 に自動では始まらない。開始は候補が Validation を通過し事前登録を commit した後、未使用の未来日を別コミットで設定する。
 
 `guard_analysis_window(from, to, allow_sealed=False, context="")` が唯一の門。
 戻り値の `info` は成果物の meta にそのまま入れる (「この数字はどこまでの

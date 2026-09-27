@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from db import sql_cancelled_race, sql_evaluable_race
+from jst import current_jst_date, current_jst_datetime
 from config import (
     BET_KELLY_MAX_PCT,
     BET_KELLY_MODE,
@@ -298,7 +299,7 @@ def build_view_model(
     from datetime import datetime, timedelta
 
     # 予想ロギング用の発行時刻・モデル版 (log_predictions 時のみ使用、バッチで固定)
-    _PRED_LOG_GENERATED_AT = datetime.now().isoformat(timespec="seconds")
+    _PRED_LOG_GENERATED_AT = current_jst_datetime().isoformat(timespec="seconds")
     _PRED_LOG_MODEL_VER = ""
     _PRED_LOG_CALIB_VER = ""
     if log_predictions:
@@ -309,7 +310,12 @@ def build_view_model(
         except Exception:  # noqa: BLE001
             pass
 
-    today = datetime.now().date()
+    # 「今日」は jst.py の 1 箇所で決める (2026-09-20)。
+    # 既定窓 (today±14) は auto_predict が --from/--to を渡すので本番では
+    # 効かないが、**`today` 自体はこの下の assess_race_completeness に渡り**、
+    # publish 完全性 alert の対象日になる (2026-09-21 のレビューで、
+    # 「本番経路では未使用」と書いていた前のコメントが誤りと判明)。
+    today = current_jst_date()
     from_d = from_date or (today - timedelta(days=14)).strftime("%Y%m%d")
     to_d = to_date or (today + timedelta(days=14)).strftime("%Y%m%d")
     from_y, from_md = from_d[:4], from_d[4:]
@@ -681,7 +687,7 @@ def build_view_model(
     # S7-β-5 (2026-05-18): footer version snapshot 用 context。
     version_info = _build_version_snapshot()
     return {
-        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "generated_at": current_jst_datetime().strftime("%Y-%m-%d %H:%M:%S"),
         "target_label": target_label,
         "race_count": len(races),
         "buy_count": len(buy_candidates),

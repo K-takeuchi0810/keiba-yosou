@@ -257,18 +257,64 @@ SEALED_ARTIFACTS: dict[str, str] = {
 }
 
 
-def sealed_window_started(today: str | None = None) -> bool:
+#: 集計窓の「端を開いたまま」にする印。`prediction_accuracy` などの既定の全期間
+#: (00000000〜99999999) で使う。封印の門はまさにこの全期間の窓を打ち切るための
+#: ものなので、ここだけは実在する日付でなくても通す。
+OPEN_WINDOW_BOUNDS = frozenset({"00000000", "99999999"})
+
+
+def _require_daystamp(label: str, value: object, *,
+                      allow_open_bounds: bool = False) -> str:
+    """YYYYMMDD (実在する日付) でなければ ValueError。
+
+    封印の判定は文字列の大小で比べるので、形式が違う値を黙って受けると
+    静かに誤判定する。実測: "2026-10-01" は "-" < "1" のため "20261001" より
+    小さいと判定され、開始済みの封印を「まだ」と答えた。
+
+    `allow_open_bounds=True` のときだけ OPEN_WINDOW_BOUNDS も通す (集計窓の端)。
+    """
+    from datetime import datetime as _dt
+
+    if not (isinstance(value, str) and len(value) == 8 and value.isdigit()):
+        raise ValueError(f"{label} は YYYYMMDD の文字列で渡すこと (got {value!r})")
+    if allow_open_bounds and value in OPEN_WINDOW_BOUNDS:
+        return value
+    try:
+        _dt.strptime(value, "%Y%m%d")
+    except ValueError:
+        raise ValueError(f"{label} が実在しない日付 (got {value!r})") from None
+    return value
+
+
+def sealed_window_started(today: str | None = None, *, now=None) -> bool:
     """封印窓が **もう始まっているか** (判定未実施 かつ 今日が SEALED_FROM 以降)。
 
     `sealed_window_active()` (= 判定がまだ) との違いに注意。封印開始日より前は
     まだ dev 窓なので、モデルの改修は自由でなければならない。
-    """
-    from datetime import date
 
+    「今日」は **`jst.current_jst_daystamp` だけ**から作る (2026-09-25)。以前は
+    `date.today()` = OS のローカル日付で、UTC のホストでは JST 10/01 00:00-08:59 が
+    まだ 9/30 と判定され、封印窓の最初の 9 時間を dev 窓として扱っていた。
+    `today` (YYYYMMDD) か `now` (tz 付き datetime) で固定できる。両方省略すると
+    JST の現在日付。
+
+    **不正な引数はその場で ValueError** (封印が未定でも)。`today` と `now` の同時指定、
+    `today` / `SEALED_FROM` の形式違い (YYYYMMDD 以外・実在しない日付) を黙って
+    受けると、どちらが勝ったか・どう比べたかが呼び出し側から見えない。
+    """
+    from jst import current_jst_daystamp
+
+    if today is not None and now is not None:
+        raise ValueError("sealed_window_started: today と now は同時に渡せない "
+                         f"(today={today!r}, now={now!r})")
+    if today is not None:
+        _require_daystamp("today", today)
+    if SEALED_FROM is not None:
+        _require_daystamp("SEALED_FROM", SEALED_FROM)
     if not sealed_window_active():
         return False
-    now = today or date.today().strftime("%Y%m%d")
-    return SEALED_FROM is not None and now >= SEALED_FROM
+    day = today if today is not None else current_jst_daystamp(now)
+    return SEALED_FROM is not None and day >= SEALED_FROM
 
 
 def artifact_drift() -> list[str]:
@@ -326,11 +372,12 @@ def guard_analysis_window(
     *見る* 側ではないため。
     """
     for label, value in (("from_date", from_date), ("to_date", to_date)):
-        if not (len(value) == 8 and value.isdigit()):
-            # YYYYMMDD 以外を渡されると文字列比較が破綻する。実測: "2026-12-31" は
-            # "-" < "1" のため SEALED_FROM より小さいと判定され、門を素通りした。
-            raise ValueError(
-                f"guard_analysis_window: {label} は YYYYMMDD で渡すこと (got {value!r})")
+        # YYYYMMDD 以外を渡されると文字列比較が破綻する。実測: "2026-12-31" は
+        # "-" < "1" のため SEALED_FROM より小さいと判定され、門を素通りした。
+        # 検査は sealed_window_started と同じ 1 つ (2026-09-26 に統一。以前の
+        # 独自の検査は 8 桁の数字なら通したので、実在しない 20261332 が通った)。
+        _require_daystamp(f"guard_analysis_window: {label}", value,
+                          allow_open_bounds=True)
     info: dict = {
         "sealed_from": SEALED_FROM,
         "sealed_active": sealed_window_active(),

@@ -44,11 +44,12 @@ import os
 import tempfile
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-JST = timezone(timedelta(hours=9), "JST")
+from jst import current_jst_daystamp, current_jst_datetime
+
 
 # 状態を残す期間 (JST の日数)。これより古い記録は捨てる。
 # 「日付が変わったら前日の状態を引き継がない」ことはキーに対象日が入るので
@@ -69,11 +70,6 @@ def state_path() -> Path:
     from config import PROJECT_ROOT
 
     return PROJECT_ROOT / "data" / "runtime" / "notification_state.json"
-
-
-def jst_today() -> str:
-    """JST の今日 (YYYYMMDD)。**システムのローカル時刻に依存させない**。"""
-    return datetime.now(JST).strftime("%Y%m%d")
 
 
 @dataclass(frozen=True)
@@ -203,7 +199,7 @@ def decide(notification_type: str, subject: str, payload: dict[str, Any],
     """
     try:
         p = path or state_path()
-        today = jst_today()
+        today = current_jst_daystamp()
         key = _key(notification_type, subject)
         data = _prune(_load(p), today)
         prev = data.get(key)
@@ -245,7 +241,7 @@ def record(notification_type: str, subject: str, payload: dict[str, Any],
     """
     try:
         p = path or state_path()
-        today = jst_today()
+        today = current_jst_daystamp()
         data = _prune(_load(p), today)
         # 同じ対象について **別の結末** を伝えたら、それ以前の結末の記録は捨てる。
         # これが無いと「08:00 生成失敗 → 09:00 生成成功 → 11:00 また生成失敗」の
@@ -258,7 +254,7 @@ def record(notification_type: str, subject: str, payload: dict[str, Any],
         data[_key(notification_type, subject)] = {
             "canonical": _canonical(payload), "payload": payload,
             "date_jst": today,
-            "sent_at": datetime.now(JST).isoformat(timespec="seconds"),
+            "sent_at": current_jst_datetime().isoformat(timespec="seconds"),
             "notification_type": notification_type,
             "subject": subject}
         _save(p, data)

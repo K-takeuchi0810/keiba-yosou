@@ -5,11 +5,23 @@ param(
     [ValidateRange(1, 86400)]
     [int]$TimeoutSeconds = 1200,
     [string]$CommandPath = "",
-    [switch]$SkipNotification
+    [switch]$SkipNotification,
+    # Same path as the scheduler, but the bat skips DB writes, Discord and
+    # the Pages push (auto_predict --dry-run) and logs to *_dryrun.log.
+    # The watchdog itself never posts to Discord in a dry run, even on timeout.
+    [switch]$DryRun,
+    # Where the watchdog log goes. Tests point this at a temp dir so they
+    # never touch the production log ("silence = the task did not start").
+    [string]$LogDir = "",
+    # Program used to send watchdog alerts. Tests replace it with a stub.
+    [string]$NotifyPython = ""
 )
 
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
+if (-not $NotifyPython) {
+    $NotifyPython = Join-Path $repo ".venv64\Scripts\python.exe"
+}
 if (-not $CommandPath) {
     $CommandPath = Join-Path $PSScriptRoot "auto_predict_daily.bat"
 }
@@ -18,17 +30,28 @@ if (-not (Test-Path -LiteralPath $CommandPath -PathType Leaf)) {
     exit 2
 }
 
-$logDir = Join-Path $repo "data\logs"
-New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-$watchdogLog = Join-Path $logDir "auto_predict_watchdog.log"
+if (-not $LogDir) {
+    $LogDir = Join-Path $repo "data\logs"
+}
+New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+$watchdogLog = Join-Path $LogDir "auto_predict_watchdog.log"
 function Write-WatchdogLog([string]$Message) {
     $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message
     Add-Content -LiteralPath $watchdogLog -Value $line -Encoding ASCII
 }
 
 function Send-WatchdogAlert([string]$Reason) {
-    if ($SkipNotification) { return }
-    $python = Join-Path $repo ".venv64\Scripts\python.exe"
+    # Checked here, not only when parsing parameters, so that no later
+    # change to the switches can make a dry run post to Discord.
+    if ($DryRun) {
+        Write-WatchdogLog "notification suppressed: dry-run ($Reason)"
+        return
+    }
+    if ($SkipNotification) {
+        Write-WatchdogLog "notification suppressed: -SkipNotification ($Reason)"
+        return
+    }
+    $python = $NotifyPython
     if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
         Write-WatchdogLog "notification skipped: python not found"
         return
@@ -47,11 +70,14 @@ function Send-WatchdogAlert([string]$Reason) {
     Write-WatchdogLog "notification exit=$($notify.ExitCode)"
 }
 
-$arguments = @("/d", "/c", ('"{0}"' -f $CommandPath))
+# cmd strips the outermost quotes of the /c string, so wrap once more.
+$batArgs = ""
+if ($DryRun) { $batArgs = " --dry-run" }
+$arguments = @("/d", "/c", ('""{0}"{1}"' -f $CommandPath, $batArgs))
 $process = Start-Process -FilePath $env:ComSpec -ArgumentList $arguments `
     -WorkingDirectory $repo -WindowStyle Hidden -PassThru
 $null = $process.Handle
-Write-WatchdogLog "start pid=$($process.Id) timeout_sec=$TimeoutSeconds command=$CommandPath"
+Write-WatchdogLog "start pid=$($process.Id) timeout_sec=$TimeoutSeconds command=$CommandPath dryrun=$DryRun"
 
 if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
     Write-WatchdogLog "timeout pid=$($process.Id); terminating process tree"

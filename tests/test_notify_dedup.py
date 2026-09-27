@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 from scripts import notify_dedup
+from jst import current_jst_daystamp
 from scripts.notify_dedup import decide, record
 
 
@@ -247,7 +248,7 @@ def test_different_notification_types_do_not_collide(state):
 
 def test_old_entries_are_pruned(state):
     """古い記録は捨てる (ファイルが際限なく育たないこと)。"""
-    old = notify_dedup.jst_today()[:4] + "0101"
+    old = current_jst_daystamp()[:4] + "0101"
     state.write_text(json.dumps({
         "generation_complete:19990101": {
             "canonical": "{}", "payload": {}, "date_jst": "19990101"},
@@ -259,23 +260,24 @@ def test_old_entries_are_pruned(state):
     assert "generation_complete:19990101" not in kept
 
 
-def test_jst_is_used_not_system_local_time(monkeypatch):
-    """「同日」の判定に JST を使うこと。システムのローカル時刻任せにしない。"""
+def test_jst_is_used_not_system_local_time():
+    """「同日」の判定に JST を使うこと。システムのローカル時刻任せにしない。
+
+    以前は `notify_dedup.datetime` を monkeypatch していたが、日付の決定が
+    jst.py へ移った時点で patch が経路外になり、**実時刻との比較になって
+    9/21 に落ちた** (9/20 中だけ偶然緑だった時限つきのテスト)。
+    実装から日付を取らず、注入した時刻で確かめる。
+    """
     from datetime import datetime, timedelta, timezone
 
-    # UTC では前日、JST では当日になる時刻
-    fixed = datetime(2026, 9, 19, 16, 30, tzinfo=timezone.utc)
+    from jst import JST, current_jst_daystamp
 
-    class FixedDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return fixed.astimezone(tz) if tz else fixed
+    # UTC では 9/20、JST では 9/21 01:30
+    utc_1630 = datetime(2026, 9, 20, 16, 30, tzinfo=timezone.utc)
 
-    monkeypatch.setattr(notify_dedup, "datetime", FixedDateTime)
-
-    assert notify_dedup.jst_today() == "20260920", (
+    assert current_jst_daystamp(now=utc_1630) == "20260921", (
         "UTC 16:30 は JST では翌日 01:30。JST で判定していない")
-    assert notify_dedup.JST.utcoffset(None) == timedelta(hours=9)
+    assert JST.utcoffset(None) == timedelta(hours=9)
 
 
 # --- 配線側 ---------------------------------------------------------------
@@ -478,7 +480,7 @@ def test_record_writes_the_date_so_pruning_works(state):
     send("generation_complete", "20260919", {"n_races": 12}, "本文", path=state)
 
     entry = json.loads(state.read_text(encoding="utf-8"))["generation_complete:20260919"]
-    assert entry["date_jst"] == notify_dedup.jst_today()
+    assert entry["date_jst"] == current_jst_daystamp()
     assert entry["sent_at"].endswith("+09:00"), "JST で刻んでいない"
 
 
@@ -508,7 +510,7 @@ def test_retention_boundary_keeps_the_oldest_kept_day(state):
 
     assert notify_dedup.RETENTION_DAYS == 14, (
         "保持期間を変えるならこのテストの日数も意図して変えること")
-    today = datetime.strptime(notify_dedup.jst_today(), "%Y%m%d")
+    today = datetime.strptime(current_jst_daystamp(), "%Y%m%d")
     keep = (today - timedelta(days=14)).strftime("%Y%m%d")
     drop = (today - timedelta(days=15)).strftime("%Y%m%d")
     state.write_text(json.dumps({
