@@ -50,6 +50,7 @@ branch `jst-date-unify-20260920` で対応済。main には未反映。
 | A6 | `gui/app.py` `presetToday()` :2219, :2223 (JS `new Date()`) | ブラウザのローカル時刻 | 日付入力欄のプリセット。「今日」ボタン | なし | **直撃**。`setDates` が `from_date` / `to_date` を埋め、その値が `_run_render_in_venv64(from_date, to_date, ...)` にそのまま渡って生成窓になる | **A** | 「表示だけか、処理対象日を決めているか」で優先度が変わると指示されたので**実際に追跡して確認した**結果、後者だった。ただし値は入力欄に見えており利用者が直せるので、黙って決まる A1-A5 よりは弱い。修正案はサーバ応答に `today_jst` を載せて JS はそれを使う。テスト: UTC ホストを模したブラウザ時刻でプリセットが JST 日付になること |
 | A7 | `web/generator.py` :491 (`is_buy_candidate(..., now=datetime.now())`) | naive local | 買い候補判定のオッズ鮮度 (`max_odds_age_min`)。`odds_fetched_at` との差で「古いオッズ」を落とす | **直撃**。鮮度の判定そのもの。`odds_fetched_at` も naive local で書かれているので TZ が変わらない限り両辺は揃うが、TZ を変えると取得時と判定時で意味がずれる | なし | **A** (2026-09-25 のレビューで漏れを指摘) | A4 と同じヘルパで両辺を揃える。取得時 TZ ≠ 判定時 TZ のケースを注入で |
 | A8 | `gui/app.py` :437, :441 (`now=datetime.now()` / `odds_age_minutes(fetched_at, datetime.now())`) | naive local | GUI の買い候補判定と「オッズ何分前」表示 | A7 と同じ (GUI 側) | なし | **A** (同上) | A7 と同時に |
+| A9 | `scripts/predict.py` :75 (`is_buy_candidate(..., now=datetime.now())`) | naive local | CLI 予想の買い候補判定のオッズ鮮度 | A7 と同じ (CLI 側) | なし | **A** (2026-09-28 JST 最終ゲートのレビューで台帳漏れを指摘) | A7 と同時に |
 
 ## 未対応 — 優先度 B (対象日を決める)
 
@@ -59,6 +60,9 @@ branch `jst-date-unify-20260920` で対応済。main には未反映。
 | B2 | `scripts/fresh_odds_coverage.py` :80, :151-152 | `datetime.now() - timedelta(days=n)` | `--last N` の窓の下限 | なし | 窓の端が 1 日ずれる | **B** | 注入で窓の下限を検証。`--last 1` が「今日」を含むこと |
 | B3 | `scripts/cleanup_placeholder_horse_rows.py` :44 | `today or date.today().strftime("%Y%m%d")` | 掃除対象日の既定 | なし | 直撃 (誤った日を掃除しうる) | **B** | 注入テスト。既に `today` 引数があるので容易 |
 | B4 | `scripts/f3_phase1_readiness.py` :362 | `min(date.today()..., "20260930")` | 集計窓の上限 | なし | 直撃 | **B** | 注入テスト |
+| B5 | `db.py` `horse_num_violation_counts` :239 | `today or date.today().strftime("%Y%m%d")` | 仮の馬番 `00` 行を「違反」と数える基準日 (レース日が今日より前なら違反)。`scripts/monitor.py` :211 が `today` 無しで呼ぶので、**週次監視のカナリアの判定日がローカル時計**。`tests/test_placeholder_cleanup.py` の live DB カナリアも同じ | なし | 直撃 (JST 00:00〜09:00 に UTC ホストで走ると、前日のレースの `00` 行を違反と数えない) | **B** (2026-09-28 のゲートで、worktree の dry-run DB が日付をまたいで赤くなった原因) | `today` 注入で境界 (レース日 = 今日 / 昨日) を検証。呼び出し側 (monitor) からも JST の今日が渡ること |
+| B6 | `scripts/monitor.py` :101, :165 | `datetime.now().date()` | 週次監視の Brier / 入力監視の窓 (`--days`) の終端と始端 | なし | 窓の端が 1 日ずれる | **B** | 注入で窓の端を検証。封印の凍結判定 (`sealed_window_active`) と同じ日を指すこと |
+| B7 | `scripts/fetch_full.py` :36 | `today or date.today()` | JVOpen option=2 の取りこぼし回収の起点 (前週の月曜 00:00) | なし | 月曜の境界で 1 週ずれうる | **B** | 注入テスト。既に `today` 引数あり。JST 月曜 00:00〜09:00 を UTC ホストで |
 
 ## 未対応 — 優先度 C (刻印 / 表示のみ)
 
@@ -68,6 +72,11 @@ branch `jst-date-unify-20260920` で対応済。main には未反映。
 | C2 | 各 `analyze_*.py` / `backtest.py` / `monitor.py` の `generated_at` 等 | `datetime.now()` | 生成時刻の刻印 | **C** | 対象日ではないので統一の対象外。ただし「日付は JST / 時刻はローカル」の混在は読み手を混乱させるので、いずれ揃える |
 | C4 | `weekly_monitor.bat` :5 | `date.today()` (local) | 週次監視のログ名 (`weekly_monitor_<日付>.log`、`weekly_pytest_<日付>.log`) | **C** | 対象日ではなく刻印。日次 bat と違い日付取得の失敗時の扱いも無い (空日付のログ名になる)。JST 基盤の main 反映後に日次 bat と同じ形へ |
 | C3 | `scripts/payout_finality_monitor.py` :70 | 独自の `JST = timezone(timedelta(hours=9))` | 確定払戻の滞留監視 (経過時間の起点) | **C** | 値は `jst.JST` と同じだが、単一出典から外れた定数 (data_div 対応で main に入ったもの)。評価系は凍結中なので、凍結解除後に `from jst import JST` へ |
+| C5 | `webapp/server.py` :49 | `datetime.now()` | 集計の既定窓の終端 (config の test 期間の終端が無いときだけ、5 年窓) | **C** | 既定では config の値が使われ、到達しない |
+| C6 | `predictor/risk.py` :170, :194 | `datetime.now()` | 賭けの記録時刻 (`placed_at`) と「直近 N 日の ROI」の窓 | **C** | 実弾の運用が止まっているので現状は使われない。再開するなら記録と窓を同じ時計に |
+| C7 | `scripts/rolling_select.py` :144 | `datetime.now().strftime('%Y%m%d')` | 出力ファイル名の日付 | **C** | 刻印のみ |
+
+(A9 / B5〜B7 / C5〜C7 は 2026-09-28 の JST 最終ゲートのレビューで見つかった台帳漏れ。すべて JST ブランチの外にあり、main と同じなのでマージで悪化はしていない)
 
 ## 進め方 (2026-09-22 時点の合意)
 

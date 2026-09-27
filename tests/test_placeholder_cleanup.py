@@ -117,15 +117,27 @@ def test_delete_statement_remains_limited_to_00(tmp_path):
         ).fetchone()[0] == 1
 
 
+@pytest.mark.live_db
 def test_live_database_has_no_placeholder_violations():
     # 枠順確定前の単独 '00' 行は正当な過渡状態 (確定時に ingest が掃除する) なので
     # raw count ではなく「正規馬番行と共存する不正行」= violation の不在を検証する。
-    # monitor.py のカナリアと同じ db.count_horse_num_violations に述語を一元化。
+    # monitor.py のカナリアと同じ db.horse_num_violation_counts に述語を一元化。
+    #
+    # 基準日は JST の今日を明示して渡す (db.py 側の既定は date.today() = ローカル時計、
+    # CLOCK_LEDGER B5)。worktree の dry-run DB のような本番以外の DB では、レース日が
+    # 過ぎると仮の '00' 行が違反に転じて赤くなる (2026-09-28)。失敗時にどの DB を
+    # 読んだかと内訳を出して、本番の欠陥か環境かを見分けられるようにする。
+    from jst import current_jst_daystamp
+
     db_path = Path(DB_PATH)
     if not db_path.exists():
         pytest.skip("data/keiba.db is not available")
-    with sqlite3.connect(db_path) as conn:
-        assert db.count_horse_num_violations(conn) == 0
+    today = current_jst_daystamp()
+    with sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True) as conn:
+        counts = db.horse_num_violation_counts(conn, today=today)
+    assert counts["total"] == 0, (
+        f"{db_path} に馬番の違反行がある (基準日 {today} JST): {counts}。"
+        "本番 checkout 以外 (worktree / コピー) で走らせているなら、その DB の残骸を疑う")
 
 
 def test_dry_run_flag_overrides_execute(tmp_path, monkeypatch, capsys):

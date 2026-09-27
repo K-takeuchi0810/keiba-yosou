@@ -144,6 +144,12 @@ def test_paired_run_rejects_invalid_bootstrap_count_before_oos():
 
 
 def test_saved_pair_reproduces_frozen_validation_auc():
+    # 凍結した成果物 (data/f3_phase0_0/) は git 管理外で、本番 checkout にしか無い。
+    # worktree や git archive のコピーでは FileNotFoundError で落ちて、ほかの失敗と
+    # 見分けにくくなる (2026-09-28 の JST 最終ゲート)。無ければ理由を付けて skip する。
+    # 成果物があるのに再現できない場合は、今までどおり失敗させる。
+    if not PHASE_METRICS_PATH.exists():
+        pytest.skip(f"凍結した成果物が無い環境 (git 管理外): {PHASE_METRICS_PATH}")
     phase_metrics = json.loads(PHASE_METRICS_PATH.read_text(encoding="utf-8"))
     check, *_models = _saved_pair_validation_check(phase_metrics, output_dir=DEFAULT_OUTPUT)
     assert check["passed"] is True

@@ -364,9 +364,9 @@ def test_a_fully_cancelled_day_is_not_a_coverage_failure(tmp_path, monkeypatch, 
     """
     from scripts import auto_predict
 
-    from datetime import date
+    from jst import current_jst_daystamp
 
-    today = date.today().strftime("%Y%m%d")
+    today = current_jst_daystamp()
     conn = _coverage_db(tmp_path, cancelled=6, running=0, with_entries=0, day=today)
     conn.close()
     monkeypatch.setattr(auto_predict, "DB_PATH", str(tmp_path / "cov.db"))
@@ -399,11 +399,11 @@ def test_a_half_cancelled_day_still_passes_the_gate(tmp_path, monkeypatch, capsy
     判定し、**実施される 12 レースの予想を出さずに終わる**。順延の日に
     その日の予想を丸ごと落とす経路なので、ゲートの判断そのものを通して見る。
     """
-    from datetime import date
+    from jst import current_jst_daystamp
 
     from scripts import auto_predict
 
-    today = date.today().strftime("%Y%m%d")
+    today = current_jst_daystamp()
     conn = _coverage_db(tmp_path, cancelled=12, running=12, with_entries=12,
                         day=today)
     conn.close()

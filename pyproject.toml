@@ -9,3 +9,6 @@ testpaths = ["tests"]
 # predictor.portfolio が `from config import ...` するための解決を
 # 設定側で担保し、tests/conftest.py の手動 sys.path 注入への依存を減らす。
 pythonpath = ["."]
+markers = [
+    "live_db: 本番 checkout の data/keiba.db の中身を確かめるカナリア。worktree や git archive のコピーでは別の DB (dry-run 用の残骸など) を読むので、結果の意味が違う。`-m 'not live_db'` で外せる",
+]

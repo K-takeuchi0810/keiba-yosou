@@ -121,3 +121,25 @@ def test_a_leak_into_a_subdirectory_fails_the_session(tmp_path):
 
     assert r.returncode != 0, r.stdout[-800:]
     assert "運用ログ置き場を変更した" in r.stdout
+
+
+@pytest.mark.parametrize("value", ["warn", "foo"])
+def test_an_unknown_value_is_rejected_at_configure_time(tmp_path, value):
+    """未知の値は `pytest_configure` の段階で止めること (後段の fixture に頼らない)。
+
+    2026-09-28 の最終ゲートで、`pytest_configure` の検査を外す変異 (V3) が生き残った。
+    後ろの session fixture でも拒否されるのでテストは流れないが、止まり方が違う:
+    configure で止まれば終了コード 4 (使い方の誤り、テストを 1 本も集めない)、
+    fixture だけだと 1 (各テストがエラー)。二重の防御の 1 枚目を固定する。
+    """
+    root = _mini_repo(tmp_path / "r", "def test_a():\n    assert True\n")
+    env = child_pytest_env()
+    env[RUNTIME_GUARD_ENV] = value                 # 子に未知の値をわざと渡す
+    r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+                        "--rootdir", str(root), str(root / "tests")],
+                       cwd=root, env=env, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", timeout=120)
+
+    assert r.returncode == pytest.ExitCode.USAGE_ERROR, (r.returncode, r.stdout[-800:], r.stderr[-800:])
+    assert RUNTIME_GUARD_ENV in (r.stdout + r.stderr)
+    assert "test_a" not in r.stdout, "未知の値なのにテストを集めた"
