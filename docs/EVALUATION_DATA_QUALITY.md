@@ -75,7 +75,7 @@
 | repaired builder SHA | `9cff875` (branch `cross-date-fix-20260926`。`ead43ce` 修正 + `c3be0e9` / `9cff875` テスト。3 名レビュー PASS) |
 | regeneration date | 2026-09-28 09:16 (scratch) → 09:19 (tracked)、非開催日・ai-builder Disabled |
 | DB | 本番 `data/keiba.db` を `--db` で渡した (builder は SELECT のみ。読み取り専用への切り替えはバックログ `BUILD_DAILY_RESULTS_READONLY_DB`)。開始前・各日の後・終了後の size / mtime と WAL の size が不変 |
-| 証拠 | `docs/repairs/cross_date_20260928/` (再生成・独立チェックのスクリプトと結果。1 回目は WAL が消えたのを変化と誤判定して止めた記録も残す) |
+| 証拠 | `data/backtest/cross_date_repair_20260928/` (再生成・独立チェックのスクリプトと結果。1 回目は WAL が消えたのを変化と誤判定して止めた記録も残す) |
 
 ### 状態の変化と manifest
 
@@ -114,7 +114,7 @@ builder が新 manifest の `supersedes_manifest_sha256` に刻んだ値と一�
 | 2026-06-17 | 0 / 36 | 485 | 0 / 0 | 0 / 0 | 0 / +0 | 0 | 0 |
 | 2026-07-03 | 0 / 72 | 479 | 0 / 0 | 0 / 0 | 0 / +0 | 0 | 0 |
 
-独立チェック (`docs/repairs/cross_date_20260928/verify.py`) で 10 日とも成立したこと:
+独立チェック (`data/backtest/cross_date_repair_20260928/verify.py`) で 10 日とも成立したこと:
 HTML の race ID から日付を分類した件数と manifest の件数 (`html_races_parsed` / `foreign_date_races_dropped` /
 `foreign_date_predictions_dropped` / `foreign_date_race_ids` / `predictions`) が一致 / **出力 CSV 5 本に
 race_date ≠ 対象日の行が 0** / ◎ が 2 頭以上のレース 0 / HTML の対象日レース集合 ⊆ DB の当日 JRA レース集合
