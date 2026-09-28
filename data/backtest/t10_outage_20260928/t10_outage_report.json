@@ -1,0 +1,2786 @@
+{
+ "observed_at": "2026-09-28T10:01:53",
+ "gap_min": 15,
+ "fresh_min": 30,
+ "days": {
+  "20260905": {
+   "raw_0B30_files": 1521,
+   "raw_0B30_span": [
+    "08:20",
+    "16:21"
+   ],
+   "outage_windows": [
+    [
+     "14:31:33",
+     "14:52:02",
+     20.5
+    ],
+    [
+     "15:12:02",
+     "15:33:02",
+     21.0
+    ]
+   ],
+   "outage_minutes_total": 41.5,
+   "all": {
+    "races": 36,
+    "status": {
+     "fresh": 36
+    },
+    "source": {
+     "0B30": 35,
+     "0B31": 1
+    },
+    "age_min_p50": 0.5,
+    "age_min_p90": 0.5,
+    "age_min_max": 9.97,
+    "age_over_5min": 1,
+    "age_over_10min": 0
+   },
+   "in_outage": {
+    "races": 3,
+    "status": {
+     "fresh": 3
+    },
+    "source": {
+     "0B30": 2,
+     "0B31": 1
+    },
+    "age_min_p50": 5.0,
+    "age_min_p90": 10.0,
+    "age_min_max": 9.97,
+    "age_over_5min": 1,
+    "age_over_10min": 0
+   },
+   "not_in_outage": {
+    "races": 33,
+    "status": {
+     "fresh": 33
+    },
+    "source": {
+     "0B30": 33
+    },
+    "age_min_p50": 0.5,
+    "age_min_p90": 0.5,
+    "age_min_max": 0.45,
+    "age_over_5min": 0,
+    "age_over_10min": 0
+   },
+   "rescued_by_0B31_in_outage": 1,
+   "stale_or_missing_in_outage": 0,
+   "horse_level_source_latest_pit_odds": {
+    "0B30": 446,
+    "0B31": 7
+   },
+   "races": [
+    {
+     "race": "2026-0905-01-02-05-01",
+     "decision": "2026-09-05T09:40:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-09-04-01-01",
+     "decision": "2026-09-05T09:45:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-06-04-01-01",
+     "decision": "2026-09-05T09:55:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0905-01-02-05-02",
+     "decision": "2026-09-05T10:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-09-04-01-02",
+     "decision": "2026-09-05T10:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-06-04-01-02",
+     "decision": "2026-09-05T10:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-01-02-05-03",
+     "decision": "2026-09-05T10:40:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-09-04-01-03",
+     "decision": "2026-09-05T10:50:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-06-04-01-03",
+     "decision": "2026-09-05T11:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-01-02-05-04",
+     "decision": "2026-09-05T11:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-09-04-01-04",
+     "decision": "2026-09-05T11:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-06-04-01-04",
+     "decision": "2026-09-05T11:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-01-02-05-05",
+     "decision": "2026-09-05T12:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-09-04-01-05",
+     "decision": "2026-09-05T12:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-06-04-01-05",
+     "decision": "2026-09-05T12:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-01-02-05-06",
+     "decision": "2026-09-05T12:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0905-09-04-01-06",
+     "decision": "2026-09-05T12:40:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0905-06-04-01-06",
+     "decision": "2026-09-05T12:50:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-01-02-05-07",
+     "decision": "2026-09-05T13:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-09-04-01-07",
+     "decision": "2026-09-05T13:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-06-04-01-07",
+     "decision": "2026-09-05T13:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-01-02-05-08",
+     "decision": "2026-09-05T13:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-09-04-01-08",
+     "decision": "2026-09-05T13:40:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0905-06-04-01-08",
+     "decision": "2026-09-05T13:51:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-01-02-05-09",
+     "decision": "2026-09-05T14:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-09-04-01-09",
+     "decision": "2026-09-05T14:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0905-06-04-01-09",
+     "decision": "2026-09-05T14:21:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0905-01-02-05-10",
+     "decision": "2026-09-05T14:35:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 3.45
+    },
+    {
+     "race": "2026-0905-09-04-01-10",
+     "decision": "2026-09-05T14:45:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 4.97
+    },
+    {
+     "race": "2026-0905-06-04-01-10",
+     "decision": "2026-09-05T14:55:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-01-02-05-11",
+     "decision": "2026-09-05T15:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-09-04-01-11",
+     "decision": "2026-09-05T15:20:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0905-06-04-01-11",
+     "decision": "2026-09-05T15:35:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-01-02-05-12",
+     "decision": "2026-09-05T15:55:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-09-04-01-12",
+     "decision": "2026-09-05T16:05:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0905-06-04-01-12",
+     "decision": "2026-09-05T16:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    }
+   ]
+  },
+  "20260906": {
+   "raw_0B30_files": 1634,
+   "raw_0B30_span": [
+    "08:20",
+    "16:31"
+   ],
+   "outage_windows": [
+    [
+     "15:25:33",
+     "15:46:03",
+     20.5
+    ]
+   ],
+   "outage_minutes_total": 20.5,
+   "all": {
+    "races": 36,
+    "status": {
+     "fresh": 36
+    },
+    "source": {
+     "0B30": 35,
+     "0B31": 1
+    },
+    "age_min_p50": 0.5,
+    "age_min_p90": 0.5,
+    "age_min_max": 4.97,
+    "age_over_5min": 0,
+    "age_over_10min": 0
+   },
+   "in_outage": {
+    "races": 1,
+    "status": {
+     "fresh": 1
+    },
+    "source": {
+     "0B31": 1
+    },
+    "age_min_p50": 5.0,
+    "age_min_p90": 5.0,
+    "age_min_max": 4.97,
+    "age_over_5min": 0,
+    "age_over_10min": 0
+   },
+   "not_in_outage": {
+    "races": 35,
+    "status": {
+     "fresh": 35
+    },
+    "source": {
+     "0B30": 35
+    },
+    "age_min_p50": 0.5,
+    "age_min_p90": 0.5,
+    "age_min_max": 0.45,
+    "age_over_5min": 0,
+    "age_over_10min": 0
+   },
+   "rescued_by_0B31_in_outage": 1,
+   "stale_or_missing_in_outage": 0,
+   "horse_level_source_latest_pit_odds": {
+    "0B30": 480,
+    "0B31": 11
+   },
+   "races": [
+    {
+     "race": "2026-0906-01-02-06-01",
+     "decision": "2026-09-06T09:40:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-09-04-02-01",
+     "decision": "2026-09-06T09:45:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-06-04-02-01",
+     "decision": "2026-09-06T09:55:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-01-02-06-02",
+     "decision": "2026-09-06T10:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0906-09-04-02-02",
+     "decision": "2026-09-06T10:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-06-04-02-02",
+     "decision": "2026-09-06T10:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-01-02-06-03",
+     "decision": "2026-09-06T10:40:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-09-04-02-03",
+     "decision": "2026-09-06T10:50:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-06-04-02-03",
+     "decision": "2026-09-06T11:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-01-02-06-04",
+     "decision": "2026-09-06T11:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-09-04-02-04",
+     "decision": "2026-09-06T11:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-06-04-02-04",
+     "decision": "2026-09-06T11:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-01-02-06-05",
+     "decision": "2026-09-06T12:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-09-04-02-05",
+     "decision": "2026-09-06T12:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-06-04-02-05",
+     "decision": "2026-09-06T12:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-01-02-06-06",
+     "decision": "2026-09-06T12:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-09-04-02-06",
+     "decision": "2026-09-06T12:40:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-06-04-02-06",
+     "decision": "2026-09-06T12:50:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-01-02-06-07",
+     "decision": "2026-09-06T13:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0906-09-04-02-07",
+     "decision": "2026-09-06T13:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-06-04-02-07",
+     "decision": "2026-09-06T13:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.42
+    },
+    {
+     "race": "2026-0906-01-02-06-08",
+     "decision": "2026-09-06T13:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-09-04-02-08",
+     "decision": "2026-09-06T13:40:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0906-06-04-02-08",
+     "decision": "2026-09-06T13:51:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0906-01-02-06-09",
+     "decision": "2026-09-06T14:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0906-09-04-02-09",
+     "decision": "2026-09-06T14:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-06-04-02-09",
+     "decision": "2026-09-06T14:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-01-02-06-10",
+     "decision": "2026-09-06T14:35:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-09-04-02-10",
+     "decision": "2026-09-06T14:45:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-06-04-02-10",
+     "decision": "2026-09-06T14:55:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-01-02-06-11",
+     "decision": "2026-09-06T15:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0906-09-04-02-11",
+     "decision": "2026-09-06T15:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-06-04-02-11",
+     "decision": "2026-09-06T15:35:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 4.97
+    },
+    {
+     "race": "2026-0906-01-02-06-12",
+     "decision": "2026-09-06T15:55:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-09-04-02-12",
+     "decision": "2026-09-06T16:05:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0906-06-04-02-12",
+     "decision": "2026-09-06T16:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    }
+   ]
+  },
+  "20260912": {
+   "raw_0B30_files": 961,
+   "raw_0B30_span": [
+    "08:15",
+    "16:31"
+   ],
+   "outage_windows": [
+    [
+     "08:27:02",
+     "08:49:02",
+     22.0
+    ],
+    [
+     "09:23:01",
+     "09:46:02",
+     23.0
+    ],
+    [
+     "13:58:02",
+     "14:19:02",
+     21.0
+    ],
+    [
+     "14:31:03",
+     "14:55:32",
+     24.5
+    ]
+   ],
+   "outage_minutes_total": 90.5,
+   "all": {
+    "races": 24,
+    "status": {
+     "fresh": 24
+    },
+    "source": {
+     "0B31": 3,
+     "0B30": 21
+    },
+    "age_min_p50": 0.5,
+    "age_min_p90": 5.0,
+    "age_min_max": 8.97,
+    "age_over_5min": 1,
+    "age_over_10min": 0
+   },
+   "in_outage": {
+    "races": 5,
+    "status": {
+     "fresh": 5
+    },
+    "source": {
+     "0B31": 3,
+     "0B30": 2
+    },
+    "age_min_p50": 5.0,
+    "age_min_p90": 9.0,
+    "age_min_max": 8.97,
+    "age_over_5min": 1,
+    "age_over_10min": 0
+   },
+   "not_in_outage": {
+    "races": 19,
+    "status": {
+     "fresh": 19
+    },
+    "source": {
+     "0B30": 19
+    },
+    "age_min_p50": 0.5,
+    "age_min_p90": 0.5,
+    "age_min_max": 0.45,
+    "age_over_5min": 0,
+    "age_over_10min": 0
+   },
+   "rescued_by_0B31_in_outage": 3,
+   "stale_or_missing_in_outage": 0,
+   "horse_level_source_latest_pit_odds": {
+    "0B31": 40,
+    "0B30": 276
+   },
+   "races": [
+    {
+     "race": "2026-0912-06-04-03-01",
+     "decision": "2026-09-12T09:35:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 4.97
+    },
+    {
+     "race": "2026-0912-09-04-03-01",
+     "decision": "2026-09-12T09:51:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-06-04-03-02",
+     "decision": "2026-09-12T10:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-09-04-03-02",
+     "decision": "2026-09-12T10:25:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-06-04-03-03",
+     "decision": "2026-09-12T10:40:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-09-04-03-03",
+     "decision": "2026-09-12T10:55:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-06-04-03-04",
+     "decision": "2026-09-12T11:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-09-04-03-04",
+     "decision": "2026-09-12T11:25:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-06-04-03-05",
+     "decision": "2026-09-12T12:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-09-04-03-05",
+     "decision": "2026-09-12T12:15:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-06-04-03-06",
+     "decision": "2026-09-12T12:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-09-04-03-06",
+     "decision": "2026-09-12T12:45:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-06-04-03-07",
+     "decision": "2026-09-12T13:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0912-09-04-03-07",
+     "decision": "2026-09-12T13:15:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-06-04-03-08",
+     "decision": "2026-09-12T13:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-09-04-03-08",
+     "decision": "2026-09-12T13:45:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-06-04-03-09",
+     "decision": "2026-09-12T14:00:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 1.97
+    },
+    {
+     "race": "2026-0912-09-04-03-09",
+     "decision": "2026-09-12T14:15:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 4.97
+    },
+    {
+     "race": "2026-0912-06-04-03-10",
+     "decision": "2026-09-12T14:40:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 8.97
+    },
+    {
+     "race": "2026-0912-09-04-03-10",
+     "decision": "2026-09-12T14:55:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 4.97
+    },
+    {
+     "race": "2026-0912-06-04-03-11",
+     "decision": "2026-09-12T15:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-09-04-03-11",
+     "decision": "2026-09-12T15:35:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-06-04-03-12",
+     "decision": "2026-09-12T16:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0912-09-04-03-12",
+     "decision": "2026-09-12T16:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    }
+   ]
+  },
+  "20260913": {
+   "raw_0B30_files": 1064,
+   "raw_0B30_span": [
+    "08:31",
+    "16:31"
+   ],
+   "outage_windows": [
+    [
+     "10:02:02",
+     "10:24:02",
+     22.0
+    ]
+   ],
+   "outage_minutes_total": 22.0,
+   "all": {
+    "races": 24,
+    "status": {
+     "fresh": 24
+    },
+    "source": {
+     "0B30": 23,
+     "0B31": 1
+    },
+    "age_min_p50": 0.5,
+    "age_min_p90": 0.5,
+    "age_min_max": 9.97,
+    "age_over_5min": 1,
+    "age_over_10min": 0
+   },
+   "in_outage": {
+    "races": 1,
+    "status": {
+     "fresh": 1
+    },
+    "source": {
+     "0B31": 1
+    },
+    "age_min_p50": 10.0,
+    "age_min_p90": 10.0,
+    "age_min_max": 9.97,
+    "age_over_5min": 1,
+    "age_over_10min": 0
+   },
+   "not_in_outage": {
+    "races": 23,
+    "status": {
+     "fresh": 23
+    },
+    "source": {
+     "0B30": 23
+    },
+    "age_min_p50": 0.5,
+    "age_min_p90": 0.5,
+    "age_min_max": 0.47,
+    "age_over_5min": 0,
+    "age_over_10min": 0
+   },
+   "rescued_by_0B31_in_outage": 1,
+   "stale_or_missing_in_outage": 0,
+   "horse_level_source_latest_pit_odds": {
+    "0B30": 307,
+    "0B31": 7
+   },
+   "races": [
+    {
+     "race": "2026-0913-09-04-04-01",
+     "decision": "2026-09-13T09:35:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.47
+    },
+    {
+     "race": "2026-0913-06-04-04-01",
+     "decision": "2026-09-13T09:50:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0913-09-04-04-02",
+     "decision": "2026-09-13T10:10:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0913-06-04-04-02",
+     "decision": "2026-09-13T10:25:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0913-09-04-04-03",
+     "decision": "2026-09-13T10:40:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0913-06-04-04-03",
+     "decision": "2026-09-13T10:55:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0913-09-04-04-04",
+     "decision": "2026-09-13T11:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0913-06-04-04-04",
+     "decision": "2026-09-13T11:25:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0913-09-04-04-05",
+     "decision": "2026-09-13T12:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0913-06-04-04-05",
+     "decision": "2026-09-13T12:15:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0913-09-04-04-06",
+     "decision": "2026-09-13T12:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0913-06-04-04-06",
+     "decision": "2026-09-13T12:45:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0913-09-04-04-07",
+     "decision": "2026-09-13T13:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0913-06-04-04-07",
+     "decision": "2026-09-13T13:15:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0913-09-04-04-08",
+     "decision": "2026-09-13T13:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0913-06-04-04-08",
+     "decision": "2026-09-13T13:45:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0913-09-04-04-09",
+     "decision": "2026-09-13T14:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0913-06-04-04-09",
+     "decision": "2026-09-13T14:15:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0913-09-04-04-10",
+     "decision": "2026-09-13T14:40:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0913-06-04-04-10",
+     "decision": "2026-09-13T14:55:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0913-09-04-04-11",
+     "decision": "2026-09-13T15:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0913-06-04-04-11",
+     "decision": "2026-09-13T15:35:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0913-09-04-04-12",
+     "decision": "2026-09-13T16:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0913-06-04-04-12",
+     "decision": "2026-09-13T16:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    }
+   ]
+  },
+  "20260919": {
+   "raw_0B30_files": 1126,
+   "raw_0B30_span": [
+    "08:15",
+    "16:31"
+   ],
+   "outage_windows": [],
+   "outage_minutes_total": 0.0,
+   "all": {
+    "races": 24,
+    "status": {
+     "fresh": 24
+    },
+    "source": {
+     "0B30": 24
+    },
+    "age_min_p50": 0.5,
+    "age_min_p90": 0.5,
+    "age_min_max": 0.45,
+    "age_over_5min": 0,
+    "age_over_10min": 0
+   },
+   "in_outage": {
+    "races": 0,
+    "status": {},
+    "source": {},
+    "age_min_p50": null,
+    "age_min_p90": null,
+    "age_min_max": null,
+    "age_over_5min": 0,
+    "age_over_10min": 0
+   },
+   "not_in_outage": {
+    "races": 24,
+    "status": {
+     "fresh": 24
+    },
+    "source": {
+     "0B30": 24
+    },
+    "age_min_p50": 0.5,
+    "age_min_p90": 0.5,
+    "age_min_max": 0.45,
+    "age_over_5min": 0,
+    "age_over_10min": 0
+   },
+   "rescued_by_0B31_in_outage": 0,
+   "stale_or_missing_in_outage": 0,
+   "horse_level_source_latest_pit_odds": {
+    "0B30": 287
+   },
+   "races": [
+    {
+     "race": "2026-0919-09-04-05-01",
+     "decision": "2026-09-19T09:35:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0919-06-04-05-01",
+     "decision": "2026-09-19T09:50:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0919-09-04-05-02",
+     "decision": "2026-09-19T10:05:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0919-06-04-05-02",
+     "decision": "2026-09-19T10:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0919-09-04-05-03",
+     "decision": "2026-09-19T10:35:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0919-06-04-05-03",
+     "decision": "2026-09-19T10:50:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0919-09-04-05-04",
+     "decision": "2026-09-19T11:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0919-06-04-05-04",
+     "decision": "2026-09-19T11:25:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0919-09-04-05-05",
+     "decision": "2026-09-19T12:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0919-06-04-05-05",
+     "decision": "2026-09-19T12:15:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0919-09-04-05-06",
+     "decision": "2026-09-19T12:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0919-06-04-05-06",
+     "decision": "2026-09-19T12:45:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0919-09-04-05-07",
+     "decision": "2026-09-19T13:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0919-06-04-05-07",
+     "decision": "2026-09-19T13:15:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0919-09-04-05-08",
+     "decision": "2026-09-19T13:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0919-06-04-05-08",
+     "decision": "2026-09-19T13:45:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0919-09-04-05-09",
+     "decision": "2026-09-19T14:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0919-06-04-05-09",
+     "decision": "2026-09-19T14:15:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0919-09-04-05-10",
+     "decision": "2026-09-19T14:40:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0919-06-04-05-10",
+     "decision": "2026-09-19T14:55:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0919-09-04-05-11",
+     "decision": "2026-09-19T15:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0919-06-04-05-11",
+     "decision": "2026-09-19T15:35:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0919-09-04-05-12",
+     "decision": "2026-09-19T16:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0919-06-04-05-12",
+     "decision": "2026-09-19T16:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    }
+   ]
+  },
+  "20260920": {
+   "raw_0B30_files": 1011,
+   "raw_0B30_span": [
+    "08:15",
+    "16:31"
+   ],
+   "outage_windows": [
+    [
+     "13:03:02",
+     "13:24:02",
+     21.0
+    ],
+    [
+     "13:49:33",
+     "14:10:02",
+     20.5
+    ]
+   ],
+   "outage_minutes_total": 41.5,
+   "all": {
+    "races": 24,
+    "status": {
+     "fresh": 24
+    },
+    "source": {
+     "0B30": 22,
+     "0B31": 2
+    },
+    "age_min_p50": 0.5,
+    "age_min_p90": 0.5,
+    "age_min_max": 9.97,
+    "age_over_5min": 1,
+    "age_over_10min": 0
+   },
+   "in_outage": {
+    "races": 2,
+    "status": {
+     "fresh": 2
+    },
+    "source": {
+     "0B31": 2
+    },
+    "age_min_p50": 10.0,
+    "age_min_p90": 10.0,
+    "age_min_max": 9.97,
+    "age_over_5min": 1,
+    "age_over_10min": 0
+   },
+   "not_in_outage": {
+    "races": 22,
+    "status": {
+     "fresh": 22
+    },
+    "source": {
+     "0B30": 22
+    },
+    "age_min_p50": 0.5,
+    "age_min_p90": 0.5,
+    "age_min_max": 0.45,
+    "age_over_5min": 0,
+    "age_over_10min": 0
+   },
+   "rescued_by_0B31_in_outage": 2,
+   "stale_or_missing_in_outage": 0,
+   "horse_level_source_latest_pit_odds": {
+    "0B30": 306,
+    "0B31": 28
+   },
+   "races": [
+    {
+     "race": "2026-0920-09-04-06-01",
+     "decision": "2026-09-20T09:35:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0920-06-04-06-01",
+     "decision": "2026-09-20T09:50:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0920-09-04-06-02",
+     "decision": "2026-09-20T10:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0920-06-04-06-02",
+     "decision": "2026-09-20T10:25:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0920-09-04-06-03",
+     "decision": "2026-09-20T10:40:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0920-06-04-06-03",
+     "decision": "2026-09-20T10:55:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0920-09-04-06-04",
+     "decision": "2026-09-20T11:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0920-06-04-06-04",
+     "decision": "2026-09-20T11:25:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0920-09-04-06-05",
+     "decision": "2026-09-20T12:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0920-06-04-06-05",
+     "decision": "2026-09-20T12:15:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0920-09-04-06-06",
+     "decision": "2026-09-20T12:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0920-06-04-06-06",
+     "decision": "2026-09-20T12:45:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0920-09-04-06-07",
+     "decision": "2026-09-20T13:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0920-06-04-06-07",
+     "decision": "2026-09-20T13:15:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 4.97
+    },
+    {
+     "race": "2026-0920-09-04-06-08",
+     "decision": "2026-09-20T13:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0920-06-04-06-08",
+     "decision": "2026-09-20T13:45:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0920-09-04-06-09",
+     "decision": "2026-09-20T14:00:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0920-06-04-06-09",
+     "decision": "2026-09-20T14:15:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0920-09-04-06-10",
+     "decision": "2026-09-20T14:40:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0920-06-04-06-10",
+     "decision": "2026-09-20T14:55:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0920-09-04-06-11",
+     "decision": "2026-09-20T15:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0920-06-04-06-11",
+     "decision": "2026-09-20T15:35:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0920-09-04-06-12",
+     "decision": "2026-09-20T16:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0920-06-04-06-12",
+     "decision": "2026-09-20T16:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    }
+   ]
+  },
+  "20260921": {
+   "raw_0B30_files": 449,
+   "raw_0B30_span": [
+    "08:30",
+    "16:15"
+   ],
+   "outage_windows": [
+    [
+     "10:53:02",
+     "11:14:02",
+     21.0
+    ],
+    [
+     "11:56:02",
+     "12:19:02",
+     23.0
+    ],
+    [
+     "12:20:33",
+     "12:41:03",
+     20.5
+    ]
+   ],
+   "outage_minutes_total": 64.5,
+   "all": {
+    "races": 12,
+    "status": {
+     "fresh": 12
+    },
+    "source": {
+     "0B30": 11,
+     "0B31": 1
+    },
+    "age_min_p50": 0.5,
+    "age_min_p90": 5.0,
+    "age_min_max": 4.97,
+    "age_over_5min": 0,
+    "age_over_10min": 0
+   },
+   "in_outage": {
+    "races": 2,
+    "status": {
+     "fresh": 2
+    },
+    "source": {
+     "0B30": 1,
+     "0B31": 1
+    },
+    "age_min_p50": 5.0,
+    "age_min_p90": 5.0,
+    "age_min_max": 4.97,
+    "age_over_5min": 0,
+    "age_over_10min": 0
+   },
+   "not_in_outage": {
+    "races": 10,
+    "status": {
+     "fresh": 10
+    },
+    "source": {
+     "0B30": 10
+    },
+    "age_min_p50": 0.4,
+    "age_min_p90": 0.5,
+    "age_min_max": 4.95,
+    "age_over_5min": 0,
+    "age_over_10min": 0
+   },
+   "rescued_by_0B31_in_outage": 1,
+   "stale_or_missing_in_outage": 0,
+   "horse_level_source_latest_pit_odds": {
+    "0B30": 149,
+    "0B31": 10
+   },
+   "races": [
+    {
+     "race": "2026-0921-09-04-07-01",
+     "decision": "2026-09-21T09:50:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0921-09-04-07-02",
+     "decision": "2026-09-21T10:25:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0921-09-04-07-03",
+     "decision": "2026-09-21T10:55:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 1.98
+    },
+    {
+     "race": "2026-0921-09-04-07-04",
+     "decision": "2026-09-21T11:25:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0921-09-04-07-05",
+     "decision": "2026-09-21T12:15:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 4.97
+    },
+    {
+     "race": "2026-0921-09-04-07-06",
+     "decision": "2026-09-21T12:45:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0921-09-04-07-07",
+     "decision": "2026-09-21T13:15:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0921-09-04-07-08",
+     "decision": "2026-09-21T13:45:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0921-09-04-07-09",
+     "decision": "2026-09-21T14:15:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0921-09-04-07-10",
+     "decision": "2026-09-21T14:55:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0921-09-04-07-11",
+     "decision": "2026-09-21T15:35:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0921-09-04-07-12",
+     "decision": "2026-09-21T16:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 4.95
+    }
+   ]
+  },
+  "20260922": {
+   "raw_0B30_files": 319,
+   "raw_0B30_span": [
+    "08:15",
+    "16:11"
+   ],
+   "outage_windows": [
+    [
+     "10:21:34",
+     "10:43:02",
+     21.5
+    ],
+    [
+     "11:14:33",
+     "11:35:02",
+     20.5
+    ],
+    [
+     "11:47:02",
+     "12:11:02",
+     24.0
+    ],
+    [
+     "12:11:34",
+     "12:32:02",
+     20.5
+    ],
+    [
+     "12:32:34",
+     "12:54:02",
+     21.5
+    ],
+    [
+     "12:56:33",
+     "13:17:02",
+     20.5
+    ],
+    [
+     "13:23:02",
+     "13:45:02",
+     22.0
+    ],
+    [
+     "14:18:02",
+     "14:40:02",
+     22.0
+    ],
+    [
+     "14:52:02",
+     "15:14:02",
+     22.0
+    ],
+    [
+     "15:20:34",
+     "15:41:02",
+     20.5
+    ]
+   ],
+   "outage_minutes_total": 214.8,
+   "all": {
+    "races": 12,
+    "status": {
+     "fresh": 12
+    },
+    "source": {
+     "0B30": 8,
+     "0B31": 4
+    },
+    "age_min_p50": 3.5,
+    "age_min_p90": 10.0,
+    "age_min_max": 9.97,
+    "age_over_5min": 5,
+    "age_over_10min": 0
+   },
+   "in_outage": {
+    "races": 6,
+    "status": {
+     "fresh": 6
+    },
+    "source": {
+     "0B31": 4,
+     "0B30": 2
+    },
+    "age_min_p50": 10.0,
+    "age_min_p90": 10.0,
+    "age_min_max": 9.97,
+    "age_over_5min": 5,
+    "age_over_10min": 0
+   },
+   "not_in_outage": {
+    "races": 6,
+    "status": {
+     "fresh": 6
+    },
+    "source": {
+     "0B30": 6
+    },
+    "age_min_p50": 0.5,
+    "age_min_p90": 0.5,
+    "age_min_max": 0.45,
+    "age_over_5min": 0,
+    "age_over_10min": 0
+   },
+   "rescued_by_0B31_in_outage": 4,
+   "stale_or_missing_in_outage": 0,
+   "horse_level_source_latest_pit_odds": {
+    "0B30": 116,
+    "0B31": 45
+   },
+   "races": [
+    {
+     "race": "2026-0922-06-04-07-01",
+     "decision": "2026-09-22T09:35:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0922-06-04-07-02",
+     "decision": "2026-09-22T10:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0922-06-04-07-03",
+     "decision": "2026-09-22T10:40:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0922-06-04-07-04",
+     "decision": "2026-09-22T11:10:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0922-06-04-07-05",
+     "decision": "2026-09-22T12:00:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0922-06-04-07-06",
+     "decision": "2026-09-22T12:30:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0922-06-04-07-07",
+     "decision": "2026-09-22T13:00:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 3.45
+    },
+    {
+     "race": "2026-0922-06-04-07-08",
+     "decision": "2026-09-22T13:30:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 6.97
+    },
+    {
+     "race": "2026-0922-06-04-07-09",
+     "decision": "2026-09-22T14:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0922-06-04-07-10",
+     "decision": "2026-09-22T14:40:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0922-06-04-07-11",
+     "decision": "2026-09-22T15:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0922-06-04-07-12",
+     "decision": "2026-09-22T16:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    }
+   ]
+  },
+  "20260926": {
+   "raw_0B30_files": 559,
+   "raw_0B30_span": [
+    "08:15",
+    "16:27"
+   ],
+   "outage_windows": [
+    [
+     "09:06:02",
+     "09:27:02",
+     21.0
+    ],
+    [
+     "10:05:34",
+     "10:26:02",
+     20.5
+    ],
+    [
+     "10:39:33",
+     "11:00:02",
+     20.5
+    ],
+    [
+     "11:00:34",
+     "11:24:02",
+     23.5
+    ],
+    [
+     "12:08:33",
+     "12:29:02",
+     20.5
+    ],
+    [
+     "12:38:33",
+     "12:59:02",
+     20.5
+    ],
+    [
+     "13:25:34",
+     "13:46:32",
+     21.0
+    ],
+    [
+     "14:20:33",
+     "14:41:02",
+     20.5
+    ],
+    [
+     "14:45:34",
+     "15:06:02",
+     20.5
+    ],
+    [
+     "15:06:35",
+     "15:28:02",
+     21.4
+    ],
+    [
+     "15:34:34",
+     "15:55:02",
+     20.5
+    ],
+    [
+     "15:57:33",
+     "16:18:02",
+     20.5
+    ]
+   ],
+   "outage_minutes_total": 250.7,
+   "all": {
+    "races": 24,
+    "status": {
+     "fresh": 24
+    },
+    "source": {
+     "0B30": 16,
+     "0B31": 8
+    },
+    "age_min_p50": 0.5,
+    "age_min_p90": 10.0,
+    "age_min_max": 9.97,
+    "age_over_5min": 5,
+    "age_over_10min": 0
+   },
+   "in_outage": {
+    "races": 12,
+    "status": {
+     "fresh": 12
+    },
+    "source": {
+     "0B31": 8,
+     "0B30": 4
+    },
+    "age_min_p50": 5.0,
+    "age_min_p90": 10.0,
+    "age_min_max": 9.97,
+    "age_over_5min": 5,
+    "age_over_10min": 0
+   },
+   "not_in_outage": {
+    "races": 12,
+    "status": {
+     "fresh": 12
+    },
+    "source": {
+     "0B30": 12
+    },
+    "age_min_p50": 0.4,
+    "age_min_p90": 0.5,
+    "age_min_max": 0.45,
+    "age_over_5min": 0,
+    "age_over_10min": 0
+   },
+   "rescued_by_0B31_in_outage": 8,
+   "stale_or_missing_in_outage": 0,
+   "horse_level_source_latest_pit_odds": {
+    "0B30": 205,
+    "0B31": 108
+   },
+   "races": [
+    {
+     "race": "2026-0926-06-04-08-01",
+     "decision": "2026-09-26T09:35:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0926-09-04-08-01",
+     "decision": "2026-09-26T09:51:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0926-06-04-08-02",
+     "decision": "2026-09-26T10:05:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0926-09-04-08-02",
+     "decision": "2026-09-26T10:20:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0926-06-04-08-03",
+     "decision": "2026-09-26T10:35:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0926-09-04-08-03",
+     "decision": "2026-09-26T10:50:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0926-06-04-08-04",
+     "decision": "2026-09-26T11:10:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0926-09-04-08-04",
+     "decision": "2026-09-26T11:25:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0926-06-04-08-05",
+     "decision": "2026-09-26T12:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0926-09-04-08-05",
+     "decision": "2026-09-26T12:15:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 4.97
+    },
+    {
+     "race": "2026-0926-06-04-08-06",
+     "decision": "2026-09-26T12:30:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.42
+    },
+    {
+     "race": "2026-0926-09-04-08-06",
+     "decision": "2026-09-26T12:45:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 4.97
+    },
+    {
+     "race": "2026-0926-06-04-08-07",
+     "decision": "2026-09-26T13:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.42
+    },
+    {
+     "race": "2026-0926-09-04-08-07",
+     "decision": "2026-09-26T13:15:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0926-06-04-08-08",
+     "decision": "2026-09-26T13:30:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 4.43
+    },
+    {
+     "race": "2026-0926-09-04-08-08",
+     "decision": "2026-09-26T13:45:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 4.97
+    },
+    {
+     "race": "2026-0926-06-04-08-09",
+     "decision": "2026-09-26T14:00:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0926-09-04-08-09",
+     "decision": "2026-09-26T14:15:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0926-06-04-08-10",
+     "decision": "2026-09-26T14:40:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0926-09-04-08-10",
+     "decision": "2026-09-26T14:55:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 4.97
+    },
+    {
+     "race": "2026-0926-06-04-08-11",
+     "decision": "2026-09-26T15:20:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0926-09-04-08-11",
+     "decision": "2026-09-26T15:35:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0926-06-04-08-12",
+     "decision": "2026-09-26T16:00:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 2.45
+    },
+    {
+     "race": "2026-0926-09-04-08-12",
+     "decision": "2026-09-26T16:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    }
+   ]
+  },
+  "20260927": {
+   "raw_0B30_files": 421,
+   "raw_0B30_span": [
+    "08:15",
+    "16:31"
+   ],
+   "outage_windows": [
+    [
+     "08:45:02",
+     "09:08:02",
+     23.0
+    ],
+    [
+     "09:14:02",
+     "09:37:02",
+     23.0
+    ],
+    [
+     "09:37:34",
+     "09:58:02",
+     20.5
+    ],
+    [
+     "10:01:33",
+     "10:23:02",
+     21.5
+    ],
+    [
+     "10:24:34",
+     "10:45:02",
+     20.5
+    ],
+    [
+     "10:49:34",
+     "11:10:32",
+     21.0
+    ],
+    [
+     "11:28:33",
+     "11:49:02",
+     20.5
+    ],
+    [
+     "11:49:03",
+     "12:12:02",
+     23.0
+    ],
+    [
+     "12:17:33",
+     "12:38:02",
+     20.5
+    ],
+    [
+     "12:49:34",
+     "13:10:02",
+     20.5
+    ],
+    [
+     "13:13:34",
+     "13:34:03",
+     20.5
+    ],
+    [
+     "13:47:33",
+     "14:08:02",
+     20.5
+    ],
+    [
+     "14:26:34",
+     "14:47:02",
+     20.5
+    ],
+    [
+     "15:09:34",
+     "15:30:03",
+     20.5
+    ],
+    [
+     "15:35:33",
+     "15:56:02",
+     20.5
+    ]
+   ],
+   "outage_minutes_total": 316.2,
+   "all": {
+    "races": 24,
+    "status": {
+     "fresh": 24
+    },
+    "source": {
+     "0B31": 14,
+     "0B30": 10
+    },
+    "age_min_p50": 5.0,
+    "age_min_p90": 10.0,
+    "age_min_max": 9.97,
+    "age_over_5min": 10,
+    "age_over_10min": 0
+   },
+   "in_outage": {
+    "races": 17,
+    "status": {
+     "fresh": 17
+    },
+    "source": {
+     "0B31": 14,
+     "0B30": 3
+    },
+    "age_min_p50": 10.0,
+    "age_min_p90": 10.0,
+    "age_min_max": 9.97,
+    "age_over_5min": 10,
+    "age_over_10min": 0
+   },
+   "not_in_outage": {
+    "races": 7,
+    "status": {
+     "fresh": 7
+    },
+    "source": {
+     "0B30": 7
+    },
+    "age_min_p50": 0.5,
+    "age_min_p90": 0.5,
+    "age_min_max": 0.45,
+    "age_over_5min": 0,
+    "age_over_10min": 0
+   },
+   "rescued_by_0B31_in_outage": 14,
+   "stale_or_missing_in_outage": 0,
+   "horse_level_source_latest_pit_odds": {
+    "0B31": 165,
+    "0B30": 141
+   },
+   "races": [
+    {
+     "race": "2026-0927-09-04-09-01",
+     "decision": "2026-09-27T09:35:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 4.97
+    },
+    {
+     "race": "2026-0927-06-04-09-01",
+     "decision": "2026-09-27T09:50:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0927-09-04-09-02",
+     "decision": "2026-09-27T10:10:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0927-06-04-09-02",
+     "decision": "2026-09-27T10:25:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0927-09-04-09-03",
+     "decision": "2026-09-27T10:40:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0927-06-04-09-03",
+     "decision": "2026-09-27T10:55:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 4.97
+    },
+    {
+     "race": "2026-0927-09-04-09-04",
+     "decision": "2026-09-27T11:10:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0927-06-04-09-04",
+     "decision": "2026-09-27T11:25:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0927-09-04-09-05",
+     "decision": "2026-09-27T12:00:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0927-06-04-09-05",
+     "decision": "2026-09-27T12:15:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0927-09-04-09-06",
+     "decision": "2026-09-27T12:30:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0927-06-04-09-06",
+     "decision": "2026-09-27T12:45:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0927-09-04-09-07",
+     "decision": "2026-09-27T13:00:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0927-06-04-09-07",
+     "decision": "2026-09-27T13:15:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 1.43
+    },
+    {
+     "race": "2026-0927-09-04-09-08",
+     "decision": "2026-09-27T13:30:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0927-06-04-09-08",
+     "decision": "2026-09-27T13:45:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    },
+    {
+     "race": "2026-0927-09-04-09-09",
+     "decision": "2026-09-27T14:00:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0927-06-04-09-09",
+     "decision": "2026-09-27T14:15:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0927-09-04-09-10",
+     "decision": "2026-09-27T14:35:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 4.97
+    },
+    {
+     "race": "2026-0927-06-04-09-10",
+     "decision": "2026-09-27T14:51:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0927-09-04-09-11",
+     "decision": "2026-09-27T15:10:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.43
+    },
+    {
+     "race": "2026-0927-06-04-09-11",
+     "decision": "2026-09-27T15:30:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 9.97
+    },
+    {
+     "race": "2026-0927-09-04-09-12",
+     "decision": "2026-09-27T15:55:00",
+     "in_outage": true,
+     "status": "fresh",
+     "source": "0B31",
+     "age_min": 4.95
+    },
+    {
+     "race": "2026-0927-06-04-09-12",
+     "decision": "2026-09-27T16:20:00",
+     "in_outage": false,
+     "status": "fresh",
+     "source": "0B30",
+     "age_min": 0.45
+    }
+   ]
+  }
+ }
+}
