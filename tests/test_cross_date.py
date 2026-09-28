@@ -173,3 +173,22 @@ def test_the_invariants_look_only_at_the_target_date(tmp_path, monkeypatch):
     counts = _manifest(_run_main(tmp_path, monkeypatch, html_text=html))
 
     assert counts["foreign_date_races_dropped"] == 1
+
+
+def test_a_realistically_marked_target_race_is_scored_in_full(tmp_path, monkeypatch):
+    """★ 本番の HTML と同じ形 (◎○▲△☆ と印なし) の対象日レースは、止めずに全頭を採点すること。
+
+    ◎ を数える条件が ○ なども拾うようになると (レビューの変異 Y8)、本番の全レースが
+    「◎ が 2 頭」で止まり、答え合わせが 100% 止まる。それまで、対象日のレースに ○ を
+    含めて正常終了を期待するテストが 1 本も無く、この回帰を捕まえられなかった。
+    """
+    horses = [("1", "◎", "A"), ("2", "○", "B"), ("3", "▲", "C"), ("4", "△", "D"),
+              ("5", "☆", "E"), ("6", "", "F"), ("7", "", "G")]
+    out = _run_main(tmp_path, monkeypatch,
+                    html_text=_race("20260712", "02", 1, horses),
+                    extra_horses=tuple((f"{n:02d}", n, "0") for n in range(2, 8)))
+
+    rows = [r for r in _summary(out) if r["race_id"] == "20260712-02-01"]
+    assert len(rows) == 7, [r["horse_name"] for r in rows]
+    assert sorted(r["mark"] for r in rows) == sorted(["◎", "○", "▲", "△", "☆", "", ""])
+    assert _manifest(out)["foreign_date_races_dropped"] == 0

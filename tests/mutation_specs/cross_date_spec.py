@@ -64,4 +64,10 @@ MUTANTS = [
      '            "foreign_date_race_ids": foreign_race_ids,',
      '            "foreign_date_race_ids": [],'),
     #    落ちるべき: test_foreign_races_are_recorded_not_silently_dropped
+    # 9. ◎ を数える条件を広げる (○ も数える)。本番の HTML は全レースに ○ があるので、
+    #    これが入ると答え合わせが全部止まる (2026-09-28 レビューの変異 Y8)
+    #    落ちるべき: test_a_realistically_marked_target_race_is_scored_in_full
+    ("Y8 ◎ の数え方に ○ を含める", BDR,
+     '        honmei = [h for h in r["horses"] if (h.get("mark") or "") == "◎"]',
+     '        honmei = [h for h in r["horses"] if (h.get("mark") or "") in ("◎", "○")]'),
 ]
