@@ -1,0 +1,71 @@
+{
+  "date": "20260912",
+  "generated_at": "2026-09-28T09:19:11",
+  "source_html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-09-12\\predictions_source_20260912_110134_gite554694.html",
+  "source_html_sha256": "c096ca71a4ca4a3b9af834953c528bcedecc17e802138d8588b32948dfe97e71",
+  "version_meta": {
+    "calibrator": "isotonic (p26-lgbm-v6-calibfit-2025_isotonic, 2026-07-03)",
+    "lgbm": "lgbm-v6-rel-draw-clean-tuned-fixed (2026-07-02)",
+    "git_sha": "e554694"
+  },
+  "builder_git_sha": "9cff875cc53532f75c6783c6e0b3655172f74820",
+  "builder_git_dirty": false,
+  "supersedes_manifest_sha256": null,
+  "warnings": {
+    "schema": 3,
+    "excluded_placeholder_rows": 0,
+    "null_odds_fetched_at_rows": 0,
+    "post_start_stamped_rows": 0,
+    "post_start_unclassified_rows": 0,
+    "morning_popularity_populated_rows": 316
+  },
+  "counts": {
+    "evaluation_rows_total": 316,
+    "evaluation_rows_evaluable": 316,
+    "evaluation_rows_excluded": 0,
+    "evaluation_exclusion_reasons": {},
+    "html_races_parsed": 48,
+    "html_horses_parsed": 344,
+    "html_top_picks_parsed": 130,
+    "foreign_date_races_dropped": 24,
+    "foreign_date_predictions_dropped": 28,
+    "foreign_date_race_ids": [
+      "20260913-06-01",
+      "20260913-06-02",
+      "20260913-06-03",
+      "20260913-06-04",
+      "20260913-06-05",
+      "20260913-06-06",
+      "20260913-06-07",
+      "20260913-06-08",
+      "20260913-06-09",
+      "20260913-06-10",
+      "20260913-06-11",
+      "20260913-06-12",
+      "20260913-09-01",
+      "20260913-09-02",
+      "20260913-09-03",
+      "20260913-09-04",
+      "20260913-09-05",
+      "20260913-09-06",
+      "20260913-09-07",
+      "20260913-09-08",
+      "20260913-09-09",
+      "20260913-09-10",
+      "20260913-09-11",
+      "20260913-09-12"
+    ],
+    "predictions": 316,
+    "final_odds": 316,
+    "race_results": 316,
+    "payouts": 24,
+    "evaluation_summary": 316
+  },
+  "csv_sha256": {
+    "predictions.csv": "a3b9f586c5ba3ecd303bbb242831aeffb62334fb4e8f121de221007e359fa58b",
+    "final_odds.csv": "cce635a9b40f2601434c4a2c67fb6b3d2fed302da4a8631b6056579d582ef833",
+    "race_results.csv": "495a90e7a88399e646e2043b70aacf9153a063deec825a19be53b835cef88222",
+    "payouts.csv": "337f91d0927859b9900ee733496e8a8db4e391f3f74e700c5feead5a6b29adaa",
+    "evaluation_summary.csv": "63bd4335c2aecb4b23ab483d11a716caa1289dc60f3018aa29a071d086771d64"
+  }
+}

@@ -1,0 +1,183 @@
+{
+ "started": "2026-09-28T09:16:18",
+ "builder_worktree": "C:\\Users\\kizun\\dev\\keiba-yosou\\.claude\\worktrees\\cross-date",
+ "builder_head": "9cff875cc53532f75c6783c6e0b3655172f74820",
+ "db_before": {
+  "keiba.db": [
+   20118552576,
+   1790553604.4202156
+  ],
+  "keiba.db-wal_size": 0
+ },
+ "runs": [
+  {
+   "date": "2026-06-12",
+   "html": "data\\results\\2026-06-12\\archive\\index_20260612_013732_175436.html",
+   "html_choice": "old_manifest_source_html",
+   "rc": 0,
+   "stdout_tail": "2', '20260613-05-01', '20260613-05-02', '20260613-05-03', '20260613-05-04', '20260613-05-05', '20260613-05-06', '20260613-05-07', '20260613-05-08', '20260613-05-09', '20260613-05-10', '20260613-05-11', '20260613-05-12', '20260613-09-01', '20260613-09-02', '20260613-09-03', '20260613-09-04', '20260613-09-05', '20260613-09-06', '20260613-09-07', '20260613-09-08', '20260613-09-09', '20260613-09-10', '20260613-09-11', '20260613-09-12', '20260614-02-01', '20260614-02-02', '20260614-02-03', '20260614-02-04', '20260614-02-05', '20260614-02-06', '20260614-02-07', '20260614-02-08', '20260614-02-09', '20260614-02-10', '20260614-02-11', '20260614-02-12', '20260614-05-01', '20260614-05-02', '20260614-05-03', '20260614-05-04', '20260614-05-05', '20260614-05-06', '20260614-05-07', '20260614-05-08', '20260614-05-09', '20260614-05-10', '20260614-05-11', '20260614-05-12', '20260614-09-01', '20260614-09-02', '20260614-09-03', '20260614-09-04', '20260614-09-05', '20260614-09-06', '20260614-09-07', '20260614-09-08', '20260614-09-09', '20260614-09-10', '20260614-09-11', '20260614-09-12']\n  predictions: 0\n  final_odds: 0\n  race_results: 0\n  payouts: 0\n  evaluation_summary: 0\n\noutput: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-06-12/\nmanifest: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-06-12/manifest.json\n",
+   "stderr_tail": "",
+   "db_after": {
+    "keiba.db": [
+     20118552576,
+     1790553604.4202156
+    ],
+    "keiba.db-wal_size": 0
+   },
+   "wal_mtime_info": null
+  },
+  {
+   "date": "2026-06-17",
+   "html": "data\\results\\2026-06-17\\archive\\index_20260617_082325_554073.html",
+   "html_choice": "old_manifest_source_html",
+   "rc": 0,
+   "stdout_tail": "02', '20260614-02-03', '20260614-02-04', '20260614-02-05', '20260614-02-06']\ndb: races=7, horse_races=75, payouts=0\n\n--- summary ---\n  evaluation_rows_total: 0\n  evaluation_rows_evaluable: 0\n  evaluation_rows_excluded: 0\n  evaluation_exclusion_reasons: {}\n  html_races_parsed: 36\n  html_horses_parsed: 485\n  html_top_picks_parsed: 180\n  foreign_date_races_dropped: 36\n  foreign_date_predictions_dropped: 485\n  foreign_date_race_ids: ['20260614-02-01', '20260614-02-02', '20260614-02-03', '20260614-02-04', '20260614-02-05', '20260614-02-06', '20260614-02-07', '20260614-02-08', '20260614-02-09', '20260614-02-10', '20260614-02-11', '20260614-02-12', '20260614-05-01', '20260614-05-02', '20260614-05-03', '20260614-05-04', '20260614-05-05', '20260614-05-06', '20260614-05-07', '20260614-05-08', '20260614-05-09', '20260614-05-10', '20260614-05-11', '20260614-05-12', '20260614-09-01', '20260614-09-02', '20260614-09-03', '20260614-09-04', '20260614-09-05', '20260614-09-06', '20260614-09-07', '20260614-09-08', '20260614-09-09', '20260614-09-10', '20260614-09-11', '20260614-09-12']\n  predictions: 0\n  final_odds: 75\n  race_results: 75\n  payouts: 0\n  evaluation_summary: 0\n\noutput: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-06-17/\nmanifest: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-06-17/manifest.json\n",
+   "stderr_tail": "",
+   "db_after": {
+    "keiba.db": [
+     20118552576,
+     1790553604.4202156
+    ],
+    "keiba.db-wal_size": 0
+   },
+   "wal_mtime_info": null
+  },
+  {
+   "date": "2026-07-03",
+   "html": "data\\results\\2026-07-03\\archive\\index_20260703_230334_330683.html",
+   "html_choice": "old_manifest_source_html",
+   "rc": 0,
+   "stdout_tail": "2', '20260704-03-01', '20260704-03-02', '20260704-03-03', '20260704-03-04', '20260704-03-05', '20260704-03-06', '20260704-03-07', '20260704-03-08', '20260704-03-09', '20260704-03-10', '20260704-03-11', '20260704-03-12', '20260704-10-01', '20260704-10-02', '20260704-10-03', '20260704-10-04', '20260704-10-05', '20260704-10-06', '20260704-10-07', '20260704-10-08', '20260704-10-09', '20260704-10-10', '20260704-10-11', '20260704-10-12', '20260705-02-01', '20260705-02-02', '20260705-02-03', '20260705-02-04', '20260705-02-05', '20260705-02-06', '20260705-02-07', '20260705-02-08', '20260705-02-09', '20260705-02-10', '20260705-02-11', '20260705-02-12', '20260705-03-01', '20260705-03-02', '20260705-03-03', '20260705-03-04', '20260705-03-05', '20260705-03-06', '20260705-03-07', '20260705-03-08', '20260705-03-09', '20260705-03-10', '20260705-03-11', '20260705-03-12', '20260705-10-01', '20260705-10-02', '20260705-10-03', '20260705-10-04', '20260705-10-05', '20260705-10-06', '20260705-10-07', '20260705-10-08', '20260705-10-09', '20260705-10-10', '20260705-10-11', '20260705-10-12']\n  predictions: 0\n  final_odds: 0\n  race_results: 0\n  payouts: 0\n  evaluation_summary: 0\n\noutput: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-07-03/\nmanifest: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-07-03/manifest.json\n",
+   "stderr_tail": "",
+   "db_after": {
+    "keiba.db": [
+     20118552576,
+     1790553604.4202156
+    ],
+    "keiba.db-wal_size": 0
+   },
+   "wal_mtime_info": null
+  },
+  {
+   "date": "2026-07-18",
+   "html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-07-18\\predictions_source_20260718_093147_git552e949.html",
+   "html_choice": "old_manifest_source_html",
+   "rc": 0,
+   "stdout_tail": "9-02-03', '20260719-02-04', '20260719-02-05', '20260719-02-06']\ndb: races=36, horse_races=468, payouts=36\n\n--- summary ---\n  evaluation_rows_total: 468\n  evaluation_rows_evaluable: 468\n  evaluation_rows_excluded: 0\n  evaluation_exclusion_reasons: {}\n  html_races_parsed: 72\n  html_horses_parsed: 499\n  html_top_picks_parsed: 190\n  foreign_date_races_dropped: 36\n  foreign_date_predictions_dropped: 31\n  foreign_date_race_ids: ['20260719-02-01', '20260719-02-02', '20260719-02-03', '20260719-02-04', '20260719-02-05', '20260719-02-06', '20260719-02-07', '20260719-02-08', '20260719-02-09', '20260719-02-10', '20260719-02-11', '20260719-02-12', '20260719-03-01', '20260719-03-02', '20260719-03-03', '20260719-03-04', '20260719-03-05', '20260719-03-06', '20260719-03-07', '20260719-03-08', '20260719-03-09', '20260719-03-10', '20260719-03-11', '20260719-03-12', '20260719-10-01', '20260719-10-02', '20260719-10-03', '20260719-10-04', '20260719-10-05', '20260719-10-06', '20260719-10-07', '20260719-10-08', '20260719-10-09', '20260719-10-10', '20260719-10-11', '20260719-10-12']\n  predictions: 468\n  final_odds: 468\n  race_results: 468\n  payouts: 36\n  evaluation_summary: 468\n\noutput: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-07-18/\nmanifest: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-07-18/manifest.json\n",
+   "stderr_tail": "",
+   "db_after": {
+    "keiba.db": [
+     20118552576,
+     1790553604.4202156
+    ],
+    "keiba.db-wal_size": 0
+   },
+   "wal_mtime_info": null
+  },
+  {
+   "date": "2026-08-08",
+   "html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-08-08\\predictions_source_20260808_105630_git0f90945.html",
+   "html_choice": "old_manifest_source_html",
+   "rc": 0,
+   "stdout_tail": "9-01-03', '20260809-01-04', '20260809-01-05', '20260809-01-06']\ndb: races=36, horse_races=462, payouts=36\n\n--- summary ---\n  evaluation_rows_total: 462\n  evaluation_rows_evaluable: 462\n  evaluation_rows_excluded: 0\n  evaluation_exclusion_reasons: {}\n  html_races_parsed: 72\n  html_horses_parsed: 492\n  html_top_picks_parsed: 190\n  foreign_date_races_dropped: 36\n  foreign_date_predictions_dropped: 30\n  foreign_date_race_ids: ['20260809-01-01', '20260809-01-02', '20260809-01-03', '20260809-01-04', '20260809-01-05', '20260809-01-06', '20260809-01-07', '20260809-01-08', '20260809-01-09', '20260809-01-10', '20260809-01-11', '20260809-01-12', '20260809-04-01', '20260809-04-02', '20260809-04-03', '20260809-04-04', '20260809-04-05', '20260809-04-06', '20260809-04-07', '20260809-04-08', '20260809-04-09', '20260809-04-10', '20260809-04-11', '20260809-04-12', '20260809-07-01', '20260809-07-02', '20260809-07-03', '20260809-07-04', '20260809-07-05', '20260809-07-06', '20260809-07-07', '20260809-07-08', '20260809-07-09', '20260809-07-10', '20260809-07-11', '20260809-07-12']\n  predictions: 462\n  final_odds: 462\n  race_results: 462\n  payouts: 36\n  evaluation_summary: 462\n\noutput: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-08-08/\nmanifest: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-08-08/manifest.json\n",
+   "stderr_tail": "",
+   "db_after": {
+    "keiba.db": [
+     20118552576,
+     1790553604.4202156
+    ],
+    "keiba.db-wal_size": 0
+   },
+   "wal_mtime_info": null
+  },
+  {
+   "date": "2026-08-15",
+   "html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-08-15\\predictions_source_20260815_090147_gitc7cfdda.html",
+   "html_choice": "old_manifest_source_html",
+   "rc": 0,
+   "stdout_tail": "6-01-03', '20260816-01-04', '20260816-01-05', '20260816-01-06']\ndb: races=36, horse_races=487, payouts=36\n\n--- summary ---\n  evaluation_rows_total: 487\n  evaluation_rows_evaluable: 487\n  evaluation_rows_excluded: 0\n  evaluation_exclusion_reasons: {}\n  html_races_parsed: 72\n  html_horses_parsed: 519\n  html_top_picks_parsed: 190\n  foreign_date_races_dropped: 36\n  foreign_date_predictions_dropped: 32\n  foreign_date_race_ids: ['20260816-01-01', '20260816-01-02', '20260816-01-03', '20260816-01-04', '20260816-01-05', '20260816-01-06', '20260816-01-07', '20260816-01-08', '20260816-01-09', '20260816-01-10', '20260816-01-11', '20260816-01-12', '20260816-04-01', '20260816-04-02', '20260816-04-03', '20260816-04-04', '20260816-04-05', '20260816-04-06', '20260816-04-07', '20260816-04-08', '20260816-04-09', '20260816-04-10', '20260816-04-11', '20260816-04-12', '20260816-07-01', '20260816-07-02', '20260816-07-03', '20260816-07-04', '20260816-07-05', '20260816-07-06', '20260816-07-07', '20260816-07-08', '20260816-07-09', '20260816-07-10', '20260816-07-11', '20260816-07-12']\n  predictions: 487\n  final_odds: 487\n  race_results: 487\n  payouts: 36\n  evaluation_summary: 487\n\noutput: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-08-15/\nmanifest: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-08-15/manifest.json\n",
+   "stderr_tail": "",
+   "db_after": {
+    "keiba.db": [
+     20118552576,
+     1790553604.4202156
+    ],
+    "keiba.db-wal_size": 0
+   },
+   "wal_mtime_info": null
+  },
+  {
+   "date": "2026-08-22",
+   "html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-08-22\\predictions_source_20260822_090157_gitaff08ca.html",
+   "html_choice": "builder_default_rule_last_by_name",
+   "rc": 0,
+   "stdout_tail": "3-01-03', '20260823-01-04', '20260823-01-05', '20260823-01-06']\ndb: races=36, horse_races=477, payouts=36\n\n--- summary ---\n  evaluation_rows_total: 477\n  evaluation_rows_evaluable: 477\n  evaluation_rows_excluded: 0\n  evaluation_exclusion_reasons: {}\n  html_races_parsed: 72\n  html_horses_parsed: 503\n  html_top_picks_parsed: 190\n  foreign_date_races_dropped: 36\n  foreign_date_predictions_dropped: 26\n  foreign_date_race_ids: ['20260823-01-01', '20260823-01-02', '20260823-01-03', '20260823-01-04', '20260823-01-05', '20260823-01-06', '20260823-01-07', '20260823-01-08', '20260823-01-09', '20260823-01-10', '20260823-01-11', '20260823-01-12', '20260823-04-01', '20260823-04-02', '20260823-04-03', '20260823-04-04', '20260823-04-05', '20260823-04-06', '20260823-04-07', '20260823-04-08', '20260823-04-09', '20260823-04-10', '20260823-04-11', '20260823-04-12', '20260823-07-01', '20260823-07-02', '20260823-07-03', '20260823-07-04', '20260823-07-05', '20260823-07-06', '20260823-07-07', '20260823-07-08', '20260823-07-09', '20260823-07-10', '20260823-07-11', '20260823-07-12']\n  predictions: 477\n  final_odds: 477\n  race_results: 477\n  payouts: 36\n  evaluation_summary: 477\n\noutput: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-08-22/\nmanifest: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-08-22/manifest.json\n",
+   "stderr_tail": "",
+   "db_after": {
+    "keiba.db": [
+     20118552576,
+     1790553604.4202156
+    ],
+    "keiba.db-wal_size": 0
+   },
+   "wal_mtime_info": null
+  },
+  {
+   "date": "2026-08-29",
+   "html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-08-29\\predictions_source_20260829_110148_git82431ed.html",
+   "html_choice": "builder_default_rule_last_by_name",
+   "rc": 0,
+   "stdout_tail": "0-01-03', '20260830-01-04', '20260830-01-05', '20260830-01-06']\ndb: races=36, horse_races=494, payouts=36\n\n--- summary ---\n  evaluation_rows_total: 494\n  evaluation_rows_evaluable: 494\n  evaluation_rows_excluded: 0\n  evaluation_exclusion_reasons: {}\n  html_races_parsed: 72\n  html_horses_parsed: 514\n  html_top_picks_parsed: 190\n  foreign_date_races_dropped: 36\n  foreign_date_predictions_dropped: 20\n  foreign_date_race_ids: ['20260830-01-01', '20260830-01-02', '20260830-01-03', '20260830-01-04', '20260830-01-05', '20260830-01-06', '20260830-01-07', '20260830-01-08', '20260830-01-09', '20260830-01-10', '20260830-01-11', '20260830-01-12', '20260830-04-01', '20260830-04-02', '20260830-04-03', '20260830-04-04', '20260830-04-05', '20260830-04-06', '20260830-04-07', '20260830-04-08', '20260830-04-09', '20260830-04-10', '20260830-04-11', '20260830-04-12', '20260830-07-01', '20260830-07-02', '20260830-07-03', '20260830-07-04', '20260830-07-05', '20260830-07-06', '20260830-07-07', '20260830-07-08', '20260830-07-09', '20260830-07-10', '20260830-07-11', '20260830-07-12']\n  predictions: 494\n  final_odds: 494\n  race_results: 494\n  payouts: 36\n  evaluation_summary: 494\n\noutput: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-08-29/\nmanifest: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-08-29/manifest.json\n",
+   "stderr_tail": "",
+   "db_after": {
+    "keiba.db": [
+     20118552576,
+     1790553604.4202156
+    ],
+    "keiba.db-wal_size": 0
+   },
+   "wal_mtime_info": null
+  },
+  {
+   "date": "2026-09-05",
+   "html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-09-05\\predictions_source_20260905_110142_git6bab015.html",
+   "html_choice": "builder_default_rule_last_by_name",
+   "rc": 0,
+   "stdout_tail": "6-01-03', '20260906-01-04', '20260906-01-05', '20260906-01-06']\ndb: races=36, horse_races=455, payouts=36\n\n--- summary ---\n  evaluation_rows_total: 455\n  evaluation_rows_evaluable: 455\n  evaluation_rows_excluded: 0\n  evaluation_exclusion_reasons: {}\n  html_races_parsed: 72\n  html_horses_parsed: 482\n  html_top_picks_parsed: 190\n  foreign_date_races_dropped: 36\n  foreign_date_predictions_dropped: 27\n  foreign_date_race_ids: ['20260906-01-01', '20260906-01-02', '20260906-01-03', '20260906-01-04', '20260906-01-05', '20260906-01-06', '20260906-01-07', '20260906-01-08', '20260906-01-09', '20260906-01-10', '20260906-01-11', '20260906-01-12', '20260906-06-01', '20260906-06-02', '20260906-06-03', '20260906-06-04', '20260906-06-05', '20260906-06-06', '20260906-06-07', '20260906-06-08', '20260906-06-09', '20260906-06-10', '20260906-06-11', '20260906-06-12', '20260906-09-01', '20260906-09-02', '20260906-09-03', '20260906-09-04', '20260906-09-05', '20260906-09-06', '20260906-09-07', '20260906-09-08', '20260906-09-09', '20260906-09-10', '20260906-09-11', '20260906-09-12']\n  predictions: 455\n  final_odds: 455\n  race_results: 455\n  payouts: 36\n  evaluation_summary: 455\n\noutput: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-09-05/\nmanifest: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-09-05/manifest.json\n",
+   "stderr_tail": "",
+   "db_after": {
+    "keiba.db": [
+     20118552576,
+     1790553604.4202156
+    ],
+    "keiba.db-wal_size": 0
+   },
+   "wal_mtime_info": null
+  },
+  {
+   "date": "2026-09-12",
+   "html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-09-12\\predictions_source_20260912_110134_gite554694.html",
+   "html_choice": "builder_default_rule_last_by_name",
+   "rc": 0,
+   "stdout_tail": " c096ca71a4ca4a3b9af834953c528bcedecc17e802138d8588b32948dfe97e71\nparsed: races=48, horses_total=344, top_picks_total=130\nforeign-date races dropped: 24 races / 28 horses ['20260913-06-01', '20260913-06-02', '20260913-06-03', '20260913-06-04', '20260913-06-05', '20260913-06-06']\ndb: races=24, horse_races=316, payouts=24\n\n--- summary ---\n  evaluation_rows_total: 316\n  evaluation_rows_evaluable: 316\n  evaluation_rows_excluded: 0\n  evaluation_exclusion_reasons: {}\n  html_races_parsed: 48\n  html_horses_parsed: 344\n  html_top_picks_parsed: 130\n  foreign_date_races_dropped: 24\n  foreign_date_predictions_dropped: 28\n  foreign_date_race_ids: ['20260913-06-01', '20260913-06-02', '20260913-06-03', '20260913-06-04', '20260913-06-05', '20260913-06-06', '20260913-06-07', '20260913-06-08', '20260913-06-09', '20260913-06-10', '20260913-06-11', '20260913-06-12', '20260913-09-01', '20260913-09-02', '20260913-09-03', '20260913-09-04', '20260913-09-05', '20260913-09-06', '20260913-09-07', '20260913-09-08', '20260913-09-09', '20260913-09-10', '20260913-09-11', '20260913-09-12']\n  predictions: 316\n  final_odds: 316\n  race_results: 316\n  payouts: 24\n  evaluation_summary: 316\n\noutput: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-09-12/\nmanifest: C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\cross_regen\\out\\2026-09-12/manifest.json\n",
+   "stderr_tail": "",
+   "db_after": {
+    "keiba.db": [
+     20118552576,
+     1790553604.4202156
+    ],
+    "keiba.db-wal_size": 0
+   },
+   "wal_mtime_info": null
+  }
+ ],
+ "db_after_all": {
+  "keiba.db": [
+   20118552576,
+   1790553604.4202156
+  ],
+  "keiba.db-wal_size": 0
+ },
+ "finished": "2026-09-28T09:16:24",
+ "worktree_porcelain_after": ""
+}

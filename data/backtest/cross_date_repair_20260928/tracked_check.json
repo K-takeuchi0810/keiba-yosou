@@ -1,0 +1,148 @@
+{
+ "2026-06-12": {
+  "csv_identical_to_verified_scratch": true,
+  "manifest_diff_keys": [
+   "generated_at",
+   "supersedes_manifest_sha256"
+  ],
+  "old_manifest_sha256": "0ef745fac788df1ae868b68fcc485df0f68d207cce00daa48ef5f0aab944ba3c",
+  "supersedes_manifest_sha256": "ca59452110a1139553803392bd9dde0a96ba751c371b323dbb7eaaf824477b48",
+  "supersedes_matches_old": false,
+  "new_manifest_sha256": "9dcb1074da170f43da6d0cf066d64be2def2ca1e9a9ad1e1c9917b00d69c58fd",
+  "builder_git_sha": "9cff875cc53532f75c6783c6e0b3655172f74820",
+  "builder_git_dirty": false,
+  "source_html": "data\\results\\2026-06-12\\archive\\index_20260612_013732_175436.html",
+  "generated_at": "2026-09-28T09:19:06"
+ },
+ "2026-06-17": {
+  "csv_identical_to_verified_scratch": true,
+  "manifest_diff_keys": [
+   "generated_at",
+   "supersedes_manifest_sha256"
+  ],
+  "old_manifest_sha256": "22f13c6b2ae175de53a0dca86180520a17809e0dca8b04de1dbe9110ebaabf17",
+  "supersedes_manifest_sha256": "416e49a501faf6103f369428e1140bd024dec8bea2499f04f77d8937dd5f555f",
+  "supersedes_matches_old": false,
+  "new_manifest_sha256": "5e8019be5ff592a6a9d5e8b68dc8e3d1030dd7330cd721f9bd6e1b4982037cb3",
+  "builder_git_sha": "9cff875cc53532f75c6783c6e0b3655172f74820",
+  "builder_git_dirty": false,
+  "source_html": "data\\results\\2026-06-17\\archive\\index_20260617_082325_554073.html",
+  "generated_at": "2026-09-28T09:19:06"
+ },
+ "2026-07-03": {
+  "csv_identical_to_verified_scratch": true,
+  "manifest_diff_keys": [
+   "generated_at",
+   "supersedes_manifest_sha256"
+  ],
+  "old_manifest_sha256": "607377055afdcc15b3bac38d65bf51b7a46d4707443c9aa26ba9b0cdd2a862be",
+  "supersedes_manifest_sha256": "5cb460855fee061a5054af3c74c3017a319884b2685c8107e7748bb67c96bd09",
+  "supersedes_matches_old": false,
+  "new_manifest_sha256": "1de3e2e7bb8374e721e480f32e58524022378f1424d4252746716d0f7d61824a",
+  "builder_git_sha": "9cff875cc53532f75c6783c6e0b3655172f74820",
+  "builder_git_dirty": false,
+  "source_html": "data\\results\\2026-07-03\\archive\\index_20260703_230334_330683.html",
+  "generated_at": "2026-09-28T09:19:07"
+ },
+ "2026-07-18": {
+  "csv_identical_to_verified_scratch": true,
+  "manifest_diff_keys": [
+   "generated_at",
+   "supersedes_manifest_sha256"
+  ],
+  "old_manifest_sha256": "e4e5c446caf6f32353bf405aa838a65011c526a33b6cbcf7f6f8904c6b9df052",
+  "supersedes_manifest_sha256": "223dd7a9e3de5e319407344315fff1d3a020cacac7668fb4432885e2b023a60c",
+  "supersedes_matches_old": false,
+  "new_manifest_sha256": "e3a7f16d77d4e6d580e3e632ec527fde05e5fbc10c487bdd9d725bffea33365d",
+  "builder_git_sha": "9cff875cc53532f75c6783c6e0b3655172f74820",
+  "builder_git_dirty": false,
+  "source_html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-07-18\\predictions_source_20260718_093147_git552e949.html",
+  "generated_at": "2026-09-28T09:19:07"
+ },
+ "2026-08-08": {
+  "csv_identical_to_verified_scratch": true,
+  "manifest_diff_keys": [
+   "generated_at",
+   "supersedes_manifest_sha256"
+  ],
+  "old_manifest_sha256": "07694b825b3cf43e27ab2bcade298bb1821be252d9a1daa09ac1860cee00ac6d",
+  "supersedes_manifest_sha256": "cd58c881e10a44ee90e306fb328ad697b9743f244e6e265685000288e435e525",
+  "supersedes_matches_old": false,
+  "new_manifest_sha256": "bd223b45c44abb52dd655ee4462855554ab2f99301c4d5eed36b7ec440e96946",
+  "builder_git_sha": "9cff875cc53532f75c6783c6e0b3655172f74820",
+  "builder_git_dirty": false,
+  "source_html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-08-08\\predictions_source_20260808_105630_git0f90945.html",
+  "generated_at": "2026-09-28T09:19:08"
+ },
+ "2026-08-15": {
+  "csv_identical_to_verified_scratch": true,
+  "manifest_diff_keys": [
+   "generated_at",
+   "supersedes_manifest_sha256"
+  ],
+  "old_manifest_sha256": "87ad3a541585a3046a8553a7f16a8f0b241131365e62d647dbb5beca96ca6d4d",
+  "supersedes_manifest_sha256": "637ee37e8fd1af4ae795cdb047871c6a455072548c6c88bcf857d2278a30c01f",
+  "supersedes_matches_old": false,
+  "new_manifest_sha256": "c2924667504475937bfe58991e04d7731091ca7ecf7a007c2bf5dc8ab0c3d9c3",
+  "builder_git_sha": "9cff875cc53532f75c6783c6e0b3655172f74820",
+  "builder_git_dirty": false,
+  "source_html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-08-15\\predictions_source_20260815_090147_gitc7cfdda.html",
+  "generated_at": "2026-09-28T09:19:08"
+ },
+ "2026-08-22": {
+  "csv_identical_to_verified_scratch": true,
+  "manifest_diff_keys": [
+   "generated_at"
+  ],
+  "old_manifest_sha256": null,
+  "supersedes_manifest_sha256": null,
+  "supersedes_matches_old": null,
+  "new_manifest_sha256": "fc1ae263f30694abb53d898a5a7f13127fed86035afbcd3ca8aa8aca0f63b445",
+  "builder_git_sha": "9cff875cc53532f75c6783c6e0b3655172f74820",
+  "builder_git_dirty": false,
+  "source_html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-08-22\\predictions_source_20260822_090157_gitaff08ca.html",
+  "generated_at": "2026-09-28T09:19:09"
+ },
+ "2026-08-29": {
+  "csv_identical_to_verified_scratch": true,
+  "manifest_diff_keys": [
+   "generated_at"
+  ],
+  "old_manifest_sha256": null,
+  "supersedes_manifest_sha256": null,
+  "supersedes_matches_old": null,
+  "new_manifest_sha256": "e2cb857bab4458f4abc445ebdffe73f436825252b7137141e95548797d0f7201",
+  "builder_git_sha": "9cff875cc53532f75c6783c6e0b3655172f74820",
+  "builder_git_dirty": false,
+  "source_html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-08-29\\predictions_source_20260829_110148_git82431ed.html",
+  "generated_at": "2026-09-28T09:19:10"
+ },
+ "2026-09-05": {
+  "csv_identical_to_verified_scratch": true,
+  "manifest_diff_keys": [
+   "generated_at"
+  ],
+  "old_manifest_sha256": null,
+  "supersedes_manifest_sha256": null,
+  "supersedes_matches_old": null,
+  "new_manifest_sha256": "6994ca9b685d4f449c2b8f028eee75c9e7fd8ade1d3803950edf61f34cc9bedd",
+  "builder_git_sha": "9cff875cc53532f75c6783c6e0b3655172f74820",
+  "builder_git_dirty": false,
+  "source_html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-09-05\\predictions_source_20260905_110142_git6bab015.html",
+  "generated_at": "2026-09-28T09:19:10"
+ },
+ "2026-09-12": {
+  "csv_identical_to_verified_scratch": true,
+  "manifest_diff_keys": [
+   "generated_at"
+  ],
+  "old_manifest_sha256": null,
+  "supersedes_manifest_sha256": null,
+  "supersedes_matches_old": null,
+  "new_manifest_sha256": "e777d5421a67a93da08a5f22184c6f4e4edf9eee75033ee62d573541feebbffb",
+  "builder_git_sha": "9cff875cc53532f75c6783c6e0b3655172f74820",
+  "builder_git_dirty": false,
+  "source_html": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\results\\2026-09-12\\predictions_source_20260912_110134_gite554694.html",
+  "generated_at": "2026-09-28T09:19:11"
+ }
+}

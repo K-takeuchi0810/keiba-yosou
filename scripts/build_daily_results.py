@@ -133,6 +133,7 @@ class IndexHtmlParser(HTMLParser):
             anchor = self._attr(attrs, "id") or ""
             self._current_race = {
                 "race_anchor": anchor,
+                "race_date": None,
                 "race_num": None,
                 "track_code": None,
                 "race_name": None,
@@ -141,11 +142,14 @@ class IndexHtmlParser(HTMLParser):
                 "top_picks": [],
                 "has_bet": "buy-race" in cls,
             }
-            # anchor 例: "race-2026-06-21-05-12" -> track=05, race_num=12
-            m = re.search(r"-(\d{2})-(\d{1,2})$", anchor)
-            if m:
-                self._current_race["track_code"] = m.group(1)
-                self._current_race["race_num"] = int(m.group(2))
+            # anchor 例: "race-20260822-01-11" -> date=20260822, track=01, race_num=11
+            # **日付も取り出す** (2026-09-26)。以前は末尾の「場-R」だけを見ていたので、
+            # 土曜の HTML に入っていた日曜のレースが、土曜の同じ場・同じ R として
+            # 土曜の着順で採点された (docs/EVALUATION_DATA_QUALITY.md)。
+            parsed = parse_race_anchor(anchor)
+            if parsed:
+                (self._current_race["race_date"], self._current_race["track_code"],
+                 self._current_race["race_num"]) = parsed
             return
         if not self._in_race_details:
             return
@@ -345,6 +349,58 @@ class IndexHtmlParser(HTMLParser):
                     self._current_pick["name"] = t
 
 
+#: 予想 HTML のレース ID。保存済みの 79 本の HTML はすべてこの形 (2026-09-26 に確認)。
+RACE_ANCHOR_RE = re.compile(r"^race-(\d{8})-(\d{2})-(\d{1,2})$")
+
+
+def parse_race_anchor(anchor: str) -> tuple[str, str, int] | None:
+    """`race-YYYYMMDD-TT-R` を (日付, 場, R 番号) に。形が違えば None。"""
+    m = RACE_ANCHOR_RE.match(anchor or "")
+    if not m:
+        return None
+    return m.group(1), m.group(2), int(m.group(3))
+
+
+class PredictionInputError(ValueError):
+    """予想 HTML が評価の前提を満たさない (評価を続けずに止める)。"""
+
+
+def split_races_by_date(races: list[dict], date: str) -> tuple[list[dict], list[dict]]:
+    """対象日のレースと、別の日のレースに分ける。
+
+    別の日のレースは **評価しないが黙って捨てない**: 呼び出し側が件数と ID を
+    manifest に記録する。レース ID の形が読めないレースがあれば止める
+    (日付を確かめられないまま、どこかの日の着順で採点することになるため)。
+    """
+    unreadable = [r.get("race_anchor") for r in races if not r.get("race_date")]
+    if unreadable:
+        raise PredictionInputError(
+            f"レース ID の形が読めない ({len(unreadable)} レース): {unreadable[:5]}")
+    target = [r for r in races if r["race_date"] == date]
+    foreign = [r for r in races if r["race_date"] != date]
+    return target, foreign
+
+
+def check_prediction_invariants(races: list[dict]) -> None:
+    """評価の前に、1 レースの中の予想が矛盾していないかを確かめる。
+
+    - ◎ は 1 レースに最大 1 頭
+    - 同じ馬番が 1 レースに 2 回出てこない
+    どちらかが崩れていれば止める (別の日の予想が混ざった典型的な徴候。
+    2026-09 に実際に「1 レースに ◎ が 2 頭」が起きていた)。
+    """
+    for r in races:
+        rid = f"{r.get('race_date')}-{r.get('track_code')}-{race_num_of(r.get('race_num'))}"
+        honmei = [h for h in r["horses"] if (h.get("mark") or "") == "◎"]
+        if len(honmei) > 1:
+            raise PredictionInputError(
+                f"{rid}: ◎ が {len(honmei)} 頭いる (1 レースに最大 1 頭)")
+        nums = [(h.get("num") or "").lstrip("0") or "0" for h in r["horses"]]
+        dup = sorted({n for n in nums if nums.count(n) > 1})
+        if dup:
+            raise PredictionInputError(f"{rid}: 同じ馬番が複数ある: {dup}")
+
+
 def parse_predictions_html(html_path: Path) -> tuple[list[dict], dict]:
     """HTML を parse して races の list を返す + meta (calibrator/lgbm/git)。"""
     text = html_path.read_text(encoding="utf-8")
@@ -537,8 +593,24 @@ def main() -> int:
     print(f"html sha256: {html_sha}")
 
     # 1. HTML parse
-    races, meta = parse_predictions_html(html_path)
-    print(f"parsed: races={len(races)}, horses_total={sum(len(r['horses']) for r in races)}, top_picks_total={sum(len(r['top_picks']) for r in races)}")
+    all_races, meta = parse_predictions_html(html_path)
+    print(f"parsed: races={len(all_races)}, horses_total={sum(len(r['horses']) for r in all_races)}, top_picks_total={sum(len(r['top_picks']) for r in all_races)}")
+    # 評価するのは **対象日のレースだけ**。別の日のレースは件数と ID を
+    # manifest に残して外す (2026-09-26 の cross-date 修正)。前提が崩れて
+    # いれば、何も書き出さずに止める。
+    try:
+        races, foreign_races = split_races_by_date(all_races, date)
+        check_prediction_invariants(races)
+    except PredictionInputError as e:
+        print(f"予想 HTML が評価の前提を満たさない: {e}", file=sys.stderr)
+        return 2
+    foreign_race_ids = sorted(
+        f"{r['race_date']}-{r['track_code']}-{race_num_of(r['race_num'])}"
+        for r in foreign_races)
+    foreign_horses = sum(len(r["horses"]) for r in foreign_races)
+    if foreign_races:
+        print(f"foreign-date races dropped: {len(foreign_races)} races / "
+              f"{foreign_horses} horses {foreign_race_ids[:6]}")
 
     # 2. DB から最終 odds / 着順 / payouts を取る
     conn = sqlite3.connect(args.db)
@@ -916,9 +988,14 @@ def main() -> int:
                     {r.get("evaluation_exclusion_reason") for r in eval_rows}
                     - {None})
             },
-            "html_races_parsed": len(races),
-            "html_horses_parsed": sum(len(r["horses"]) for r in races),
-            "html_top_picks_parsed": sum(len(r["top_picks"]) for r in races),
+            # HTML に入っていた全レース (対象日 + 別の日)
+            "html_races_parsed": len(all_races),
+            "html_horses_parsed": sum(len(r["horses"]) for r in all_races),
+            "html_top_picks_parsed": sum(len(r["top_picks"]) for r in all_races),
+            # 対象日と違う日の予想 (評価しない。黙って捨てずにここに残す)
+            "foreign_date_races_dropped": len(foreign_races),
+            "foreign_date_predictions_dropped": foreign_horses,
+            "foreign_date_race_ids": foreign_race_ids,
             "predictions": len(predictions),
             "final_odds": len(final_odds),
             "race_results": len(race_results),
