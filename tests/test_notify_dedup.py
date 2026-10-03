@@ -522,7 +522,12 @@ def test_retention_boundary_keeps_the_oldest_kept_day(state):
                                         "notification_type": "generation_complete"},
     }), encoding="utf-8")
 
-    send("generation_complete", "20260919", {"n": 1}, "本文", path=state)
+    # 送る対象は keep / drop と重ならない値にする。以前は "20260919" と固定で書いていて、
+    # 今日の 15 日前がちょうど 9/19 になる 2026-10-04 に、送った記録が drop のキーを今日の日付で
+    # 上書きして「15 日前が残っている」と誤って落ちた (日付の時限爆弾)。
+    subject = today.strftime("%Y%m%d")
+    assert subject not in (keep, drop)
+    send("generation_complete", subject, {"n": 1}, "本文", path=state)
 
     kept = json.loads(state.read_text(encoding="utf-8"))
     assert f"generation_complete:{keep}" in kept, "14 日前を捨てている"
