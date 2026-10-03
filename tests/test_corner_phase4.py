@@ -210,3 +210,51 @@ def test_recent_corner_stats_empty_blood():
     conn = _db()
     assert recent_corner_stats(conn, "", "20250401") == (None, None, 0)
     assert recent_corner_stats(conn, "0000000000", "20250401") == (None, None, 0)
+
+
+def _probe_rec(horse, c1, c2, c3, c4, order, race="R1"):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(record_type="SE", race_id=race, horse_num=horse, confirmed_order=order,
+                           corner_order_1=c1, corner_order_2=c2, corner_order_3=c3, corner_order_4=c4)
+
+
+def test_probe_three_way_tie_is_only_a_warning():
+    """同順位 3 頭以上は併走で正常に起きる (JRA 公式にもある)。自動の範囲サニティの不合格に数えない。"""
+    from scripts import probe_corner_offsets as probe
+
+    recs = [_probe_rec("01", 2, 2, 2, 1, 1), _probe_rec("02", 2, 2, 2, 2, 2),
+            _probe_rec("03", 2, 2, 2, 3, 3), _probe_rec("04", 4, 4, 4, 4, 4)]
+    assert probe._verdict(recs) == 0
+    # 頭数を超える順位は従来どおり不合格
+    recs[3] = _probe_rec("04", 4, 4, 4, 9, 4)
+    assert probe._verdict(recs) == 1
+
+
+def test_probe_exit_code_follows_golden_when_expectations_are_given(monkeypatch):
+    """--expect を与えたら、終了コードは golden 突合だけで決まる (範囲サニティが不合格でも、golden 一致なら 0)。"""
+    import sys
+
+    from scripts import probe_corner_offsets as probe
+
+    # 3 頭のレースで 4 角 8 位 (> 頭数 + 2) → 自動の範囲サニティは不合格
+    recs = [_probe_rec("01", 1, 1, 1, 1, 1), _probe_rec("02", 2, 2, 2, 8, 2), _probe_rec("03", 3, 3, 3, 3, 3)]
+    monkeypatch.setattr(probe, "parse_se_file", lambda path: recs)
+    assert probe._verdict(recs) == 1
+    monkeypatch.setattr(sys, "argv", ["probe", "x.jvd", "--expect=R1:01:1:1:1:1", "--expect=R1:02:2:2:2:8"])
+    assert probe.main() == 0
+    monkeypatch.setattr(sys, "argv", ["probe", "x.jvd", "--expect=R1:02:2:2:2:7"])
+    assert probe.main() == 1
+    # --expect が無ければ従来どおり範囲サニティの結果
+    monkeypatch.setattr(sys, "argv", ["probe", "x.jvd"])
+    assert probe.main() == 1
+
+
+def test_probe_golden_fails_when_the_expected_record_is_missing():
+    """--expect の馬が raw に無ければ不一致として数える (黙って一致扱いにしない)。"""
+    from scripts.probe_corner_offsets import _check_expectations
+
+    rec = _probe_rec("01", 1, 1, 1, 1, 1)
+    assert _check_expectations([rec], ["R1:01:1:1:1:1"]) == 0
+    assert _check_expectations([rec], ["R1:02:1:1:1:1"]) == 1
+    assert _check_expectations([rec], ["R9:01:1:1:1:1"]) == 1

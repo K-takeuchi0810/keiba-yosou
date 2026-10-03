@@ -464,7 +464,33 @@ def sealed_notice(info: dict) -> str:
 # probe_corner_offsets --expect/--ra を実機で緑化したら True に反転する。
 # webapp はこのフラグ 1 箇所で「先行力(暫定)」ラベルの要否を決める (probe 状態と
 # 表示ラベルの単一情報源。緑化後の (暫定) 外し忘れ防止 — 2026-07-06 検証監査)。
-CORNER_BYTES_VERIFIED: bool = False
+#
+# 2026-10-04 に True へ反転: JRA 公式の結果と 5 レース・74 頭・296 値すべてで一致し、終了コード 0
+# (data/backtest/corner_probe_20261004/、対象と期待値は probe の実行前にコミットで固定)。
+# **フラグはコメントの規約ではなくコードで強制する**。False のときの振る舞いは 3 通り:
+#   - 止める (例外): `require_corner_bytes_verified()` を通る経路 = `predictor.features.recent_corner_stats` と、
+#     これから書く backfill
+#   - 計算しない: `predictor.features.compute_features` (ai-builder が import するので例外にせず、通過順位の特徴だけ None / 0)
+#   - 表示しない: `scripts/analyze_misses.py`、`webapp/views.py` は「(暫定)」のラベル
+#   通常の取り込み (parser と db.upsert_horse_race) は止めない (2026-07 以降の運用経路)。
+#   通過順位を読むファイルは tests/test_corner_gate.py の許可リストで固定する (新しく読む処理はそこで落ちる)
+CORNER_BYTES_VERIFIED: bool = True
+
+
+class CornerBytesNotVerified(RuntimeError):
+    """通過順位 (corner_order_*) のバイト位置が未検証なのに、その値を使おうとした。"""
+
+
+def require_corner_bytes_verified(context: str) -> None:
+    """通過順位を使う処理 (`recent_corner_stats`) と backfill の入口で呼ぶ。False なら止める。
+
+    フラグは呼び出しのたびに読む (テストや緊急時に config.CORNER_BYTES_VERIFIED を False にすれば、
+    通過順位の利用と backfill がすべて止まる)。脚質コード (`leg_quality_code`) は通過順位ではないので対象外。
+    """
+    if not CORNER_BYTES_VERIFIED:
+        raise CornerBytesNotVerified(
+            f"{context}: 通過順位のバイト位置が未検証 (config.CORNER_BYTES_VERIFIED = False)。"
+            "scripts/probe_corner_offsets.py --expect を JRA 公式の値で緑化してから使う")
 
 # HN (繁殖馬マスタ) の産地名を webapp で表示してよいか (バイト位置確定 + DB 反映済みか)。
 # バイト位置は 2026-07-06 実 .jvd で -2 ずれと確定し parse_hn を 208 に修正済み。ただし

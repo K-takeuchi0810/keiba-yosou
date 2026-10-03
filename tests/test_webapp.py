@@ -86,9 +86,20 @@ def test_render_race_has_line_color_and_masters():
     assert "父×馬場" in html
 
 
-def test_horse_detail_line_agari_rank_and_pace_provisional():
+def test_horse_detail_line_pace_label_follows_the_corner_flag(monkeypatch):
+    """CORNER_BYTES_VERIFIED が True (2026-10-04 に probe 緑化で反転) なら「(暫定)」を付けない。"""
+    feat3 = {"recent_4corner_samples": 4, "recent_4corner_avg_position": 2.3,
+             "recent_4corner_position_change": 1.5}
+    monkeypatch.setattr(views.config, "CORNER_BYTES_VERIFIED", True)
+    assert views._horse_detail_line({}, feat3, [], 1600, corner_env=True)["pace"].startswith("先行力4角avg2.3")
+    assert views._horse_detail_line({}, {}, [], 1600, corner_env=True)["pace"] == "先行力 4角データ無"
+
+
+def test_horse_detail_line_agari_rank_and_pace_provisional(monkeypatch):
     """サブ行の上がり順位併記・先行力(暫定)ラベル・corner_env fallback の 3 分岐
-    (2026-07-06 code-quality/validation 監査: 未テスト分岐の regression)。"""
+    (2026-07-06 code-quality/validation 監査: 未テスト分岐の regression)。
+    (暫定) の分岐はフラグを False に差し替えて確かめる (2026-10-04 に既定が True になった)。"""
+    monkeypatch.setattr(views.config, "CORNER_BYTES_VERIFIED", False)
     # (i) 上がり最速 + 近走最高順位 併記
     feat = {"best_final_3f": 335, "best_final_3f_rank": 2}
     d = views._horse_detail_line({}, feat, [], 1600, corner_env=False)

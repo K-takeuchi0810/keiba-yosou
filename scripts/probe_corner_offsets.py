@@ -26,9 +26,12 @@ jvdata-record スキルの鉄則「新パーサは実データで一周させる
   2. そのレースの全馬の corner_order_4 と confirmed_order を並べる。
   3. 自動サニティ (_verdict が判定):
      - corner_order_4 は 1..出走頭数(+2) の範囲に収まるはず (順位なので)。
-     - 同一レース内で corner_order_4 の値がほぼ一意 (同順位が 3 頭以上なら順位でない値の疑い)。
      - 全部 0 なら offset ズレ or 未収録。
-  4. 逸脱があれば exit 1 で「offset がズレている可能性大」と警告。
+     - 同順位が 3 頭以上は **警告だけ** (併走で正常に起きる。JRA 公式にもある。2026-10-04)。
+  4. --expect が無いとき: 範囲・全 0 の逸脱があれば exit 1 (参考の判定)。
+     --expect があるとき: **終了コードは golden 突合だけで決まる** (一致で 0、不一致・該当レコード無しで 1)。
+     範囲サニティは表示するだけ。golden は決定的な検証なので、照合する馬を広く (全馬) 与えること
+     (疎な --expect では、golden に含めなかった馬の逸脱は終了コードに出ない)。
   (補助的な目視確認: 逃げ/先行馬の corner_order_4 が小さく出ているかは出力を見て確認する。
    これは自動判定には含めない。)
 
@@ -169,6 +172,7 @@ def _verdict(records) -> int:
         # サニティ判定。1-2 角は小回り短距離で存在しない (全 0 が正常) ので、
         # 全 0 警告は 4 角のみ。範囲/重複チェックは非ゼロ値に対し全 4 角で行う。
         bad = []
+        warns = []
         if not any(v for v in corners[4]):
             bad.append("corner_order_4 が全て 0 (offset ズレ or 未収録の可能性)")
         for i in (1, 2, 3, 4):
@@ -178,9 +182,13 @@ def _verdict(records) -> int:
             over = [v for v in nonzero if v > field + 2]
             if over:
                 bad.append(f"corner{i}: 頭数({field})を超える順位 {over} (offset ズレの可能性大)")
+            # 同順位 3 頭以上は警告だけ (2026-10-04)。JRA 公式の通過順位にも併走で 3 頭以上の同順位がある
+            # (例: 2024 日本ダービー 3 角で 1・11・15 番がいずれも 2 位)。これを不合格に数えると正しい値を疑う
             dup = [v for v, c in Counter(nonzero).items() if c >= 3]
             if dup:
-                bad.append(f"corner{i}: 同順位が3頭以上重複 {dup} (順位でない値の可能性)")
+                warns.append(f"corner{i}: 同順位が3頭以上 {dup} (併走なら正常。判定には使わない)")
+        for w in warns:
+            print("  (警告)", w)
         if bad:
             problems += 1
             for b in bad:
@@ -221,14 +229,17 @@ def main() -> int:
         return 2
     rc = _verdict(records)
     if args.expect:
+        # golden 突合が決定的な検証なので、--expect を与えたときの終了コードは golden の結果だけで決める
+        # (2026-10-04)。自動の範囲サニティ (_verdict) は参考として表示するだけ
         print("\n=== golden fixture 突合 ===")
         failures = _check_expectations(records, args.expect)
         if failures:
             print(f"❌ golden 突合 {failures} 件不一致。offset ズレ確定 — parser.py を修正せよ。")
             return 1
-        print("✅ golden 突合すべて一致。")
-    else:
-        print("(参考) --expect で公式成績の既知値を与えると決定的検証になります。")
+        print(f"✅ golden 突合すべて一致 ({len(args.expect)} 頭)。"
+              + ("" if rc == 0 else f" (参考: 自動の範囲サニティは rc={rc}。判定には使わない)"))
+        return 0
+    print("(参考) --expect で公式成績の既知値を与えると決定的検証になります。")
     return rc
 
 
