@@ -447,7 +447,7 @@ Group 検証の比較対象は **0.5-4B 修復後の `Market only`**。
 **Group A / B / D / E の仮説・反証条件と、採否の閾値 (5 群・Bonferroni 0.05/5) は変えない。** Group C は、
 主検定の仮説を脚質コード版 C′ に置き換える (§8-3、群の数は 5 のまま)。
 この改訂は Group A / C′ の特徴を 1 つも実装する前に書いた。初稿 (ce98a73) の 4 名レビューの指摘
-(`data/scorecards/20261004_0420_phase05_5_prereg_update__review4.md`) と、外部の指示者の決定を反映した。
+(`data/scorecards/20261004_0350_phase05_5_prereg_update__review4.md`) と、外部の指示者の決定を反映した。
 
 ### 8-1. モデルの土台
 
