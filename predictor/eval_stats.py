@@ -38,9 +38,8 @@ def normalise(d: dict[str, float]) -> dict[str, float]:
     return {k: v / tot for k, v in d.items()} if tot > 0 else {}
 
 
-def block_boot(samples: list[dict], stat, n_boot: int = N_BOOT,
-               seed: int = SEED) -> tuple[float, float]:
-    """レースを塊として再抽出した 95% 区間。
+def _block_resample(samples: list[dict], stat, n_boot: int, seed: int) -> tuple[list[float], int]:
+    """レースを塊として n_boot 回再抽出し、(昇順の統計量の値, 捨てた回数) を返す。
 
     同一レースの馬は「1 頭しか勝たない」ので独立ではない。馬単位で再抽出すると
     区間が狭く出て、無い差を有ると言ってしまう。
@@ -54,18 +53,88 @@ def block_boot(samples: list[dict], stat, n_boot: int = N_BOOT,
     bl = list(blocks.values())
     rng = random.Random(seed)
     vals: list[float] = []
+    discarded = 0
     for _ in range(n_boot):
         draw: list[dict] = []
         for _ in range(len(bl)):
             draw.extend(bl[rng.randrange(len(bl))])
         v = stat(draw)
         if v is None or (isinstance(v, float) and math.isnan(v)):
+            discarded += 1
             continue
         vals.append(float(v))
+    vals.sort()
+    return vals, discarded
+
+
+def block_boot(samples: list[dict], stat, n_boot: int = N_BOOT,
+               seed: int = SEED) -> tuple[float, float]:
+    """レースを塊として再抽出した 95% 区間 (従来の呼び出し元のための関数。挙動は 2026-10-04 以前と同じ)。
+
+    捨てた再抽出が半分を超えたら (NaN, NaN)。Phase 0.5-5 の主検定には使わない (`primary_block_ci` を使う)。
+    """
+    vals, _ = _block_resample(samples, stat, n_boot, seed)
     if len(vals) < n_boot // 2:
         return float("nan"), float("nan")
-    vals.sort()
     return vals[int(0.025 * len(vals))], vals[int(0.975 * len(vals))]
+
+
+def block_boot_ci(samples: list[dict], stat, *, level: float, n_boot: int, seed: int,
+                  max_discard_frac: float) -> dict:
+    """水準・回数・seed・捨てる上限をすべて明示して求める、レース単位のパーセンタイル区間 (2026-10-04)。
+
+    両側 `level` の区間の端点は、昇順の値の `int(a·n)` 番目と `int((1 − a)·n)` 番目 (a = (1 − level) / 2、
+    n = 有効な再抽出の数。従来の `block_boot` と同じ切り捨て)。不正な引数は止める (黙って 95% などに戻らない)。
+    捨てた再抽出が `max_discard_frac × n_boot` を超えたら区間は無効 (lo / hi は NaN、`valid` は False)。
+    捨てた再抽出は無作為ではない (収束しないのは極端な再抽出に偏る) ので、`n_discarded` を必ず成果物に残す。
+
+    **再現性の前提**: ブロックの並びは `samples` の中の race_id の初出の順なので、同じ seed でも `samples` の並びが
+    違えば区間は変わる。呼び出し側は決定的な順序 (race_id → 馬番) で渡し、入力の sha256 を成果物に残すこと。
+    引数は組み込みの int / float (numpy の整数型は拒否する。np.float64 は float のサブクラスなので受理される)。下限 n_boot ≥ 100 と上限 max_discard_frac < 0.5 は、
+    それより少ない再抽出や、半分以上を捨てた区間は意味を持たないため。
+    """
+    if not samples:
+        raise ValueError("標本が空")
+    if not isinstance(level, float) or not (0.5 <= level < 1.0):
+        raise ValueError(f"区間の水準が不正: {level!r} (0.5 以上 1 未満の float)")
+    if not isinstance(n_boot, int) or isinstance(n_boot, bool) or n_boot < 100:
+        raise ValueError(f"再抽出の回数が不正: {n_boot!r} (100 以上の int)")
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise ValueError(f"seed が不正: {seed!r}")
+    if isinstance(max_discard_frac, bool) or not isinstance(max_discard_frac, (int, float)) \
+            or not (0.0 <= max_discard_frac < 0.5):
+        raise ValueError(f"捨てる上限が不正: {max_discard_frac!r}")
+    vals, discarded = _block_resample(samples, stat, n_boot, seed)
+    alpha = (1.0 - level) / 2.0
+    out = {"level": level, "n_boot": n_boot, "seed": seed, "n_valid": len(vals), "n_discarded": discarded,
+           "max_discard": math.floor(max_discard_frac * n_boot + 1e-9),   # 浮動小数の 7.000000000000001 などで 1 ずれないように
+           "lower_quantile": alpha, "upper_quantile": 1.0 - alpha}
+    if discarded > out["max_discard"] or not vals:
+        return {**out, "lo": float("nan"), "hi": float("nan"), "valid": False}
+    n = len(vals)
+    return {**out, "lo": vals[int(alpha * n)], "hi": vals[int((1.0 - alpha) * n)], "valid": True}
+
+
+# Phase 0.5-5 の主検定の区間 (docs/PHASE05_5_PREREG.md §8-4。事前登録で固定)
+PRIMARY_CI_LEVEL = 0.99
+PRIMARY_N_BOOT = 5000
+PRIMARY_SEED = 20261004
+PRIMARY_MAX_DISCARD_FRAC = 0.01
+
+
+def primary_block_ci(samples: list[dict], stat, *, level: float) -> dict:
+    """Phase 0.5-5 の主検定の区間。水準は呼び出し側で **99% を明示** させ、それ以外は止める。
+
+    回数 5000・seed 20261004・捨てる上限 1% は事前登録の値に固定 (呼び出し側から変えられない)。
+    区間が無効 (`valid` False) なら判定は PRIMARY_INCONCLUSIVE (事前登録 §8-4)。判定するコードは `valid` を先に見ること
+    (`float("nan") > 0` は False なので、`lo > 0` だけで判定すると無効な区間が PRIMARY_FAIL に化ける)。
+    戻り値の dict (水準・回数・seed・捨てた回数を含む) は丸ごと成果物に残す。主検定のコードは
+    `block_boot` / `coefficient_ci` (95%) を使わず、この関数だけを使う。
+    """
+    if level != PRIMARY_CI_LEVEL:
+        raise ValueError(f"Phase 0.5-5 の主検定の区間は 99% に固定 (渡された水準: {level!r})")
+    return block_boot_ci(samples, stat, level=PRIMARY_CI_LEVEL, n_boot=PRIMARY_N_BOOT, seed=PRIMARY_SEED,
+                         max_discard_frac=PRIMARY_MAX_DISCARD_FRAC)
 
 
 def conditional_logit(samples: list[dict], cols: list[str],
