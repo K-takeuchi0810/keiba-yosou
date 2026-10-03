@@ -57,9 +57,10 @@ def test_the_training_matrix_excludes_the_audit_column():
 
 
 def test_audit_rates():
+    # 非対称な数にする (2/4 だと「立っていない行を数える」変異でも 0.5 になって素通りした)
     rows = [{"h_history_truncated": 1.0}, {"h_history_truncated": 0.0},
-            {"h_history_truncated": 0.0}, {"h_history_truncated": 1.0}]
-    assert fm.audit_rates(rows) == {"h_history_truncated": 0.5}
+            {"h_history_truncated": 1.0}, {"h_history_truncated": 1.0}]
+    assert fm.audit_rates(rows) == {"h_history_truncated": 0.75}
     assert fm.audit_rates([]) == {"h_history_truncated": None}
 
 
@@ -163,7 +164,7 @@ def test_collect_builds_the_input_from_the_model_schema(tmp_path, monkeypatch, m
     mod = importlib.import_module(f"scripts.{module_name}")
     feats = json.loads((FROZEN / f"{model}.meta.json").read_text(encoding="utf-8"))["features"]
     rows = [_row(feats, race_id="2026-0712-02-01-01-01", horse_num=f"{i:02d}", won=0,
-                 date="20260712", h_history_truncated=float(i % 2)) for i in range(1, 5)]
+                 date="20260712", h_history_truncated=1.0 if i == 1 else 0.0) for i in range(1, 5)]
     monkeypatch.setattr(mod, "build_dataset", lambda f, t: (rows, {}))
     monkeypatch.setattr(mod, "MODEL_PATH", path)
     monkeypatch.setattr(mod, "DB_PATH", _empty_races_db(tmp_path / "races.db"))
@@ -173,7 +174,7 @@ def test_collect_builds_the_input_from_the_model_schema(tmp_path, monkeypatch, m
     assert schema["n_features"] == 31 and schema["only_in_model"] == ["h_history_truncated"]
     assert schema["matches_current_features"] is False
     assert info["audit_columns"] == ["h_history_truncated"]
-    assert info["audit_rates_eval_rows"] == {"h_history_truncated": 0.5}
+    assert info["audit_rates_eval_rows"] == {"h_history_truncated": 0.25}
     assert counts.get("no_race") == 1 and samples == []
 
 
@@ -186,10 +187,11 @@ def test_the_domain_audit_still_monitors_the_audit_column(monkeypatch):
     monkeypatch.setattr(fda, "snapshot", lambda conn: {})
     monkeypatch.setattr(db, "DB_PATH", ":memory:")
     feats = ["h_starts"]
-    splits = {"train": [{"h_starts": 1.0, "h_history_truncated": 1.0}, {"h_starts": 2.0, "h_history_truncated": 0.0}],
+    splits = {"train": [{"h_starts": 1.0, "h_history_truncated": 1.0}, {"h_starts": 2.0, "h_history_truncated": 0.0},
+                        {"h_starts": 2.0, "h_history_truncated": 0.0}, {"h_starts": 2.0, "h_history_truncated": 0.0}],
               "strategy_dev": [{"h_starts": 3.0, "h_history_truncated": 0.0}]}
     out = fda.run(feats, splits, audit_columns=["h_history_truncated"])
     recs = {r["feature"]: r for r in out["features"]}
     assert recs["h_history_truncated"]["audit_only"] is True and recs["h_starts"]["audit_only"] is False
-    assert out["meta"]["audit_rates"] == {"train": {"h_history_truncated": 0.5},
+    assert out["meta"]["audit_rates"] == {"train": {"h_history_truncated": 0.25},
                                           "strategy_dev": {"h_history_truncated": 0.0}}
