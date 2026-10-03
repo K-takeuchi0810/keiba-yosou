@@ -14,7 +14,7 @@ Phase 0.5-4B の後に `h_history_truncated` をモデル入力から外す (31 
 
 - LightGBM は名前を渡さずに学習すると `Column_0`, `Column_1`, ... という名前を付ける
   (4B 以前の Fundamental モデルがこれ。2026-10-04 以降の学習は名前を渡す)。その場合は meta が正本
-- 名前を持つモデル (`scripts/market_offset_model.py`) は、名前と meta が一致することを確かめる
+- 名前を持つモデル (市場オフセット、2026-10-04 以降の Fundamental) は、名前と meta が一致することを確かめる
 - 食い違い・本数の不一致・データに列が無い、はすべて止める (fail-closed)
 """
 from __future__ import annotations
@@ -130,6 +130,8 @@ def assert_model_window_disjoint(model_path: Path, from_date: str, to_date: str)
     if not meta_path.exists():
         raise FileNotFoundError(f"モデルの meta が無い: {meta_path}")
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    if not meta.get("train") and not meta.get("validation"):
+        raise ValueError(f"モデルの meta に学習・検証の窓が無く、評価窓との重なりを確かめられない: {meta_path}")
     for key in ("train", "validation"):
         span = meta.get(key)
         if not span:

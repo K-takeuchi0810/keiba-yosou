@@ -98,7 +98,7 @@ def _flag(r: dict, c: str) -> bool:
     except (TypeError, ValueError):
         raise ValueError(f"監査用の列 {c} が 0/1 でない: {raw!r}") from None
     if v not in (0.0, 1.0):
-        raise ValueError(f"監査用の列 {c} が 0/1 でない: {r[c]!r}")
+        raise ValueError(f"監査用の列 {c} が 0/1 でない: {raw!r}")
     return v == 1.0
 
 

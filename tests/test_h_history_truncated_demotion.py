@@ -287,7 +287,10 @@ def test_collect_refuses_a_model_that_contains_a_market_feature(tmp_path, monkey
                         num_boost_round=3)
     path = tmp_path / "model.txt"
     booster.save_model(str(path))
-    (tmp_path / "model.meta.json").write_text(json.dumps({"features": names}), encoding="utf-8")
+    # 評価窓と重ならない学習・検証の窓を持たせる (窓のガードは市場特徴の検査より前に効くので)
+    (tmp_path / "model.meta.json").write_text(json.dumps({
+        "features": names, "train": ["20220101", "20241231"], "validation": ["20250101", "20251231"]}),
+        encoding="utf-8")
     rows = [{"h_starts": 1.0, "track_recent_30d_avg_winning_pop": 2.0, "race_id": "r", "horse_num": "01",
              "won": 0, "date": "20260712", "h_history_truncated": 0.0}]
     monkeypatch.setattr(mod, "build_dataset", lambda f, t: (rows, {}))
@@ -436,3 +439,30 @@ def test_collect_refuses_an_in_sample_evaluation_window(tmp_path, monkeypatch, m
         with pytest.raises(ValueError, match="in-sample"):
             mod.collect("20260601", "20260731")
     assert "margin" not in rows[0] and "p_raw" not in rows[0]
+
+
+def _meta_file(tmp_path: Path, meta: dict) -> Path:
+    (tmp_path / "m.txt").write_text("", encoding="utf-8")
+    (tmp_path / "m.meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    return tmp_path / "m.txt"
+
+
+@pytest.mark.parametrize("from_date,to_date,overlaps", [
+    ("20251231", "20260331", True),     # 評価の初日 = 検証の最終日 (閉区間なので重なる)
+    ("20260101", "20260331", False),    # 翌日からなら重ならない
+    ("20210101", "20220101", True),     # 評価の最終日 = 学習の初日
+    ("20210101", "20211231", False),
+])
+def test_window_guard_treats_windows_as_closed_intervals(tmp_path, from_date, to_date, overlaps):
+    path = _meta_file(tmp_path, {"train": ["20220101", "20241231"], "validation": ["20250101", "20251231"]})
+    if overlaps:
+        with pytest.raises(ValueError, match="in-sample"):
+            ms.assert_model_window_disjoint(path, from_date, to_date)
+    else:
+        ms.assert_model_window_disjoint(path, from_date, to_date)
+
+
+def test_window_guard_fails_closed_without_windows(tmp_path):
+    """meta に学習・検証の窓が無ければ、重なりを確かめられないので止める (黙って通さない)。"""
+    with pytest.raises(ValueError, match="窓が無く"):
+        ms.assert_model_window_disjoint(_meta_file(tmp_path, {"features": []}), "20260101", "20260331")

@@ -88,12 +88,13 @@ def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter, dict]:
     """
     assert_no_market_features(
         FEATURES, source_module=Path(__file__).parent / "fundamental_model.py")
+    # meta だけで決まるので、重いデータの構築より前に確かめる
+    assert_model_window_disjoint(MODEL_PATH, from_date, to_date)
     print("評価期間の特徴を構築中 ...", flush=True)
     data, _ = build_dataset(from_date, to_date)
     booster, model_features, schema = load_model_schema(MODEL_PATH, FEATURES)
     assert_no_market_features(
         model_features, source_module=Path(__file__).parent / "fundamental_model.py")
-    assert_model_window_disjoint(MODEL_PATH, from_date, to_date)
     X = feature_matrix(data, model_features)
     for d, m in zip(data, booster.predict(X, raw_score=True), strict=True):
         d["margin"] = float(m)
