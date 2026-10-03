@@ -263,6 +263,7 @@ def test_outside_rows_are_checksummed_and_unchanged(tmp_path):
     rep = bf.run(path, _records(), apply=True, today="20240101")
     assert rep["outside_before"] == rep["outside_after"] and rep["outside_before"]["rows"] == 12   # 地方 6 + 3 月 6
     assert set(rep["wal_checkpoint"]) == {"busy", "log_frames", "checkpointed_frames"}
+    assert set(rep["state_after_commit"]) == {"t.db", "t.db-wal", "t.db-shm"}      # checkpoint の前の状態
 
 
 def test_main_dry_run_writes_a_report_and_returns_zero(tmp_path, monkeypatch):
@@ -363,10 +364,21 @@ def test_main_reports_sqlite_errors_with_result_error(tmp_path, monkeypatch):
     assert rep["result"] == "error" and "database is locked" in rep["error"]
 
 
-def test_dry_run_opens_the_db_read_only(tmp_path):
+def test_dry_run_opens_the_db_read_only(tmp_path, monkeypatch):
+    """dry-run の接続は構造的に書けない (書こうとすると読み取り専用のエラーで止まる)。"""
     path = _db(tmp_path)
+    real = bf.target_rows
+
+    def write_then_read(conn):
+        conn.execute("UPDATE horse_races SET corner_order_4 = 1")
+        return real(conn)
+
+    monkeypatch.setattr(bf, "target_rows", write_then_read)
+    with pytest.raises(sqlite3.OperationalError, match="readonly"):
+        bf.run(path, _records(), apply=False, today="20240101")
+    monkeypatch.undo()
     rep = bf.run(path, _records(), apply=False, today="20240101")
-    assert rep["result"] == "dry_run" and "keiba" not in rep["db"]
+    assert rep["result"] == "dry_run"
     assert set(rep["state_before"]) == {"t.db", "t.db-wal", "t.db-shm"}
 
 
@@ -380,3 +392,25 @@ def test_after_acceptance_uses_the_reread_values(tmp_path, monkeypatch):
     with pytest.raises(bf.BackfillError, match="適用後"):
         bf.run(path, _records(), apply=True, today="20240101")
     assert _digest(path) == before
+
+
+def test_main_writes_the_report_even_on_keyboard_interrupt(tmp_path, monkeypatch):
+    """Ctrl-C (KeyboardInterrupt) でも、レポートを書いてから再送出する (書き込み中なら rollback 済み)。"""
+    import json
+    path = _db(tmp_path)
+    before = _digest(path)
+    monkeypatch.setattr(bf, "raw_files", lambda d: [Path("x.jvd")])
+    monkeypatch.setattr(bf, "load_records", lambda files: (_records(), []))
+    real = bf.current_values
+
+    def interrupt(conn):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(bf, "current_values", interrupt)          # UPDATE の後、適用後の検収で中断
+    out = tmp_path / "r.json"
+    with pytest.raises(KeyboardInterrupt):
+        bf.main(["--db", str(path), "--apply", "--report", str(out)])
+    rep = json.loads(out.read_text(encoding="utf-8"))
+    assert rep["result"] == "error" and "KeyboardInterrupt" in rep["error"]
+    assert _digest(path) == before
+    assert real is not None

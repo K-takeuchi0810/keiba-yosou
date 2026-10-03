@@ -69,3 +69,42 @@
 変わったセルは corner 4 列だけ、監視 18 列は全行一致、適用後の検収は合格 (最小 96.56%)。
 clone には対象の行しか入れていないので、対象外の行のチェックサムは 0 行で空振り (同一)。対象外の行についての E2E の証拠は、
 本番の実行のレポートの `outside_before` / `outside_after` で取る。clone は WAL モードではないので checkpoint は (0, -1, -1)。
+
+## 本番の実行手順 — 確定版 (2026-10-04、v3 の限定再レビューと外部の指示者の追加要件を反映。上の手順 1〜7 より優先)
+
+対象のコード: main に入った backfill v4 (このブランチ) のマージ後の SHA。**dry-run と apply は同じ Git SHA・同じ script の sha256 で**
+行う (main は auto_predict の自動の push で進みうるので、最終レビュー済みの SHA に固定した clean な worktree で実行する)。
+
+1. **非開催の確認**: JRA のカレンダーと、本番の races の当日の JRA 行が 0 (10/04 は 24 件、10/05 は 0 件を確認済み)
+2. **書き手の停止の確認**: タスク `MAIBuilder Live JRA Data` と `MAIBuilder Live JRA Data Controller` (Controller が Live を
+   再起動しうる) が無効、`keiba-fresh-odds` / `keiba-fresh-odds-healthcheck` / `keiba-morning-odds` / `keiba-auto-predict` /
+   `keiba-trend-collect-raceday` (20:00) の実行時刻を避ける。`Get-Process python*,pythonw*,wscript*` を目視し、
+   `fetch_fresh_odds.lock` / ai-builder の `fetch-live-jvdata.lock` も確認
+3. **静止の確認 (dry-run の前に)**: keiba.db の mtime、WAL 0 B、**shm の mtime** が数分動かない。dry-run (mode=ro) と確認者の
+   読み取りの接続でも shm の mtime は動くので、静止の確認は dry-run の **前** に行い、その後に動くのは正常とする
+4. **固定した worktree を作る**:
+   `git -C C:/Users/kizun/dev/keiba-yosou worktree add --detach C:/Users/kizun/dev/keiba-yosou/.claude/worktrees/backfill-prod <SHA>`、
+   `git status --short` が空、`git rev-parse HEAD` と `sha256sum scripts/backfill_corner_orders.py` を記録、
+   `python -c "import config; print(config.PROJECT_ROOT, config.CORNER_BYTES_VERIFIED)"` が worktree のパス / True
+5. **dry-run** (固定した worktree から、`--db` / `--raw-dir` / `--report` は絶対パス):
+   `.venv64/Scripts/python.exe -m scripts.backfill_corner_orders --db C:/Users/kizun/dev/keiba-yosou/data/keiba.db
+   --raw-dir C:/Users/kizun/dev/keiba-yosou/data/raw/RACE --report <main>/data/backtest/corner_scratch_20261004/prod_dryrun_<SHA>.json`
+6. **計画値の確認 (すべて満たさなければ承認を求めずに中止)**:
+   - (a) Scratch B の 335 ファイルが、dry-run の manifest に **部分集合として** 含まれ、sha256 が全件一致
+   - (b) 追加のファイルがあれば、その名前の日付は 20260630 より後 (例: 10/04 20:00 以降の週次 SE)
+   - (c) `raw_records_used == 309,865`、`raw_keys == 262,113`、`planned_updates == 262,113`、`db_rows == 262,885`、
+     `null_remaining_after == 772`、`nonnull_before == 0`、`raw_keys_not_in_db == 0`、`acceptance_planned.ok`
+     ((c) が一致すれば、追加のファイルの寄与が 0 であることの機械的な証明になる)
+   - 「対象外の更新 0」は dry-run のレポートには無い (対象外の行のチェックサムと接続の変更件数の検査は apply のトランザクションの中でだけ取れる)。
+     apply のレポートで確認する
+7. **dry-run の結果を提示してユーザーの明示の承認** (SHA・script の sha256・6 の数値・所要時間を添える)。承認の後、**同じ worktree・
+   同じ静止の窓で** (20:00 の傾向収集のバッチをまたがない) apply する
+8. **apply**: 5 と同じコマンドに `--apply --expected-nonnull-before 0`、レポートは `prod_apply_<SHA>.json`。確認:
+   `updated_rows == 262,113`、`acceptance_after.ok`、`outside_before == outside_after`、`wal_checkpoint.busy == 0`、
+   `state_after_commit` の WAL の大きさ、`state_after` の WAL 0 B。**rc が 1 でも `result == "applied"` なら COMMIT 済み**
+   (例: checkpoint の失敗)。その場合は再び --apply せず、適用後の監査で判断する
+9. **適用後の監査**: 本番で対象範囲の corner_order_4 が NULL の行が 772 (すべて data_div 9)、月ごとの最小が 0.9655 以上
+10. **常駐プロセスの再起動 (重要)**: GUI / webapp など、`_pred_cache` や `_corner_data_present` をメモリに持つプロセス。
+    特徴のキャッシュの鍵に DB の中身が無いので、再起動するまで古い recent_4corner_* を持ち続ける
+11. **ai-builder の互換確認** (読み取り側の import と特徴の生成。ai-builder のコードには触れない)、2 つのレポートを main にコミット
+12. 取り消しの経路は上の手順 5 のとおり (`--expected-nonnull-before 0` で通った適用にだけ有効)
