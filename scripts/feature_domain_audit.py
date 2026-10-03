@@ -82,11 +82,16 @@ def run(features: list[str], splits: dict[str, list[dict]],
     conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
     meta = snapshot(conn)
     conn.close()
+    # 率の定義は学習の meta と同じ関数 (fundamental_model.audit_rates) を使う。ここで別に書くと、
+    # 定義を変えたときに同じキー名で違う数字が出る
+    from scripts.fundamental_model import audit_rates, audit_rates_by_year
+
     return {"meta": {**meta, "base_split": base, "splits": names,
                      "n_rows": {k: len(v) for k, v in splits.items()},
                      "audit_columns": audit_columns,
-                     "audit_rates": {k: {c: float(np.mean(arrays[k][c] == 1.0)) if len(arrays[k][c]) else None
-                                         for c in audit_columns} for k in names}},
+                     "audit_rates": {k: audit_rates(splits[k], audit_columns) for k in names},
+                     "audit_rates_by_year": {k: audit_rates_by_year(splits[k], audit_columns)
+                                             for k in names}},
             "features": rows_out}
 
 

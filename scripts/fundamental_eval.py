@@ -58,7 +58,7 @@ from predictor.pit_t10 import RACE_KEYS, decision_time, t10_market  # noqa: E402
 from predictor.provenance import snapshot  # noqa: E402
 from predictor.model_schema import feature_matrix, load_model_schema  # noqa: E402
 from scripts.fundamental_model import (  # noqa: E402
-    AUDIT_COLUMNS, FEATURES, MODEL_PATH, audit_rates, build_dataset)
+    FEATURES, MODEL_PATH, build_dataset, eval_audit_info)
 from scripts.market_data_audit import confirmed_win_payouts  # noqa: E402
 
 # T−10 スナップが発走の何分前までなら「T−10 の市場」と呼んでよいか。
@@ -131,8 +131,7 @@ def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter, dict]:
     X = feature_matrix(data, model_features)
     for d, p in zip(data, booster.predict(X), strict=True):
         d["p_raw"] = float(p)
-    model_info = {"model_feature_schema": schema, "audit_columns": AUDIT_COLUMNS,
-                  "audit_rates_eval_rows": audit_rates(data)}
+    model_info = {"model_feature_schema": schema, **eval_audit_info(data)}
 
     by_race: dict[str, list[dict]] = defaultdict(list)
     for d in data:

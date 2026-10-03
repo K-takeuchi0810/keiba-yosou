@@ -61,7 +61,7 @@ from scripts.fundamental_eval import (  # noqa: E402
     _final_market_odds,
 )
 from predictor.model_schema import feature_matrix, load_model_schema  # noqa: E402
-from scripts.fundamental_model import AUDIT_COLUMNS, FEATURES, audit_rates, build_dataset  # noqa: E402
+from scripts.fundamental_model import FEATURES, build_dataset, eval_audit_info  # noqa: E402
 from scripts.market_data_audit import confirmed_win_payouts  # noqa: E402
 from scripts.market_offset_model import MODEL_PATH  # noqa: E402
 
@@ -121,8 +121,7 @@ def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter, dict]:
     X = feature_matrix(data, model_features)
     for d, m in zip(data, booster.predict(X, raw_score=True), strict=True):
         d["margin"] = float(m)
-    model_info = {"model_feature_schema": schema, "audit_columns": AUDIT_COLUMNS,
-                  "audit_rates_eval_rows": audit_rates(data)}
+    model_info = {"model_feature_schema": schema, **eval_audit_info(data)}
 
     by_race: dict[str, list[dict]] = defaultdict(list)
     for d in data:
@@ -339,7 +338,7 @@ def main() -> int:
         pass
 
     s = out["sets"]
-    print(f"\n=== Phase 0.5-4A ({out['meta']['prereg']} どおり 1 回のみ) ===")
+    print(f"\n=== {out['meta']['label']} ({out['meta']['prereg']} どおり 1 回のみ) ===")
     print(f"  主分析 (鮮度 {out['meta']['max_lead_minutes']} 分以内) "
           f"{s['fresh_t10']['n_races']:,} レース / {s['fresh_t10']['n_horses']:,} 頭")
     print(f"  参考 (全体) {s['all']['n_races']:,} レース / "

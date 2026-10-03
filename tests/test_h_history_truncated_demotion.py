@@ -9,7 +9,11 @@
   (`predictor.model_schema`)。31 特徴の 4B (凍結) は 31 列で再現でき、30 列のデータでは
   黙って評価せずに止まる。並びとモデル・meta が食い違えば止まる
 - 評価スクリプト (`market_offset_eval` / `fundamental_eval`) の `collect()` が、実際にモデル自身の
-  並びで入力を作る (今の FEATURES に戻すと、31 特徴の 4B で列が合わずに落ちる)
+  並びで入力を作る (今の FEATURES に戻すと、31 特徴の 4B で列が合わずに落ちる)。行ごと・特徴ごとに
+  違う値で、予測値そのものが直接の計算と一致する (列の並べ替えも検出する)
+- 学習 (`fit()`) は特徴の名前をモデルに刻み (Fundamental も Column_* にしない)、meta に世代名・本数・
+  監査用の列の率 (年別も) を残す
+- 評価の出力には、モデルファイルの sha256 と学習時の meta の主な項目が入る
 """
 from __future__ import annotations
 
@@ -62,6 +66,33 @@ def test_audit_rates():
             {"h_history_truncated": 1.0}, {"h_history_truncated": 1.0}]
     assert fm.audit_rates(rows) == {"h_history_truncated": 0.75}
     assert fm.audit_rates([]) == {"h_history_truncated": None}
+    assert fm.audit_rates([{"x": 1.0}, {"x": 0.0}, {"x": 0.0}], ["x"]) == {"x": pytest.approx(1 / 3)}
+
+
+@pytest.mark.parametrize("bad", [float("nan"), 0.5, 2.0])
+def test_audit_rates_refuse_a_non_binary_value(bad):
+    """NaN などを黙って「立っていない」側に数えない。"""
+    with pytest.raises(ValueError, match="0/1"):
+        fm.audit_rates([{"h_history_truncated": 1.0}, {"h_history_truncated": bad}])
+
+
+def test_audit_rates_by_year():
+    rows = ([{"date": "20220105", "h_history_truncated": 1.0}] * 3
+            + [{"date": "20220610", "h_history_truncated": 0.0}]
+            + [{"date": "20230301", "h_history_truncated": 1.0}]
+            + [{"date": "20230302", "h_history_truncated": 0.0}] * 4)
+    assert fm.audit_rates_by_year(rows) == {"h_history_truncated": {"2022": 0.75, "2023": 0.2}}
+
+
+def test_audit_meta_records_the_generation_and_the_rates():
+    train = [{"date": "20220101", "h_history_truncated": 1.0}, {"date": "20230101", "h_history_truncated": 0.0},
+             {"date": "20230102", "h_history_truncated": 0.0}, {"date": "20230103", "h_history_truncated": 0.0}]
+    valid = [{"date": "20250101", "h_history_truncated": 0.0}]
+    m = fm.audit_meta(train, valid)
+    assert m["feature_set"] == "post_demotion_repaired_30features" and m["n_features"] == 30
+    assert m["audit_columns"] == ["h_history_truncated"]
+    assert m["audit_rates"] == {"train": {"h_history_truncated": 0.25}, "validation": {"h_history_truncated": 0.0}}
+    assert m["audit_rates_by_year"]["train"] == {"h_history_truncated": {"2022": 1.0, "2023": 0.0}}
 
 
 # --- モデル自身の特徴の並び ----------------------------------------------------------
@@ -88,6 +119,15 @@ def test_an_older_model_is_kept_with_its_own_columns_and_recorded():
     assert prov["only_in_model"] == ["x"] and prov["only_in_current"] == []
 
 
+def test_a_model_with_fewer_features_than_now_is_recorded():
+    """次に特徴を足したとき (古いモデルの方が少ない) の記録。"""
+    with pytest.warns(UserWarning):
+        feats, prov = ms.resolve_feature_schema(["a", "b"], 2, None, CUR)
+    assert feats == ["a", "b"]
+    assert prov["only_in_current"] == ["c"] and prov["only_in_model"] == []
+    assert prov["same_set_different_order"] is False
+
+
 def test_same_set_in_a_different_order_is_not_silently_reordered():
     with pytest.warns(UserWarning):
         feats, prov = ms.resolve_feature_schema(["c", "b", "a"], 3, None, CUR)
@@ -112,6 +152,9 @@ def test_missing_data_columns_fail_closed():
     with pytest.raises(ms.ModelSchemaError, match="b"):
         ms.feature_matrix([{"a": 1.0}], ["a", "b"])
     assert ms.feature_matrix([{"a": 1.0, "b": 2.0, "z": 9.0}], ["b", "a"]).tolist() == [[2.0, 1.0]]
+    # 欠落が先頭の行ではなく途中の行にあっても止める
+    with pytest.raises(ms.ModelSchemaError, match="b"):
+        ms.feature_matrix([{"a": 1.0, "b": 2.0}, {"a": 1.0, "b": 2.0}, {"a": 1.0}], ["a", "b"])
 
 
 # --- 凍結した 4B (31 特徴) の再現 ---------------------------------------------------
@@ -135,6 +178,28 @@ def test_the_frozen_4b_model_is_reproduced_with_its_31_columns(name):
     rows30 = [{f: r[f] for f in fm.FEATURES} for r in rows]
     with pytest.raises(ms.ModelSchemaError, match="h_history_truncated"):
         ms.feature_matrix(rows30, feats)
+    # 評価の出力に残す記録: ファイルの sha256 (凍結の manifest と一致) と学習時の meta
+    manifest = json.loads((FROZEN / "FREEZE_MANIFEST.json").read_text(encoding="utf-8"))
+    sha = {f["frozen_as"]: f["sha256"] for f in manifest["files"]}
+    assert prov["model_sha256"] == sha[f"{name}.txt"]
+    assert prov["model_meta_file"] == f"{name}.meta.json"
+    assert prov["model_meta"]["git_sha"] == meta["git_sha"]
+    assert prov["model_meta"]["train"] == meta["train"]
+    assert "feature_set" not in prov["model_meta"]       # 4B の meta には世代名が無い (入れたふりをしない)
+
+
+def test_meta_n_features_disagreeing_with_the_model_fails_closed(tmp_path):
+    src = FROZEN / "market_offset_model.txt"
+    if not src.exists():
+        pytest.skip(f"凍結した 4B が無い: {src}")
+    (tmp_path / "m.txt").write_bytes(src.read_bytes())
+    meta = json.loads((FROZEN / "market_offset_model.meta.json").read_text(encoding="utf-8"))
+    meta["n_features"] = 30
+    (tmp_path / "m.meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with pytest.raises(ms.ModelSchemaError, match="n_features"):
+            ms.load_model_schema(tmp_path / "m.txt", fm.FEATURES)
 
 
 # --- 評価スクリプトの配線 -----------------------------------------------------------
@@ -154,17 +219,27 @@ def test_collect_builds_the_input_from_the_model_schema(tmp_path, monkeypatch, m
     """collect() が、今の FEATURES (30) ではなくモデル自身の並び (4B は 31) で入力を作ること。
 
     今の FEATURES に戻す変異では、31 特徴のモデルに 30 列を渡して LightGBM が落ちる。
+    行ごと・特徴ごとに違う値を使い、collect() が書いた予測値 (margin / p_raw) が、モデル自身の並びでの
+    直接の計算と一致することも確かめる (全特徴を同じ値にすると、列の並べ替えが見えずに素通りした)。
     レース表は空なので、予測のあとは全行が「レース無し」で外れる (ここで見たいのは入力の組み立て)。
     """
     import importlib
+
+    import lightgbm as lgb
 
     path = FROZEN / f"{model}.txt"
     if not path.exists():
         pytest.skip(f"凍結した 4B が無い: {path}")
     mod = importlib.import_module(f"scripts.{module_name}")
     feats = json.loads((FROZEN / f"{model}.meta.json").read_text(encoding="utf-8"))["features"]
-    rows = [_row(feats, race_id="2026-0712-02-01-01-01", horse_num=f"{i:02d}", won=0,
-                 date="20260712", h_history_truncated=1.0 if i == 1 else 0.0) for i in range(1, 5)]
+    rng = np.random.default_rng(7)
+    rows = []
+    for i in range(1, 41):
+        r = {f: float(v) for f, v in zip(feats, rng.normal(scale=3.0, size=len(feats)))}
+        r.update(race_id="2026-0712-02-01-01-01", horse_num=f"{i:02d}", won=0,
+                 date="20260712" if i <= 30 else "20250712",
+                 h_history_truncated=1.0 if i <= 10 else 0.0)
+        rows.append(r)
     monkeypatch.setattr(mod, "build_dataset", lambda f, t: (rows, {}))
     monkeypatch.setattr(mod, "MODEL_PATH", path)
     monkeypatch.setattr(mod, "DB_PATH", _empty_races_db(tmp_path / "races.db"))
@@ -175,7 +250,110 @@ def test_collect_builds_the_input_from_the_model_schema(tmp_path, monkeypatch, m
     assert schema["matches_current_features"] is False
     assert info["audit_columns"] == ["h_history_truncated"]
     assert info["audit_rates_eval_rows"] == {"h_history_truncated": 0.25}
+    assert info["audit_rates_by_year_eval_rows"] == {"h_history_truncated": {"2025": 0.0, "2026": 1 / 3}}
+    assert schema["model_sha256"] and schema["model_meta"]["train"]
     assert counts.get("no_race") == 1 and samples == []
+    # 予測値が、モデル自身の並びでの直接の計算と一致する
+    booster = lgb.Booster(model_file=str(path))
+    X = np.array([[r[f] for f in feats] for r in rows])
+    if module_name == "market_offset_eval":
+        got, want = [r["margin"] for r in rows], booster.predict(X, raw_score=True)
+    else:
+        got, want = [r["p_raw"] for r in rows], booster.predict(X)
+    assert np.allclose(got, want)
+    assert np.std(want) > 0      # 値が全部同じだと、並べ替えを検出できない
+
+
+@pytest.mark.parametrize("module_name", ["market_offset_eval", "fundamental_eval"])
+def test_collect_refuses_a_model_that_contains_a_market_feature(tmp_path, monkeypatch, module_name):
+    """モデル自身の並びに市場由来の特徴があれば、予測する前に止める (今の FEATURES の検査だけでは見えない)。"""
+    import importlib
+
+    import lightgbm as lgb
+
+    mod = importlib.import_module(f"scripts.{module_name}")
+    names = ["h_starts", "track_recent_30d_avg_winning_pop"]
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(200, 2))
+    booster = lgb.train({"objective": "binary", "verbose": -1, "min_data_in_leaf": 5},
+                        lgb.Dataset(X, label=(X[:, 0] > 0).astype(int), feature_name=names),
+                        num_boost_round=3)
+    path = tmp_path / "model.txt"
+    booster.save_model(str(path))
+    (tmp_path / "model.meta.json").write_text(json.dumps({"features": names}), encoding="utf-8")
+    rows = [{"h_starts": 1.0, "track_recent_30d_avg_winning_pop": 2.0, "race_id": "r", "horse_num": "01",
+             "won": 0, "date": "20260712", "h_history_truncated": 0.0}]
+    monkeypatch.setattr(mod, "build_dataset", lambda f, t: (rows, {}))
+    monkeypatch.setattr(mod, "MODEL_PATH", path)
+    monkeypatch.setattr(mod, "DB_PATH", _empty_races_db(tmp_path / "races.db"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with pytest.raises(ValueError, match="track_recent_30d_avg_winning_pop"):
+            mod.collect("20260601", "20260731")
+    assert "margin" not in rows[0] and "p_raw" not in rows[0]
+
+
+# --- 学習 (fit) の成果物 -----------------------------------------------------------------
+
+def _synthetic_rows(n: int, year_from: int, seed: int) -> list[dict]:
+    rng = np.random.default_rng(seed)
+    out = []
+    for i in range(n):
+        r = {f: float(v) for f, v in zip(fm.FEATURES, rng.normal(size=len(fm.FEATURES)))}
+        r.update(race_id=f"{year_from + i % 3}-r{i // 10}", horse_num=f"{i % 10 + 1:02d}",
+                 date=f"{year_from + i % 3}0601",
+                 won=int(rng.random() < 1 / (1 + np.exp(-r["h_starts"] * 2))),
+                 h_history_truncated=1.0 if i % 4 == 0 else 0.0)
+        out.append(r)
+    return out
+
+
+def _check_fitted_artifacts(model_path: Path, meta_path: Path, train: list[dict]) -> None:
+    import lightgbm as lgb
+
+    booster = lgb.Booster(model_file=str(model_path))
+    assert booster.feature_name() == fm.FEATURES        # Column_* ではなく名前が刻まれる
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    assert meta["features"] == fm.FEATURES
+    assert meta["feature_set"] == fm.FEATURE_SET and meta["n_features"] == 30
+    assert meta["audit_columns"] == ["h_history_truncated"]
+    assert meta["audit_rates"]["train"] == fm.audit_rates(train)
+    assert meta["audit_rates"]["train"]["h_history_truncated"] == pytest.approx(0.25)
+    assert meta["audit_rates_by_year"]["train"] == fm.audit_rates_by_year(train)
+    # 名前と meta が揃うので、評価側は名前で並びを決め、今の FEATURES と一致する
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _, feats, prov = ms.load_model_schema(model_path, fm.FEATURES)
+    assert feats == fm.FEATURES and prov["schema_source"] == "booster_feature_name"
+    assert prov["matches_current_features"] is True
+    assert prov["model_meta"]["feature_set"] == fm.FEATURE_SET
+
+
+def test_fundamental_fit_names_the_features_and_records_the_audit(tmp_path, monkeypatch):
+    data = {"2022": _synthetic_rows(900, 2022, 1), "2025": _synthetic_rows(300, 2025, 2)}
+    monkeypatch.setattr(fm, "build_dataset", lambda f, t: (data[f[:4]], {}))
+    monkeypatch.setattr(fm, "MODEL_PATH", tmp_path / "fundamental_model.txt")
+    monkeypatch.setattr(fm, "META_PATH", tmp_path / "fundamental_model.meta.json")
+    monkeypatch.setattr(fm, "DB_PATH", _empty_races_db(tmp_path / "races.db"))
+    fm.fit()
+    _check_fitted_artifacts(tmp_path / "fundamental_model.txt", tmp_path / "fundamental_model.meta.json",
+                            data["2022"])
+
+
+def test_market_offset_fit_names_the_features_and_records_the_audit(tmp_path, monkeypatch):
+    from scripts import market_offset_model as mom
+
+    data = {"2022": _synthetic_rows(900, 2022, 3), "2025": _synthetic_rows(300, 2025, 4)}
+    market = {(r["race_id"], r["horse_num"]): 0.1 for rows in data.values() for r in rows}
+    monkeypatch.setattr(mom, "build_dataset", lambda f, t: (data[f[:4]], {}))
+    monkeypatch.setattr(mom, "training_market", lambda conn, y, t: market)
+    monkeypatch.setattr(mom, "payout_agreement", lambda conn, y, t: 1.0)
+    monkeypatch.setattr(mom, "MODEL_PATH", tmp_path / "market_offset_model.txt")
+    monkeypatch.setattr(mom, "META_PATH", tmp_path / "market_offset_model.meta.json")
+    monkeypatch.setattr(mom, "DB_PATH", _empty_races_db(tmp_path / "races.db"))
+    mom.fit()
+    _check_fitted_artifacts(tmp_path / "market_offset_model.txt", tmp_path / "market_offset_model.meta.json",
+                            data["2022"])
 
 
 # --- 域外監査は監査用の列も監視する -----------------------------------------------------
@@ -187,11 +365,14 @@ def test_the_domain_audit_still_monitors_the_audit_column(monkeypatch):
     monkeypatch.setattr(fda, "snapshot", lambda conn: {})
     monkeypatch.setattr(db, "DB_PATH", ":memory:")
     feats = ["h_starts"]
-    splits = {"train": [{"h_starts": 1.0, "h_history_truncated": 1.0}, {"h_starts": 2.0, "h_history_truncated": 0.0},
-                        {"h_starts": 2.0, "h_history_truncated": 0.0}, {"h_starts": 2.0, "h_history_truncated": 0.0}],
-              "strategy_dev": [{"h_starts": 3.0, "h_history_truncated": 0.0}]}
+    splits = {"train": [{"h_starts": 1.0, "h_history_truncated": 1.0, "date": "20220101"},
+                        {"h_starts": 2.0, "h_history_truncated": 0.0, "date": "20230101"},
+                        {"h_starts": 2.0, "h_history_truncated": 0.0, "date": "20230102"},
+                        {"h_starts": 2.0, "h_history_truncated": 0.0, "date": "20230103"}],
+              "strategy_dev": [{"h_starts": 3.0, "h_history_truncated": 0.0, "date": "20260601"}]}
     out = fda.run(feats, splits, audit_columns=["h_history_truncated"])
     recs = {r["feature"]: r for r in out["features"]}
     assert recs["h_history_truncated"]["audit_only"] is True and recs["h_starts"]["audit_only"] is False
     assert out["meta"]["audit_rates"] == {"train": {"h_history_truncated": 0.25},
                                           "strategy_dev": {"h_history_truncated": 0.0}}
+    assert out["meta"]["audit_rates_by_year"]["train"] == {"h_history_truncated": {"2022": 1.0, "2023": 0.0}}

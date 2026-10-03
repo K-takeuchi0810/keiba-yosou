@@ -85,18 +85,35 @@ def resolve_feature_schema(booster_feature_names: Sequence[str], num_feature: in
     return features, provenance
 
 
-def load_model_schema(model_path: Path, current_features: Sequence[str]):
-    """モデルファイルと同じ場所の `<名前>.meta.json` を読み、Booster・並び・記録を返す。"""
+# 評価の出力に写す、学習時の meta の項目。`predictor/*_model.txt` は同じ名前で上書きされるので、
+# ファイル名だけでは「どの学習のモデルを評価したか」を後から辿れない
+MODEL_META_KEYS = ("feature_set", "n_features", "git_sha", "git_dirty", "code_version",
+                   "train", "validation", "n_train", "n_valid", "best_iteration")
+
+
+def load_model_schema(model_path: Path, current_features: Sequence[str]) -> tuple[object, list[str], dict]:
+    """モデルファイルと同じ場所の `<名前>.meta.json` を読み、Booster・並び・記録を返す。
+
+    記録には、モデルファイルの sha256 と、学習時の meta の主な項目 (`MODEL_META_KEYS`、
+    古い meta に無い項目は入れない) も入れる。
+    """
+    import hashlib
+
     import lightgbm as lgb
 
+    model_path = Path(model_path)
     booster = lgb.Booster(model_file=str(model_path))
-    meta_path = Path(model_path).with_suffix(".meta.json")
-    meta_features = None
-    if meta_path.exists():
-        meta_features = json.loads(meta_path.read_text(encoding="utf-8")).get("features")
+    meta_path = model_path.with_suffix(".meta.json")
+    meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
     features, provenance = resolve_feature_schema(
-        booster.feature_name(), booster.num_feature(), meta_features, current_features)
-    provenance["model_file"] = Path(model_path).name
+        booster.feature_name(), booster.num_feature(), meta.get("features"), current_features)
+    if "n_features" in meta and meta["n_features"] != len(features):
+        raise ModelSchemaError(
+            f"meta の n_features ({meta['n_features']}) とモデルの特徴の本数 ({len(features)}) が違う")
+    provenance["model_file"] = model_path.name
+    provenance["model_sha256"] = hashlib.sha256(model_path.read_bytes()).hexdigest()
+    provenance["model_meta_file"] = meta_path.name if meta_path.exists() else None
+    provenance["model_meta"] = {k: meta[k] for k in MODEL_META_KEYS if k in meta}
     return booster, features, provenance
 
 

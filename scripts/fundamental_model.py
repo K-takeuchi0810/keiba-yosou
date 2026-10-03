@@ -82,12 +82,56 @@ FEATURES = [
 # 4B (31 特徴) の成果物は data/backtest/frozen_4b_repaired_31features_20260919/ に凍結してある。
 AUDIT_COLUMNS = ["h_history_truncated"]
 
+# この FEATURES で学習したモデルの世代名。meta に刻み、凍結した 4A (original 30) /
+# 4B (repaired 31) と取り違えないようにする。FEATURES を変えたら必ず変える。
+FEATURE_SET = "post_demotion_repaired_30features"
 
-def audit_rates(rows: list[dict]) -> dict[str, float | None]:
-    """監査用の列ごとに、値が 1 の行の割合。行が無ければ None。"""
+
+def _flag(r: dict, c: str) -> bool:
+    """監査用の列は 0 / 1 の二値。それ以外 (NaN を含む) は黙って片側に数えずに止める。"""
+    v = float(r[c])
+    if v not in (0.0, 1.0):
+        raise ValueError(f"監査用の列 {c} が 0/1 でない: {r[c]!r}")
+    return v == 1.0
+
+
+def audit_rates(rows: list[dict], columns: list[str] | None = None) -> dict[str, float | None]:
+    """監査用の列ごとに、値が 1 の行の割合。行が無ければ None。
+
+    率の定義はここだけに置く (学習の meta・評価の出力・域外監査が同じ関数を使う)。
+    """
+    columns = AUDIT_COLUMNS if columns is None else columns
     if not rows:
-        return {c: None for c in AUDIT_COLUMNS}
-    return {c: float(sum(1 for r in rows if float(r[c]) == 1.0) / len(rows)) for c in AUDIT_COLUMNS}
+        return {c: None for c in columns}
+    return {c: sum(_flag(r, c) for r in rows) / len(rows) for c in columns}
+
+
+def audit_rates_by_year(rows: list[dict], columns: list[str] | None = None) -> dict[str, dict[str, float]]:
+    """監査用の列ごとの、年 (`date` の先頭 4 桁) 別の率。
+
+    時間の代理かどうかは「年とともに単調に減るか」で判定するので、期間ごとの 1 値では足りない
+    (4B で問題を見つけたのは年別の表 40.9 → 22.3 → 9.7 → 3.9%)。
+    """
+    columns = AUDIT_COLUMNS if columns is None else columns
+    by_year: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        by_year[str(r["date"])[:4]].append(r)
+    return {c: {y: audit_rates(by_year[y], [c])[c] for y in sorted(by_year)} for c in columns}
+
+
+def eval_audit_info(rows: list[dict]) -> dict:
+    """評価の出力に入れる、評価行での監査用の列の率 (全体と年別)。"""
+    return {"audit_columns": list(AUDIT_COLUMNS), "audit_rates_eval_rows": audit_rates(rows),
+            "audit_rates_by_year_eval_rows": audit_rates_by_year(rows)}
+
+
+def audit_meta(train: list[dict], valid: list[dict]) -> dict:
+    """学習の meta に入れる、特徴の世代と監査用の列の記録 (Fundamental / 市場オフセットで共通)。"""
+    return {"feature_set": FEATURE_SET, "n_features": len(FEATURES),
+            "audit_columns": list(AUDIT_COLUMNS),
+            "audit_rates": {"train": audit_rates(train), "validation": audit_rates(valid)},
+            "audit_rates_by_year": {"train": audit_rates_by_year(train),
+                                    "validation": audit_rates_by_year(valid)}}
 
 
 def _rate(w: int, n: int, pw: float = 1.0, pn: float = 12.0) -> float:
@@ -389,7 +433,10 @@ def fit() -> dict:
         n_estimators=2000, learning_rate=0.03, num_leaves=63,
         min_child_samples=100, subsample=0.8, subsample_freq=1,
         colsample_bytree=0.8, random_state=20260918, verbose=-1)
+    # 名前を渡す (2026-10-04)。渡さないと LightGBM は Column_* と名付け、並びの契約が meta だけになる
+    # (meta の並びが入れ替わっても本数しか照合できない)。名前があれば model_schema が meta と突き合わせる
     model.fit(Xtr, ytr, eval_set=[(Xva, yva)], eval_metric="binary_logloss",
+              feature_name=list(FEATURES),
               callbacks=[lgb.early_stopping(100, verbose=False)])
     model.booster_.save_model(str(MODEL_PATH))
 
@@ -397,8 +444,7 @@ def fit() -> dict:
     from predictor.evaluation import evaluate_probabilities
     rep = evaluate_probabilities(list(yva), list(model.predict_proba(Xva)[:, 1]))
     meta = {**snapshot(conn_meta), "features": FEATURES,
-            "audit_columns": AUDIT_COLUMNS,
-            "audit_rates": {"train": audit_rates(train), "validation": audit_rates(valid)},
+            **audit_meta(train, valid),
             "train": [tr_from, tr_to], "validation": [va_from, va_to],
             "n_train": len(train), "n_valid": len(valid),
             "excluded_train": dict(s_tr), "excluded_valid": dict(s_va),

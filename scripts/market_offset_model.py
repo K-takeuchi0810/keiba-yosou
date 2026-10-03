@@ -61,10 +61,9 @@ from db import DB_PATH  # noqa: E402
 from predictor.feature_manifest import assert_no_market_features  # noqa: E402
 from predictor.provenance import snapshot  # noqa: E402
 from scripts.fundamental_model import (  # noqa: E402
-    AUDIT_COLUMNS,
-    audit_rates,
     FEATURES,
     TRUST_FLOOR_YEAR,
+    audit_meta,
     build_dataset,
 )
 
@@ -233,9 +232,8 @@ def fit() -> dict:
     from predictor.evaluation import log_loss
     p_off = 1.0 / (1.0 + np.exp(-(iva + margin)))
     meta = {**snapshot(conn), "features": FEATURES, "params": PARAMS,
-            # 監査用の列はモデルに渡さず、学習・検証での率だけを残す (2026-10-04)
-            "audit_columns": AUDIT_COLUMNS,
-            "audit_rates": {"train": audit_rates(train), "validation": audit_rates(valid)},
+            # 特徴の世代と、監査用の列 (モデルに渡さない) の学習・検証での率 (2026-10-04)
+            **audit_meta(train, valid),
             "training_market_payout_agreement": agreement,
             "train": [tr_from, tr_to], "validation": [va_from, va_to],
             "n_train": len(train), "n_valid": len(valid),

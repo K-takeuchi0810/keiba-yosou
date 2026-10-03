@@ -53,14 +53,83 @@ MUTANTS = [
      '        "matches_current_features": True,'),
     # 発火率の数え方を逆に → test_audit_rates
     ("B10 監査列の率を逆に数える", FM,
-     "    return {c: float(sum(1 for r in rows if float(r[c]) == 1.0) / len(rows)) for c in AUDIT_COLUMNS}",
-     "    return {c: float(sum(1 for r in rows if float(r[c]) != 1.0) / len(rows)) for c in AUDIT_COLUMNS}"),
+     "    return v == 1.0",
+     "    return v != 1.0"),
     # 域外監査から監査列を外す → test_the_domain_audit_still_monitors_the_audit_column
     ("B11 域外監査が監査列を監視しない", "scripts/feature_domain_audit.py",
      "    features = list(features) + [c for c in audit_columns if c not in features]",
      "    features = list(features)"),
     # 評価の出力の監査列の率を空にする → test_collect_builds_the_input_from_the_model_schema
     ("B12 評価の監査列の率を空の行で数える", "scripts/market_offset_eval.py",
-     '                  "audit_rates_eval_rows": audit_rates(data)}',
-     '                  "audit_rates_eval_rows": audit_rates([])}'),
+     '    model_info = {"model_feature_schema": schema, **eval_audit_info(data)}',
+     '    model_info = {"model_feature_schema": schema, **eval_audit_info([])}'),
+    # --- 4 名レビュー (84b2376) の後に追加 (2026-10-04) ---
+    # Fundamental の学習で名前を渡さない (validation M2) → test_fundamental_fit_names_the_features_and_records_the_audit
+    ("B13 Fundamental の学習で特徴の名前を渡さない", FM,
+     "              feature_name=list(FEATURES),\n",
+     ""),
+    # 評価で列を反転 (validation M1 / X2) → test_collect_builds_the_input_from_the_model_schema[fundamental_eval]
+    ("B14 fundamental_eval が列を反転して予測する", "scripts/fundamental_eval.py",
+     "    X = feature_matrix(data, model_features)\n",
+     "    X = feature_matrix(data, model_features)[:, ::-1]\n"),
+    # (validation M1 / X3) → test_collect_builds_the_input_from_the_model_schema[market_offset_eval]
+    ("B15 market_offset_eval が列を反転して予測する", "scripts/market_offset_eval.py",
+     "    X = feature_matrix(data, model_features)\n",
+     "    X = feature_matrix(data, model_features)[:, ::-1]\n"),
+    # 学習の meta の並びを反転 (validation X1) → test_fundamental_fit_names_the_features_and_records_the_audit
+    ("B16 Fundamental の学習 meta の並びを反転", FM,
+     '    meta = {**snapshot(conn_meta), "features": FEATURES,',
+     '    meta = {**snapshot(conn_meta), "features": list(reversed(FEATURES)),'),
+    # (code-quality X9) → test_a_model_with_fewer_features_than_now_is_recorded
+    ("B17 今だけにある特徴を記録しない", MS,
+     '        "only_in_current": [f for f in current if f not in features],',
+     '        "only_in_current": [],'),
+    # (code-quality X1 / validation X6) → test_collect_refuses_a_model_that_contains_a_market_feature[fundamental_eval]
+    ("B18 fundamental_eval がモデルの並びの市場特徴を検査しない", "scripts/fundamental_eval.py",
+     "    assert_no_market_features(\n        model_features, source_module",
+     "    (lambda *a, **k: None)(\n        model_features, source_module"),
+    # → test_collect_refuses_a_model_that_contains_a_market_feature[market_offset_eval]
+    ("B19 market_offset_eval がモデルの並びの市場特徴を検査しない", "scripts/market_offset_eval.py",
+     "    assert_no_market_features(\n        model_features, source_module",
+     "    (lambda *a, **k: None)(\n        model_features, source_module"),
+    # (code-quality X2) → test_missing_data_columns_fail_closed
+    ("B20 列の欠落を先頭の行でしか調べない", MS,
+     "    missing = sorted({c for r in rows for c in features if c not in r})",
+     "    missing = sorted({c for r in rows[:1] for c in features if c not in r})"),
+    # NaN を黙って 0 側に数える → test_audit_rates_refuse_a_non_binary_value
+    ("B21 監査列の 0/1 以外の値を許す", FM,
+     "    if v not in (0.0, 1.0):",
+     "    if False:"),
+    # 年別の内訳を月別にする → test_audit_rates_by_year
+    ("B22 年別の内訳の鍵を誤る", FM,
+     '        by_year[str(r["date"])[:4]].append(r)',
+     '        by_year[str(r["date"])[:6]].append(r)'),
+    # → test_the_frozen_4b_model_is_reproduced_with_its_31_columns
+    ("B23 モデルファイルの sha256 を記録しない", MS,
+     '    provenance["model_sha256"] = hashlib.sha256(model_path.read_bytes()).hexdigest()',
+     '    provenance["model_sha256"] = None'),
+    # → test_meta_n_features_disagreeing_with_the_model_fails_closed
+    ("B24 meta の n_features との食い違いを許す", MS,
+     '    if "n_features" in meta and meta["n_features"] != len(features):',
+     '    if False:'),
+    # → test_audit_meta_records_the_generation_and_the_rates / fit のテスト
+    ("B25 学習 meta の特徴の本数を誤る", FM,
+     '    return {"feature_set": FEATURE_SET, "n_features": len(FEATURES),',
+     '    return {"feature_set": FEATURE_SET, "n_features": 31,'),
+    # 学習と検証の率を取り違える (code-quality X3) → test_fundamental_fit_names_the_features_and_records_the_audit
+    ("B26 Fundamental の学習 meta で学習と検証を取り違える", FM,
+     "            **audit_meta(train, valid),\n",
+     "            **audit_meta(valid, train),\n"),
+    # → test_the_domain_audit_still_monitors_the_audit_column
+    ("B27 域外監査が年別の内訳を残さない", "scripts/feature_domain_audit.py",
+     '                     "audit_rates_by_year": {k: audit_rates_by_year(splits[k], audit_columns)',
+     '                     "audit_rates_by_year": {k: {}'),
+    # → test_market_offset_fit_names_the_features_and_records_the_audit
+    ("B28 市場オフセットの学習 meta で学習と検証を取り違える", "scripts/market_offset_model.py",
+     "            **audit_meta(train, valid),\n",
+     "            **audit_meta(valid, train),\n"),
+    # → test_the_frozen_4b_model_is_reproduced_with_its_31_columns
+    ("B29 学習時の meta を評価の記録に写さない", MS,
+     '    provenance["model_meta"] = {k: meta[k] for k in MODEL_META_KEYS if k in meta}',
+     '    provenance["model_meta"] = {}'),
 ]
