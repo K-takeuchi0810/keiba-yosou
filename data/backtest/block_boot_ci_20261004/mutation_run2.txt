@@ -1,0 +1,20 @@
+copy=git archive f76fed8 spec=tests/mutation_specs/block_boot_ci_spec.py sha256=78859b42177468b1 started=2026-10-04T06:34:15
+KILLED C1 端点を 95% に固定する FAILED tests/test_eval_stats.py::test_block_boot_ci_takes_the_requested_quantiles
+KILLED C2 水準の検査を外す FAILED tests/test_eval_stats.py::test_block_boot_ci_rejects_invalid_arguments[kwargs0]
+KILLED C3 回数の下限を外す FAILED tests/test_eval_stats.py::test_block_boot_ci_rejects_invalid_arguments[kwargs5]
+KILLED C4 主検定で 99% 以外も許す FAILED tests/test_eval_stats.py::test_primary_ci_requires_an_explicit_99_percent_and_fixed_settings
+KILLED C5 主検定の回数を 1000 にする FAILED tests/test_eval_stats.py::test_primary_ci_requires_an_explicit_99_percent_and_fixed_settings
+KILLED C6 捨てる上限を見ない FAILED tests/test_eval_stats.py::test_block_boot_ci_is_invalid_when_too_many_resamples_fail
+KILLED C7 捨てた回数を数えない FAILED tests/test_eval_stats.py::test_block_boot_ci_is_invalid_when_too_many_resamples_fail
+KILLED C8 seed を使わない FAILED tests/test_eval_stats.py::test_block_boot_ci_is_deterministic_for_a_seed
+KILLED C9 従来の block_boot の端点を変える FAILED tests/test_eval_stats.py::test_legacy_block_boot_is_unchanged - assert...
+KILLED C10 主検定の seed を変える FAILED tests/test_eval_stats.py::test_primary_ci_requires_an_explicit_99_percent_and_fixed_settings
+KILLED C11 主検定の捨てる上限を 5% にする FAILED tests/test_eval_stats.py::test_primary_ci_requires_an_explicit_99_percent_and_fixed_settings
+KILLED C12 上側の分位を lower と同じ式にする FAILED tests/test_eval_stats.py::test_block_boot_ci_takes_the_requested_quantiles
+KILLED C13 馬単位で再抽出する FAILED tests/test_eval_stats.py::test_block_boot_ci_resamples_whole_races - a...
+KILLED C14 最後のレースを引かない FAILED tests/test_eval_stats.py::test_block_boot_ci_resamples_whole_races - a...
+KILLED C15 レースを 1 本多く引く FAILED tests/test_eval_stats.py::test_block_boot_ci_resamples_whole_races - a...
+KILLED C16 seed の乱数列をずらす FAILED tests/test_eval_stats.py::test_primary_ci_golden_values_pin_the_registered_random_stream
+KILLED C17 水準の下限を緩める FAILED tests/test_eval_stats.py::test_block_boot_ci_rejects_invalid_arguments[kwargs12]
+KILLED C18 空の標本を通す FAILED tests/test_eval_stats.py::test_block_boot_ci_rejects_empty_samples - F...
+rc=0
