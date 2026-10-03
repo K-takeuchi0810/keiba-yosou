@@ -22,12 +22,14 @@ def main() -> int:
         if p.name == "MANIFEST.json" or p.is_dir():
             continue
         b = p.read_bytes()
+        verbatim = p.name in VERBATIM
         files.append({
             "file": p.name, "bytes": len(b), "sha256": hashlib.sha256(b).hexdigest(),
-            "line_endings": ("verbatim (-text。LightGBM 自身が書く \\r\\n を含むので変換しない)"
-                             if p.name in VERBATIM else
-                             "書き出したときのバイト (= git の blob)。autocrlf=true の checkout では CRLF に"
-                             "なりうるので、照合は CRLF→LF にしてから"),
+            # git の blob と照合する値。-text のモデルは書き出したバイトのまま、それ以外は CRLF→LF
+            # (Windows の Python はテキストを CRLF で書き、git は autocrlf=true で LF にして格納する)
+            "sha256_git_blob": hashlib.sha256(b if verbatim else b.replace(b"\r\n", b"\n")).hexdigest(),
+            "line_endings": ("verbatim (-text。LightGBM 自身が書く CRLF を含むので変換しない)" if verbatim else
+                             "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"),
         })
     metas = {n: json.loads((HERE / f"{n}.meta.json").read_text(encoding="utf-8"))
              for n in ("fundamental_model", "market_offset_model")}

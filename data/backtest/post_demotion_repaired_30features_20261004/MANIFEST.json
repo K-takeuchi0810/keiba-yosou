@@ -207,91 +207,106 @@
    "file": "compare.py",
    "bytes": 9913,
    "sha256": "eb4a602c0bda802ae1335910eebc0f1c69787133858efdb22e70bca3564c5049",
-   "line_endings": "書き出したときのバイト (= git の blob)。autocrlf=true の checkout では CRLF になりうるので、照合は CRLF→LF にしてから"
+   "sha256_git_blob": "eb4a602c0bda802ae1335910eebc0f1c69787133858efdb22e70bca3564c5049",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
   },
   {
    "file": "comparison_4b_vs_30.json",
    "bytes": 5728,
    "sha256": "1392e6434ec5ef6c0e43503d63f15c3956a4b3bef426fd7dd6396e2fcbcb9fa5",
-   "line_endings": "書き出したときのバイト (= git の blob)。autocrlf=true の checkout では CRLF になりうるので、照合は CRLF→LF にしてから"
+   "sha256_git_blob": "0863f06f8fdf819e3e96782d0c7c306277c4c54180c126cf0439398f9ee5853d",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
   },
   {
    "file": "db_state_after_eval.txt",
    "bytes": 202,
    "sha256": "8740d9acc22e2d6e73c2193521ddeb1511f962b5caeabd3e1cf80e146e5626db",
-   "line_endings": "書き出したときのバイト (= git の blob)。autocrlf=true の checkout では CRLF になりうるので、照合は CRLF→LF にしてから"
+   "sha256_git_blob": "8740d9acc22e2d6e73c2193521ddeb1511f962b5caeabd3e1cf80e146e5626db",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
   },
   {
    "file": "db_state_after_fit.txt",
    "bytes": 202,
    "sha256": "8740d9acc22e2d6e73c2193521ddeb1511f962b5caeabd3e1cf80e146e5626db",
-   "line_endings": "書き出したときのバイト (= git の blob)。autocrlf=true の checkout では CRLF になりうるので、照合は CRLF→LF にしてから"
+   "sha256_git_blob": "8740d9acc22e2d6e73c2193521ddeb1511f962b5caeabd3e1cf80e146e5626db",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
   },
   {
    "file": "eval.log",
    "bytes": 6887,
    "sha256": "6e44123565e2f596dd639d2a4d099a340ac273a0e06dd6452bfa92682ebaec1c",
-   "line_endings": "書き出したときのバイト (= git の blob)。autocrlf=true の checkout では CRLF になりうるので、照合は CRLF→LF にしてから"
+   "sha256_git_blob": "290076d138886e52d9ba1077964b8892a982e620de50f46a120d1594bf7807c4",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
   },
   {
    "file": "feature_domain_post_demotion.json",
    "bytes": 32106,
    "sha256": "e992351807d7f820bc1e73e347c935bdc60a89275ec69d03de339849223fb8e3",
-   "line_endings": "書き出したときのバイト (= git の blob)。autocrlf=true の checkout では CRLF になりうるので、照合は CRLF→LF にしてから"
+   "sha256_git_blob": "ae5ab93854491ba6b7cff2230d93711c3a635dd680bda69e51d993a382c9fb39",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
   },
   {
    "file": "fit.log",
    "bytes": 1191,
    "sha256": "2670e0d65c43dc75d0e8cd701a4ee6f3887aae510fcb33156e31bae3f4699790",
-   "line_endings": "書き出したときのバイト (= git の blob)。autocrlf=true の checkout では CRLF になりうるので、照合は CRLF→LF にしてから"
+   "sha256_git_blob": "06dac1200309ddd8bfb3309404448815f117349caf492357d2e1dff10eb85cbd",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
   },
   {
    "file": "fundamental_model.meta.json",
    "bytes": 1747,
    "sha256": "13e97a0c4cd5e7d10f0aac75e8377f799f36cc5a742252b0fb0356a6230439d1",
-   "line_endings": "書き出したときのバイト (= git の blob)。autocrlf=true の checkout では CRLF になりうるので、照合は CRLF→LF にしてから"
+   "sha256_git_blob": "5f6e37cd1b5a9a13a5b1f8203cfd843550df1292abacd73996162b4110b0ca16",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
   },
   {
    "file": "fundamental_model.txt",
    "bytes": 1532152,
    "sha256": "473065f87fd4da2f5d35afcf189ce8138580af2df92346f749bc765841003fd7",
-   "line_endings": "verbatim (-text。LightGBM 自身が書く \\r\\n を含むので変換しない)"
+   "sha256_git_blob": "473065f87fd4da2f5d35afcf189ce8138580af2df92346f749bc765841003fd7",
+   "line_endings": "verbatim (-text。LightGBM 自身が書く CRLF を含むので変換しない)"
   },
   {
    "file": "make_manifest.py",
-   "bytes": 4410,
-   "sha256": "80b885db96445ef03540516f74148810524a9cc838b8b66cb2ea71f944ce0958",
-   "line_endings": "書き出したときのバイト (= git の blob)。autocrlf=true の checkout では CRLF になりうるので、照合は CRLF→LF にしてから"
+   "bytes": 4673,
+   "sha256": "eadbcbb982664dbbcbacabef9b24a0d96384eeae2a2bb1b32bd87e3eb59c750d",
+   "sha256_git_blob": "eadbcbb982664dbbcbacabef9b24a0d96384eeae2a2bb1b32bd87e3eb59c750d",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
   },
   {
    "file": "market_offset_model.meta.json",
    "bytes": 2099,
    "sha256": "1b1bc2fceecb00a212f9cb9be04504965d0fc1039445ec7f8e61466a7f2147bb",
-   "line_endings": "書き出したときのバイト (= git の blob)。autocrlf=true の checkout では CRLF になりうるので、照合は CRLF→LF にしてから"
+   "sha256_git_blob": "42c2fbdc9c07db561c7a6e30dbd01799ff9a5d2f8c9c6be0876f69f3cffd0a9d",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
   },
   {
    "file": "market_offset_model.txt",
    "bytes": 253739,
    "sha256": "e327a03567b7f5a304b0f72173ca3961a0b5fa31fde04d7b5470804292fafa1b",
-   "line_endings": "verbatim (-text。LightGBM 自身が書く \\r\\n を含むので変換しない)"
+   "sha256_git_blob": "e327a03567b7f5a304b0f72173ca3961a0b5fa31fde04d7b5470804292fafa1b",
+   "line_endings": "verbatim (-text。LightGBM 自身が書く CRLF を含むので変換しない)"
   },
   {
    "file": "post_demotion_market_offset_eval.json",
    "bytes": 7365,
    "sha256": "b1c1f5dbff4e62fb7b955eb82b0d33ad4e8c0b6ffc53b0a4d9dc6da59048f3e8",
-   "line_endings": "書き出したときのバイト (= git の blob)。autocrlf=true の checkout では CRLF になりうるので、照合は CRLF→LF にしてから"
+   "sha256_git_blob": "a7ee6ac563c59bfea01e6554598d38e35121f6d563bd428f0306a61e487b2d8b",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
   },
   {
    "file": "post_demotion_market_offset_samples.csv",
    "bytes": 2441995,
    "sha256": "8a0f44629dac1f1207f74c3f1d98e1510b34a0a6b2423e1b9ee8e69ef244e460",
-   "line_endings": "書き出したときのバイト (= git の blob)。autocrlf=true の checkout では CRLF になりうるので、照合は CRLF→LF にしてから"
+   "sha256_git_blob": "1cf44ddc19e77550ff563262dcfffb54421904bdc94e78e4502286561eabdafd",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
   },
   {
    "file": "run_step.py",
    "bytes": 1800,
    "sha256": "5d027123ac0a887e6e7e4190660e43f89402c1bebb9680353872738b19ece6a0",
-   "line_endings": "書き出したときのバイト (= git の blob)。autocrlf=true の checkout では CRLF になりうるので、照合は CRLF→LF にしてから"
+   "sha256_git_blob": "5d027123ac0a887e6e7e4190660e43f89402c1bebb9680353872738b19ece6a0",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
   }
  ]
 }
