@@ -1,5 +1,5 @@
 {
- "db": "C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\scratch_b2.db",
+ "db": "C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\scratch_b.db",
  "apply": true,
  "range": [
   "20210101",
@@ -2019,18 +2019,13 @@
   }
  ],
  "state_before": {
-  "scratch_b2.db": {
+  "scratch_b.db": {
    "bytes": 68542464,
-   "mtime": "2026-10-04T05:38:24+09:00"
+   "mtime": "2026-10-04T05:18:51"
   },
-  "scratch_b2.db-wal": null
- },
- "outside_before": {
-  "rows": 0,
-  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  "scratch_b.db-wal": null
  },
  "db_rows": 262885,
- "nonnull_before": 0,
  "planned_updates": 262113,
  "null_remaining_after": 772,
  "raw_keys": 262113,
@@ -2111,10 +2106,6 @@
   "over_field_examples": [],
   "ok": true
  },
- "outside_after": {
-  "rows": 0,
-  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
- },
  "updated_rows": 262113,
  "acceptance_after": {
   "monthly_c4_rate": {
@@ -2192,16 +2183,11 @@
   "ok": true
  },
  "result": "applied",
- "wal_checkpoint": {
-  "busy": 0,
-  "log_frames": -1,
-  "checkpointed_frames": -1
- },
  "state_after": {
-  "scratch_b2.db": {
+  "scratch_b.db": {
    "bytes": 77033472,
-   "mtime": "2026-10-04T05:38:55+09:00"
+   "mtime": "2026-10-04T05:19:21"
   },
-  "scratch_b2.db-wal": null
+  "scratch_b.db-wal": null
  }
 }

@@ -55,3 +55,11 @@
    古いキャッシュ (None / 0) と新しく計算した月 (実値) が混ざりうる。学習の重みは 0 なので予想は不変の見込みだが、キャッシュの
    扱い (版の繰り上げ・破棄) は ai-builder 側の判断が要る。keiba-yosou 側では backfill の前後で `recent_corner_stats` の差の
    規模を記録し、ai-builder のコードには触れない
+
+## v2 のコードでの再実行 (2026-10-04 05:38、a2f33cf)
+
+`scratch_b_result.json` / `scratch_b_backfill_report.json` / `scratch_b.log` は v2 の結果 (v1 の結果は `*_v1.*` に改名して残す)。
+本番の読み取り 05:38:20〜24 (本番 DB / WAL は前後で不変)、clone 262,885 行、更新 262,113 行 = 予定、`nonnull_before = 0`、
+変わったセルは corner 4 列だけ、監視 18 列は全行一致、適用後の検収は合格 (最小 96.56%)。
+clone には対象の行しか入れていないので、対象外の行のチェックサムは 0 行で空振り (同一)。対象外の行についての E2E の証拠は、
+本番の実行のレポートの `outside_before` / `outside_after` で取る。clone は WAL モードではないので checkpoint は (0, -1, -1)。
