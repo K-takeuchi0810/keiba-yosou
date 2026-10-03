@@ -227,6 +227,8 @@ def test_block_boot_ci_is_deterministic_for_a_seed():
     {"level": 0.0}, {"level": 1.0}, {"level": 1.5}, {"level": 99}, {"level": "0.99"},
     {"n_boot": 0}, {"n_boot": 50}, {"n_boot": 1000.0}, {"n_boot": True},
     {"seed": None}, {"max_discard_frac": 0.5}, {"max_discard_frac": -0.1},
+    {"level": 0.3}, {"n_boot": 99}, {"seed": True}, {"max_discard_frac": False}, {"max_discard_frac": "0.01"},
+    {"max_discard_frac": None},
 ])
 def test_block_boot_ci_rejects_invalid_arguments(kwargs):
     from predictor.eval_stats import block_boot_ci
@@ -277,3 +279,47 @@ def test_legacy_block_boot_is_unchanged():
 
     lo, hi = block_boot(_samples(), mostly_fail, n_boot=1000, seed=1)
     assert math.isnan(lo) and math.isnan(hi)
+
+
+
+def test_block_boot_ci_resamples_whole_races():
+    """レースを塊として引く (馬単位でない)。2 頭ずつのレース 2 本なら、平均の取り得る値は AA / AB / BB の 3 種類だけ。"""
+    from predictor.eval_stats import _block_resample
+
+    samples = [{"race_id": "A", "v": 0.0}, {"race_id": "A", "v": 0.0},
+               {"race_id": "B", "v": 10.0}, {"race_id": "B", "v": 10.0}]
+    vals, discarded = _block_resample(samples, lambda d: sum(x["v"] for x in d) / len(d), 400, 3)
+    assert discarded == 0 and set(vals) == {0.0, 5.0, 10.0}          # 馬単位なら 2.5 / 7.5 も出る
+    # 1 回の再抽出はレースの数 (2) と同じ数のレースを引く: 頭数は常に 4
+    sizes, _ = _block_resample(samples, lambda d: float(len(d)), 200, 3)
+    assert set(sizes) == {4.0}
+
+
+def test_primary_ci_golden_values_pin_the_registered_random_stream():
+    """登録した seed 20261004 の乱数列と再抽出の順序を固定する (メタデータでなく値で)。
+
+    標本と統計量を固定し、主検定の区間の値をそのまま書く。再抽出のやり方や seed の配線を誰かが変えると落ちる。
+    """
+    import random as _random
+
+    from predictor.eval_stats import primary_block_ci
+
+    rng = _random.Random(0)
+    samples = [{"race_id": f"r{r:02d}", "v": rng.gauss(0, 1)} for r in range(30) for _ in range(8)]
+    out = primary_block_ci(samples, lambda d: sum(x["v"] for x in d) / len(d), level=0.99)
+    assert (out["lo"], out["hi"]) == (-0.18383339415685848, 0.1454146544589627)
+    assert (out["n_valid"], out["n_discarded"], out["valid"]) == (5000, 0, True)
+
+
+def test_block_boot_ci_rejects_empty_samples():
+    from predictor.eval_stats import block_boot_ci
+
+    with pytest.raises(ValueError, match="空"):
+        block_boot_ci([], lambda d: 1.0, level=0.99, n_boot=100, seed=1, max_discard_frac=0.01)
+
+
+def test_max_discard_is_floored_without_float_error():
+    from predictor.eval_stats import block_boot_ci
+
+    out = block_boot_ci(_samples(), _seq_stat(), level=0.99, n_boot=100, seed=1, max_discard_frac=0.07)
+    assert out["max_discard"] == 7                                    # 0.07 × 100 = 7.000000000000001
