@@ -37,3 +37,16 @@
 - block_boot の分位の引数を検出力の固定より前に (validation)
 - seed 感度の診断も CONSUMED_WINDOWS に (validation)
 - 対照 1 の賭け金にも返還の規則 (profitability)
+
+## 条件の確認 (127e0fa → 614615b → 最終)
+
+| 担当 | 127e0fa | 614615b |
+|---|---|---|
+| prediction-logic-analyst | **PASS 4.3** (条件なし。should-fix: 同値の順位・合成の入力・C′ の脚質残差化の副次・間隔 24 分 → 614615b で反映) | — |
+| data-pipeline-engineer | **PASS 4.2** (条件なし。nice-to-have: 月ごと 95%・SE* 全種・未取り込みの確認・分母の注記 → 614615b で反映) | — |
+| validation-process-auditor | 条件付き PASS 4.3 (N4: 検出力の SE を 2025 の結果を見ずに / N5: 区間 NA の判定) | 条件付き PASS 4.4 (N4 / N5 解消。新たに must-fix 2: 購入率の見込みに使う β の指定 / §4-5 と §8-8 の「落とす・落とさない」の二重) |
+| profitability-judge | (d13c2e2 で PASS 4.2、条件なし) | — |
+
+最終コミットで validation の must-fix 2 件 (β = β_target・β_market = 1 の仮定値で数える / §4-5 の当該文を撤回して §8-8 を優先) と
+should-fix (推定コードと収束の基準の SHA を凍結物に) を反映した。validation は「文言の追記で済み、主検定の実行前
+(SHA 固定前) に反映すれば PASS」としており、この反映は再確認のレビューにかけていない。
