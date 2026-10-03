@@ -1,0 +1,259 @@
+{
+ "meta": {
+  "git_sha": "99eec6886e3746f3866289f66851ddb7a9291847",
+  "git_dirty": true,
+  "code_version": "99eec6886e37-dirty",
+  "data_version": "35626:cce388ce8e",
+  "dirty_paths": [
+   "config.py",
+   "predictor/market_offset_model.meta.json",
+   "predictor/market_offset_model.txt",
+   "scripts/feature_domain_audit.py",
+   "scripts/foundation_repair_audit.py",
+   "scripts/fundamental_model.py",
+   "scripts/market_offset_eval.py",
+   "tests/test_data_split.py",
+   "tests/test_fundamental_dataset.py"
+  ],
+  "from_date": "20260509",
+  "to_date": "20260831",
+  "prereg": "docs/PHASE05_PREREG.md",
+  "run_index": 2,
+  "n_boot_primary": 300,
+  "baseline_log_loss": 0.21351,
+  "max_lead_minutes": 30,
+  "sealed": {
+   "sealed_from": null,
+   "sealed_active": false,
+   "requested_to": "20260831",
+   "clamped": false,
+   "allow_sealed": false
+  },
+  "buy_edge_pt": 0.05,
+  "market_features": 0,
+  "label": "Phase 0.5-4B 基盤修復後の再評価"
+ },
+ "counts": {
+  "no_t10": 239,
+  "analysed": 931,
+  "t10_fresh": 626,
+  "runner_set_mismatch": 6
+ },
+ "sets": {
+  "all": {
+   "n_races": 931,
+   "n_horses": 12533
+  },
+  "fresh_t10": {
+   "n_races": 626,
+   "n_horses": 8279
+  }
+ },
+ "primary_conditional_logit": {
+  "coef_market": 0.9560963404440463,
+  "coef_correction": 0.4996637467589598,
+  "coef_correction_ci95": [
+   -0.8279035767100236,
+   1.7258532794886776
+  ],
+  "pass": false
+ },
+ "rejection_1_price_polynomial": {
+  "coef_correction": 0.4923053944814648,
+  "coef_correction_ci95": [
+   -0.8641787466477715,
+   1.7194573042029144
+  ],
+  "survives": false
+ },
+ "t10_market_fresh_t10": {
+  "n_races": 626,
+  "n_horses": 8279,
+  "log_loss": 0.21351180680419896,
+  "brier": 0.0597782385645052,
+  "calibration_error": 0.009373644159922695
+ },
+ "offset_fresh_t10": {
+  "n_races": 626,
+  "n_horses": 8279,
+  "log_loss": 0.21348138623836102,
+  "brier": 0.05974933883599563,
+  "calibration_error": 0.008345131054475177
+ },
+ "t10_market_all": {
+  "n_races": 931,
+  "n_horses": 12533,
+  "log_loss": 0.21193957914982547,
+  "brier": 0.05933715808062012,
+  "calibration_error": 0.008215
+ },
+ "offset_all": {
+  "n_races": 931,
+  "n_horses": 12533,
+  "log_loss": 0.21189072033885514,
+  "brier": 0.05931531347379866,
+  "calibration_error": 0.007833
+ },
+ "hypothesis_2_log_loss": {
+  "offset": 0.21348138623836102,
+  "baseline": 0.21351,
+  "pass": true
+ },
+ "band_calibration_offset": [
+  {
+   "band": "0-5%",
+   "n": 4604,
+   "predicted": 0.021398009388253307,
+   "actual": 0.017810599478714162,
+   "gap": -0.003587409909539145,
+   "gap_ci95": [
+    -0.006988308186477766,
+    0.00017807693747907277
+   ],
+   "z": -1.9622708392924846
+  },
+  {
+   "band": "5-10%",
+   "n": 1616,
+   "predicted": 0.07092268355540124,
+   "actual": 0.0625,
+   "gap": -0.00842268355540124,
+   "gap_ci95": [
+    -0.01798790996236506,
+    0.002953645956633097
+   ],
+   "z": -1.5765931257287578
+  },
+  {
+   "band": "10-20%",
+   "n": 1323,
+   "predicted": 0.13980152778357247,
+   "actual": 0.15495086923658352,
+   "gap": 0.015149341453011056,
+   "gap_ci95": [
+    -0.001729811422632982,
+    0.031094197718813693
+   ],
+   "z": 1.8091735073347421
+  },
+  {
+   "band": "20-30%",
+   "n": 441,
+   "predicted": 0.2407336984339021,
+   "actual": 0.24036281179138322,
+   "gap": -0.00037088664251888614,
+   "gap_ci95": [
+    -0.03548970501406512,
+    0.03609030561158197
+   ],
+   "z": -0.020310823121264792
+  },
+  {
+   "band": "30%+",
+   "n": 295,
+   "predicted": 0.4127170368946989,
+   "actual": 0.45084745762711864,
+   "gap": 0.038130420732419734,
+   "gap_ci95": [
+    -0.0150019693892538,
+    0.0909286683115833
+   ],
+   "z": 1.411003531413759
+  }
+ ],
+ "band_calibration_t10": [
+  {
+   "band": "0-5%",
+   "n": 4616,
+   "predicted": 0.02149449579805475,
+   "actual": 0.01776429809358752,
+   "gap": -0.0037301977044672287,
+   "gap_ci95": [
+    -0.0071513603610388644,
+    8.957033810305659e-05
+   ],
+   "z": -2.0193683705617556
+  },
+  {
+   "band": "5-10%",
+   "n": 1606,
+   "predicted": 0.07103613926691074,
+   "actual": 0.06351183063511831,
+   "gap": -0.007524308631792431,
+   "gap_ci95": [
+    -0.01683066459164051,
+    0.0036053434042580823
+   ],
+   "z": -1.4432734657534043
+  },
+  {
+   "band": "10-20%",
+   "n": 1324,
+   "predicted": 0.14030934077710172,
+   "actual": 0.1510574018126888,
+   "gap": 0.010748061035587092,
+   "gap_ci95": [
+    -0.005030583997800792,
+    0.02616369804996549
+   ],
+   "z": 1.3506201339909905
+  },
+  {
+   "band": "20-30%",
+   "n": 440,
+   "predicted": 0.24107062623555647,
+   "actual": 0.25,
+   "gap": 0.008929373764443527,
+   "gap_ci95": [
+    -0.026211564566412077,
+    0.04509816865704311
+   ],
+   "z": 0.49085167843812055
+  },
+  {
+   "band": "30%+",
+   "n": 293,
+   "predicted": 0.4124802901057784,
+   "actual": 0.4539249146757679,
+   "gap": 0.041444624569989486,
+   "gap_ci95": [
+    -0.013586563784207917,
+    0.09450819953804357
+   ],
+   "z": 1.5029400066038823
+  }
+ ],
+ "rejection_2_stale_only_win": {
+  "delta_fresh": -3.0420565837935287e-05,
+  "delta_all": -4.88588109703314e-05,
+  "triggered": false
+ },
+ "control_flat_all": {
+  "n_bets": 8279,
+  "roi": 0.7033458147119217,
+  "roi_ci95": [
+   0.6174990973643038,
+   0.8008708099725635
+  ],
+  "testable": true,
+  "min_bets_required": 100
+ },
+ "flat_bet_edge": {
+  "n_bets": 0,
+  "roi": NaN,
+  "roi_ci95": [
+   NaN,
+   NaN
+  ],
+  "testable": false,
+  "min_bets_required": 100
+ },
+ "money_pass": null,
+ "verdict": {
+  "primary": false,
+  "money": null,
+  "money_untestable_reason": "購入条件に該当 0 頭 (最低 100 頭)",
+  "rejected_by": [],
+  "overall_pass": false
+ }
+}

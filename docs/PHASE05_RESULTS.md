@@ -929,3 +929,9 @@ MC 誤差が ±0.1 級あり、点推定の差 0.11 は **再抽選の雑音と�
 
 ΔLogLoss の区間は、この成果物の `_samples.csv` から後から計算した
 (評価をやり直したわけではない)。次回以降は評価スクリプトが直接出す。
+
+- **0.5-4B 凍結 (2026-10-04)**: `data/backtest/frozen_4b_repaired_31features_20260919/`
+  (`FREEZE_MANIFEST.json` に sha256・元のコミット・31 特徴の一覧・主要な数値)。
+  h_history_truncated をモデル入力から外して 30 特徴で学習し直すと `predictor/*_model.*` が上書きされるので、
+  その前にモデル 4 ファイル・評価 JSON・サンプル CSV・基盤監査 JSON・レビュー記録を別名で凍結した。
+  世代の呼び名: 4A = original 30-feature / **4B = repaired 31-feature** / 次 = post-demotion repaired 30-feature

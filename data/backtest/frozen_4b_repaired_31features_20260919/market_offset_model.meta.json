@@ -1,0 +1,79 @@
+{
+ "git_sha": "99eec6886e3746f3866289f66851ddb7a9291847",
+ "git_dirty": true,
+ "code_version": "99eec6886e37-dirty",
+ "data_version": "nodata",
+ "dirty_paths": [
+  "config.py",
+  "predictor/market_offset_model.txt",
+  "scripts/feature_domain_audit.py",
+  "scripts/foundation_repair_audit.py",
+  "scripts/fundamental_model.py",
+  "scripts/market_offset_eval.py",
+  "tests/test_data_split.py",
+  "tests/test_fundamental_dataset.py"
+ ],
+ "features": [
+  "h_starts",
+  "h_wins",
+  "h_winrate",
+  "h_top3rate",
+  "h_last_finish",
+  "h_days_since",
+  "h_best_finish",
+  "h_recent3_avg_finish",
+  "hd_starts",
+  "hd_winrate",
+  "ht_starts",
+  "ht_winrate",
+  "j_rides_365",
+  "j_winrate",
+  "t_runs_365",
+  "t_winrate",
+  "s_winrate",
+  "h_history_truncated",
+  "age",
+  "sex",
+  "burden",
+  "waku",
+  "starters",
+  "dist",
+  "surface",
+  "cond",
+  "weather",
+  "grade",
+  "w_abs",
+  "w_delta",
+  "blinker"
+ ],
+ "params": {
+  "objective": "binary",
+  "learning_rate": 0.03,
+  "num_leaves": 63,
+  "min_child_samples": 100,
+  "bagging_fraction": 0.8,
+  "bagging_freq": 1,
+  "feature_fraction": 0.8,
+  "seed": 20260918,
+  "verbose": -1
+ },
+ "training_market_payout_agreement": 0.9945,
+ "train": [
+  "20220101",
+  "20241231"
+ ],
+ "validation": [
+  "20250101",
+  "20251231"
+ ],
+ "n_train": 141541,
+ "n_valid": 47715,
+ "excluded": {
+  "skip_no_market_price": 416
+ },
+ "best_iteration": 28,
+ "validation_log_loss_market_only": 0.2036002423884326,
+ "validation_log_loss_offset": 0.20348468295621047,
+ "training_market_source": "horse_races.win_odds (2021-2025 では確定オッズ。同着を除き一致率 100%)",
+ "market_features": 0
+}
