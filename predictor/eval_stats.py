@@ -90,7 +90,7 @@ def block_boot_ci(samples: list[dict], stat, *, level: float, n_boot: int, seed:
 
     **再現性の前提**: ブロックの並びは `samples` の中の race_id の初出の順なので、同じ seed でも `samples` の並びが
     違えば区間は変わる。呼び出し側は決定的な順序 (race_id → 馬番) で渡し、入力の sha256 を成果物に残すこと。
-    引数は組み込みの int / float だけ (numpy の型は拒否する)。下限 n_boot ≥ 100 と上限 max_discard_frac < 0.5 は、
+    引数は組み込みの int / float (numpy の整数型は拒否する。np.float64 は float のサブクラスなので受理される)。下限 n_boot ≥ 100 と上限 max_discard_frac < 0.5 は、
     それより少ない再抽出や、半分以上を捨てた区間は意味を持たないため。
     """
     if not samples:
