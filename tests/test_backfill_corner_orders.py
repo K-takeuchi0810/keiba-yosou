@@ -182,3 +182,17 @@ def test_rerun_is_idempotent(tmp_path):
     once = _digest(path)
     bf.run(path, _records(), apply=True, today="20240101")
     assert _digest(path) == once
+
+
+def test_scratched_horses_do_not_count_toward_the_field(tmp_path):
+    """出走頭数は取消・除外 (1/2/3) を除く。3 頭のうち 1 頭が取消なら出走 2 頭で、3 位は範囲外。"""
+    path = _db(tmp_path)
+    conn = sqlite3.connect(path)
+    conn.execute("UPDATE horse_races SET abnormal_code='1', confirmed_order=0"
+                 " WHERE race_month_day='0106' AND track_code='05' AND horse_num='03'")
+    conn.commit()
+    conn.close()
+    recs = [_rec("20240106", "05", 2, (1, 1, 3, 2)) if (r.month_day == "0106" and r.track_code == "05"
+            and r.horse_num == "02") else r for r in _records()]
+    rep = bf.run(path, recs, apply=False, today="20240101")
+    assert rep["acceptance_planned"]["over_field"] >= 1
