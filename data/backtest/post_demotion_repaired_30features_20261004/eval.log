@@ -1,0 +1,92 @@
+start 2026-10-04T02:43:34 HEAD=61e2d14
+[run_step] domain: scripts.feature_domain_audit ['--json', 'data/backtest/post_demotion_repaired_30features_20261004/feature_domain_post_demotion.json'] / code=C:\Users\kizun\dev\keiba-yosou\.claude\worktrees\post-demotion-30f / db=C:\Users\kizun\dev\keiba-yosou\data\keiba.db
+train (20220101〜20241231) を構築中 ...
+validation (20250101〜20251231) を構築中 ...
+strategy_dev (20260509〜20260831) を構築中 ...
+
+=== 学習域 (train) の外に出ている割合 ===
+  train: 141,846 行
+  validation: 47,826 行
+  strategy_dev: 15,855 行
+
+                        特徴     学習 min     学習 max          train     validation   strategy_dev
+---------------------------------------------------------------------------------------------
+                  h_starts          0         51          0.00%          0.05%          0.09%
+                    h_wins          0          8          0.00%          0.01%          0.01%
+                 h_winrate    0.01786     0.3913          0.00%          0.03%          0.03%
+                h_top3rate    0.06122       0.64          0.00%          0.01%          0.01%
+             h_last_finish          1         18          0.00%          0.00%          0.00%
+              h_days_since          5       1100          0.00%          0.01%          0.01%
+             h_best_finish          1         18          0.00%          0.00%          0.00%
+      h_recent3_avg_finish          1         18          0.00%          0.00%          0.00%
+                 hd_starts          0         37          0.00%          0.04%          0.15%
+                hd_winrate    0.02041     0.3913          0.00%          0.03%          0.03%
+                 ht_starts          0         22          0.00%          0.01%          0.01%
+                ht_winrate    0.02941     0.3333          0.00%          0.01%          0.00%
+               j_rides_365          0        945          0.00%          0.99%          2.05%
+                 j_winrate   0.006452     0.2866          0.00%          0.18%          0.00%
+                t_runs_365          0        550          0.00%          0.00%          0.00%
+                 t_winrate   0.009804     0.1967          0.00%          0.00%          0.00%
+                 s_winrate   0.006494     0.2128          0.00%          0.04%          0.04%
+                       age          2         12          0.00%          0.00%          0.00%
+                       sex          1          3          0.00%          0.00%          0.00%
+                    burden        480        650          0.00%          0.00%          0.00%
+                      waku          1          8          0.00%          0.00%          0.00%
+                  starters          5         18          0.00%          0.00%          0.00%
+                      dist       1000       4250          0.00%          0.03%          0.00%
+                   surface          1          5          0.00%          0.00%          0.00%
+                      cond          0          4          0.00%          0.00%          0.00%
+                   weather          1          6          0.00%          0.00%          0.00%
+                     grade          0          3          0.00%          0.00%          0.00%
+                     w_abs        336        999          0.00%          0.00%          0.00%
+                   w_delta        -46        999          0.00%          0.00%          0.00%
+                   blinker          0          1          0.00%          0.00%          0.00%
+ h_history_truncated (監査列)          0          1          0.00%          0.00%          0.00%
+
+域外率が 1% を超える特徴: 1 件: ['j_rides_365']
+
+saved: data/backtest/post_demotion_repaired_30features_20261004/feature_domain_post_demotion.json
+rc_domain=0 02:44:18
+[run_step] eval: scripts.market_offset_eval ['--run-index', '1', '--label', 'post-demotion repaired 30-feature (strategy_dev 消費済み窓の paired 再評価、対照 = 凍結 4B repaired 31-feature)', '--json', 'data/backtest/post_demotion_repaired_30features_20261004/post_demotion_market_offset_eval.json', '--csv', 'data/backtest/post_demotion_repaired_30features_20261004/post_demotion_market_offset_samples.csv'] / code=C:\Users\kizun\dev\keiba-yosou\.claude\worktrees\post-demotion-30f / db=C:\Users\kizun\dev\keiba-yosou\data\keiba.db
+評価期間の特徴を構築中 ...
+
+=== post-demotion repaired 30-feature (strategy_dev 消費済み窓の paired 再評価、対照 = 凍結 4B repaired 31-feature) (docs/PHASE05_PREREG.md どおり 1 回のみ) ===
+  主分析 (鮮度 30 分以内) 626 レース / 8,279 頭
+  参考 (全体) 931 レース / 12,533 頭
+
+=== 主要仮説: 市場を与えた上で AI 補正に価値はあるか ===
+  市場の係数   +0.9565
+  補正の係数   +0.2343 95% 区間 [-0.9796, +1.2678]
+  → 不合格 (区間が 0 を含む)
+
+=== 棄却条件 1: 補正は価格の単調変換にすぎないか ===
+  logit(P_T10) の 3 次式を同時に入れた場合の補正の係数 +0.2412 [-0.9512, +1.2837]
+  → 生き残らない
+
+=== 補助 1: LogLoss ===
+            集合      T−10 市場         オフセット後          差
+-----------------------------------------------------
+       鮮度内 (主)      0.21351        0.21362   +0.00010
+       全体 (参考)      0.21194        0.21213   +0.00019
+  事前登録の基準線 0.21351 に対し 下回らなかった
+
+=== 補助 2-6: 確率帯ごとの較正 (各帯の z を併記。Bonferroni 閾値は 2.64) ===
+       帯      頭数      予測      実際       ずれ                 95% 区間 |      市場のずれ
+    0-5%   4,614   2.15%   1.86%   -0.29pt [ -0.65,  +0.10]pt |     -0.37pt
+   5-10%   1,612   7.12%   5.89%   -1.23pt [ -2.21,  -0.11]pt |     -0.75pt
+  10-20%   1,319  14.00%  15.47%   +1.46pt [ -0.15,  +3.09]pt |     +1.07pt
+  20-30%     442  24.11%  25.11%   +1.01pt [ -2.55,  +4.71]pt |     +0.89pt
+    30%+     292  41.30%  44.86%   +3.56pt [ -2.03,  +8.91]pt |     +4.14pt
+
+=== 金額 (100 円均等 / 払戻は確定値) ===
+                補正後が市場より 5pt 以上高い馬      1 点  判定不能 (最低 100 点)  [判定対象]
+                            鮮度内の全頭  8,279 点   70.3% 95% 区間 [61.7, 80.1]%  [対照 (モデル非依存)]
+
+=== 事前登録に照らした判定 ===
+  主要仮説 (b2 の区間下限 > 0)     不合格
+  金額 (回収率の区間下限 > 100%)   判定不能: 購入条件に該当 1 頭 (最低 100 頭)
+  棄却条件                         該当なし
+  **総合: 不合格**
+
+saved: data/backtest/post_demotion_repaired_30features_20261004/post_demotion_market_offset_eval.json
+rc_eval=0 02:45:43

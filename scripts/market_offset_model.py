@@ -228,10 +228,13 @@ def fit() -> dict:
     # 検証での確認 (合否には使わない。早期停止が効いているかの目視用)
     margin = booster.predict(Xva, num_iteration=booster.best_iteration,
                              raw_score=True)
-    conn.close()
     from predictor.evaluation import log_loss
     p_off = 1.0 / (1.0 + np.exp(-(iva + margin)))
-    meta = {**snapshot(conn), "features": FEATURES, "params": PARAMS,
+    # snapshot は接続を閉じる前に取る (2026-10-04)。閉じた接続では data_version が
+    # sqlite3.ProgrammingError を握り潰して "nodata" になり、4B の meta もそうなっていた
+    data_snapshot = snapshot(conn)
+    conn.close()
+    meta = {**data_snapshot, "features": FEATURES, "params": PARAMS,
             # 特徴の世代と、監査用の列 (モデルに渡さない) の学習・検証での率 (2026-10-04)
             **audit_meta(train, valid),
             "training_market_payout_agreement": agreement,

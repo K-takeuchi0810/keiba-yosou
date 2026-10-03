@@ -13,12 +13,13 @@ Phase 0.5-4B の後に `h_history_truncated` をモデル入力から外す (31 
 削ったり、並べ替えたりしない)。
 
 - LightGBM は名前を渡さずに学習すると `Column_0`, `Column_1`, ... という名前を付ける
-  (`scripts/fundamental_model.py` の Fundamental モデルがこれ)。その場合は meta が正本
-- 名前を持つモデル (`scripts/market_offset_model.py`) は、名前と meta が一致することを確かめる
+  (4B 以前の Fundamental モデルがこれ。2026-10-04 以降の学習は名前を渡す)。その場合は meta が正本
+- 名前を持つモデル (市場オフセット、2026-10-04 以降の Fundamental) は、名前と meta が一致することを確かめる
 - 食い違い・本数の不一致・データに列が無い、はすべて止める (fail-closed)
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import warnings
@@ -97,8 +98,6 @@ def load_model_schema(model_path: Path, current_features: Sequence[str]) -> tupl
     記録には、モデルファイルの sha256 と、学習時の meta の主な項目 (`MODEL_META_KEYS`、
     古い meta に無い項目は入れない) も入れる。
     """
-    import hashlib
-
     import lightgbm as lgb
 
     model_path = Path(model_path)
@@ -115,6 +114,34 @@ def load_model_schema(model_path: Path, current_features: Sequence[str]) -> tupl
     provenance["model_meta_file"] = meta_path.name if meta_path.exists() else None
     provenance["model_meta"] = {k: meta[k] for k in MODEL_META_KEYS if k in meta}
     return booster, features, provenance
+
+
+def assert_model_window_disjoint(model_path: Path, from_date: str, to_date: str) -> None:
+    """モデルの学習・検証窓が評価窓と重なっていないことを **実行時に** 確かめる。
+
+    `config.SPLIT_DIVERGENCE` は文書化の強制であって実行時の防御ではない。
+    新 train (2022-2024) で学習した booster を旧 `DATA_PERIODS["test"]`
+    (2024-2025) で評価すると 2024 が in-sample になるが、宣言制の guard は
+    それを落とさない (専門家レビュー指摘)。モデル meta に学習窓が記録して
+    あるので、ここで突き合わせる。市場オフセット / Fundamental の評価が共通で使う
+    (2026-10-04 に market_offset_eval から移した)。
+    """
+    meta_path = Path(model_path).with_suffix(".meta.json")
+    if not meta_path.exists():
+        raise FileNotFoundError(f"モデルの meta が無い: {meta_path}")
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    if not meta.get("train") and not meta.get("validation"):
+        raise ValueError(f"モデルの meta に学習・検証の窓が無く、評価窓との重なりを確かめられない: {meta_path}")
+    for key in ("train", "validation"):
+        span = meta.get(key)
+        if not span:
+            continue
+        lo, hi = span
+        if lo <= to_date and from_date <= hi:
+            raise ValueError(
+                f"モデルの {key} 窓 ({lo}〜{hi}) が評価窓 "
+                f"({from_date}〜{to_date}) と重なっている = in-sample。"
+                f"モデル: {Path(model_path).name}")
 
 
 def feature_matrix(rows: Iterable[dict], features: Sequence[str]) -> np.ndarray:

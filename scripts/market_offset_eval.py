@@ -60,7 +60,8 @@ from scripts.fundamental_eval import (  # noqa: E402
     DEFAULT_MAX_LEAD_MINUTES,
     _final_market_odds,
 )
-from predictor.model_schema import feature_matrix, load_model_schema  # noqa: E402
+from predictor.model_schema import (  # noqa: E402
+    assert_model_window_disjoint, feature_matrix, load_model_schema)
 from scripts.fundamental_model import FEATURES, build_dataset, eval_audit_info  # noqa: E402
 from scripts.market_data_audit import confirmed_win_payouts  # noqa: E402
 from scripts.market_offset_model import MODEL_PATH  # noqa: E402
@@ -78,31 +79,6 @@ N_BOOT_PRIMARY = 300
 BUY_EDGE_PT = 0.05
 
 
-def assert_model_window_disjoint(from_date: str, to_date: str) -> None:
-    """モデルの学習・検証窓が評価窓と重なっていないことを **実行時に** 確かめる。
-
-    `config.SPLIT_DIVERGENCE` は文書化の強制であって実行時の防御ではない。
-    新 train (2022-2024) で学習した booster を旧 `DATA_PERIODS["test"]`
-    (2024-2025) で評価すると 2024 が in-sample になるが、宣言制の guard は
-    それを落とさない (専門家レビュー指摘)。モデル meta に学習窓が記録して
-    あるので、ここで突き合わせる。
-    """
-    meta_path = MODEL_PATH.with_suffix(".meta.json")
-    if not meta_path.exists():
-        raise FileNotFoundError(f"モデルの meta が無い: {meta_path}")
-    meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    for key in ("train", "validation"):
-        span = meta.get(key)
-        if not span:
-            continue
-        lo, hi = span
-        if lo <= to_date and from_date <= hi:
-            raise ValueError(
-                f"モデルの {key} 窓 ({lo}〜{hi}) が評価窓 "
-                f"({from_date}〜{to_date}) と重なっている = in-sample。"
-                f"モデル: {MODEL_PATH.name}")
-
-
 def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter, dict]:
     """T−10 市場を init_score にして補正を当て、確定払戻と突き合わせる。
 
@@ -112,12 +88,13 @@ def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter, dict]:
     """
     assert_no_market_features(
         FEATURES, source_module=Path(__file__).parent / "fundamental_model.py")
+    # meta だけで決まるので、重いデータの構築より前に確かめる
+    assert_model_window_disjoint(MODEL_PATH, from_date, to_date)
     print("評価期間の特徴を構築中 ...", flush=True)
     data, _ = build_dataset(from_date, to_date)
     booster, model_features, schema = load_model_schema(MODEL_PATH, FEATURES)
     assert_no_market_features(
         model_features, source_module=Path(__file__).parent / "fundamental_model.py")
-    assert_model_window_disjoint(from_date, to_date)
     X = feature_matrix(data, model_features)
     for d, m in zip(data, booster.predict(X, raw_score=True), strict=True):
         d["margin"] = float(m)

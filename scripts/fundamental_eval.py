@@ -56,7 +56,8 @@ from predictor.eval_stats import (  # noqa: E402
 from predictor.feature_manifest import assert_no_market_features  # noqa: E402
 from predictor.pit_t10 import RACE_KEYS, decision_time, t10_market  # noqa: E402
 from predictor.provenance import snapshot  # noqa: E402
-from predictor.model_schema import feature_matrix, load_model_schema  # noqa: E402
+from predictor.model_schema import (  # noqa: E402
+    assert_model_window_disjoint, feature_matrix, load_model_schema)
 from scripts.fundamental_model import (  # noqa: E402
     FEATURES, MODEL_PATH, build_dataset, eval_audit_info)
 from scripts.market_data_audit import confirmed_win_payouts  # noqa: E402
@@ -117,12 +118,14 @@ def delta_distribution(samples: list[dict]) -> dict:
 def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter, dict]:
     """特徴を作り、T−10 市場・最終オッズ・確定払戻を突き合わせる。
 
-    入力の列は **モデル自身の特徴の並び** から作る (2026-10-04)。Fundamental モデルは
+    入力の列は **モデル自身の特徴の並び** から作る (2026-10-04)。4B 以前の Fundamental モデルは
     特徴の名前を持たない (Column_*) ので、meta の features が正本になる。並びの出どころと、
     評価期間での監査用の列の率を 3 つ目の戻り値で返す。
     """
     assert_no_market_features(
         FEATURES, source_module=Path(__file__).parent / "fundamental_model.py")
+    # meta だけで決まるので、重いデータの構築より前に確かめる
+    assert_model_window_disjoint(MODEL_PATH, from_date, to_date)
     print("評価期間の特徴を構築中 ...", flush=True)
     data, _ = build_dataset(from_date, to_date)
     booster, model_features, schema = load_model_schema(MODEL_PATH, FEATURES)

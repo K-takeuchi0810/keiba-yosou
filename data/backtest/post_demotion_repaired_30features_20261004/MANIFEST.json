@@ -1,0 +1,312 @@
+{
+ "generation": "post-demotion repaired 30-feature",
+ "feature_set": "post_demotion_repaired_30features",
+ "created": "2026-10-04",
+ "prereg": "docs/PHASE05_RESULTS.md「post-demotion repaired 30-feature の学習 — 事前固定」(commit 61e2d14、学習の前)",
+ "control": "data/backtest/frozen_4b_repaired_31features_20260919/ (4B repaired 31-feature、上書きしていない)",
+ "code": {
+  "git_sha": "61e2d14d3e7656345c4b9ad549b3a68a0fd91304",
+  "dirty_note": "meta の git_dirty=True は、学習が書き出した predictor/*_model.* 自身が理由 (dirty_paths を参照)。コードは 61e2d14 のまま。実行は run_step.py (未コミットのまま実行し、このコミットで追加) で config.DB_PATH を本番の DB に向けた",
+  "dirty_paths": {
+   "fundamental_model": [
+    "predictor/fundamental_model.txt"
+   ],
+   "market_offset_model": [
+    "predictor/fundamental_model.meta.json",
+    "predictor/fundamental_model.txt",
+    "predictor/market_offset_model.txt"
+   ]
+  }
+ },
+ "data_version": {
+  "fundamental_model": "46717:4ee66a39fb",
+  "market_offset_model": "46717:4ee66a39fb"
+ },
+ "db_state": {
+  "after_fit": [
+   "/c/Users/kizun/dev/keiba-yosou/data/keiba.db size=20157546496 mtime=2026-10-03 20:00:19.060705900 +0900",
+   "/c/Users/kizun/dev/keiba-yosou/data/keiba.db-wal size=0 mtime=2026-10-04 00:05:10.885085100 +0900"
+  ],
+  "after_eval": [
+   "/c/Users/kizun/dev/keiba-yosou/data/keiba.db size=20157546496 mtime=2026-10-03 20:00:19.060705900 +0900",
+   "/c/Users/kizun/dev/keiba-yosou/data/keiba.db-wal size=0 mtime=2026-10-04 00:05:10.885085100 +0900"
+  ],
+  "note": "学習の開始時の DB の大きさは fit.log の 1 行目。DB 本体の mtime (10/03 20:00) と WAL 0 バイトは学習・評価の前後で不変"
+ },
+ "models": {
+  "fundamental_model": {
+   "n_features": 30,
+   "train": [
+    "20220101",
+    "20241231"
+   ],
+   "validation": [
+    "20250101",
+    "20251231"
+   ],
+   "n_train": 141846,
+   "n_valid": 47826,
+   "best_iteration": 220,
+   "audit_columns": [
+    "h_history_truncated"
+   ],
+   "audit_rates": {
+    "train": {
+     "h_history_truncated": 0.2129845043215882
+    },
+    "validation": {
+     "h_history_truncated": 0.02829005143645716
+    }
+   },
+   "audit_rates_by_year": {
+    "train": {
+     "h_history_truncated": {
+      "2022": 0.3666129442700823,
+      "2023": 0.19204101357313946,
+      "2024": 0.08032529301851538
+     }
+    },
+    "validation": {
+     "h_history_truncated": {
+      "2025": 0.02829005143645716
+     }
+    }
+   }
+  },
+  "market_offset_model": {
+   "n_features": 30,
+   "train": [
+    "20220101",
+    "20241231"
+   ],
+   "validation": [
+    "20250101",
+    "20251231"
+   ],
+   "n_train": 141541,
+   "n_valid": 47715,
+   "best_iteration": 36,
+   "audit_columns": [
+    "h_history_truncated"
+   ],
+   "audit_rates": {
+    "train": {
+     "h_history_truncated": 0.2130054189245519
+    },
+    "validation": {
+     "h_history_truncated": 0.028292989625903806
+    }
+   },
+   "audit_rates_by_year": {
+    "train": {
+     "h_history_truncated": {
+      "2022": 0.3665788243294938,
+      "2023": 0.19217568904891247,
+      "2024": 0.08028684512916542
+     }
+    },
+    "validation": {
+     "h_history_truncated": {
+      "2025": 0.028292989625903806
+     }
+    }
+   }
+  }
+ },
+ "features": [
+  "h_starts",
+  "h_wins",
+  "h_winrate",
+  "h_top3rate",
+  "h_last_finish",
+  "h_days_since",
+  "h_best_finish",
+  "h_recent3_avg_finish",
+  "hd_starts",
+  "hd_winrate",
+  "ht_starts",
+  "ht_winrate",
+  "j_rides_365",
+  "j_winrate",
+  "t_runs_365",
+  "t_winrate",
+  "s_winrate",
+  "age",
+  "sex",
+  "burden",
+  "waku",
+  "starters",
+  "dist",
+  "surface",
+  "cond",
+  "weather",
+  "grade",
+  "w_abs",
+  "w_delta",
+  "blinker"
+ ],
+ "features_equal_between_models": true,
+ "evaluation": {
+  "label": "post-demotion repaired 30-feature (strategy_dev 消費済み窓の paired 再評価、対照 = 凍結 4B repaired 31-feature)",
+  "run_index": 1,
+  "window": [
+   "20260509",
+   "20260831"
+  ],
+  "beta2": 0.23434314405406007,
+  "beta2_ci95": [
+   -0.9796152376066024,
+   1.2677965989380087
+  ],
+  "verdict": {
+   "primary": false,
+   "money": null,
+   "money_untestable_reason": "購入条件に該当 1 頭 (最低 100 頭)",
+   "rejected_by": [],
+   "overall_pass": false
+  }
+ },
+ "acceptance": {
+  "a_beta2_ci_overlaps_4b": {
+   "pass": true,
+   "ci_4b": [
+    -0.8279035767100236,
+    1.7258532794886776
+   ],
+   "ci_30": [
+    -0.9796152376066024,
+    1.2677965989380087
+   ]
+  },
+  "b_domain_not_worse": {
+   "n_features_checked": 30,
+   "tolerance": 0.005,
+   "pass": true,
+   "failures": [],
+   "max_rate": {
+    "validation": {
+     "feature": "j_rides_365",
+     "split": "validation",
+     "rate_4b": 0.009869108852925187,
+     "rate_30": 0.009869108852925187,
+     "ok": true
+    },
+    "strategy_dev": {
+     "feature": "j_rides_365",
+     "split": "strategy_dev",
+     "rate_4b": 0.020498265531378113,
+     "rate_30": 0.020498265531378113,
+     "ok": true
+    }
+   }
+  },
+  "accepted": true
+ },
+ "files": [
+  {
+   "file": "compare.py",
+   "bytes": 9913,
+   "sha256": "eb4a602c0bda802ae1335910eebc0f1c69787133858efdb22e70bca3564c5049",
+   "sha256_git_blob": "eb4a602c0bda802ae1335910eebc0f1c69787133858efdb22e70bca3564c5049",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
+  },
+  {
+   "file": "comparison_4b_vs_30.json",
+   "bytes": 5728,
+   "sha256": "1392e6434ec5ef6c0e43503d63f15c3956a4b3bef426fd7dd6396e2fcbcb9fa5",
+   "sha256_git_blob": "0863f06f8fdf819e3e96782d0c7c306277c4c54180c126cf0439398f9ee5853d",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
+  },
+  {
+   "file": "db_state_after_eval.txt",
+   "bytes": 202,
+   "sha256": "8740d9acc22e2d6e73c2193521ddeb1511f962b5caeabd3e1cf80e146e5626db",
+   "sha256_git_blob": "8740d9acc22e2d6e73c2193521ddeb1511f962b5caeabd3e1cf80e146e5626db",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
+  },
+  {
+   "file": "db_state_after_fit.txt",
+   "bytes": 202,
+   "sha256": "8740d9acc22e2d6e73c2193521ddeb1511f962b5caeabd3e1cf80e146e5626db",
+   "sha256_git_blob": "8740d9acc22e2d6e73c2193521ddeb1511f962b5caeabd3e1cf80e146e5626db",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
+  },
+  {
+   "file": "eval.log",
+   "bytes": 6887,
+   "sha256": "6e44123565e2f596dd639d2a4d099a340ac273a0e06dd6452bfa92682ebaec1c",
+   "sha256_git_blob": "290076d138886e52d9ba1077964b8892a982e620de50f46a120d1594bf7807c4",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
+  },
+  {
+   "file": "feature_domain_post_demotion.json",
+   "bytes": 32106,
+   "sha256": "e992351807d7f820bc1e73e347c935bdc60a89275ec69d03de339849223fb8e3",
+   "sha256_git_blob": "ae5ab93854491ba6b7cff2230d93711c3a635dd680bda69e51d993a382c9fb39",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
+  },
+  {
+   "file": "fit.log",
+   "bytes": 1191,
+   "sha256": "2670e0d65c43dc75d0e8cd701a4ee6f3887aae510fcb33156e31bae3f4699790",
+   "sha256_git_blob": "06dac1200309ddd8bfb3309404448815f117349caf492357d2e1dff10eb85cbd",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
+  },
+  {
+   "file": "fundamental_model.meta.json",
+   "bytes": 1747,
+   "sha256": "13e97a0c4cd5e7d10f0aac75e8377f799f36cc5a742252b0fb0356a6230439d1",
+   "sha256_git_blob": "5f6e37cd1b5a9a13a5b1f8203cfd843550df1292abacd73996162b4110b0ca16",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
+  },
+  {
+   "file": "fundamental_model.txt",
+   "bytes": 1532152,
+   "sha256": "473065f87fd4da2f5d35afcf189ce8138580af2df92346f749bc765841003fd7",
+   "sha256_git_blob": "473065f87fd4da2f5d35afcf189ce8138580af2df92346f749bc765841003fd7",
+   "line_endings": "verbatim (-text。LightGBM 自身が書く CRLF を含むので変換しない)"
+  },
+  {
+   "file": "make_manifest.py",
+   "bytes": 4673,
+   "sha256": "eadbcbb982664dbbcbacabef9b24a0d96384eeae2a2bb1b32bd87e3eb59c750d",
+   "sha256_git_blob": "eadbcbb982664dbbcbacabef9b24a0d96384eeae2a2bb1b32bd87e3eb59c750d",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
+  },
+  {
+   "file": "market_offset_model.meta.json",
+   "bytes": 2099,
+   "sha256": "1b1bc2fceecb00a212f9cb9be04504965d0fc1039445ec7f8e61466a7f2147bb",
+   "sha256_git_blob": "42c2fbdc9c07db561c7a6e30dbd01799ff9a5d2f8c9c6be0876f69f3cffd0a9d",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
+  },
+  {
+   "file": "market_offset_model.txt",
+   "bytes": 253739,
+   "sha256": "e327a03567b7f5a304b0f72173ca3961a0b5fa31fde04d7b5470804292fafa1b",
+   "sha256_git_blob": "e327a03567b7f5a304b0f72173ca3961a0b5fa31fde04d7b5470804292fafa1b",
+   "line_endings": "verbatim (-text。LightGBM 自身が書く CRLF を含むので変換しない)"
+  },
+  {
+   "file": "post_demotion_market_offset_eval.json",
+   "bytes": 7365,
+   "sha256": "b1c1f5dbff4e62fb7b955eb82b0d33ad4e8c0b6ffc53b0a4d9dc6da59048f3e8",
+   "sha256_git_blob": "a7ee6ac563c59bfea01e6554598d38e35121f6d563bd428f0306a61e487b2d8b",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
+  },
+  {
+   "file": "post_demotion_market_offset_samples.csv",
+   "bytes": 2441995,
+   "sha256": "8a0f44629dac1f1207f74c3f1d98e1510b34a0a6b2423e1b9ee8e69ef244e460",
+   "sha256_git_blob": "1cf44ddc19e77550ff563262dcfffb54421904bdc94e78e4502286561eabdafd",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
+  },
+  {
+   "file": "run_step.py",
+   "bytes": 1800,
+   "sha256": "5d027123ac0a887e6e7e4190660e43f89402c1bebb9680353872738b19ece6a0",
+   "sha256_git_blob": "5d027123ac0a887e6e7e4190660e43f89402c1bebb9680353872738b19ece6a0",
+   "line_endings": "sha256 は書き出したときのバイト (CRLF のことがある)。git の blob は LF"
+  }
+ ]
+}

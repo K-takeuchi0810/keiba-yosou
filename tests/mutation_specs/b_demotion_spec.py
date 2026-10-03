@@ -132,4 +132,29 @@ MUTANTS = [
     ("B29 学習時の meta を評価の記録に写さない", MS,
      '    provenance["model_meta"] = {k: meta[k] for k in MODEL_META_KEYS if k in meta}',
      '    provenance["model_meta"] = {}'),
+    # --- 学習用ブランチのレビュー (da05c51) の後に追加 (2026-10-04) ---
+    # → test_collect_refuses_an_in_sample_evaluation_window / test_window_guard_treats_windows_as_closed_intervals
+    ("B30 評価窓の重なりを見逃す", MS,
+     "        if lo <= to_date and from_date <= hi:",
+     "        if False:"),
+    # → test_window_guard_treats_windows_as_closed_intervals
+    ("B31 評価窓の境界日を重なりと見なさない", MS,
+     "        if lo <= to_date and from_date <= hi:",
+     "        if lo < to_date and from_date < hi:"),
+    # → test_window_guard_fails_closed_without_windows
+    ("B32 meta に窓が無ければ素通り", MS,
+     '    if not meta.get("train") and not meta.get("validation"):',
+     "    if False:"),
+    # → test_market_offset_fit_names_the_features_and_records_the_audit (data_version)
+    ("B33 市場オフセットの学習で接続を閉じてから snapshot", "scripts/market_offset_model.py",
+     "    data_snapshot = snapshot(conn)\n    conn.close()\n",
+     "    conn.close()\n    data_snapshot = snapshot(conn)\n"),
+    # → test_collect_refuses_an_in_sample_evaluation_window[fundamental_eval-fundamental_model]
+    ("B34 fundamental_eval が評価窓の重なりを確かめない", "scripts/fundamental_eval.py",
+     "    assert_model_window_disjoint(MODEL_PATH, from_date, to_date)\n",
+     ""),
+    # → test_window_guard_fails_closed_without_a_meta_file
+    ("B35 meta が無ければ素通り", MS,
+     '        raise FileNotFoundError(f"モデルの meta が無い: {meta_path}")',
+     "        return"),
 ]

@@ -16,3 +16,5 @@ predictor/lgbm_meta.json text eol=lf
 # 凍結した LightGBM モデルのコピーも同じ理由で改行を変換しない (2026-10-04)。
 # 変換されると LightGBM が読めず、FREEZE_MANIFEST.json の sha256 とも合わなくなる。
 data/backtest/frozen_*/*model*.txt -text
+# post-demotion repaired 30-feature の学習成果物のコピーも同じ (2026-10-04)
+data/backtest/post_demotion_*/*model*.txt -text
