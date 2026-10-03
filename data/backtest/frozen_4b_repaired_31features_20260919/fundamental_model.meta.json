@@ -1,0 +1,74 @@
+{
+ "git_sha": "af42382b79affd3cd7a684a925e017e9899ea8f3",
+ "git_dirty": true,
+ "code_version": "af42382b79af-dirty",
+ "data_version": null,
+ "dirty_paths": [
+  "config.py",
+  "predictor/fundamental_model.txt",
+  "predictor/market_offset_model.meta.json",
+  "predictor/market_offset_model.txt",
+  "scripts/feature_domain_audit.py",
+  "scripts/foundation_repair_audit.py",
+  "scripts/fundamental_model.py",
+  "scripts/market_offset_eval.py",
+  "tests/test_data_split.py",
+  "tests/test_fundamental_dataset.py"
+ ],
+ "features": [
+  "h_starts",
+  "h_wins",
+  "h_winrate",
+  "h_top3rate",
+  "h_last_finish",
+  "h_days_since",
+  "h_best_finish",
+  "h_recent3_avg_finish",
+  "hd_starts",
+  "hd_winrate",
+  "ht_starts",
+  "ht_winrate",
+  "j_rides_365",
+  "j_winrate",
+  "t_runs_365",
+  "t_winrate",
+  "s_winrate",
+  "h_history_truncated",
+  "age",
+  "sex",
+  "burden",
+  "waku",
+  "starters",
+  "dist",
+  "surface",
+  "cond",
+  "weather",
+  "grade",
+  "w_abs",
+  "w_delta",
+  "blinker"
+ ],
+ "train": [
+  "20220101",
+  "20241231"
+ ],
+ "validation": [
+  "20250101",
+  "20251231"
+ ],
+ "n_train": 141846,
+ "n_valid": 47826,
+ "excluded_train": {
+  "skip_did_not_start": 308,
+  "rows": 141846
+ },
+ "excluded_valid": {
+  "skip_did_not_start": 366,
+  "rows": 47826
+ },
+ "best_iteration": 247,
+ "validation_log_loss": 0.22526420832826619,
+ "validation_brier": 0.06179244631923488,
+ "validation_calibration_error": 0.00202188809434199,
+ "market_features": 0
+}

@@ -1,0 +1,274 @@
+{
+ "name": "4B repaired 31-feature (Phase 0.5-4B、2026-09-19)",
+ "frozen_at": "2026-10-04T00:59:06",
+ "why": "h_history_truncated をモデル入力から外して 30 特徴で学習し直す前に、4B の成果物を別名で凍結する。以後、predictor/*_model.* は 30 特徴版で上書きされうるが、4B はここから再現する (2026-10-04 CHAT)",
+ "generation_labels": {
+  "4A": "original 30-feature",
+  "4B": "repaired 31-feature (この凍結)",
+  "next": "post-demotion repaired 30-feature"
+ },
+ "repo_head_at_freeze": "8f16f8b209ccbf310233a84429e8663693b2a2d2",
+ "source_commits": {
+  "market_offset_model (ファイルを入れたコミット)": "999b3f9",
+  "fundamental_model (ファイルを入れたコミット)": "99eec68",
+  "market_offset_model.meta.git_sha (学習時のコード)": "99eec6886e3746f3866289f66851ddb7a9291847",
+  "fundamental_model.meta.git_sha (学習時のコード)": "af42382b79affd3cd7a684a925e017e9899ea8f3",
+  "4B evaluation JSON meta.git_sha": "99eec6886e3746f3866289f66851ddb7a9291847"
+ },
+ "features": [
+  "h_starts",
+  "h_wins",
+  "h_winrate",
+  "h_top3rate",
+  "h_last_finish",
+  "h_days_since",
+  "h_best_finish",
+  "h_recent3_avg_finish",
+  "hd_starts",
+  "hd_winrate",
+  "ht_starts",
+  "ht_winrate",
+  "j_rides_365",
+  "j_winrate",
+  "t_runs_365",
+  "t_winrate",
+  "s_winrate",
+  "h_history_truncated",
+  "age",
+  "sex",
+  "burden",
+  "waku",
+  "starters",
+  "dist",
+  "surface",
+  "cond",
+  "weather",
+  "grade",
+  "w_abs",
+  "w_delta",
+  "blinker"
+ ],
+ "n_features": 31,
+ "contains_h_history_truncated": true,
+ "fundamental_features_equal_market_offset_features": true,
+ "market_offset_model": {
+  "train": [
+   "20220101",
+   "20241231"
+  ],
+  "validation": [
+   "20250101",
+   "20251231"
+  ],
+  "n_train": 141541,
+  "n_valid": 47715,
+  "best_iteration": 28,
+  "validation_log_loss_market_only": 0.2036002423884326,
+  "validation_log_loss_offset": 0.20348468295621047,
+  "training_market_source": "horse_races.win_odds (2021-2025 では確定オッズ。同着を除き一致率 100%)"
+ },
+ "fundamental_model": {
+  "train": [
+   "20220101",
+   "20241231"
+  ],
+  "validation": [
+   "20250101",
+   "20251231"
+  ],
+  "n_train": 141846,
+  "n_valid": 47826,
+  "best_iteration": 247,
+  "validation_log_loss": 0.22526420832826619
+ },
+ "evaluation_4B": {
+  "window": [
+   "20260509",
+   "20260831"
+  ],
+  "sets": {
+   "all": {
+    "n_races": 931,
+    "n_horses": 12533
+   },
+   "fresh_t10": {
+    "n_races": 626,
+    "n_horses": 8279
+   }
+  },
+  "beta2": 0.4996637467589598,
+  "beta2_ci95": [
+   -0.8279035767100236,
+   1.7258532794886776
+  ],
+  "primary_pass": false,
+  "logloss_fresh": {
+   "t10_market": 0.21351180680419896,
+   "offset": 0.21348138623836102
+  },
+  "money_pass": null,
+  "buy_bets": 0,
+  "verdict": {
+   "primary": false,
+   "money": null,
+   "money_untestable_reason": "購入条件に該当 0 頭 (最低 100 頭)",
+   "rejected_by": [],
+   "overall_pass": false
+  }
+ },
+ "reproduction_note": "2026-09-26 の感度分析 (main d5eb54e、data/backtest/src_sensitivity_20260926_v2) で、この 4 ファイルのモデルを使って 4B の評価を完全に再現した (sets・β₂・LogLoss が一致)",
+ "files": [
+  {
+   "source_path": "predictor/fundamental_model.txt",
+   "source_root": "worktree (git 管理下)",
+   "frozen_as": "fundamental_model.txt",
+   "sha256": "3eae1403ffa6098792c80aa7cc80b1955ad7ec3acc8d92636527d349eccd6670",
+   "bytes": 1719613,
+   "last_commit_of_source": "99eec6886e3746f3866289f66851ddb7a9291847",
+   "line_endings": "verbatim (-text, LightGBM のため変換しない)",
+   "sha256_lf_normalized": "3eae1403ffa6098792c80aa7cc80b1955ad7ec3acc8d92636527d349eccd6670"
+  },
+  {
+   "source_path": "predictor/fundamental_model.meta.json",
+   "source_root": "worktree (git 管理下)",
+   "frozen_as": "fundamental_model.meta.json",
+   "sha256": "943ea9d851029101217bc05ae8df61634ef60dffcb885a056bc33b74dde0c33e",
+   "bytes": 1514,
+   "last_commit_of_source": "99eec6886e3746f3866289f66851ddb7a9291847",
+   "line_endings": "text (git は LF で保存し、Windows の作業ツリーでは CRLF)",
+   "sha256_lf_normalized": "84c2a48587655c8ae669d33b5d548d475aaaf099933d1fb16f6cd267b2ef4112"
+  },
+  {
+   "source_path": "predictor/market_offset_model.txt",
+   "source_root": "worktree (git 管理下)",
+   "frozen_as": "market_offset_model.txt",
+   "sha256": "fd84304d152a40c488d67e721e9f8bd0354b16eb9a29d82860654c3a258d0484",
+   "bytes": 198319,
+   "last_commit_of_source": "999b3f919a22e5608e8ec9deac764635e9ebbfea",
+   "line_endings": "verbatim (-text, LightGBM のため変換しない)",
+   "sha256_lf_normalized": "fd84304d152a40c488d67e721e9f8bd0354b16eb9a29d82860654c3a258d0484"
+  },
+  {
+   "source_path": "predictor/market_offset_model.meta.json",
+   "source_root": "worktree (git 管理下)",
+   "frozen_as": "market_offset_model.meta.json",
+   "sha256": "e32abe26e8f7723ca269730c9d413821652b6496176338eef4997b3641cba202",
+   "bytes": 1703,
+   "last_commit_of_source": "999b3f919a22e5608e8ec9deac764635e9ebbfea",
+   "line_endings": "text (git は LF で保存し、Windows の作業ツリーでは CRLF)",
+   "sha256_lf_normalized": "9d97efdbc61d8f1e0fb78e531dc1ec7429943ccfdd47d31fd7780fd53c1a46b2"
+  },
+  {
+   "source_path": "data/backtest/20260919_phase05_4B_market_offset.json",
+   "source_root": "worktree (git 管理下)",
+   "frozen_as": "20260919_phase05_4B_market_offset.json",
+   "sha256": "99ea1637a0ea41d39891983152c0dda8bf4f55ffd72efd7545587437e6cb1ccb",
+   "bytes": 5791,
+   "last_commit_of_source": "999b3f919a22e5608e8ec9deac764635e9ebbfea",
+   "line_endings": "text (git は LF で保存し、Windows の作業ツリーでは CRLF)",
+   "sha256_lf_normalized": "645a9087cfc8b929241f985dce10d2ba4853c8e6e968361293551fb473d2b413"
+  },
+  {
+   "source_path": "data/backtest/20260919_phase05_4B_samples.csv",
+   "source_root": "worktree (git 管理下)",
+   "frozen_as": "20260919_phase05_4B_samples.csv",
+   "sha256": "ddfc8c872c4aaaf0a9d2b46d20a4019f7fcabe89a709b3d5e44e523908166360",
+   "bytes": 2443567,
+   "last_commit_of_source": "999b3f919a22e5608e8ec9deac764635e9ebbfea",
+   "line_endings": "text (git は LF で保存し、Windows の作業ツリーでは CRLF)",
+   "sha256_lf_normalized": "051bbff5a5e145f9806995f7ed7e47fa7314bad756b50e73770c9de3f441376d"
+  },
+  {
+   "source_path": "data/backtest/20260919_phase05_4B_foundation_audit.json",
+   "source_root": "worktree (git 管理下)",
+   "frozen_as": "20260919_phase05_4B_foundation_audit.json",
+   "sha256": "820a80a5b862ca1b6d55e7c0357683a8afab34eef39ead305707d347b7746315",
+   "bytes": 1933,
+   "last_commit_of_source": "999b3f919a22e5608e8ec9deac764635e9ebbfea",
+   "line_endings": "text (git は LF で保存し、Windows の作業ツリーでは CRLF)",
+   "sha256_lf_normalized": "1096ebe2dfc7ed6803d4f9653cdbc8b1dc26d0c92a458b96c71d6541bc43078d"
+  },
+  {
+   "source_path": "data/scorecards/20260919_1100_phase05_4b_foundation.md",
+   "source_root": "本番 checkout (git 管理外)",
+   "frozen_as": "20260919_1100_phase05_4b_foundation.md",
+   "sha256": "507739037b160a78fb006dc6e89e6b233e06d35679987d8dbb1eafce0f5756d5",
+   "bytes": 7828,
+   "last_commit_of_source": null,
+   "line_endings": "text (git は LF で保存し、Windows の作業ツリーでは CRLF)",
+   "sha256_lf_normalized": "605f27021fd83f40ff482e125e49805aa5922c2f57fea9ddd360e7658e86d357"
+  },
+  {
+   "source_path": "data/scorecards/20260919_1100_phase05_4b_foundation__code-quality-reviewer.md",
+   "source_root": "本番 checkout (git 管理外)",
+   "frozen_as": "20260919_1100_phase05_4b_foundation__code-quality-reviewer.md",
+   "sha256": "fa3c4c61fd9239b36bbf88ebbab89dd69aeb6c13243ce95f0026bb154ea7b2d2",
+   "bytes": 8028,
+   "last_commit_of_source": null,
+   "line_endings": "text (git は LF で保存し、Windows の作業ツリーでは CRLF)",
+   "sha256_lf_normalized": "3728a7a31e7d8274809cb71a7f459d713cd9b9194aafd4547c795b8cd63890f8"
+  },
+  {
+   "source_path": "data/scorecards/20260919_1100_phase05_4b_foundation__data-pipeline-engineer.md",
+   "source_root": "本番 checkout (git 管理外)",
+   "frozen_as": "20260919_1100_phase05_4b_foundation__data-pipeline-engineer.md",
+   "sha256": "790ebaac907b752c211a12c7de615437f325dc7a6406d260c53454ee240332fa",
+   "bytes": 8037,
+   "last_commit_of_source": null,
+   "line_endings": "text (git は LF で保存し、Windows の作業ツリーでは CRLF)",
+   "sha256_lf_normalized": "ca83aca1f60b2a0941732d536ca4d9a22919300576993b1f4e116cb26b1f2587"
+  },
+  {
+   "source_path": "data/scorecards/20260919_1100_phase05_4b_foundation__gui-ux-auditor.md",
+   "source_root": "本番 checkout (git 管理外)",
+   "frozen_as": "20260919_1100_phase05_4b_foundation__gui-ux-auditor.md",
+   "sha256": "5f459dd45f2f4a670d9023dec03facb9cf2800ab79dc3aebb5b3f02bf413a032",
+   "bytes": 4699,
+   "last_commit_of_source": null,
+   "line_endings": "text (git は LF で保存し、Windows の作業ツリーでは CRLF)",
+   "sha256_lf_normalized": "f16d09eca983323fc54a6e6f12ede78db9bacce84236acc869a4e148eca90022"
+  },
+  {
+   "source_path": "data/scorecards/20260919_1100_phase05_4b_foundation__mobile-html-reviewer.md",
+   "source_root": "本番 checkout (git 管理外)",
+   "frozen_as": "20260919_1100_phase05_4b_foundation__mobile-html-reviewer.md",
+   "sha256": "b760ac4a66a60b47b87ad975eda9472e05db2d3886001318643c9e2c100ff53a",
+   "bytes": 4978,
+   "last_commit_of_source": null,
+   "line_endings": "text (git は LF で保存し、Windows の作業ツリーでは CRLF)",
+   "sha256_lf_normalized": "36640ea96c61fda76b1aca51609a20ee70e709cbc52040c875ccb3fee5681994"
+  },
+  {
+   "source_path": "data/scorecards/20260919_1100_phase05_4b_foundation__prediction-logic-analyst.md",
+   "source_root": "本番 checkout (git 管理外)",
+   "frozen_as": "20260919_1100_phase05_4b_foundation__prediction-logic-analyst.md",
+   "sha256": "96258f1bfa8a4edd28cf0814583747be7a367897ca5c5bb9bb4c7b8a47614dfd",
+   "bytes": 7106,
+   "last_commit_of_source": null,
+   "line_endings": "text (git は LF で保存し、Windows の作業ツリーでは CRLF)",
+   "sha256_lf_normalized": "f67b587d1f62311379f56b12d2211ccb86e7c3af2fa7dd69e5661fc36b6e8372"
+  },
+  {
+   "source_path": "data/scorecards/20260919_1100_phase05_4b_foundation__profitability-judge.md",
+   "source_root": "本番 checkout (git 管理外)",
+   "frozen_as": "20260919_1100_phase05_4b_foundation__profitability-judge.md",
+   "sha256": "d890ccf8024a71eb78012b5d6c9301a427de31bacf79fae5b8338e110c37aa6e",
+   "bytes": 9978,
+   "last_commit_of_source": null,
+   "line_endings": "text (git は LF で保存し、Windows の作業ツリーでは CRLF)",
+   "sha256_lf_normalized": "cbdcb38dd5c038961d94a0e7c97484de3687be4ff18e1156503e9f24e4500b35"
+  },
+  {
+   "source_path": "data/scorecards/20260919_1100_phase05_4b_foundation__validation-process-auditor.md",
+   "source_root": "本番 checkout (git 管理外)",
+   "frozen_as": "20260919_1100_phase05_4b_foundation__validation-process-auditor.md",
+   "sha256": "f4584089bd41425adcaebc6815d86f70358b23f1eccd95f6f95e250ce060033f",
+   "bytes": 8490,
+   "last_commit_of_source": null,
+   "line_endings": "text (git は LF で保存し、Windows の作業ツリーでは CRLF)",
+   "sha256_lf_normalized": "132a0addfffd4a62e32b6a3c9e0b0cb61cd9e9da841926176bc0936e7571b7c8"
+  }
+ ],
+ "hash_note": "sha256 は凍結した時点の作業ツリーのバイト。照合は sha256_lf_normalized (CRLF を LF にした中身 = git の blob) で行う。モデルの .txt は .gitattributes で -text なので、どちらも同じ値",
+ "feature_schema_note": "market_offset_model.txt は feature_name() に 31 特徴の名前を持つ。fundamental_model.txt は名前を持たない (Column_0〜Column_30)。fundamental の特徴の並びは fundamental_model.meta.json の features を正本にする。凍結したモデルを git から取り出して LightGBM で読み、元のモデルと同じ予測を返すことを確認した (2026-10-04)"
+}
