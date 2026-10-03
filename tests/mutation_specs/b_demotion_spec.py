@@ -153,4 +153,8 @@ MUTANTS = [
     ("B34 fundamental_eval が評価窓の重なりを確かめない", "scripts/fundamental_eval.py",
      "    assert_model_window_disjoint(MODEL_PATH, from_date, to_date)\n",
      ""),
+    # → test_window_guard_fails_closed_without_a_meta_file
+    ("B35 meta が無ければ素通り", MS,
+     '        raise FileNotFoundError(f"モデルの meta が無い: {meta_path}")',
+     "        return"),
 ]

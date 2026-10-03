@@ -466,3 +466,10 @@ def test_window_guard_fails_closed_without_windows(tmp_path):
     """meta に学習・検証の窓が無ければ、重なりを確かめられないので止める (黙って通さない)。"""
     with pytest.raises(ValueError, match="窓が無く"):
         ms.assert_model_window_disjoint(_meta_file(tmp_path, {"features": []}), "20260101", "20260331")
+
+
+def test_window_guard_fails_closed_without_a_meta_file(tmp_path):
+    """meta そのものが無ければ止める (名前付きモデル + meta 無しの評価を止めているのはこの分岐だけ)。"""
+    (tmp_path / "m.txt").write_text("", encoding="utf-8")
+    with pytest.raises(FileNotFoundError):
+        ms.assert_model_window_disjoint(tmp_path / "m.txt", "20260101", "20260331")
