@@ -368,3 +368,15 @@ def test_dry_run_opens_the_db_read_only(tmp_path):
     rep = bf.run(path, _records(), apply=False, today="20240101")
     assert rep["result"] == "dry_run" and "keiba" not in rep["db"]
     assert set(rep["state_before"]) == {"t.db", "t.db-wal", "t.db-shm"}
+
+
+def test_after_acceptance_uses_the_reread_values(tmp_path, monkeypatch):
+    """適用後の検収は、計画の値でなく DB から読み直した値で行う (読み直した 4 角が 0 なら適用後の検収で止まる)。"""
+    path = _db(tmp_path)
+    before = _digest(path)
+    real = bf.current_values
+    monkeypatch.setattr(bf, "current_values",
+                        lambda conn: {k: (v[0], v[1], v[2], 0) for k, v in real(conn).items()})
+    with pytest.raises(bf.BackfillError, match="適用後"):
+        bf.run(path, _records(), apply=True, today="20240101")
+    assert _digest(path) == before
