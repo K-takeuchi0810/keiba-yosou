@@ -112,6 +112,7 @@ CORNER_FILES = {
     "predictor/pit_view.py",           # 発走後の列として除外するリスト (読まない)
     "predictor/features.py",           # recent_corner_stats (ガード) / compute_features (フラグで計算しない)
     "scripts/analyze_misses.py",       # 診断の表示 (フラグで表示しない)
+    "scripts/backfill_corner_orders.py",  # backfill (入口で require_corner_bytes_verified、corner 4 列だけを UPDATE)
     "scripts/probe_corner_offsets.py",  # バイト位置の検証 (raw を読む)
 }
 
