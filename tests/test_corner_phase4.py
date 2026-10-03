@@ -248,3 +248,13 @@ def test_probe_exit_code_follows_golden_when_expectations_are_given(monkeypatch)
     # --expect が無ければ従来どおり範囲サニティの結果
     monkeypatch.setattr(sys, "argv", ["probe", "x.jvd"])
     assert probe.main() == 1
+
+
+def test_probe_golden_fails_when_the_expected_record_is_missing():
+    """--expect の馬が raw に無ければ不一致として数える (黙って一致扱いにしない)。"""
+    from scripts.probe_corner_offsets import _check_expectations
+
+    rec = _probe_rec("01", 1, 1, 1, 1, 1)
+    assert _check_expectations([rec], ["R1:01:1:1:1:1"]) == 0
+    assert _check_expectations([rec], ["R1:02:1:1:1:1"]) == 1
+    assert _check_expectations([rec], ["R9:01:1:1:1:1"]) == 1

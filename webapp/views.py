@@ -12,7 +12,8 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from config import CORNER_BYTES_VERIFIED, HN_BIRTHPLACE_VERIFIED
+import config
+from config import HN_BIRTHPLACE_VERIFIED
 from predictor.sire_lines import (
     classify_country,
     classify_sire,
@@ -180,7 +181,8 @@ def _horse_detail_line(h: dict, feat: dict, recent: list[dict], cur_distance: in
     # config.CORNER_BYTES_VERIFIED=False の間は「(暫定)」を付す (probe 緑化で反転、
     # ラベルと probe 状態の単一情報源 — 2026-07-06 監査)。corner データは probe 緑化 +
     # backfill 後にのみ存在するため samples>0 のときだけ表示する。
-    prov = "" if CORNER_BYTES_VERIFIED else "(暫定)"
+    # フラグは呼び出しのたびに config から読む (import 時に名前を取り込むと、緊急で False に戻しても効かない)
+    prov = "" if config.CORNER_BYTES_VERIFIED else "(暫定)"
     pace = None
     c_n = feat.get("recent_4corner_samples") or 0
     c_avg = feat.get("recent_4corner_avg_position")
