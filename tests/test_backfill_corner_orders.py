@@ -150,7 +150,7 @@ def test_failed_acceptance_rolls_back_without_partial_writes(tmp_path):
             if r.month_day == "0203" else r for r in _records()]
     rep = bf.run(path, recs, apply=False, today="20240101")
     assert rep["acceptance_planned"]["failed_months"] == ["202402"]
-    with pytest.raises(bf.BackfillError, match="検収"):
+    with pytest.raises(bf.BackfillError, match="計画の値"):       # 書き込みの前 (計画の段階) で止まる
         bf.run(path, recs, apply=True, today="20240101")
     assert _digest(path) == before
 
@@ -196,3 +196,22 @@ def test_scratched_horses_do_not_count_toward_the_field(tmp_path):
             and r.horse_num == "02") else r for r in _records()]
     rep = bf.run(path, recs, apply=False, today="20240101")
     assert rep["acceptance_planned"]["over_field"] >= 1
+
+
+def test_failure_after_writing_rolls_back_everything(tmp_path, monkeypatch):
+    """計画の検収が通り、適用後の検収だけが不合格になった場合も、rollback して部分適用を残さない。"""
+    path = _db(tmp_path)
+    before = _digest(path)
+    real = bf.acceptance
+    calls = []
+
+    def flaky(rows, values):
+        calls.append(1)
+        out = real(rows, values)
+        return out if len(calls) == 1 else {**out, "ok": False, "failed_months": ["202401"]}
+
+    monkeypatch.setattr(bf, "acceptance", flaky)
+    with pytest.raises(bf.BackfillError, match="適用後"):
+        bf.run(path, _records(), apply=True, today="20240101")
+    assert len(calls) == 2
+    assert _digest(path) == before
