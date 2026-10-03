@@ -12,3 +12,7 @@ predictor/calibrator.json text eol=lf
 predictor/weights.json text eol=lf
 predictor/lgbm_features.json text eol=lf
 predictor/lgbm_meta.json text eol=lf
+
+# 凍結した LightGBM モデルのコピーも同じ理由で改行を変換しない (2026-10-04)。
+# 変換されると LightGBM が読めず、FREEZE_MANIFEST.json の sha256 とも合わなくなる。
+data/backtest/frozen_*/*model*.txt -text
