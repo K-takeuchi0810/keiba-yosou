@@ -34,6 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import config  # noqa: E402
 from db import DB_PATH, PROJECT_ROOT  # noqa: E402
 
 RESULTS_DIR = PROJECT_ROOT / "data" / "results"
@@ -103,7 +104,11 @@ def horse_context(conn: sqlite3.Connection, date: str, track: str,
         """,
         (date[:4], date[4:], track, int(race_num), int(horse_num)),
     ).fetchone()
-    return dict(row) if row else {}
+    out = dict(row) if row else {}
+    # 通過順位のバイト位置が未検証なら表示しない (config.require_corner_bytes_verified と同じフラグ、2026-10-04)
+    if out and not config.CORNER_BYTES_VERIFIED:
+        out.update(c1=None, c2=None, c3=None, c4=None)
+    return out
 
 
 def race_context(conn: sqlite3.Connection, date: str, track: str,

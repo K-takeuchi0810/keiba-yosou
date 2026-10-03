@@ -9,6 +9,8 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime
 
+import config
+
 
 def _cached(cache: dict | None, key: tuple, loader):
     if cache is None:
@@ -123,7 +125,10 @@ def recent_corner_stats(
 
     corner_order_4 が未 ingest (全て 0/NULL) の環境では samples=0, 指標 None を返し、
     呼び出し側は「データ無し」として扱えるので後方互換。
+
+    通過順位のバイト位置が未検証 (`config.CORNER_BYTES_VERIFIED = False`) なら止まる (2026-10-04)。
     """
+    config.require_corner_bytes_verified("predictor.features.recent_corner_stats")
     if not blood_register_num or blood_register_num == "0" * 10:
         return None, None, 0
     rows = conn.execute(
@@ -1290,7 +1295,9 @@ def compute_features(
     # 毎頭発行しないよう「corner データが 1 件でも存在するか」を run 単位で 1 回だけ判定し、
     # 不在なら以降スキップする (backfill 前の backtest 実行時間を無駄にしない)。
     # cache=None の公開契約を破らない (_cached は None 安全。2026-07-05 監査指摘)
-    corner_present = _cached(
+    # 通過順位のバイト位置が未検証なら計算しない (既定値 None / 0 のまま。ほかの特徴は通常どおり)。
+    # 例外にしないのは、compute_features を import する ai-builder の特徴の生成を止めないため (2026-10-04)
+    corner_present = config.CORNER_BYTES_VERIFIED and _cached(
         cache,
         ("_corner_data_present",),
         lambda: conn.execute(
