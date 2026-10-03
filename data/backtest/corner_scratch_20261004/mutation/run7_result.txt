@@ -1,0 +1,32 @@
+copy=git archive 76ee150 spec=tests/mutation_specs/backfill_corner_spec.py sha256=881ef6fafde9e3bc started=2026-10-04T06:26:32
+KILLED K1 run の入口のガードを外す FAILED tests/test_backfill_corner_orders.py::test_unverified_flag_stops_before_opening_the_db
+KILLED K2 オッズの刻印の列も書き換える FAILED tests/test_backfill_corner_orders.py::test_apply_changes_only_the_corner_columns
+KILLED K3 raw の食い違いを見逃す FAILED tests/test_backfill_corner_orders.py::test_conflicting_raw_values_stop_before_writing
+KILLED K4 data_div 7 以外の raw も使う FAILED tests/test_backfill_corner_orders.py::test_non_confirmed_raw_records_are_not_used
+KILLED K5 raw の日付の範囲を見ない FAILED tests/test_backfill_corner_orders.py::test_non_confirmed_raw_records_are_not_used
+KILLED K6 地方の raw も使う FAILED tests/test_backfill_corner_orders.py::test_non_confirmed_raw_records_are_not_used
+KILLED K7 計画の検収が不合格でも適用する FAILED tests/test_backfill_corner_orders.py::test_failed_acceptance_rolls_back_without_partial_writes
+KILLED K8 失敗しても rollback せず commit する FAILED tests/test_backfill_corner_orders.py::test_failure_after_writing_rolls_back_everything
+KILLED K9 開催日の拒否を外す FAILED tests/test_backfill_corner_orders.py::test_apply_is_refused_on_a_race_day
+KILLED K10 dry-run でも書く FAILED tests/test_backfill_corner_orders.py::test_dry_run_writes_nothing - sq...
+KILLED K11 範囲外の順位の判定を頭数 + 2 に緩める FAILED tests/test_backfill_corner_orders.py::test_out_of_field_positions_fail_acceptance
+KILLED K12 raw に無い行を 0 で埋める FAILED tests/test_backfill_corner_orders.py::test_rows_without_raw_stay_null_and_are_counted
+KILLED K13 被覆率の閾値を見ない FAILED tests/test_backfill_corner_orders.py::test_failed_acceptance_rolls_back_without_partial_writes
+KILLED K14 出走頭数に取消・除外も数える FAILED tests/test_backfill_corner_orders.py::test_scratched_horses_do_not_count_toward_the_field
+KILLED K15 被覆率の閾値を 60% に緩める FAILED tests/test_backfill_corner_orders.py::test_coverage_two_thirds_is_below_the_threshold
+KILLED K16 月の欠けを見逃す FAILED tests/test_backfill_corner_orders.py::test_a_missing_month_fails_the_acceptance
+KILLED K17 食い違いを 4 角でしか見ない FAILED tests/test_backfill_corner_orders.py::test_conflicting_raw_values_stop_before_writing
+KILLED K18 WHERE から馬番を落とす (更新件数の検査で止まるべき) FAILED tests/test_backfill_corner_orders.py::test_apply_changes_only_the_corner_columns
+KILLED K19 前の状態の検査を外す FAILED tests/test_backfill_corner_orders.py::test_unexpected_prior_state_stops_the_apply
+KILLED K20 対象外の行の検査を外す FAILED tests/test_backfill_corner_orders.py::test_a_change_outside_the_target_rolls_back
+KILLED K21 対象外の行のチェックサムに一部しか入れない FAILED tests/test_backfill_corner_orders.py::test_outside_digest_reflects_the_row_contents
+KILLED K22 前の状態の検査を「多い」側だけにする FAILED tests/test_backfill_corner_orders.py::test_prior_state_mismatch_in_either_direction_stops
+KILLED K23 前の状態を 4 角だけで数える FAILED tests/test_backfill_corner_orders.py::test_prior_state_mismatch_in_either_direction_stops
+KILLED K24 適用後の検収で DB を読み直さない FAILED tests/test_backfill_corner_orders.py::test_after_acceptance_uses_the_reread_values
+KILLED K25 main が sqlite3.Error でレポートを書かない FAILED tests/test_backfill_corner_orders.py::test_main_reports_sqlite_errors_with_result_error
+KILLED K26 失敗時に result を error にしない FAILED tests/test_backfill_corner_orders.py::test_main_reports_sqlite_errors_with_result_error
+KILLED K27 dry-run を書き込みできる接続で開く FAILED tests/test_backfill_corner_orders.py::test_dry_run_opens_the_db_read_only
+KILLED K28 COMMIT 直後の状態を記録しない FAILED tests/test_backfill_corner_orders.py::test_outside_rows_are_checksummed_and_unchanged
+KILLED K29 run が Ctrl-C を捕まえない FAILED tests/test_backfill_corner_orders.py::test_main_writes_the_report_even_on_keyboard_interrupt
+KILLED K30 main が Ctrl-C でレポートを書かない FAILED tests/test_backfill_corner_orders.py::test_main_writes_the_report_even_on_keyboard_interrupt
+rc=0

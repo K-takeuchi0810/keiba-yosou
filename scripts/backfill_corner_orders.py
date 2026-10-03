@@ -308,7 +308,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--raw-dir", default=str(Path(config.PROJECT_ROOT) / "data" / "raw" / "RACE"))
     ap.add_argument("--apply", action="store_true", help="書き込む (無ければ dry-run)")
     ap.add_argument("--expected-nonnull-before", type=int, default=DEFAULT_EXPECTED_NONNULL_BEFORE,
-                    help="--apply の前に corner が入っている対象の行の件数の想定 (既定 0 = 全行 NULL)")
+                    help="--apply の前に corner が入っている対象の行の件数の想定 "
+                         f"(既定 {DEFAULT_EXPECTED_NONNULL_BEFORE} = 全行 NULL)")
     ap.add_argument("--report", required=True)
     args = ap.parse_args(argv)
     config.require_corner_bytes_verified(GUARD_CONTEXT)   # raw を読む前にも止める
@@ -321,7 +322,7 @@ def main(argv: list[str] | None = None) -> int:
         report = run(Path(args.db), records, args.apply, manifest=manifest,
                      expected_nonnull_before=args.expected_nonnull_before)
         rc = 0 if (report["result"] == "applied" or report["acceptance_planned"]["ok"]) else 1
-    except Exception as e:                       # 想定外の例外もレポートを書いてから
+    except BaseException as e:                   # Ctrl-C を含め、想定外の例外もレポートを書いてから再送出
         report = getattr(e, "report", None) or {"db": args.db, "apply": args.apply, "raw_dir": args.raw_dir,
                                                 "result": "error", "error": f"{type(e).__name__}: {e}"}
         rc = 1
