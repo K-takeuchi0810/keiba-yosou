@@ -1,0 +1,303 @@
+files 335 / idempotent True / missing [] / failed ['202201', '202301', '202302', '202503', '202511'] / accepted False
+198611 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+198701 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+198702 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+198711 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+198805 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+198807 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+198808 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+198810 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+198906 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+198907 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+198909 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199002 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199007 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199012 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+199102 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199103 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199110 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199205 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+199208 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199301 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+199302 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+199303 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199304 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199307 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+199401 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+199404 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199406 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199408 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+199412 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+199502 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199504 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+199603 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med 1 
+199605 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199609 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199708 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+199710 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199805 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199806 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199901 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+199902 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199905 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199906 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+199909 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+199911 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med 1 
+199912 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200001 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200002 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+200003 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200004 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+200006 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200010 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200102 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200103 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200109 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200201 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med 1 
+200203 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200204 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200205 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200208 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200211 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+200212 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+200303 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200307 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200308 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200311 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200312 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med 1 
+200401 rows      4 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200402 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200403 rows      8 c4>0 1.0000 null 0.0000 over 7 front_med None 
+200404 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200405 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200406 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200407 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+200408 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200410 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med 1 
+200411 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200412 rows      3 c4>0 1.0000 null 0.0000 over 0 front_med None 
+200501 rows      2 c4>0 1.0000 null 0.0000 over 0 front_med 1 
+200502 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med 1 
+200503 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200504 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200505 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+200506 rows      3 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200507 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+200508 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200509 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200510 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+200511 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med 1 
+200601 rows      3 c4>0 1.0000 null 0.0000 over 2 front_med 1 
+200602 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200603 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200604 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+200605 rows      4 c4>0 1.0000 null 0.0000 over 4 front_med None 
+200606 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200607 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200608 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200609 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200610 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200611 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200612 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+200701 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200702 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200703 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200704 rows      4 c4>0 1.0000 null 0.0000 over 4 front_med None 
+200707 rows      3 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200708 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200709 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200710 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200711 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+200712 rows      3 c4>0 1.0000 null 0.0000 over 2 front_med 1 
+200801 rows      5 c4>0 1.0000 null 0.0000 over 5 front_med None 
+200802 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200803 rows      6 c4>0 1.0000 null 0.0000 over 6 front_med None 
+200804 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+200805 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200806 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+200807 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200808 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200809 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200810 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200811 rows      3 c4>0 1.0000 null 0.0000 over 2 front_med None 
+200812 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200901 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+200903 rows      9 c4>0 1.0000 null 0.0000 over 5 front_med 1 
+200904 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200905 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200906 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200907 rows      4 c4>0 1.0000 null 0.0000 over 4 front_med None 
+200908 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+200909 rows      3 c4>0 1.0000 null 0.0000 over 2 front_med 1 
+200910 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+200912 rows      3 c4>0 1.0000 null 0.0000 over 1 front_med 1 
+201001 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201002 rows      3 c4>0 1.0000 null 0.0000 over 2 front_med 1 
+201003 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+201004 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med 1 
+201005 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201006 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201007 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201008 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201009 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+201010 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201011 rows      3 c4>0 1.0000 null 0.0000 over 1 front_med 1 
+201012 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201101 rows      4 c4>0 1.0000 null 0.0000 over 4 front_med None 
+201102 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201103 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+201104 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+201105 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201106 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201107 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201110 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201112 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201201 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med 1 
+201202 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201203 rows      4 c4>0 1.0000 null 0.0000 over 3 front_med 1 
+201204 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201206 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201207 rows      3 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201208 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201209 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201210 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201301 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201302 rows      4 c4>0 1.0000 null 0.0000 over 3 front_med 2 
+201304 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201305 rows      4 c4>0 1.0000 null 0.0000 over 3 front_med 1 
+201306 rows      4 c4>0 1.0000 null 0.0000 over 4 front_med None 
+201308 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+201309 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201310 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201311 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201312 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201401 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201402 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+201404 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201406 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201408 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201409 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201410 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201411 rows      3 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201412 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201501 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+201502 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201504 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201505 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201506 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+201507 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201508 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+201510 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201601 rows      4 c4>0 1.0000 null 0.0000 over 3 front_med None 
+201602 rows      3 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201604 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201605 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201607 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201608 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med 1 
+201609 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+201610 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201611 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201612 rows      3 c4>0 1.0000 null 0.0000 over 2 front_med 1 
+201702 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201704 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+201705 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201706 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201707 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201708 rows      3 c4>0 1.0000 null 0.0000 over 3 front_med None 
+201709 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201710 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201712 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+201801 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201803 rows      1 c4>0 1.0000 null 0.0000 over 0 front_med None 
+201805 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201806 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201808 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201810 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med 1 
+201811 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201901 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med 1 
+201903 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201904 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201905 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+201906 rows      6 c4>0 1.0000 null 0.0000 over 4 front_med None 
+201908 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201911 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+201912 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+202001 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+202002 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med 1 
+202004 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+202005 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+202007 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+202009 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+202010 rows      2 c4>0 1.0000 null 0.0000 over 1 front_med None 
+202011 rows      2 c4>0 1.0000 null 0.0000 over 2 front_med None 
+202012 rows      1 c4>0 1.0000 null 0.0000 over 1 front_med None 
+202101 rows   4412 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202102 rows   4046 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202103 rows   3921 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202104 rows   3664 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202105 rows   4620 c4>0 0.9762 null 0.0000 over 0 front_med 1 *
+202106 rows   3576 c4>0 1.0000 null 0.0000 over 0 front_med 1 *
+202107 rows   3863 c4>0 0.9912 null 0.0000 over 0 front_med 1.0 *
+202108 rows   3962 c4>0 0.9732 null 0.0000 over 0 front_med 1 *
+202109 rows   3219 c4>0 0.9947 null 0.0000 over 0 front_med 1.0 *
+202110 rows   4470 c4>0 0.9700 null 0.0000 over 0 front_med 1.0 *
+202111 rows   3641 c4>0 1.0000 null 0.0000 over 0 front_med 1 *
+202112 rows   4082 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202201 rows   4229 c4>0 1.0000 null 0.0000 over 1 front_med 1 *
+202202 rows   4041 c4>0 1.0000 null 0.0000 over 0 front_med 1 *
+202203 rows   3685 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202204 rows   3909 c4>0 1.0000 null 0.0000 over 0 front_med 1 *
+202205 rows   4335 c4>0 0.9781 null 0.0000 over 0 front_med 1.0 *
+202206 rows   3520 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202207 rows   4313 c4>0 0.9917 null 0.0000 over 0 front_med 1.0 *
+202208 rows   3570 c4>0 0.9748 null 0.0000 over 0 front_med 1.0 *
+202209 rows   3144 c4>0 0.9943 null 0.0000 over 0 front_med 1.0 *
+202210 rows   4386 c4>0 0.9763 null 0.0000 over 0 front_med 1.0 *
+202211 rows   3619 c4>0 1.0000 null 0.0000 over 0 front_med 1 *
+202212 rows   4090 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202301 rows   4322 c4>0 1.0000 null 0.0000 over 2 front_med 1 *
+202302 rows   4076 c4>0 1.0000 null 0.0000 over 1 front_med 1.0 *
+202303 rows   3720 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202304 rows   4668 c4>0 0.9934 null 0.0000 over 0 front_med 1 *
+202305 rows   3708 c4>0 0.9741 null 0.0000 over 0 front_med 1 *
+202306 rows   3579 c4>0 1.0000 null 0.0000 over 0 front_med 1 *
+202307 rows   4388 c4>0 0.9918 null 0.0000 over 0 front_med 1.0 *
+202308 rows   3635 c4>0 0.9777 null 0.0000 over 0 front_med 1.0 *
+202309 rows   3428 c4>0 0.9950 null 0.0000 over 0 front_med 1 *
+202310 rows   4067 c4>0 0.9734 null 0.0000 over 0 front_med 1 *
+202311 rows   3647 c4>0 1.0000 null 0.0000 over 0 front_med 1 *
+202312 rows   4036 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202401 rows   4056 c4>0 1.0000 null 0.0000 over 0 front_med 1 *
+202402 rows   3900 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202403 rows   4568 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202404 rows   3992 c4>0 0.9920 null 0.0000 over 0 front_med 1 *
+202405 rows   3672 c4>0 0.9749 null 0.0000 over 0 front_med 1 *
+202406 rows   4513 c4>0 1.0000 null 0.0000 over 0 front_med 1 *
+202407 rows   3425 c4>0 0.9895 null 0.0000 over 0 front_med 1 *
+202408 rows   4013 c4>0 0.9796 null 0.0000 over 0 front_med 1 *
+202409 rows   3218 c4>0 0.9947 null 0.0000 over 0 front_med 1.0 *
+202410 rows   3659 c4>0 0.9656 null 0.0000 over 0 front_med 1 *
+202411 rows   4082 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202412 rows   3654 c4>0 1.0000 null 0.0000 over 0 front_med 1 *
+202501 rows   3595 c4>0 1.0000 null 0.0000 over 0 front_med 1 *
+202502 rows   4014 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202503 rows   4772 c4>0 1.0000 null 0.0000 over 1 front_med 1.0 *
+202504 rows   3725 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202505 rows   4290 c4>0 0.9704 null 0.0000 over 0 front_med 1 *
+202506 rows   3976 c4>0 1.0000 null 0.0000 over 0 front_med 1 *
+202507 rows   3635 c4>0 0.9917 null 0.0000 over 0 front_med 1.0 *
+202508 rows   4667 c4>0 0.9732 null 0.0000 over 0 front_med 1 *
+202509 rows   3106 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202510 rows   3545 c4>0 0.9800 null 0.0000 over 0 front_med 1 *
+202511 rows   4389 c4>0 1.0000 null 0.0000 over 1 front_med 1 *
+202512 rows   3783 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202601 rows   3952 c4>0 1.0000 null 0.0000 over 0 front_med 1 *
+202602 rows   3994 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202603 rows   4202 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202604 rows   3718 c4>0 1.0000 null 0.0000 over 0 front_med 1.0 *
+202605 rows   4723 c4>0 0.9731 null 0.0000 over 0 front_med 1 *
+202606 rows   3559 c4>0 1.0000 null 0.0000 over 0 front_med 1 *
+202607 rows   3721 c4>0 0.9911 null 0.0000 over 0 front_med 1 
+202608 rows   4722 c4>0 0.9727 null 0.0000 over 1 front_med 1 
+202609 rows   3116 c4>0 1.0000 null 0.0000 over 0 front_med 1 
+rc=0

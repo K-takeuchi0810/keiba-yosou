@@ -444,6 +444,9 @@ GATE_EXEMPT = {
     # 取り込み・生成 (データを作る側)
     "scripts/fetch_full.py", "scripts/fetch_results.py", "scripts/fetch_odds.py",
     "scripts/fetch_mining.py", "scripts/fetch_fresh_odds.py",
+    # 通過順位の backfill (corner 4 列だけを UPDATE する作る側)。confirmed_order は検収の被覆率の分母に
+    # 使うだけで、成績は出さない (2026-10-04)
+    "scripts/backfill_corner_orders.py",
     "scripts/fetch_morning_odds.py", "scripts/predict.py", "scripts/predict_t10.py",
     "scripts/repair_odds_stamps.py", "scripts/cleanup_placeholder_horse_rows.py",
     # 運用監視 (入力が揃っているかを見るだけで、当たり外れは見ない)

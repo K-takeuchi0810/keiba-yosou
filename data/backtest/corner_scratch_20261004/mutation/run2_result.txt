@@ -1,0 +1,16 @@
+copy=git archive afeb94d spec=tests/mutation_specs/backfill_corner_spec.py sha256=868a57fa4160ec05 started=2026-10-04T05:17:03
+KILLED K1 run の入口のガードを外す FAILED tests/test_backfill_corner_orders.py::test_unverified_flag_stops_before_opening_the_db
+KILLED K2 オッズの列も書き換える FAILED tests/test_backfill_corner_orders.py::test_apply_changes_only_the_corner_columns
+KILLED K3 raw の食い違いを見逃す FAILED tests/test_backfill_corner_orders.py::test_conflicting_raw_values_stop_before_writing
+KILLED K4 data_div 7 以外の raw も使う FAILED tests/test_backfill_corner_orders.py::test_non_confirmed_raw_records_are_not_used
+KILLED K5 raw の日付の範囲を見ない FAILED tests/test_backfill_corner_orders.py::test_non_confirmed_raw_records_are_not_used
+KILLED K6 地方の raw も使う FAILED tests/test_backfill_corner_orders.py::test_non_confirmed_raw_records_are_not_used
+KILLED K7 計画の検収が不合格でも適用する FAILED tests/test_backfill_corner_orders.py::test_failed_acceptance_rolls_back_without_partial_writes
+KILLED K8 失敗しても rollback せず commit する FAILED tests/test_backfill_corner_orders.py::test_failure_after_writing_rolls_back_everything
+KILLED K9 開催日の拒否を外す FAILED tests/test_backfill_corner_orders.py::test_apply_is_refused_on_a_race_day
+KILLED K10 dry-run でも書く FAILED tests/test_backfill_corner_orders.py::test_dry_run_writes_nothing - As...
+KILLED K11 範囲外の順位の判定を頭数 + 2 に緩める FAILED tests/test_backfill_corner_orders.py::test_out_of_field_positions_fail_acceptance
+KILLED K12 raw に無い行を 0 で埋める FAILED tests/test_backfill_corner_orders.py::test_rows_without_raw_stay_null_and_are_counted
+KILLED K13 被覆率の閾値を見ない FAILED tests/test_backfill_corner_orders.py::test_failed_acceptance_rolls_back_without_partial_writes
+KILLED K14 出走頭数に競走除外も数える FAILED tests/test_backfill_corner_orders.py::test_scratched_horses_do_not_count_toward_the_field
+rc=0

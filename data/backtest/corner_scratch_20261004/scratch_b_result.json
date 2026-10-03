@@ -1,0 +1,69 @@
+{
+ "clone": "C:\\Users\\kizun\\AppData\\Local\\Temp\\claude\\C--Users-kizun-dev-keiba-yosou\\ba1406e5-db88-4baa-8fae-bdcf86bee826\\scratchpad\\scratch_b2.db",
+ "prod_read_started": "2026-10-04T05:38:20",
+ "prod_read_finished": "2026-10-04T05:38:24",
+ "prod_state_before_read": {
+  "keiba.db": {
+   "bytes": 20157546496,
+   "mtime": "2026-10-03T20:00:19+09:00"
+  },
+  "keiba.db-wal": {
+   "bytes": 0,
+   "mtime": "2026-10-04T00:05:10+09:00"
+  }
+ },
+ "prod_state_after_read": {
+  "keiba.db": {
+   "bytes": 20157546496,
+   "mtime": "2026-10-03T20:00:19+09:00"
+  },
+  "keiba.db-wal": {
+   "bytes": 0,
+   "mtime": "2026-10-04T00:05:10+09:00"
+  }
+ },
+ "clone_rows": {
+  "horse_races": 262885,
+  "races": 19056
+ },
+ "backfill_rc": 0,
+ "backfill_result": "applied",
+ "backfill_error": null,
+ "updated_rows": 262113,
+ "planned_updates": 262113,
+ "null_remaining_after": 772,
+ "raw_keys_not_in_db": 0,
+ "acceptance_after_ok": true,
+ "min_monthly_c4_rate": 0.9655643618474993,
+ "same_primary_keys": true,
+ "rows": 262885,
+ "changed_cells_by_column": {
+  "corner_order_1": 262113,
+  "corner_order_2": 262113,
+  "corner_order_3": 262113,
+  "corner_order_4": 262113
+ },
+ "only_corner_columns_changed": true,
+ "watched_columns_changed_rows": {
+  "win_odds": 0,
+  "odds_fetched_at": 0,
+  "odds_dataspec": 0,
+  "win_popularity": 0,
+  "jockey_code": 0,
+  "jockey_short_name": 0,
+  "burden_weight": 0,
+  "horse_weight": 0,
+  "weight_change_sign": 0,
+  "weight_change_diff": 0,
+  "finish_order": 0,
+  "confirmed_order": 0,
+  "finish_time": 0,
+  "abnormal_code": 0,
+  "final_3f": 0,
+  "leg_quality_code": 0,
+  "data_div": 0,
+  "blood_register_num": 0
+ },
+ "watched_all_identical": true,
+ "accepted": true
+}
