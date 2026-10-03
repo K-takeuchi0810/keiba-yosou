@@ -319,3 +319,52 @@ def test_outside_digest_reflects_the_row_contents(tmp_path):
     d2 = bf.outside_digest(conn)
     conn.close()
     assert d1["rows"] == d2["rows"] == 12 and d1["sha256"] != d2["sha256"]
+
+
+def test_prior_state_mismatch_in_either_direction_stops(tmp_path):
+    """想定より少ない (誰かが消した) 場合も止める。corner_order_1 だけが入った行も「入っている」と数える。"""
+    path = _db(tmp_path)
+    with pytest.raises(bf.BackfillError, match="前の状態"):
+        bf.run(path, _records(), apply=True, today="20240101", expected_nonnull_before=6)
+    conn = sqlite3.connect(path)
+    conn.execute("UPDATE horse_races SET corner_order_1=2 WHERE race_month_day='0106' AND track_code='05' AND horse_num='02'")
+    conn.commit()
+    conn.close()
+    assert bf.run(path, _records(), apply=False, today="20240101")["nonnull_before"] == 1
+
+
+def test_after_check_rereads_the_db_and_counts_changes(tmp_path):
+    """適用後の検収は DB を読み直す。トリガで 4 角を 0 にされると適用後の検収・変更件数の検査で止まり rollback する。"""
+    path = _db(tmp_path)
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TRIGGER zero_c4 AFTER UPDATE OF corner_order_1 ON horse_races BEGIN"
+                 " UPDATE horse_races SET corner_order_4 = 0 WHERE rowid = NEW.rowid; END")
+    conn.commit()
+    conn.close()
+    before = _digest(path)
+    with pytest.raises(bf.BackfillError, match="変更件数|適用後"):
+        bf.run(path, _records(), apply=True, today="20240101")
+    assert _digest(path) == before
+
+
+def test_main_reports_sqlite_errors_with_result_error(tmp_path, monkeypatch):
+    import json
+    path = _db(tmp_path)
+    monkeypatch.setattr(bf, "raw_files", lambda d: [Path("x.jvd")])
+    monkeypatch.setattr(bf, "load_records", lambda files: (_records(), []))
+
+    def boom(conn):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(bf, "target_rows", boom)
+    out = tmp_path / "r.json"
+    assert bf.main(["--db", str(path), "--apply", "--report", str(out)]) == 1
+    rep = json.loads(out.read_text(encoding="utf-8"))
+    assert rep["result"] == "error" and "database is locked" in rep["error"]
+
+
+def test_dry_run_opens_the_db_read_only(tmp_path):
+    path = _db(tmp_path)
+    rep = bf.run(path, _records(), apply=False, today="20240101")
+    assert rep["result"] == "dry_run" and "keiba" not in rep["db"]
+    assert set(rep["state_before"]) == {"t.db", "t.db-wal", "t.db-shm"}

@@ -15,7 +15,12 @@ SE を再び upsert すると、`win_odds` を確定値で上書きする一方�
   (月ごとの `corner_order_4 > 0` ≥ 95%、順位 > 出走頭数が 0 件、更新件数 = 予定件数) が不合格なら rollback
 - 今日 (JST) が JRA の開催日 (races にその日の JRA のレースがある) なら `--apply` を拒否する。
   これは安全装置の 1 つにすぎず、本番での実行には書き手の停止の確認とユーザーの明示の承認が別に要る
-- 前後の DB / WAL の大きさ・更新時刻、対象の行数、月ごとの被覆率を記録する
+- 前後の DB / WAL / SHM の大きさ・更新時刻、対象の行数、月ごとの被覆率を記録する
+- (v2) `--apply` は計画・更新・検収を 1 つの書き込みトランザクション (BEGIN IMMEDIATE) で行う。対象の行に corner が
+  すでに入っている件数が `--expected-nonnull-before` (既定 0 = 全行 NULL) と違えば止める。対象外の行の行数とチェックサム、
+  この接続の総変更件数 (= 更新件数) を前後で検査する。COMMIT 直後 (checkpoint の前) の状態を記録してから
+  `wal_checkpoint(TRUNCATE)` を打つ (成功時の戻り値は (0, 0, 0) なので、WAL の規模の証拠は COMMIT 直後の状態で見る)
+- dry-run は読み取り専用 (mode=ro) で開く
 
 usage:
     .venv64/Scripts/python.exe -m scripts.backfill_corner_orders --db <db> [--apply] --report <json>
@@ -40,6 +45,8 @@ import config  # noqa: E402
 # 対象の終端は 2026-06-30 (事前登録 §8-3。2026-07 以降は offset 修正後の取り込みで値が入っている)
 FROM_DATE, TO_DATE = "20210101", "20260630"
 JRA_TRACKS = (1, 10)                     # JRA の track_code の範囲 (01〜10)
+GUARD_CONTEXT = "scripts.backfill_corner_orders"
+DEFAULT_EXPECTED_NONNULL_BEFORE = 0      # --apply の前に corner が入っている対象の行の件数の想定 (全行 NULL)
 THRESHOLD = 0.95
 REFUNDED = ("1", "2", "3")
 PK = ("race_year", "race_month_day", "track_code", "kaiji", "nichiji", "race_num", "horse_num")
@@ -147,7 +154,7 @@ def acceptance(rows: list, values: dict[tuple, tuple]) -> dict:
 
 def db_state(path: Path) -> dict:
     out = {}
-    for p in (path, Path(str(path) + "-wal")):
+    for p in (path, Path(str(path) + "-wal"), Path(str(path) + "-shm")):
         if p.exists():
             st = p.stat()
             out[p.name] = {"bytes": st.st_size,
@@ -186,20 +193,23 @@ def nonnull_corners(rows: list) -> int:
 
 
 def run(db_path: Path, records: Iterable, apply: bool, today: str | None = None, manifest: list | None = None,
-        expected_nonnull_before: int = 0) -> dict:
+        expected_nonnull_before: int = DEFAULT_EXPECTED_NONNULL_BEFORE) -> dict:
     """本体。`records` は SE レコードの列 (テストでは合成した値を渡す)。
 
     `--apply` のときは、計画・更新・検収を **1 つの書き込みトランザクション** (BEGIN IMMEDIATE) の中で行う
     (計画と適用が同じ snapshot になり、ほかの書き手が割り込めない)。対象の行の corner がすでに入っている件数が
     `expected_nonnull_before` (既定 0 = 全行 NULL) と違えば止める (別の経路で入った値を黙って上書きしない)。
     """
-    config.require_corner_bytes_verified(__name__)
+    config.require_corner_bytes_verified(GUARD_CONTEXT)
     raw, used = raw_corner_map(records)          # raw の食い違いは DB を開く前に止める
     if not Path(db_path).exists():
         raise BackfillError(f"DB が無い: {db_path}")
     report: dict = {"db": str(db_path), "apply": apply, "range": [FROM_DATE, TO_DATE], "threshold": THRESHOLD,
                     "raw_files": manifest or [], "state_before": db_state(Path(db_path))}
-    conn = sqlite3.connect(str(db_path), timeout=30, isolation_level=None)
+    if apply:
+        conn = sqlite3.connect(str(db_path), timeout=30, isolation_level=None)
+    else:                                         # dry-run は構造的に書けないように読み取り専用で開く
+        conn = sqlite3.connect(f"file:{Path(db_path).as_posix()}?mode=ro", uri=True, timeout=30, isolation_level=None)
     conn.row_factory = sqlite3.Row
     in_tx = False
     try:
@@ -245,10 +255,11 @@ def run(db_path: Path, records: Iterable, apply: bool, today: str | None = None,
             raise BackfillError("対象外の行が変わった")
         conn.execute("COMMIT")
         in_tx = False
+        report["state_after_commit"] = db_state(Path(db_path))     # checkpoint の前 (WAL の規模の証拠)
         report.update({"updated_rows": changed, "acceptance_after": after, "result": "applied"})
         busy, log, ckpt = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
         report["wal_checkpoint"] = {"busy": busy, "log_frames": log, "checkpointed_frames": ckpt}
-    except Exception as e:
+    except BaseException as e:                    # Ctrl-C でもレポートを残す
         if in_tx:
             try:
                 conn.execute("ROLLBACK")
@@ -286,16 +297,21 @@ def load_records(files: list[Path]) -> tuple[list, list[dict]]:
     return records, manifest
 
 
+def _write_report(path: str, report: dict) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--db", required=True, help="対象の DB (既定値は持たない。本番に当てるときも明示する)")
     ap.add_argument("--raw-dir", default=str(Path(config.PROJECT_ROOT) / "data" / "raw" / "RACE"))
     ap.add_argument("--apply", action="store_true", help="書き込む (無ければ dry-run)")
-    ap.add_argument("--expected-nonnull-before", type=int, default=0,
+    ap.add_argument("--expected-nonnull-before", type=int, default=DEFAULT_EXPECTED_NONNULL_BEFORE,
                     help="--apply の前に corner が入っている対象の行の件数の想定 (既定 0 = 全行 NULL)")
     ap.add_argument("--report", required=True)
     args = ap.parse_args(argv)
-    config.require_corner_bytes_verified(__name__)   # raw を読む前にも止める
+    config.require_corner_bytes_verified(GUARD_CONTEXT)   # raw を読む前にも止める
     files = raw_files(Path(args.raw_dir))
     report: dict
     try:
@@ -305,12 +321,14 @@ def main(argv: list[str] | None = None) -> int:
         report = run(Path(args.db), records, args.apply, manifest=manifest,
                      expected_nonnull_before=args.expected_nonnull_before)
         rc = 0 if (report["result"] == "applied" or report["acceptance_planned"]["ok"]) else 1
-    except (BackfillError, sqlite3.Error) as e:
+    except Exception as e:                       # 想定外の例外もレポートを書いてから
         report = getattr(e, "report", None) or {"db": args.db, "apply": args.apply, "raw_dir": args.raw_dir,
-                                                "error": f"{type(e).__name__}: {e}"}
+                                                "result": "error", "error": f"{type(e).__name__}: {e}"}
         rc = 1
-    Path(args.report).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.report).write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
+        if not isinstance(e, (BackfillError, sqlite3.Error)):
+            _write_report(args.report, report)
+            raise
+    _write_report(args.report, report)
     print(json.dumps({k: v for k, v in report.items() if k not in ("raw_files", "acceptance_planned", "acceptance_after")},
                      ensure_ascii=False, indent=1))
     return rc

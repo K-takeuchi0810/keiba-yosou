@@ -15,7 +15,7 @@ BF = "scripts/backfill_corner_orders.py"
 
 MUTANTS = [
     ("K1 run の入口のガードを外す", BF,
-     "    config.require_corner_bytes_verified(__name__)\n    raw, used = raw_corner_map(records)",
+     "    config.require_corner_bytes_verified(GUARD_CONTEXT)\n    raw, used = raw_corner_map(records)",
      "    raw, used = raw_corner_map(records)"),
     ("K2 オッズの刻印の列も書き換える", BF,
      """f"UPDATE horse_races SET {', '.join(f'{c} = ?' for c in CORNERS)}\"""",
@@ -77,4 +77,19 @@ MUTANTS = [
     ("K21 対象外の行のチェックサムに一部しか入れない", BF,
      "        h.update(repr(tuple(row)).encode())\n        n += 1",
      "        n += 1"),
+    ("K22 前の状態の検査を「多い」側だけにする", BF,
+     '        if report["nonnull_before"] != expected_nonnull_before:',
+     '        if report["nonnull_before"] > expected_nonnull_before:'),
+    ("K23 前の状態を 4 角だけで数える", BF,
+     "    return sum(1 for r in rows if any(r[c] is not None for c in CORNERS))",
+     "    return sum(1 for r in rows if r[\"corner_order_4\"] is not None)"),
+    ("K24 適用後の検収で DB を読み直さない", BF,
+     "        after = acceptance(target_rows(conn), current_values(conn))",
+     "        after = acceptance(rows, plan.updates)"),
+    ("K25 main が sqlite3.Error でレポートを書かない", BF,
+     "        if not isinstance(e, (BackfillError, sqlite3.Error)):",
+     "        if not isinstance(e, BackfillError):"),
+    ("K26 失敗時に result を error にしない", BF,
+     '        report.setdefault("result", "error")\n',
+     ''),
 ]

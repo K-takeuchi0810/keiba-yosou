@@ -41,20 +41,26 @@
 本番の手順で固定すること (3 名のレビュー):
 1. 非開催日である (JRA のカレンダーと races の当日行 0)。`MAIBuilder Live JRA Data` のタスクが無効、fresh odds / auto_predict /
    20:00 の傾向収集バッチの時刻を避ける。keiba.db を開いているプロセスが無い (`fetch_fresh_odds.lock` /
-   ai-builder の `fetch-live-jvdata.lock` も確認)。WAL が 0 B で mtime が動いていない
+   ai-builder の `fetch-live-jvdata.lock` も確認)。WAL が 0 B で mtime が動いていない。**`keiba.db-shm` の mtime も動いていない**
+   (10/04 は WAL 0 B のまま shm だけ 05:44 に動いていた = 誰かが接続を開いた。shm の方が鋭い)
 2. main に入ったコードを main checkout から、`--raw-dir C:/Users/kizun/dev/keiba-yosou/data/raw/RACE` を明示して dry-run →
-   `planned_updates == 262,113`、`null_remaining_after == 772`、`raw_keys_not_in_db == 0`、`nonnull_before == 0`、
+   `db_rows == 262,885`、`planned_updates == 262,113`、`null_remaining_after == 772`、`raw_keys_not_in_db == 0`、`nonnull_before == 0`、
    raw の manifest の sha256 が scratch_b_backfill_report.json と一致
 3. ユーザーの明示の承認 → `--apply` → `updated_rows == 262,113`、`acceptance_after.ok`、`outside_before == outside_after`、
-   WAL の checkpoint の結果、`state_after`
+   `wal_checkpoint.busy == 0` と `state_after` の WAL 0 B (TRUNCATE の成功時の戻り値は (0, 0, 0) なので、WAL の規模は
+   `state_after_commit` で見る)。書き込みトランザクションの保持は 1〜3 分、WAL のピークは 200〜250 MB 以下の見込み (data-pipeline)
 4. 適用後の監査: 本番で対象範囲の corner_order_4 が NULL の行が 772 (すべて data_div 9)、月ごとの最小が 0.9655 以上
 5. 取り消しの経路 (前の状態 = 対象範囲は全行 NULL を 10/04 に実測): `UPDATE horse_races SET corner_order_1=NULL, ... _4=NULL
-   WHERE (race_year||race_month_day) BETWEEN '20210101' AND '20260630' AND CAST(track_code AS INTEGER) BETWEEN 1 AND 10`
+   WHERE (race_year||race_month_day) BETWEEN '20210101' AND '20260630' AND CAST(track_code AS INTEGER) BETWEEN 1 AND 10`。
+   `--expected-nonnull-before 0` で通った適用に対してだけ有効 (0 以外で上書きした場合はこの SQL では戻せない)。非開催日・書き手の停止の下で
+   1 トランザクションで行い、rowcount == 262,885 を確かめる (clone で 0.7 秒、取り消し → 再適用で同じ digest に収束することを data-pipeline が確認)
 6. ai_builder_impact は **requires_followup**: ai-builder は keiba.db の corner 列を直接読まないが、`compute_features` の
    `recent_4corner_*` を計算列に持つ。行列のキャッシュ (`out/matrix/`) の鍵は DB の中身を含まないので、backfill の後は
    古いキャッシュ (None / 0) と新しく計算した月 (実値) が混ざりうる。学習の重みは 0 なので予想は不変の見込みだが、キャッシュの
    扱い (版の繰り上げ・破棄) は ai-builder 側の判断が要る。keiba-yosou 側では backfill の前後で `recent_corner_stats` の差の
    規模を記録し、ai-builder のコードには触れない
+7. backfill の後、GUI / webapp など常駐しているプロセスを再起動する (`gui/app.py` の `_pred_cache` と `predictor/features.py` の
+   `_corner_data_present` は起動中のメモリに古い値 (通過順位なし) を持ち続ける。予想への影響はほぼ無いが、鮮度の原則として)
 
 ## v2 のコードでの再実行 (2026-10-04 05:38、a2f33cf)
 
