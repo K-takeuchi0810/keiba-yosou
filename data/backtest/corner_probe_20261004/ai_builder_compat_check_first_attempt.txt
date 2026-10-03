@@ -1,0 +1,11 @@
+import OK; CORNER_BYTES_VERIFIED = True
+races: 2
+2026 0920 06 01 horses 15 with corner features 15 example (1.5, 2)
+2026 0920 06 02 horses 14 with corner features 14 example (10.0, 1)
+Traceback (most recent call last):
+  File "<stdin>", line 22, in <module>
+  File "C:\Users\kizun\dev\keiba-yosou\.claude\worktrees\corner-probe\predictor\rules.py", line 1366, in predict_race
+    for h in horses:
+             ^^^^^^
+TypeError: 'sqlite3.Connection' object is not iterable
+predict_race OK (True): 15 / False: 15 / 予想 (馬番・score・印) が同一: True

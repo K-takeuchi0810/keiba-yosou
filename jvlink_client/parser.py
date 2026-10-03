@@ -199,7 +199,9 @@ class HorseRaceInfo:
     leg_quality_code: str  # 1=逃 2=先 3=差 4=追
     # コーナー通過順位 (隊列/先行力の素データ)。0 = 不明/未通過 (小回り 1000m 等は
     # 1-2 角が無いので 0 が正常)。
-    # バイト位置 352/354/356/358 の根拠 (2026-07-05 **暫定確定** — 実データ突合まで):
+    # バイト位置 352/354/356/358 の根拠 (2026-07-05 暫定確定 → **2026-10-04 に JRA 公式の値で検証済み**:
+    #   5 レース・74 頭・296 値が一致。data/backtest/corner_probe_20261004/RESULT.md。
+    #   利用してよいかの単一の情報源は config.CORNER_BYTES_VERIFIED):
     #   実データ検証済みアンカー Time=339(4), Odds=360(4), Ninki=364(2),
     #   final_3f=391(3), mining=538(5), 脚質=553(1) との突合で、343-359 の 17B が
     #   着差コード×3(9B)+1〜4角(8B) に過不足なく埋まり、後方連鎖 (394-403=1着馬
@@ -208,15 +210,18 @@ class HorseRaceInfo:
     #   注意: 端点整合は必要条件であって十分条件ではない。17B 内の「着差→角」の
     #   順序は公開実装 (specially198/jra-van-race-horse-table RaceUmaService.cs) の
     #   フィールド順に依拠しており、独立な裏取りではなく相補的な補完である。
-    #   ★必須ゲート: 本番 backfill 前に scripts/probe_corner_offsets.py --expect
-    #   (JRA 公式成績の既知値突合) を実 SE .jvd で**緑化するまで corner の
-    #   backfill・先行力指標の利用を禁止** (2026-07-05 検証監査で hard gate 再確認)。
+    #   ゲート: scripts/probe_corner_offsets.py --expect (JRA 公式成績の既知値突合) を
+    #   2026-10-04 に緑化済み。利用・backfill の可否は config.require_corner_bytes_verified() で
+    #   コードとして強制している (取り込み = この parser と db.upsert_horse_race は止めない)。
     #   ★backfill 前処理: バグ窓 (旧 394 offset の 2026-07-04 版) で results ingest を
     #   実行していた場合、非ゼロのゴミ corner が upsert の >0 ガードにより正しい 0 で
     #   上書きできず残留する。再 ingest 前に
     #     UPDATE horse_races SET corner_order_1=0, corner_order_2=0,
     #                            corner_order_3=0, corner_order_4=0;
-    #   でゼロ化してから ingest_all(force=True) を実行すること。
+    #   でゼロ化してから取り込むこと。ただし **ingest_all(force=True) / upsert_horse_race での再取り込みは使わない**:
+    #   SE の再 upsert は win_odds を確定値で上書きする一方で odds_fetched_at の刻印が残り、
+    #   「発走前の刻印 + 確定オッズ」という PIT の汚染行ができる (2026-10-04 data-pipeline レビュー)。
+    #   backfill は corner 4 列だけを UPDATE する専用の処理で行う (docs/PHASE05_5_PREREG.md §8-3)。
     corner_order_1: int = 0
     corner_order_2: int = 0
     corner_order_3: int = 0

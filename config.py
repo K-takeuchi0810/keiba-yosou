@@ -467,8 +467,13 @@ def sealed_notice(info: dict) -> str:
 #
 # 2026-10-04 に True へ反転: JRA 公式の結果と 5 レース・74 頭・296 値すべてで一致し、終了コード 0
 # (data/backtest/corner_probe_20261004/、対象と期待値は probe の実行前にコミットで固定)。
-# **フラグはコメントの規約ではなくコードで強制する**: 通過順位を読む処理はすべて
-# `require_corner_bytes_verified()` を通し、False なら止まる (compute_features は通過順位の特徴だけを計算しない)。
+# **フラグはコメントの規約ではなくコードで強制する**。False のときの振る舞いは 3 通り:
+#   - 止める (例外): `require_corner_bytes_verified()` を通る経路 = `predictor.features.recent_corner_stats` と、
+#     これから書く backfill
+#   - 計算しない: `predictor.features.compute_features` (ai-builder が import するので例外にせず、通過順位の特徴だけ None / 0)
+#   - 表示しない: `scripts/analyze_misses.py`、`webapp/views.py` は「(暫定)」のラベル
+#   通常の取り込み (parser と db.upsert_horse_race) は止めない (2026-07 以降の運用経路)。
+#   通過順位を読むファイルは tests/test_corner_gate.py の許可リストで固定する (新しく読む処理はそこで落ちる)
 CORNER_BYTES_VERIFIED: bool = True
 
 
@@ -477,7 +482,7 @@ class CornerBytesNotVerified(RuntimeError):
 
 
 def require_corner_bytes_verified(context: str) -> None:
-    """通過順位を読む・書く処理の入口で呼ぶ。`CORNER_BYTES_VERIFIED` が False なら止める。
+    """通過順位を使う処理 (`recent_corner_stats`) と backfill の入口で呼ぶ。False なら止める。
 
     フラグは呼び出しのたびに読む (テストや緊急時に config.CORNER_BYTES_VERIFIED を False にすれば、
     通過順位の利用と backfill がすべて止まる)。脚質コード (`leg_quality_code`) は通過順位ではないので対象外。

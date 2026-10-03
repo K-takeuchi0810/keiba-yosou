@@ -100,3 +100,33 @@ def test_the_miss_analysis_does_not_show_unverified_corners(monkeypatch):
     off = analyze_misses.horse_context(conn, "20240107", "05", "01", "01")
     assert (off["c1"], off["c2"], off["c3"], off["c4"]) == (None, None, None, None)
     assert off["fin"] == on["fin"]
+
+
+# 通過順位 (corner_order_*) を書く・読むことを許すファイル。ここに無いファイルが corner_order_ を含んだら落ちる
+# (新しく読む処理がガードを呼び忘れても静かに素通りしないように。code-quality レビュー 2026-10-04)。
+# 足すときは、そのファイルが config.require_corner_bytes_verified() を通る (または取り込みだけ) ことを確かめる。
+CORNER_FILES = {
+    "config.py",                       # フラグとガードの定義 (docstring)
+    "db.py",                           # 列の migration と取り込みの upsert (取り込みはガードしない)
+    "jvlink_client/parser.py",         # SE の parse (取り込み)
+    "predictor/pit_view.py",           # 発走後の列として除外するリスト (読まない)
+    "predictor/features.py",           # recent_corner_stats (ガード) / compute_features (フラグで計算しない)
+    "scripts/analyze_misses.py",       # 診断の表示 (フラグで表示しない)
+    "scripts/probe_corner_offsets.py",  # バイト位置の検証 (raw を読む)
+}
+
+
+def test_only_known_files_touch_corner_columns():
+    root = Path(__file__).resolve().parents[1]
+    found = set()
+    for path in root.rglob("*.py"):
+        rel = path.relative_to(root).as_posix()
+        if rel.startswith(("tests/", ".claude/", ".venv", "data/")):
+            continue
+        try:
+            src = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        if "corner_order_" in src:
+            found.add(rel)
+    assert found == CORNER_FILES, f"許可リストとの違い: 余分 {sorted(found - CORNER_FILES)} / 不足 {sorted(CORNER_FILES - found)}"
