@@ -39,6 +39,8 @@ from predictor.feature_manifest import (  # noqa: E402
 )
 from predictor.provenance import snapshot  # noqa: E402
 from scripts.fundamental_model import (  # noqa: E402
+    AUDIT_COLUMNS,
+    FEATURE_SET,
     FEATURES,
     NOT_A_START,
     ROLLING_DAYS,
@@ -289,7 +291,10 @@ def run() -> dict:
     # Feature Manifest の契約テストは独立に走らせて結果を取る。
     checks["6_feature_manifest_tests"] = run_manifest_tests()
     return {"meta": {**meta_snapshot, "rolling_days": ROLLING_DAYS,
-                     "n_features": len(FEATURES)},
+                     # データ側の特徴の世代。ディスク上のモデルの世代は、そのモデルの meta を見る
+                     # (再学習の前は、モデルが 4B の 31 本のまま FEATURES が 30 本になる過渡期がある)
+                     "feature_set": FEATURE_SET, "n_features": len(FEATURES),
+                     "audit_columns": list(AUDIT_COLUMNS)},
             "checks": checks,
             "all_ok": all(c["ok"] for c in checks.values())}
 

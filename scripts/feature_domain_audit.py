@@ -51,8 +51,16 @@ def out_of_range(values: np.ndarray, lo: float, hi: float) -> float:
     return float(((ok < lo) | (ok > hi)).mean())
 
 
-def run(features: list[str], splits: dict[str, list[dict]]) -> dict:
-    """`splits` は {窓名: 行} 。最初の窓を学習域の基準とする。"""
+def run(features: list[str], splits: dict[str, list[dict]],
+        audit_columns: list[str] | None = None) -> dict:
+    """`splits` は {窓名: 行} 。最初の窓を学習域の基準とする。
+
+    `audit_columns` (モデルには渡さない監査用の列) も同じ表で監視し、`audit_only=True` を付ける
+    (2026-10-04)。h_history_truncated の発火率が窓ごとに違う (時間の代理) ことを見つけたのは
+    この監査なので、モデルから外しても監視は止めない。
+    """
+    audit_columns = list(audit_columns or [])
+    features = list(features) + [c for c in audit_columns if c not in features]
     names = list(splits)
     base = names[0]
     arrays = {k: {f: np.array([r[f] for r in rows], dtype=float)
@@ -63,7 +71,7 @@ def run(features: list[str], splits: dict[str, list[dict]]) -> dict:
         b = arrays[base][f]
         bf = b[np.isfinite(b)]
         lo, hi = (float(bf.min()), float(bf.max())) if bf.size else (np.nan, np.nan)
-        rec = {"feature": f, "train_min": lo, "train_max": hi,
+        rec = {"feature": f, "audit_only": f in audit_columns, "train_min": lo, "train_max": hi,
                "stats": {k: summarise(arrays[k][f]) for k in names},
                "out_of_train_range": {
                    k: out_of_range(arrays[k][f], lo, hi) for k in names}}
@@ -74,8 +82,16 @@ def run(features: list[str], splits: dict[str, list[dict]]) -> dict:
     conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
     meta = snapshot(conn)
     conn.close()
+    # 率の定義は学習の meta と同じ関数 (fundamental_model.audit_rates) を使う。ここで別に書くと、
+    # 定義を変えたときに同じキー名で違う数字が出る
+    from scripts.fundamental_model import audit_rates, audit_rates_by_year
+
     return {"meta": {**meta, "base_split": base, "splits": names,
-                     "n_rows": {k: len(v) for k, v in splits.items()}},
+                     "n_rows": {k: len(v) for k, v in splits.items()},
+                     "audit_columns": audit_columns,
+                     "audit_rates": {k: audit_rates(splits[k], audit_columns) for k in names},
+                     "audit_rates_by_year": {k: audit_rates_by_year(splits[k], audit_columns)
+                                             for k in names}},
             "features": rows_out}
 
 
@@ -95,7 +111,8 @@ def print_report(out: dict, threshold: float = 0.01) -> None:
         finite = [r for r in rates if r == r]      # 全 NaN なら空になる
         if finite and max(finite) > threshold:
             worst.append(rec)
-        print(f"{rec['feature']:>26} {rec['train_min']:10.4g} "
+        label = rec["feature"] + (" (監査列)" if rec.get("audit_only") else "")
+        print(f"{label:>26} {rec['train_min']:10.4g} "
               f"{rec['train_max']:10.4g} " + " ".join(
                   f"{r * 100:13.2f}%" for r in rates))
     print(f"\n域外率が {threshold * 100:.0f}% を超える特徴: "
@@ -108,7 +125,7 @@ def main() -> int:
     ap.add_argument("--threshold", type=float, default=0.01)
     args = ap.parse_args()
 
-    from scripts.fundamental_model import FEATURES, build_dataset
+    from scripts.fundamental_model import AUDIT_COLUMNS, FEATURES, build_dataset
 
     splits = {}
     for name in ("train", "validation", "strategy_dev"):
@@ -116,7 +133,7 @@ def main() -> int:
         print(f"{name} ({w['from']}〜{w['to']}) を構築中 ...", flush=True)
         splits[name] = build_dataset(w["from"], w["to"])[0]
 
-    out = run(list(FEATURES), splits)
+    out = run(list(FEATURES), splits, audit_columns=list(AUDIT_COLUMNS))
     print_report(out, args.threshold)
 
     if args.json:
