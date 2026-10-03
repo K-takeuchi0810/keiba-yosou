@@ -88,8 +88,15 @@ FEATURE_SET = "post_demotion_repaired_30features"
 
 
 def _flag(r: dict, c: str) -> bool:
-    """監査用の列は 0 / 1 の二値。それ以外 (NaN を含む) は黙って片側に数えずに止める。"""
-    v = float(r[c])
+    """監査用の列は 0 / 1 の二値。それ以外 (NaN・None を含む) は黙って片側に数えずに止める。
+
+    列そのものが無い行は KeyError (0 として数えない)。
+    """
+    raw = r[c]
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        raise ValueError(f"監査用の列 {c} が 0/1 でない: {raw!r}") from None
     if v not in (0.0, 1.0):
         raise ValueError(f"監査用の列 {c} が 0/1 でない: {r[c]!r}")
     return v == 1.0
@@ -442,7 +449,8 @@ def fit() -> dict:
 
     conn_meta = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
     from predictor.evaluation import evaluate_probabilities
-    rep = evaluate_probabilities(list(yva), list(model.predict_proba(Xva)[:, 1]))
+    rep = evaluate_probabilities(
+        list(yva), list(model.booster_.predict(Xva, num_iteration=model.best_iteration_)))
     meta = {**snapshot(conn_meta), "features": FEATURES,
             **audit_meta(train, valid),
             "train": [tr_from, tr_to], "validation": [va_from, va_to],

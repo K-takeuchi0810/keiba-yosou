@@ -67,9 +67,12 @@ def test_audit_rates():
     assert fm.audit_rates(rows) == {"h_history_truncated": 0.75}
     assert fm.audit_rates([]) == {"h_history_truncated": None}
     assert fm.audit_rates([{"x": 1.0}, {"x": 0.0}, {"x": 0.0}], ["x"]) == {"x": pytest.approx(1 / 3)}
+    # 列そのものが無い行は 0 として数えない
+    with pytest.raises(KeyError):
+        fm.audit_rates([{"h_history_truncated": 1.0}, {"other": 0.0}])
 
 
-@pytest.mark.parametrize("bad", [float("nan"), 0.5, 2.0])
+@pytest.mark.parametrize("bad", [float("nan"), 0.5, 2.0, None, "x"])
 def test_audit_rates_refuse_a_non_binary_value(bad):
     """NaN などを黙って「立っていない」側に数えない。"""
     with pytest.raises(ValueError, match="0/1"):
@@ -93,6 +96,7 @@ def test_audit_meta_records_the_generation_and_the_rates():
     assert m["audit_columns"] == ["h_history_truncated"]
     assert m["audit_rates"] == {"train": {"h_history_truncated": 0.25}, "validation": {"h_history_truncated": 0.0}}
     assert m["audit_rates_by_year"]["train"] == {"h_history_truncated": {"2022": 1.0, "2023": 0.0}}
+    assert m["audit_rates_by_year"]["validation"] == {"h_history_truncated": {"2025": 0.0}}
 
 
 # --- モデル自身の特徴の並び ----------------------------------------------------------
@@ -185,16 +189,19 @@ def test_the_frozen_4b_model_is_reproduced_with_its_31_columns(name):
     assert prov["model_meta_file"] == f"{name}.meta.json"
     assert prov["model_meta"]["git_sha"] == meta["git_sha"]
     assert prov["model_meta"]["train"] == meta["train"]
+    assert set(prov["model_meta"]) == set(ms.MODEL_META_KEYS) & set(meta)
+    assert prov["model_file"] == f"{name}.txt"
     assert "feature_set" not in prov["model_meta"]       # 4B の meta には世代名が無い (入れたふりをしない)
 
 
-def test_meta_n_features_disagreeing_with_the_model_fails_closed(tmp_path):
+@pytest.mark.parametrize("n_features", [30, 32])
+def test_meta_n_features_disagreeing_with_the_model_fails_closed(tmp_path, n_features):
     src = FROZEN / "market_offset_model.txt"
     if not src.exists():
         pytest.skip(f"凍結した 4B が無い: {src}")
     (tmp_path / "m.txt").write_bytes(src.read_bytes())
     meta = json.loads((FROZEN / "market_offset_model.meta.json").read_text(encoding="utf-8"))
-    meta["n_features"] = 30
+    meta["n_features"] = n_features
     (tmp_path / "m.meta.json").write_text(json.dumps(meta), encoding="utf-8")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -308,6 +315,24 @@ def _synthetic_rows(n: int, year_from: int, seed: int) -> list[dict]:
     return out
 
 
+def _db_with_ingest_ledger(path: Path) -> Path:
+    """学習の meta の data_version を確かめるための、取り込み台帳を 1 行持つ DB。"""
+    _empty_races_db(path)
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE ingested_files (path TEXT, ingested_at TEXT)")
+    conn.execute("INSERT INTO ingested_files VALUES ('x', '2026-10-04T00:00:00')")
+    conn.commit()
+    conn.close()
+    return path
+
+
+def _split_data(seed: int) -> dict[str, list[dict]]:
+    from config import DATA_SPLIT
+
+    tr, va = DATA_SPLIT["train"]["from"], DATA_SPLIT["validation"]["from"]
+    return {tr: _synthetic_rows(900, int(tr[:4]), seed), va: _synthetic_rows(300, int(va[:4]), seed + 1)}
+
+
 def _check_fitted_artifacts(model_path: Path, meta_path: Path, train: list[dict]) -> None:
     import lightgbm as lgb
 
@@ -320,6 +345,8 @@ def _check_fitted_artifacts(model_path: Path, meta_path: Path, train: list[dict]
     assert meta["audit_rates"]["train"] == fm.audit_rates(train)
     assert meta["audit_rates"]["train"]["h_history_truncated"] == pytest.approx(0.25)
     assert meta["audit_rates_by_year"]["train"] == fm.audit_rates_by_year(train)
+    # どの取り込み状態の DB で学習したかが残る (閉じた接続で取ると "nodata" になっていた)
+    assert meta["data_version"] not in (None, "nodata")
     # 名前と meta が揃うので、評価側は名前で並びを決め、今の FEATURES と一致する
     with warnings.catch_warnings():
         warnings.simplefilter("error")
@@ -330,30 +357,32 @@ def _check_fitted_artifacts(model_path: Path, meta_path: Path, train: list[dict]
 
 
 def test_fundamental_fit_names_the_features_and_records_the_audit(tmp_path, monkeypatch):
-    data = {"2022": _synthetic_rows(900, 2022, 1), "2025": _synthetic_rows(300, 2025, 2)}
-    monkeypatch.setattr(fm, "build_dataset", lambda f, t: (data[f[:4]], {}))
+    data = _split_data(1)
+    monkeypatch.setattr(fm, "build_dataset", lambda f, t: (data[f], {}))
     monkeypatch.setattr(fm, "MODEL_PATH", tmp_path / "fundamental_model.txt")
     monkeypatch.setattr(fm, "META_PATH", tmp_path / "fundamental_model.meta.json")
-    monkeypatch.setattr(fm, "DB_PATH", _empty_races_db(tmp_path / "races.db"))
-    fm.fit()
+    monkeypatch.setattr(fm, "DB_PATH", _db_with_ingest_ledger(tmp_path / "races.db"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)    # sklearn の「名前が無い」警告を出さない
+        fm.fit()
     _check_fitted_artifacts(tmp_path / "fundamental_model.txt", tmp_path / "fundamental_model.meta.json",
-                            data["2022"])
+                            next(iter(data.values())))
 
 
 def test_market_offset_fit_names_the_features_and_records_the_audit(tmp_path, monkeypatch):
     from scripts import market_offset_model as mom
 
-    data = {"2022": _synthetic_rows(900, 2022, 3), "2025": _synthetic_rows(300, 2025, 4)}
+    data = _split_data(3)
     market = {(r["race_id"], r["horse_num"]): 0.1 for rows in data.values() for r in rows}
-    monkeypatch.setattr(mom, "build_dataset", lambda f, t: (data[f[:4]], {}))
+    monkeypatch.setattr(mom, "build_dataset", lambda f, t: (data[f], {}))
     monkeypatch.setattr(mom, "training_market", lambda conn, y, t: market)
     monkeypatch.setattr(mom, "payout_agreement", lambda conn, y, t: 1.0)
     monkeypatch.setattr(mom, "MODEL_PATH", tmp_path / "market_offset_model.txt")
     monkeypatch.setattr(mom, "META_PATH", tmp_path / "market_offset_model.meta.json")
-    monkeypatch.setattr(mom, "DB_PATH", _empty_races_db(tmp_path / "races.db"))
+    monkeypatch.setattr(mom, "DB_PATH", _db_with_ingest_ledger(tmp_path / "races.db"))
     mom.fit()
     _check_fitted_artifacts(tmp_path / "market_offset_model.txt", tmp_path / "market_offset_model.meta.json",
-                            data["2022"])
+                            next(iter(data.values())))
 
 
 # --- 域外監査は監査用の列も監視する -----------------------------------------------------
@@ -365,14 +394,45 @@ def test_the_domain_audit_still_monitors_the_audit_column(monkeypatch):
     monkeypatch.setattr(fda, "snapshot", lambda conn: {})
     monkeypatch.setattr(db, "DB_PATH", ":memory:")
     feats = ["h_starts"]
-    splits = {"train": [{"h_starts": 1.0, "h_history_truncated": 1.0, "date": "20220101"},
-                        {"h_starts": 2.0, "h_history_truncated": 0.0, "date": "20230101"},
-                        {"h_starts": 2.0, "h_history_truncated": 0.0, "date": "20230102"},
-                        {"h_starts": 2.0, "h_history_truncated": 0.0, "date": "20230103"}],
-              "strategy_dev": [{"h_starts": 3.0, "h_history_truncated": 0.0, "date": "20260601"}]}
-    out = fda.run(feats, splits, audit_columns=["h_history_truncated"])
+    splits = {"train": [{"h_starts": 1.0, "h_history_truncated": 1.0, "flag_x": 0.0, "date": "20220101"},
+                        {"h_starts": 2.0, "h_history_truncated": 0.0, "flag_x": 0.0, "date": "20230101"},
+                        {"h_starts": 2.0, "h_history_truncated": 0.0, "flag_x": 0.0, "date": "20230102"},
+                        {"h_starts": 2.0, "h_history_truncated": 0.0, "flag_x": 1.0, "date": "20230103"}],
+              "strategy_dev": [{"h_starts": 3.0, "h_history_truncated": 0.0, "flag_x": 1.0, "date": "20260601"},
+                               {"h_starts": 3.0, "h_history_truncated": 1.0, "flag_x": 1.0, "date": "20260602"}]}
+    # 既定 (AUDIT_COLUMNS) に無い列名も渡す: 引数を無視して既定の列を数える誤りを検出する
+    out = fda.run(feats, splits, audit_columns=["h_history_truncated", "flag_x"])
     recs = {r["feature"]: r for r in out["features"]}
     assert recs["h_history_truncated"]["audit_only"] is True and recs["h_starts"]["audit_only"] is False
-    assert out["meta"]["audit_rates"] == {"train": {"h_history_truncated": 0.25},
-                                          "strategy_dev": {"h_history_truncated": 0.0}}
-    assert out["meta"]["audit_rates_by_year"]["train"] == {"h_history_truncated": {"2022": 1.0, "2023": 0.0}}
+    assert out["meta"]["audit_rates"] == {"train": {"h_history_truncated": 0.25, "flag_x": 0.25},
+                                          "strategy_dev": {"h_history_truncated": 0.5, "flag_x": 1.0}}
+    assert out["meta"]["audit_rates_by_year"]["train"] == {"h_history_truncated": {"2022": 1.0, "2023": 0.0},
+                                                           "flag_x": {"2022": 0.0, "2023": 1 / 3}}
+    assert out["meta"]["audit_rates_by_year"]["strategy_dev"] == {"h_history_truncated": {"2026": 0.5},
+                                                                  "flag_x": {"2026": 1.0}}
+
+
+@pytest.mark.parametrize("module_name,model", [("market_offset_eval", "market_offset_model"),
+                                               ("fundamental_eval", "fundamental_model")])
+def test_collect_refuses_an_in_sample_evaluation_window(tmp_path, monkeypatch, module_name, model):
+    """モデルの学習・検証窓が評価窓と重なれば、予測する前に止める (fundamental_eval にも当てた)。"""
+    import importlib
+
+    src = FROZEN / f"{model}.txt"
+    if not src.exists():
+        pytest.skip(f"凍結した 4B が無い: {src}")
+    mod = importlib.import_module(f"scripts.{module_name}")
+    (tmp_path / "m.txt").write_bytes(src.read_bytes())
+    meta = json.loads((FROZEN / f"{model}.meta.json").read_text(encoding="utf-8"))
+    meta["validation"] = ["20260701", "20260710"]          # 評価窓 (6/01〜7/31) と重なる
+    (tmp_path / "m.meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    feats = meta["features"]
+    rows = [_row(feats, race_id="r", horse_num="01", won=0, date="20260712", h_history_truncated=0.0)]
+    monkeypatch.setattr(mod, "build_dataset", lambda f, t: (rows, {}))
+    monkeypatch.setattr(mod, "MODEL_PATH", tmp_path / "m.txt")
+    monkeypatch.setattr(mod, "DB_PATH", _empty_races_db(tmp_path / "races.db"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with pytest.raises(ValueError, match="in-sample"):
+            mod.collect("20260601", "20260731")
+    assert "margin" not in rows[0] and "p_raw" not in rows[0]

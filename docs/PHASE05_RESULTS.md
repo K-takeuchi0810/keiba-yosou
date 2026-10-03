@@ -935,3 +935,50 @@ MC 誤差が ±0.1 級あり、点推定の差 0.11 は **再抽選の雑音と�
   h_history_truncated をモデル入力から外して 30 特徴で学習し直すと `predictor/*_model.*` が上書きされるので、
   その前にモデル 4 ファイル・評価 JSON・サンプル CSV・基盤監査 JSON・レビュー記録を別名で凍結した。
   世代の呼び名: 4A = original 30-feature / **4B = repaired 31-feature** / 次 = post-demotion repaired 30-feature
+
+### post-demotion repaired 30-feature の学習 — 事前固定 (2026-10-04、学習の前に書く)
+
+h_history_truncated をモデル入力から外した (main `4d8e940`) 後の 30 特徴で、2 つのモデルを学習し直す。
+**目的は衛生の変更であって、改善の主張ではない。** 4B の結論 (主要仮説 不合格・総合 不合格) を置き換えない。
+
+**実行するもの (これ以外は実行しない)**
+
+1. `fundamental_model --fit` / `market_offset_model --fit` (DATA_SPLIT のまま: train 2022-2024、validation 2025 で早期停止)
+2. `feature_domain_audit` (train / validation / strategy_dev の特徴の分布だけ。成績は見ない)
+3. `market_offset_eval` を strategy_dev (2026-05-09〜08-31) で 1 回。`--run-index 1`
+   (run_index は 4A / 4B と同じく世代ごとの通し番号)、`--label` に世代名を入れる
+- `fundamental_eval` は実行しない (4B でも実行していない。窓の消費を増やさない)
+- 成果物: `predictor/*_model.*` は上書きされる (4B は `frozen_4b_repaired_31features_20260919/` に凍結済み)。
+  学習の直後に `data/backtest/post_demotion_repaired_30features_20261004/` へ写し、sha256 を記録する
+
+**受理の条件 (両方を満たせば受理)**
+
+- (a) β₂ の 95% 区間が、4B の区間 [−0.828, +1.726] と重なる
+- (b) 学習域外率が悪化しない: 30 特徴それぞれ・validation と strategy_dev それぞれで、
+  4B の域外監査 (`data/backtest/20260919_feature_domain_after.json`) の値 + 0.5pt 以下
+  (4B の最大は validation 0.99% / strategy_dev 2.05%、どちらも `j_rides_365`)。
+  特徴の定義は 4B と同じなので、これはデータの側が変わっていないことの機械的な確認
+
+**読み方 (結果を見る前に固定する)**
+
+- 受理しても言えるのは「降格は 4B の否定的な結論を変えなかった」まで
+- **β₂ が良くなっても信号と見なさない。** 打ち切りの情報は age・h_starts・h_days_since の欠損の組み合わせから
+  部分的に復元できるので、降格は時間の代理を「消す」のではなく「薄める」変更である。β₂ の変化は希釈の効果であって
+  新しい情報ではない。「時間の代理は消えた」とは書かない
+- (a) を満たさない場合は不受理。原因を調べ終わるまで、30 特徴版を後続 (0.5-5) の土台にしない
+- strategy_dev は消費済みの窓で、今回は **同じ 626 レースの paired 再評価**。新しい validation と呼ばない。
+  実行したら `config.CONSUMED_WINDOWS` に追記する
+- 2025 (validation) は 4A / 4B の早期停止と選択に使用済み。2025 の LogLoss を out-of-sample の証拠として報告しない
+- `CONFIRM_FROM = 20260914` 以降には触れない
+
+**比較して記録するもの (判定には使わない)**: ΔLogLoss の区間 / 4B と 30 特徴版の補正 (比) の馬別の相関 /
+比の p95・p99・log 比の SD / 比 ≥ 1.75 の頭数 / 購入条件 (5pt 超) の該当数 / 補正後 top1 == 市場 1 番人気 /
+監査用の列の率 (全体・年別) / 評価 JSON の `model_feature_schema.model_meta.feature_set`
+(= `post_demotion_repaired_30features`)
+
+**凍結した 4B の特徴の並びの契約 (検証レビューの指摘 M2-b)**: 4B の `fundamental_model.txt` は特徴の名前を
+持たない (`Column_*`) ので、名前での照合ができない。meta の `features` (31 本) が、FREEZE_MANIFEST の `features`、
+および `market_offset_model.txt` の `feature_name()` (学習コード 99eec68) と完全に一致することをもって並びの契約とする
+(validation レビュー 2026-10-04 で照合)。2026-10-04 以降の学習は名前をモデルに刻む。
+なお、Fundamental の meta の `git_sha` af42382 は未コミットの変更がある状態の SHA で、そのコミットの FEATURES は
+4A の 30 本である。実効のコードは 99eec68
