@@ -412,5 +412,7 @@ def test_main_writes_the_report_even_on_keyboard_interrupt(tmp_path, monkeypatch
         bf.main(["--db", str(path), "--apply", "--report", str(out)])
     rep = json.loads(out.read_text(encoding="utf-8"))
     assert rep["result"] == "error" and "KeyboardInterrupt" in rep["error"]
+    # run() が中断を捕まえて内訳 (計画の件数・前の状態) をレポートに付け、rollback している
+    assert rep["planned_updates"] == 6 and "state_before" in rep and "rollback_error" not in rep
     assert _digest(path) == before
     assert real is not None
