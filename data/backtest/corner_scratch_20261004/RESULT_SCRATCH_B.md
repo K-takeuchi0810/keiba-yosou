@@ -21,8 +21,37 @@
 2026-05/06 の `odds_fetched_at` の刻印がある行も、`win_odds` と刻印の両方が変わっていない
 (SE の再 upsert で起きる「発走前の刻印 + 確定オッズ」の PIT の汚染が、この処理では構造的に起きないことの E2E の確認)。
 
+## 3 名のレビューの後に足したもの (コードの v2、変異 K15〜K21)
+
+- `--apply` では計画・更新・検収を 1 つの書き込みトランザクション (BEGIN IMMEDIATE) で行う (計画と適用が同じ snapshot)
+- 前の状態の assert: 対象の行の corner がすでに入っている件数が想定 (既定 0) と違えば止める (本番は 10/04 時点で 0 行)
+- 対象外の horse_races の行 (地方・範囲外の日付) の行数とチェックサムを前後で比べ、違えば rollback。この接続の総変更件数が
+  更新件数と一致することも検査する (ほかのテーブルに書いていないことの機械的な確認)
+- COMMIT の後に `PRAGMA wal_checkpoint(TRUNCATE)` を打ち、結果をレポートに残す
+- 失敗時もレポートに内訳 (計画の検収・前の状態など) を残す。`sqlite3.Error` も捕まえる。raw のファイルが 0 件なら明示のエラー
+- Scratch B の clone には当日 (10/04) の races が無かったので、開催日の拒否は E2E では空振りだった (単体テストのみ。本番の
+  races には 10/04 の JRA 行が 24 件あり、本番では働くことを data-pipeline が確認)
+
 ## 本番の backfill について (別のゲート)
 
 本番 DB への実行は 10/05 以降に、非開催の確認 → ai-builder / fresh odds などの書き手の停止の確認 → DB / WAL の静止の確認 →
 本番での dry-run → **ユーザーの明示の承認** → `--apply` → 適用後の監査 → ai-builder の互換確認、の順で行う。
 `--apply` の開催日の拒否は安全装置の 1 つにすぎず、ユーザーの承認の代わりにはならない。
+
+本番の手順で固定すること (3 名のレビュー):
+1. 非開催日である (JRA のカレンダーと races の当日行 0)。`MAIBuilder Live JRA Data` のタスクが無効、fresh odds / auto_predict /
+   20:00 の傾向収集バッチの時刻を避ける。keiba.db を開いているプロセスが無い (`fetch_fresh_odds.lock` /
+   ai-builder の `fetch-live-jvdata.lock` も確認)。WAL が 0 B で mtime が動いていない
+2. main に入ったコードを main checkout から、`--raw-dir C:/Users/kizun/dev/keiba-yosou/data/raw/RACE` を明示して dry-run →
+   `planned_updates == 262,113`、`null_remaining_after == 772`、`raw_keys_not_in_db == 0`、`nonnull_before == 0`、
+   raw の manifest の sha256 が scratch_b_backfill_report.json と一致
+3. ユーザーの明示の承認 → `--apply` → `updated_rows == 262,113`、`acceptance_after.ok`、`outside_before == outside_after`、
+   WAL の checkpoint の結果、`state_after`
+4. 適用後の監査: 本番で対象範囲の corner_order_4 が NULL の行が 772 (すべて data_div 9)、月ごとの最小が 0.9655 以上
+5. 取り消しの経路 (前の状態 = 対象範囲は全行 NULL を 10/04 に実測): `UPDATE horse_races SET corner_order_1=NULL, ... _4=NULL
+   WHERE (race_year||race_month_day) BETWEEN '20210101' AND '20260630' AND CAST(track_code AS INTEGER) BETWEEN 1 AND 10`
+6. ai_builder_impact は **requires_followup**: ai-builder は keiba.db の corner 列を直接読まないが、`compute_features` の
+   `recent_4corner_*` を計算列に持つ。行列のキャッシュ (`out/matrix/`) の鍵は DB の中身を含まないので、backfill の後は
+   古いキャッシュ (None / 0) と新しく計算した月 (実値) が混ざりうる。学習の重みは 0 なので予想は不変の見込みだが、キャッシュの
+   扱い (版の繰り上げ・破棄) は ai-builder 側の判断が要る。keiba-yosou 側では backfill の前後で `recent_corner_stats` の差の
+   規模を記録し、ai-builder のコードには触れない

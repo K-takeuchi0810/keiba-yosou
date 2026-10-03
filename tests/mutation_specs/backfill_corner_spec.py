@@ -1,6 +1,9 @@
 """通過順位の backfill (scripts/backfill_corner_orders.py) の変異の定義 (2026-10-04)。
 
     python -m scripts.mutation_sandbox --copy <隔離コピー> --spec tests/mutation_specs/backfill_corner_spec.py
+
+v2 (3 名のレビューの後): run() を 1 つの書き込みトランザクションにし、前の状態・対象外の行・接続の変更件数の検査を
+足したので、対象の文字列を作り直し、K15〜K21 を追加した。
 """
 
 TESTS = [
@@ -12,11 +15,11 @@ BF = "scripts/backfill_corner_orders.py"
 
 MUTANTS = [
     ("K1 run の入口のガードを外す", BF,
-     '    config.require_corner_bytes_verified("scripts.backfill_corner_orders")\n    raw, used = raw_corner_map(records)',
-     '    raw, used = raw_corner_map(records)'),
-    ("K2 オッズの列も書き換える", BF,
-     '"UPDATE horse_races SET corner_order_1 = ?, corner_order_2 = ?, corner_order_3 = ?, corner_order_4 = ?"',
-     '"UPDATE horse_races SET corner_order_1 = ?, corner_order_2 = ?, corner_order_3 = ?, corner_order_4 = ?, odds_fetched_at = NULL"'),
+     "    config.require_corner_bytes_verified(__name__)\n    raw, used = raw_corner_map(records)",
+     "    raw, used = raw_corner_map(records)"),
+    ("K2 オッズの刻印の列も書き換える", BF,
+     """f"UPDATE horse_races SET {', '.join(f'{c} = ?' for c in CORNERS)}\"""",
+     """f"UPDATE horse_races SET {', '.join(f'{c} = ?' for c in CORNERS)}, odds_fetched_at = NULL\""""),
     ("K3 raw の食い違いを見逃す", BF,
      "        if key in out and out[key] != val:",
      "        if False:"),
@@ -33,11 +36,11 @@ MUTANTS = [
      "        if not planned[\"ok\"]:\n            raise BackfillError(",
      "        if False:\n            raise BackfillError("),
     ("K8 失敗しても rollback せず commit する", BF,
-     '        except Exception:\n            conn.execute("ROLLBACK")',
-     '        except Exception:\n            conn.execute("COMMIT")'),
+     '            try:\n                conn.execute("ROLLBACK")',
+     '            try:\n                conn.execute("COMMIT")'),
     ("K9 開催日の拒否を外す", BF,
-     "        if apply and is_race_day(conn, today):",
-     "        if False:"),
+     "            if is_race_day(conn, today):",
+     "            if False:"),
     ("K10 dry-run でも書く", BF,
      '        if not apply:\n            report["result"] = "dry_run"\n            return report',
      '        if False:\n            report["result"] = "dry_run"\n            return report'),
@@ -50,7 +53,28 @@ MUTANTS = [
     ("K13 被覆率の閾値を見ない", BF,
      '    failed = sorted(ym for ym, r in rates.items() if r is None or r < THRESHOLD)',
      '    failed = []'),
-    ("K14 出走頭数に競走除外も数える", BF,
+    ("K14 出走頭数に取消・除外も数える", BF,
      '        if str(row["abnormal_code"] or "").strip() not in REFUNDED:',
      '        if True:'),
+    ("K15 被覆率の閾値を 60% に緩める", BF,
+     "THRESHOLD = 0.95",
+     "THRESHOLD = 0.6"),
+    ("K16 月の欠けを見逃す", BF,
+     "    missing = sorted(expected - set(rates))",
+     "    missing = []"),
+    ("K17 食い違いを 4 角でしか見ない", BF,
+     "        if key in out and out[key] != val:",
+     "        if key in out and out[key][3] != val[3]:"),
+    ("K18 WHERE から馬番を落とす (更新件数の検査で止まるべき)", BF,
+     """                f" WHERE {' AND '.join(f'{c} = ?' for c in PK)}", (*values, *key))""",
+     """                f" WHERE {' AND '.join(f'{c} = ?' for c in PK[:-1])}", (*values, *key[:-1]))"""),
+    ("K19 前の状態の検査を外す", BF,
+     '        if report["nonnull_before"] != expected_nonnull_before:',
+     '        if False:'),
+    ("K20 対象外の行の検査を外す", BF,
+     '        if report["outside_after"] != report["outside_before"]:',
+     '        if False:'),
+    ("K21 対象外の行のチェックサムに一部しか入れない", BF,
+     "        h.update(repr(tuple(row)).encode())\n        n += 1",
+     "        n += 1"),
 ]

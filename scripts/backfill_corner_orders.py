@@ -37,7 +37,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import config  # noqa: E402
 
+# 対象の終端は 2026-06-30 (事前登録 §8-3。2026-07 以降は offset 修正後の取り込みで値が入っている)
 FROM_DATE, TO_DATE = "20210101", "20260630"
+JRA_TRACKS = (1, 10)                     # JRA の track_code の範囲 (01〜10)
 THRESHOLD = 0.95
 REFUNDED = ("1", "2", "3")
 PK = ("race_year", "race_month_day", "track_code", "kaiji", "nichiji", "race_num", "horse_num")
@@ -60,7 +62,7 @@ class Plan:
 
 
 def is_jra(track_code: str) -> bool:
-    return str(track_code).isdigit() and 1 <= int(track_code) <= 10
+    return str(track_code).isdigit() and JRA_TRACKS[0] <= int(track_code) <= JRA_TRACKS[1]
 
 
 def in_range(ymd: str) -> bool:
@@ -90,7 +92,7 @@ def target_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
         f"""SELECT {', '.join(PK)}, {', '.join(CORNERS)}, abnormal_code, confirmed_order
               FROM horse_races
              WHERE (race_year || race_month_day) BETWEEN ? AND ?
-               AND CAST(track_code AS INTEGER) BETWEEN 1 AND 10""", (FROM_DATE, TO_DATE)).fetchall()
+               AND CAST(track_code AS INTEGER) BETWEEN ? AND ?""", (FROM_DATE, TO_DATE, *JRA_TRACKS)).fetchall()
 
 
 def make_plan(rows: list, raw: dict[tuple, tuple], raw_used: int) -> Plan:
@@ -148,7 +150,8 @@ def db_state(path: Path) -> dict:
     for p in (path, Path(str(path) + "-wal")):
         if p.exists():
             st = p.stat()
-            out[p.name] = {"bytes": st.st_size, "mtime": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds")}
+            out[p.name] = {"bytes": st.st_size,
+                           "mtime": datetime.fromtimestamp(st.st_mtime, JST).isoformat(timespec="seconds")}
         else:
             out[p.name] = None
     return out
@@ -156,17 +159,41 @@ def db_state(path: Path) -> dict:
 
 def is_race_day(conn: sqlite3.Connection, today: str) -> bool:
     return conn.execute(
-        "SELECT 1 FROM races WHERE (race_year || race_month_day) = ? AND CAST(track_code AS INTEGER) BETWEEN 1 AND 10"
-        " LIMIT 1", (today,)).fetchone() is not None
+        "SELECT 1 FROM races WHERE (race_year || race_month_day) = ? AND CAST(track_code AS INTEGER) BETWEEN ? AND ?"
+        " LIMIT 1", (today, *JRA_TRACKS)).fetchone() is not None
 
 
 def current_values(conn: sqlite3.Connection) -> dict[tuple, tuple]:
     return {tuple(r[c] for c in PK): tuple(r[c] for c in CORNERS) for r in target_rows(conn)}
 
 
-def run(db_path: Path, records: Iterable, apply: bool, today: str | None = None, manifest: list | None = None) -> dict:
-    """本体。`records` は SE レコードの列 (テストでは合成した値を渡す)。"""
-    config.require_corner_bytes_verified("scripts.backfill_corner_orders")
+def outside_digest(conn: sqlite3.Connection) -> dict:
+    """対象外の horse_races の行 (地方・範囲外の日付) の行数とチェックサム。前後で同一であることを示す。"""
+    h = hashlib.sha256()
+    n = 0
+    for row in conn.execute(
+            f"""SELECT * FROM horse_races
+                 WHERE NOT ((race_year || race_month_day) BETWEEN ? AND ?
+                            AND CAST(track_code AS INTEGER) BETWEEN {JRA_TRACKS[0]} AND {JRA_TRACKS[1]})
+                 ORDER BY {', '.join(PK)}""", (FROM_DATE, TO_DATE)):
+        h.update(repr(tuple(row)).encode())
+        n += 1
+    return {"rows": n, "sha256": h.hexdigest()}
+
+
+def nonnull_corners(rows: list) -> int:
+    return sum(1 for r in rows if any(r[c] is not None for c in CORNERS))
+
+
+def run(db_path: Path, records: Iterable, apply: bool, today: str | None = None, manifest: list | None = None,
+        expected_nonnull_before: int = 0) -> dict:
+    """本体。`records` は SE レコードの列 (テストでは合成した値を渡す)。
+
+    `--apply` のときは、計画・更新・検収を **1 つの書き込みトランザクション** (BEGIN IMMEDIATE) の中で行う
+    (計画と適用が同じ snapshot になり、ほかの書き手が割り込めない)。対象の行の corner がすでに入っている件数が
+    `expected_nonnull_before` (既定 0 = 全行 NULL) と違えば止める (別の経路で入った値を黙って上書きしない)。
+    """
+    config.require_corner_bytes_verified(__name__)
     raw, used = raw_corner_map(records)          # raw の食い違いは DB を開く前に止める
     if not Path(db_path).exists():
         raise BackfillError(f"DB が無い: {db_path}")
@@ -174,42 +201,66 @@ def run(db_path: Path, records: Iterable, apply: bool, today: str | None = None,
                     "raw_files": manifest or [], "state_before": db_state(Path(db_path))}
     conn = sqlite3.connect(str(db_path), timeout=30, isolation_level=None)
     conn.row_factory = sqlite3.Row
+    in_tx = False
     try:
         today = today or datetime.now(JST).strftime("%Y%m%d")
-        if apply and is_race_day(conn, today):
-            raise BackfillError(f"今日 {today} は JRA の開催日なので --apply を拒否する")
+        if apply:
+            if is_race_day(conn, today):
+                raise BackfillError(f"今日 {today} は JRA の開催日なので --apply を拒否する")
+            conn.execute("BEGIN IMMEDIATE")
+            in_tx = True
+            report["outside_before"] = outside_digest(conn)
         rows = target_rows(conn)
         plan = make_plan(rows, raw, used)
-        planned = acceptance(rows, {**{tuple(r[c] for c in PK): None for r in rows}, **plan.updates})
-        report.update({"db_rows": plan.db_rows, "planned_updates": len(plan.updates),
-                       "null_remaining_after": plan.missing_in_raw, "raw_keys": plan.raw_keys,
-                       "raw_records_used": plan.raw_records_used, "raw_keys_not_in_db": plan.raw_outside_db,
-                       "acceptance_planned": planned})
+        planned = acceptance(rows, plan.updates)
+        report.update({"db_rows": plan.db_rows, "nonnull_before": nonnull_corners(rows),
+                       "planned_updates": len(plan.updates), "null_remaining_after": plan.missing_in_raw,
+                       "raw_keys": plan.raw_keys, "raw_records_used": plan.raw_records_used,
+                       "raw_keys_not_in_db": plan.raw_outside_db, "acceptance_planned": planned})
         if not apply:
             report["result"] = "dry_run"
             return report
+        if report["nonnull_before"] != expected_nonnull_before:
+            raise BackfillError(f"前の状態が想定と違う: corner が入っている対象の行 {report['nonnull_before']} "
+                                f"(想定 {expected_nonnull_before})")
         if not planned["ok"]:
             raise BackfillError(f"検収 (計画の値) が不合格: {planned['failed_months']} {planned['missing_months']} "
                                 f"over={planned['over_field']}")
-        conn.execute("BEGIN IMMEDIATE")
-        try:
-            changed = 0
-            for key, (c1, c2, c3, c4) in plan.updates.items():
-                cur = conn.execute(
-                    "UPDATE horse_races SET corner_order_1 = ?, corner_order_2 = ?, corner_order_3 = ?, corner_order_4 = ?"
-                    " WHERE race_year = ? AND race_month_day = ? AND track_code = ? AND kaiji = ? AND nichiji = ?"
-                    " AND race_num = ? AND horse_num = ?", (c1, c2, c3, c4, *key))
-                changed += cur.rowcount
-            if changed != len(plan.updates):
-                raise BackfillError(f"更新件数 {changed} が予定 {len(plan.updates)} と違う")
-            after = acceptance(target_rows(conn), current_values(conn))
-            if not after["ok"]:
-                raise BackfillError(f"検収 (適用後) が不合格: {after['failed_months']} over={after['over_field']}")
-            conn.execute("COMMIT")
-        except Exception:
-            conn.execute("ROLLBACK")
-            raise
+        changes_before = conn.total_changes
+        changed = 0
+        for key, values in plan.updates.items():
+            cur = conn.execute(
+                f"UPDATE horse_races SET {', '.join(f'{c} = ?' for c in CORNERS)}"
+                f" WHERE {' AND '.join(f'{c} = ?' for c in PK)}", (*values, *key))
+            changed += cur.rowcount
+        if changed != len(plan.updates):
+            raise BackfillError(f"更新件数 {changed} が予定 {len(plan.updates)} と違う")
+        if conn.total_changes - changes_before != changed:
+            raise BackfillError("この接続の変更件数が更新件数と違う (想定外の書き込み)")
+        after = acceptance(target_rows(conn), current_values(conn))
+        if not after["ok"]:
+            raise BackfillError(f"検収 (適用後) が不合格: {after['failed_months']} over={after['over_field']}")
+        report["outside_after"] = outside_digest(conn)
+        if report["outside_after"] != report["outside_before"]:
+            raise BackfillError("対象外の行が変わった")
+        conn.execute("COMMIT")
+        in_tx = False
         report.update({"updated_rows": changed, "acceptance_after": after, "result": "applied"})
+        busy, log, ckpt = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        report["wal_checkpoint"] = {"busy": busy, "log_frames": log, "checkpointed_frames": ckpt}
+    except Exception as e:
+        if in_tx:
+            try:
+                conn.execute("ROLLBACK")
+            except sqlite3.Error as rb:              # 元の例外を隠さない
+                report["rollback_error"] = str(rb)
+        report.setdefault("result", "error")
+        report["error"] = f"{type(e).__name__}: {e}"
+        try:
+            e.report = report                       # main() が失敗の内訳もレポートに書けるように
+        except AttributeError:
+            pass
+        raise
     finally:
         conn.close()
         report["state_after"] = db_state(Path(db_path))
@@ -240,16 +291,24 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--db", required=True, help="対象の DB (既定値は持たない。本番に当てるときも明示する)")
     ap.add_argument("--raw-dir", default=str(Path(config.PROJECT_ROOT) / "data" / "raw" / "RACE"))
     ap.add_argument("--apply", action="store_true", help="書き込む (無ければ dry-run)")
+    ap.add_argument("--expected-nonnull-before", type=int, default=0,
+                    help="--apply の前に corner が入っている対象の行の件数の想定 (既定 0 = 全行 NULL)")
     ap.add_argument("--report", required=True)
     args = ap.parse_args(argv)
-    config.require_corner_bytes_verified("scripts.backfill_corner_orders")   # raw を読む前にも止める
+    config.require_corner_bytes_verified(__name__)   # raw を読む前にも止める
     files = raw_files(Path(args.raw_dir))
-    records, manifest = load_records(files)
+    report: dict
     try:
-        report = run(Path(args.db), records, args.apply, manifest=manifest)
+        if not files:
+            raise BackfillError(f"raw の SE ファイルが無い: {args.raw_dir}")
+        records, manifest = load_records(files)
+        report = run(Path(args.db), records, args.apply, manifest=manifest,
+                     expected_nonnull_before=args.expected_nonnull_before)
         rc = 0 if (report["result"] == "applied" or report["acceptance_planned"]["ok"]) else 1
-    except BackfillError as e:
-        report, rc = {"db": args.db, "apply": args.apply, "error": str(e), "raw_files": manifest}, 1
+    except (BackfillError, sqlite3.Error) as e:
+        report = getattr(e, "report", None) or {"db": args.db, "apply": args.apply, "raw_dir": args.raw_dir,
+                                                "error": f"{type(e).__name__}: {e}"}
+        rc = 1
     Path(args.report).parent.mkdir(parents=True, exist_ok=True)
     Path(args.report).write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps({k: v for k, v in report.items() if k not in ("raw_files", "acceptance_planned", "acceptance_after")},
