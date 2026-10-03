@@ -18,6 +18,9 @@
 365 日のローリング特徴は 2022 の開始時点で 1 年ぶんの履歴を確保できる
 (Phase 0.5-4B 基盤修復、2026-09-19)。それでも 2019-2020 に走っていた馬の
 キャリアは復元できないので、`h_history_truncated` で印を付ける。
+**この印はモデルには渡さず、監査用の列 (`AUDIT_COLUMNS`) として行に残す** (2026-10-04)。
+真値で作り直した後も、学習行の 21.3% (2022 年の行では 36.7%) で立ち、年とともに減る
+(観測窓の経過時間の代理になりうる。docs/PHASE05_RESULTS.md「直した欠陥 3」)。
 
 **モデル構造・特徴選択・ハイパーパラメータは 2025 以前で決める**。
 2026 は評価対象であって、見ながら調整すると 933 レースに過学習する。
@@ -66,13 +69,25 @@ FEATURES = [
     # 累積生涯カウントは信頼下限 (2021) から数え始めるので、実質
     # 「観測窓の経過時間」を測ってしまい、学習域を出る (Phase 0.5-4B)。
     "j_rides_365", "j_winrate", "t_runs_365", "t_winrate", "s_winrate",
-    # 2020 以前の raw が使えないため、そこで途切れている馬に印を付ける。
-    # 通算成績が「新馬と同じ値」に見えることをモデルに伝える。
-    "h_history_truncated",
     # レース条件 (市場ではない)
     "age", "sex", "burden", "waku", "starters", "dist", "surface", "cond",
     "weather", "grade", "w_abs", "w_delta", "blinker",
 ]
+
+# 行には残すが、モデルには渡さない監査用の列 (2026-10-04、Phase 0.5-4B の後)。
+# `h_history_truncated`: 2020 以前に出走記録があるのに、その記録が使えない (通算成績が左打ち切り)。
+# 4B ではモデルの特徴だったが、真値で作り直した後も学習行の 21.3% (2022 年の行では 36.7%) で立ち、
+# 年とともに減る (時間の代理になりうる)。モデルから外し、学習・検証・評価の各期間での率を
+# meta と評価の出力に毎回残す。
+# 4B (31 特徴) の成果物は data/backtest/frozen_4b_repaired_31features_20260919/ に凍結してある。
+AUDIT_COLUMNS = ["h_history_truncated"]
+
+
+def audit_rates(rows: list[dict]) -> dict[str, float | None]:
+    """監査用の列ごとに、値が 1 の行の割合。行が無ければ None。"""
+    if not rows:
+        return {c: None for c in AUDIT_COLUMNS}
+    return {c: float(sum(1 for r in rows if float(r[c]) == 1.0) / len(rows)) for c in AUDIT_COLUMNS}
 
 
 def _rate(w: int, n: int, pw: float = 1.0, pn: float = 12.0) -> float:
@@ -382,6 +397,8 @@ def fit() -> dict:
     from predictor.evaluation import evaluate_probabilities
     rep = evaluate_probabilities(list(yva), list(model.predict_proba(Xva)[:, 1]))
     meta = {**snapshot(conn_meta), "features": FEATURES,
+            "audit_columns": AUDIT_COLUMNS,
+            "audit_rates": {"train": audit_rates(train), "validation": audit_rates(valid)},
             "train": [tr_from, tr_to], "validation": [va_from, va_to],
             "n_train": len(train), "n_valid": len(valid),
             "excluded_train": dict(s_tr), "excluded_valid": dict(s_va),

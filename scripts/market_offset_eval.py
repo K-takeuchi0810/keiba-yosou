@@ -60,7 +60,8 @@ from scripts.fundamental_eval import (  # noqa: E402
     DEFAULT_MAX_LEAD_MINUTES,
     _final_market_odds,
 )
-from scripts.fundamental_model import FEATURES, build_dataset  # noqa: E402
+from predictor.model_schema import feature_matrix, load_model_schema  # noqa: E402
+from scripts.fundamental_model import AUDIT_COLUMNS, FEATURES, audit_rates, build_dataset  # noqa: E402
 from scripts.market_data_audit import confirmed_win_payouts  # noqa: E402
 from scripts.market_offset_model import MODEL_PATH  # noqa: E402
 
@@ -102,19 +103,26 @@ def assert_model_window_disjoint(from_date: str, to_date: str) -> None:
                 f"モデル: {MODEL_PATH.name}")
 
 
-def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter]:
-    """T−10 市場を init_score にして補正を当て、確定払戻と突き合わせる。"""
-    import lightgbm as lgb
+def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter, dict]:
+    """T−10 市場を init_score にして補正を当て、確定払戻と突き合わせる。
 
+    入力の列は **モデル自身の特徴の並び** (feature_name() / meta) から作る (2026-10-04)。
+    今の FEATURES から作ると、31 特徴で学習した過去のモデル (4B) を評価し直したときに
+    列がずれる。並びの出どころと、評価期間での監査用の列の率を 3 つ目の戻り値で返す。
+    """
     assert_no_market_features(
         FEATURES, source_module=Path(__file__).parent / "fundamental_model.py")
     print("評価期間の特徴を構築中 ...", flush=True)
     data, _ = build_dataset(from_date, to_date)
-    booster = lgb.Booster(model_file=str(MODEL_PATH))
+    booster, model_features, schema = load_model_schema(MODEL_PATH, FEATURES)
+    assert_no_market_features(
+        model_features, source_module=Path(__file__).parent / "fundamental_model.py")
     assert_model_window_disjoint(from_date, to_date)
-    X = np.array([[d[c] for c in FEATURES] for d in data], dtype=float)
+    X = feature_matrix(data, model_features)
     for d, m in zip(data, booster.predict(X, raw_score=True), strict=True):
         d["margin"] = float(m)
+    model_info = {"model_feature_schema": schema, "audit_columns": AUDIT_COLUMNS,
+                  "audit_rates_eval_rows": audit_rates(data)}
 
     by_race: dict[str, list[dict]] = defaultdict(list)
     for d in data:
@@ -181,7 +189,7 @@ def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter]:
                 "payout_odds": payouts.get(h.zfill(2), 0.0),
             })
     conn.close()
-    return samples, c
+    return samples, c, model_info
 
 
 def _add_price_polynomial(rows: list[dict]) -> None:
@@ -198,7 +206,7 @@ def run(from_date: str, to_date: str, run_index: int) -> dict:
     notice = sealed_notice(sealed)
     if notice:
         print(notice, file=sys.stderr)
-    samples, counts = collect(from_date, to_date)
+    samples, counts, model_info = collect(from_date, to_date)
     fresh = [s for s in samples if s["lead_min"] <= DEFAULT_MAX_LEAD_MINUTES]
     _add_price_polynomial(samples)   # fresh は samples の部分集合
 
@@ -213,7 +221,8 @@ def run(from_date: str, to_date: str, run_index: int) -> dict:
                  "baseline_log_loss": BASELINE_LOG_LOSS,
                  "max_lead_minutes": DEFAULT_MAX_LEAD_MINUTES,
                  "sealed": sealed,
-                 "buy_edge_pt": BUY_EDGE_PT, "market_features": 0},
+                 "buy_edge_pt": BUY_EDGE_PT, "market_features": 0,
+                 **model_info},
         "counts": dict(counts),
         "sets": {"all": {"n_races": len({s["race_id"] for s in samples}),
                          "n_horses": len(samples)},

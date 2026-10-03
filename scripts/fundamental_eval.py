@@ -56,7 +56,9 @@ from predictor.eval_stats import (  # noqa: E402
 from predictor.feature_manifest import assert_no_market_features  # noqa: E402
 from predictor.pit_t10 import RACE_KEYS, decision_time, t10_market  # noqa: E402
 from predictor.provenance import snapshot  # noqa: E402
-from scripts.fundamental_model import FEATURES, MODEL_PATH, build_dataset  # noqa: E402
+from predictor.model_schema import feature_matrix, load_model_schema  # noqa: E402
+from scripts.fundamental_model import (  # noqa: E402
+    AUDIT_COLUMNS, FEATURES, MODEL_PATH, audit_rates, build_dataset)
 from scripts.market_data_audit import confirmed_win_payouts  # noqa: E402
 
 # T−10 スナップが発走の何分前までなら「T−10 の市場」と呼んでよいか。
@@ -112,18 +114,25 @@ def delta_distribution(samples: list[dict]) -> dict:
     }
 
 
-def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter]:
-    """特徴を作り、T−10 市場・最終オッズ・確定払戻を突き合わせる。"""
-    import lightgbm as lgb
+def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter, dict]:
+    """特徴を作り、T−10 市場・最終オッズ・確定払戻を突き合わせる。
 
+    入力の列は **モデル自身の特徴の並び** から作る (2026-10-04)。Fundamental モデルは
+    特徴の名前を持たない (Column_*) ので、meta の features が正本になる。並びの出どころと、
+    評価期間での監査用の列の率を 3 つ目の戻り値で返す。
+    """
     assert_no_market_features(
         FEATURES, source_module=Path(__file__).parent / "fundamental_model.py")
     print("評価期間の特徴を構築中 ...", flush=True)
     data, _ = build_dataset(from_date, to_date)
-    booster = lgb.Booster(model_file=str(MODEL_PATH))
-    X = np.array([[d[c] for c in FEATURES] for d in data], dtype=float)
+    booster, model_features, schema = load_model_schema(MODEL_PATH, FEATURES)
+    assert_no_market_features(
+        model_features, source_module=Path(__file__).parent / "fundamental_model.py")
+    X = feature_matrix(data, model_features)
     for d, p in zip(data, booster.predict(X), strict=True):
         d["p_raw"] = float(p)
+    model_info = {"model_feature_schema": schema, "audit_columns": AUDIT_COLUMNS,
+                  "audit_rates_eval_rows": audit_rates(data)}
 
     by_race: dict[str, list[dict]] = defaultdict(list)
     for d in data:
@@ -189,7 +198,7 @@ def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter]:
                 "payout_odds": payouts.get(h.zfill(2), 0.0),
             })
     conn.close()
-    return samples, c
+    return samples, c, model_info
 
 
 def run(from_date: str, to_date: str, max_lead: int) -> dict:
@@ -199,7 +208,7 @@ def run(from_date: str, to_date: str, max_lead: int) -> dict:
     if notice:
         print(notice, file=sys.stderr)
 
-    samples, counts = collect(from_date, to_date)
+    samples, counts, model_info = collect(from_date, to_date)
     fresh = [s for s in samples if s["lead_min"] <= max_lead]
     confirmed = [s for s in fresh if s["final_odds_confirmed"]]
 
@@ -210,7 +219,7 @@ def run(from_date: str, to_date: str, max_lead: int) -> dict:
     out: dict = {
         "meta": {**meta_snapshot, "from_date": from_date, "to_date": to_date,
                  "odds_source": "T-10", "max_lead_minutes": max_lead,
-                 "market_features": 0},
+                 "market_features": 0, **model_info},
         "counts": dict(counts),
         "sets": {
             "all": {"n_races": len({s["race_id"] for s in samples}),
