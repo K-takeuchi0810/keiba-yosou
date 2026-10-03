@@ -1,0 +1,210 @@
+{
+ "acceptance": {
+  "a_beta2_ci_overlaps_4b": {
+   "pass": true,
+   "ci_4b": [
+    -0.8279035767100236,
+    1.7258532794886776
+   ],
+   "ci_30": [
+    -0.9796152376066024,
+    1.2677965989380087
+   ]
+  },
+  "b_domain_not_worse": {
+   "n_features_checked": 30,
+   "tolerance": 0.005,
+   "pass": true,
+   "failures": [],
+   "max_rate": {
+    "validation": {
+     "feature": "j_rides_365",
+     "split": "validation",
+     "rate_4b": 0.009869108852925187,
+     "rate_30": 0.009869108852925187,
+     "ok": true
+    },
+    "strategy_dev": {
+     "feature": "j_rides_365",
+     "split": "strategy_dev",
+     "rate_4b": 0.020498265531378113,
+     "rate_30": 0.020498265531378113,
+     "ok": true
+    }
+   }
+  },
+  "accepted": true
+ },
+ "comparison_not_used_for_decision": {
+  "beta2": {
+   "4b": 0.4996637467589598,
+   "30": 0.23434314405406007
+  },
+  "beta_market": {
+   "4b": 0.9560963404440463,
+   "30": 0.9565078823254921
+  },
+  "verdict": {
+   "4b": {
+    "primary": false,
+    "money": null,
+    "money_untestable_reason": "購入条件に該当 0 頭 (最低 100 頭)",
+    "rejected_by": [],
+    "overall_pass": false
+   },
+   "30": {
+    "primary": false,
+    "money": null,
+    "money_untestable_reason": "購入条件に該当 1 頭 (最低 100 頭)",
+    "rejected_by": [],
+    "overall_pass": false
+   }
+  },
+  "sets": {
+   "4b": {
+    "all": {
+     "n_races": 931,
+     "n_horses": 12533
+    },
+    "fresh_t10": {
+     "n_races": 626,
+     "n_horses": 8279
+    }
+   },
+   "30": {
+    "all": {
+     "n_races": 931,
+     "n_horses": 12533
+    },
+    "fresh_t10": {
+     "n_races": 626,
+     "n_horses": 8279
+    }
+   }
+  },
+  "fresh_t10": {
+   "4b": {
+    "n_races": 626,
+    "n_horses": 8279,
+    "log_loss_offset": 0.21348138623836102,
+    "log_loss_t10": 0.21351180680419898,
+    "delta_log_loss_offset_minus_t10": -3.0420565837963043e-05,
+    "delta_log_loss_ci95": [
+     -0.00036582805324586465,
+     0.0002952022413311304
+    ],
+    "abs_correction_mean_pt": 0.29732366341277355,
+    "abs_correction_max_pt": 4.859575756865686,
+    "ratio_max": 1.7379975499361708,
+    "ratio_p95": 1.1323014398940816,
+    "ratio_p99": 1.227763157082821,
+    "log_ratio_sd": 0.068605636588995,
+    "n_ratio_ge_1_25": 57,
+    "n_ratio_ge_1_75": 0,
+    "n_purchase_condition": 0,
+    "share_top1_equals_market_favourite": 0.9664536741214057
+   },
+   "30": {
+    "n_races": 626,
+    "n_horses": 8279,
+    "log_loss_offset": 0.21361653379688406,
+    "log_loss_t10": 0.21351180680419898,
+    "delta_log_loss_offset_minus_t10": 0.00010472699268507246,
+    "delta_log_loss_ci95": [
+     -0.00027252855754315505,
+     0.00047174292557071635
+    ],
+    "abs_correction_mean_pt": 0.33850591898002486,
+    "abs_correction_max_pt": 6.049961643838008,
+    "ratio_max": 1.9341052601929107,
+    "ratio_p95": 1.1500221086315159,
+    "ratio_p99": 1.2551154620842102,
+    "log_ratio_sd": 0.07691279038118218,
+    "n_ratio_ge_1_25": 88,
+    "n_ratio_ge_1_75": 1,
+    "n_purchase_condition": 1,
+    "share_top1_equals_market_favourite": 0.9600638977635783
+   }
+  },
+  "paired": {
+   "n_common_horses": 8279,
+   "n_only_4b": 0,
+   "n_only_30": 0,
+   "t10_market_identical": true,
+   "corr_log_ratio_4b_vs_30": 0.5428231273352266,
+   "log_loss_30_minus_4b": 0.00013514755852309102,
+   "log_loss_30_minus_4b_ci95": [
+    -0.0002016471604770219,
+    0.0004650730445114076
+   ]
+  },
+  "audit_rates_eval_rows_30": {
+   "h_history_truncated": 0.00857773573005361
+  },
+  "audit_rates_by_year_eval_rows_30": {
+   "h_history_truncated": {
+    "2026": 0.00857773573005361
+   }
+  },
+  "model_feature_schema_30": {
+   "schema_source": "booster_feature_name",
+   "n_features": 30,
+   "matches_current_features": true,
+   "model_sha256": "e327a03567b7f5a304b0f72173ca3961a0b5fa31fde04d7b5470804292fafa1b",
+   "model_meta": {
+    "feature_set": "post_demotion_repaired_30features",
+    "n_features": 30,
+    "git_sha": "61e2d14d3e7656345c4b9ad549b3a68a0fd91304",
+    "git_dirty": true,
+    "code_version": "61e2d14d3e76-dirty",
+    "train": [
+     "20220101",
+     "20241231"
+    ],
+    "validation": [
+     "20250101",
+     "20251231"
+    ],
+    "n_train": 141541,
+    "n_valid": 47715,
+    "best_iteration": 36
+   }
+  },
+  "domain_audit_rates_30": {
+   "train": {
+    "h_history_truncated": {
+     "2022": 0.3666129442700823,
+     "2023": 0.19204101357313946,
+     "2024": 0.08032529301851538
+    }
+   },
+   "validation": {
+    "h_history_truncated": {
+     "2025": 0.02829005143645716
+    }
+   },
+   "strategy_dev": {
+    "h_history_truncated": {
+     "2026": 0.00857773573005361
+    }
+   }
+  }
+ },
+ "notes": [
+  "判定は acceptance の 2 条件だけ (事前固定)。comparison の数値は判定に使わない",
+  "β₂ が良くなっても新しい信号とは見なさない (打ち切りの情報は他の特徴から部分的に復元できる = 希釈)",
+  "区間はレース単位の再抽選 n=2000 seed=20261004。4B の評価 JSON の β₂ の区間は n_boot=300"
+ ],
+ "inputs": {
+  "4b": {
+   "eval": "frozen_4b_repaired_31features_20260919\\20260919_phase05_4B_market_offset.json",
+   "samples": "frozen_4b_repaired_31features_20260919\\20260919_phase05_4B_samples.csv",
+   "domain": "20260919_feature_domain_after.json"
+  },
+  "30": {
+   "eval": "post_demotion_repaired_30features_20261004\\post_demotion_market_offset_eval.json",
+   "samples": "post_demotion_repaired_30features_20261004\\post_demotion_market_offset_samples.csv",
+   "domain": "post_demotion_repaired_30features_20261004\\feature_domain_post_demotion.json"
+  }
+ }
+}

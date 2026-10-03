@@ -158,6 +158,11 @@ CONSUMED_WINDOWS: list[dict[str, str]] = [
              "だけで固定してから実行"},
     {"from": "20260509", "to": "20260831", "by": "feature_domain_audit",
      "note": "特徴の分布のみ (成績は見ていない)。学習域外率の測定 (2026-09-19)"},
+    {"from": "20260509", "to": "20260831", "by": "post_demotion_30f market_offset_eval",
+     "note": "h_history_truncated を外した 30 特徴の同じ 626 レースでの paired 再評価 (2026-10-04、1 回)。"
+             "受理条件は学習の前に固定 (docs/PHASE05_RESULTS.md)。新しい validation ではない"},
+    {"from": "20260509", "to": "20260831", "by": "post_demotion_30f feature_domain_audit",
+     "note": "特徴の分布のみ (成績は見ていない)。4B 比の域外率の確認 (2026-10-04)"},
 ]
 
 # 候補の事前登録後に「1 度だけ」使う確認窓の開始日。

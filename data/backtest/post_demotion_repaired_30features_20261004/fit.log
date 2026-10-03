@@ -1,0 +1,20 @@
+start 2026-10-04T02:41:47 HEAD=61e2d14 db_size=20157546496
+[run_step] fit_fundamental: scripts.fundamental_model ['--fit'] / code=C:\Users\kizun\dev\keiba-yosou\.claude\worktrees\post-demotion-30f / db=C:\Users\kizun\dev\keiba-yosou\data\keiba.db
+学習データ構築 20220101〜20241231 ...
+  141,846 頭 (除外 {'skip_did_not_start': 308, 'rows': 141846})
+検証データ構築 20250101〜20251231 ...
+  47,826 頭 (除外 {'skip_did_not_start': 366, 'rows': 47826})
+
+保存: fundamental_model.txt (best_iteration=220)
+  検証 LogLoss 0.22526 / Brier 0.06178 / 較正誤差 0.00152
+rc_fundamental=0 02:42:24
+[run_step] fit_offset: scripts.market_offset_model ['--fit'] / code=C:\Users\kizun\dev\keiba-yosou\.claude\worktrees\post-demotion-30f / db=C:\Users\kizun\dev\keiba-yosou\data\keiba.db
+学習用の市場価格 236,916 頭ぶん (確定払戻との一致率 0.9945)
+学習データ構築 20220101〜20241231 ...
+  141,541 頭
+検証データ構築 20250101〜20251231 ...
+  47,715 頭 (市場価格が無く除外 416)
+
+保存: market_offset_model.txt (best_iteration=36)
+  検証 LogLoss 市場のみ 0.20360 → オフセット後 0.20346
+rc_offset=0 02:42:57
