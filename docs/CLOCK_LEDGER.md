@@ -135,8 +135,15 @@ main に `jst.py` が無いため全起動が exit 8 + Discord ERROR になる�
 
 | 確認日時 (JST) | main SHA | 1 日付入りログ | 2 DATE_FAILURE 新規なし | 3 watchdog exit | 4 LastTaskResult | 5 週次監視 | 確認者 |
 |---|---|---|---|---|---|---|---|
-| 2026-09-28 08:11 | `3a43f93` (merge of `89a3840`) | ○ `run date 20260928 (JST) dryrun=[] cwd=C:\Users\kizun\dev\keiba-yosou` | ○ ファイル無し | ○ `finish pid=10776 exit=0` (非開催日、出馬表なし) | ○ 0 (08:00:01) | 未 (10/04 (日) 10:00 の後に記入) | Claude (読み取りのみ) |
+| 2026-09-28 08:11 | `3a43f93` (merge of `89a3840`) | ○ `run date 20260928 (JST) dryrun=[] cwd=C:\Users\kizun\dev\keiba-yosou` | ○ ファイル無し | ○ `finish pid=10776 exit=0` (非開催日、出馬表なし) | ○ 0 (08:00:01) | ○ (2026-10-04 10:25 に確認、下記) | Claude (読み取りのみ) |
 
+- 5 の確認 (2026-10-04 10:25 JST、main `827a39a`、読み取りのみ): `keiba-yosou-weekly-monitor` の
+  LastRunTime 2026/10/04 10:00:00・LastTaskResult 0。`data/logs/weekly_monitor_20261004.log` に
+  `runtime_guard=off pytest_exit=0 full_output=data\monitor_runs\weekly_pytest_20261004.log` と
+  `Weekly Monitor End (exit 0)` (10:24:06)。pytest は 1130 passed / 6 skipped (480 秒)。
+  監視の判定は alert false (Brier 0.061917 / baseline 0.062605、drift −1.1%、mining 1.00、馬番の違反 0、
+  sealed_frozen false)。ログ名の日付 (C4、ローカル時計) は JST の当日と一致。
+  **これで runbook 1〜5 がすべて成立し、JST 統一の運用受け入れは完了**
 - 2026-09-28 のゲートでの参考値: テストの collect-only は 980 本 (`89a3840`)。main に統合した後の全テストは
   989 passed / 6 skipped (`3a43f93`)。統合前に、本番と同じ経路 (wscript → vbs → ps1 → bat) で
   `-DryRun -LogDir <本番の外>` を実行し exit 0 (`data/logs/auto_predict_daily_20260928_dryrun.log`)
