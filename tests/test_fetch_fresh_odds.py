@@ -9,6 +9,20 @@ import scripts.fetch_fresh_odds as mod
 
 
 @pytest.fixture(autouse=True)
+def _no_real_watchdog(monkeypatch):
+    """`main()` が張る本物の watchdog (`threading.Timer` → 480 秒後に `os._exit(3)`) を、テストでは張らない。
+
+    2026-10-06 に発見: このファイルのテストが `mod.main()` を呼ぶたびに 480 秒のタイマーが pytest のプロセスに残り、
+    その後のテストの合計が 480 秒を超えると、pytest ごと **黙って** 終了コード 3 で落ちていた (出力も traceback も無い)。
+    テストが増えて全体が長くなった時点で、無関係なテスト (test_pit_parity の重いテスト) の途中で落ちる形で表に出た。
+    呼ばれた秒数だけ記録し、`main()` が既定の 480 秒で watchdog を張ること自体は下のテストで確かめる。
+    """
+    calls: list[float] = []
+    monkeypatch.setattr(mod, "start_watchdog", lambda max_seconds: calls.append(max_seconds))
+    return calls
+
+
+@pytest.fixture(autouse=True)
 def _isolate_coverage_log(monkeypatch, tmp_path):
     """テスト実行で運用 JSONL (data/logs/fresh_odds_coverage.jsonl) を汚染しないよう、
     すべてのテストで COVERAGE_LOG_PATH を tmp_path 配下にリダイレクトする。
@@ -250,3 +264,22 @@ def test_fetch_fresh_odds_source_tag_flows_to_coverage(monkeypatch, tmp_path):
     assert mod.main() == 0
     payload = json.loads(coverage_path.read_text(encoding="utf-8").strip())
     assert payload["source"] == "morning"
+
+
+def test_main_arms_the_watchdog_with_the_default_runtime(monkeypatch, tmp_path, _no_real_watchdog):
+    """本番の経路は既定 480 秒 (環境変数で変えられる) で watchdog を張る。テストでは本物のタイマーは張らない。"""
+    monkeypatch.delenv("FRESH_ODDS_MAX_RUNTIME_SEC", raising=False)
+    monkeypatch.setattr(mod, "LOCK_PATH", tmp_path / "fetch_fresh_odds.lock")
+    monkeypatch.setattr(mod, "open_db", lambda: _Conn([]))
+    monkeypatch.setattr(mod, "JVLinkClient", _FakeJV)
+    monkeypatch.setattr(mod, "ingest_all", lambda **kw: {"ok": True})
+    monkeypatch.setattr(sys, "argv", ["fetch_fresh_odds.py", "--date", "20260101"])
+    mod.main()
+    assert _no_real_watchdog == [480.0]
+
+
+def test_real_watchdog_is_not_left_running_by_these_tests():
+    """このファイルのテストの後に、watchdog のタイマーのスレッドが残っていないこと。"""
+    import threading
+    assert not [t for t in threading.enumerate() if isinstance(t, threading.Timer) and t.is_alive()]
+
