@@ -104,6 +104,8 @@ def test_par_model_recovers_known_effects_and_keeps_class_out_of_the_base():
     # 基準 = セル + 馬場状態 (クラスと年齢の区分は含めない = 2a)
     assert par.base(r) == pytest.approx(cells[("05", "11", 1600)] + going["T3"], abs=0.05)
     assert par.fitted(r) == pytest.approx(par.base(r) + cls_eff[r.cls] + age_eff[r.age], abs=0.05)
+    young = next(x for x in races.values() if x.age == "2yo" and x.cls == "999" and par.level_of(x) is not None)
+    assert par.fitted(young) == pytest.approx(par.base(young) - 1.2 + 1.5, abs=0.05)   # 年齢の区分も期待勝ち時計に入る
     assert par.coef["class=999"] == pytest.approx(-1.2, abs=0.05)
     assert par.coef["age=2yo"] == pytest.approx(1.5, abs=0.05)
 
@@ -206,7 +208,7 @@ def test_weight_effect_excludes_handicap_races():
     for r in races.values():
         if r.runs[0].burden_kg == 58.0:
             r.weight_type = g.HANDICAP
-            r.runs[0].sec_per_km = 50.0                       # ハンデ戦のゴミ値は推定に入らない
+            r.runs[0].sec_per_km += 1.0                       # clip の内側のずれ: 除かなければ係数が変わる
     fit = g.fit_weight_effect(races, par, {}, (2023,))
     assert fit["w"] == pytest.approx(0.05, abs=1e-6)
 
