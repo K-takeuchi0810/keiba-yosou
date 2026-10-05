@@ -598,3 +598,11 @@ def test_provenance_stops_on_a_missing_dependency(monkeypatch, tmp_path):
     monkeypatch.setattr(g, "DEPENDENCIES", g.DEPENDENCIES + ("scripts/does_not_exist.py",))
     with pytest.raises(g.GroupAError, match="依存ファイルが無い"):
         g.provenance(tmp_path / "x.db")
+
+
+def test_own_output_is_not_counted_as_dirty():
+    assert g._is_own_output("?? data/backtest/group_a_20261005/e1b/", "data/backtest/group_a_20261005/e1b")
+    assert g._is_own_output(" M data/backtest/group_a_20261005/e1b/x.json", "data/backtest/group_a_20261005/e1b")
+    assert not g._is_own_output(" M scripts/group_a.py", "data/backtest/group_a_20261005/e1b")
+    assert not g._is_own_output("?? data/backtest/group_a_20261005/e1bx/", "data/backtest/group_a_20261005/e1b")
+    assert not g._is_own_output("?? data/backtest/group_a_20261005/e1b/", None)

@@ -688,6 +688,11 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def _is_own_output(status_line: str, own_output: str | None) -> bool:
+    path = status_line[3:].strip().strip('"').replace("\\", "/")
+    return bool(own_output) and path.startswith(own_output.rstrip("/") + "/")
+
+
 def _dependency_hashes(files) -> dict:
     missing = [f for f in files if not (ROOT / f).exists()]
     if missing:
@@ -695,8 +700,12 @@ def _dependency_hashes(files) -> dict:
     return {f: sha256_file(ROOT / f) for f in files}
 
 
-def provenance(db_path, argv: list[str] | None = None, extra_files: tuple[str, ...] = ()) -> dict:
-    """成果物の来歴を 1 か所で作る: HEAD・全ツリーの未コミットの変更・依存ファイルの sha256・版・DB の状態・argv。"""
+def provenance(db_path, argv: list[str] | None = None, extra_files: tuple[str, ...] = (),
+               own_output: str | None = None) -> dict:
+    """成果物の来歴を 1 か所で作る: HEAD・全ツリーの未コミットの変更・依存ファイルの sha256・版・DB の状態・argv。
+
+    `own_output` (その実行が書く出力先、repo からの相対) の未追跡・変更は `git_dirty` の判定から外す (生の一覧は `git_status` に残す)。
+    """
     def git(*args: str) -> subprocess.CompletedProcess:
         return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True)
     head = git("rev-parse", "HEAD")
@@ -705,7 +714,9 @@ def provenance(db_path, argv: list[str] | None = None, extra_files: tuple[str, .
     st = dbp.stat() if dbp.exists() else None
     return {
         "git_sha": head.stdout.strip() if head.returncode == 0 else "unknown",
-        "git_dirty": (bool(status.stdout.strip()) if status.returncode == 0 else None),
+        "git_dirty": (any(not _is_own_output(line, own_output) for line in status.stdout.strip().splitlines())
+                      if status.returncode == 0 else None),
+        "own_output": own_output,
         "git_status": status.stdout.strip().splitlines() if status.returncode == 0 else None,
         "files_sha256": _dependency_hashes(DEPENDENCIES + tuple(extra_files)),
         "python": platform.python_version(), "numpy": np.__version__, "argv": list(argv if argv is not None else sys.argv),

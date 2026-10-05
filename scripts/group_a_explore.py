@@ -106,6 +106,13 @@ def evaluate(races: dict, spec: g.Spec, est: tuple, ev: tuple, fs: dict) -> dict
     }
 
 
+def _rel_to_root(path: Path) -> str | None:
+    try:
+        return Path(path).resolve().relative_to(g.ROOT.resolve()).as_posix()
+    except ValueError:
+        return None
+
+
 def complexity_key(name: str) -> tuple:
     s, v, w = name[:2], name[2:4], name[4:6]
     nondefault = (v != DEFAULTS["V"]) + (w != DEFAULTS["W"]) + (s != DEFAULTS["S"])
@@ -149,7 +156,8 @@ def main(argv: list[str] | None = None) -> int:
     started = datetime.now().astimezone().isoformat(timespec="seconds")
     races, load_stats = g.load_races(2024, db_path=a.db)
     fs = past_field_size(races)
-    meta = {"mode": a.mode, "started_at": started, "provenance": g.provenance(a.db, ["group_a_explore", *(argv or sys.argv[1:])]),
+    meta = {"mode": a.mode, "started_at": started, "provenance": g.provenance(a.db, ["group_a_explore", *(argv or sys.argv[1:])],
+                                       own_output=_rel_to_root(out)),
             "load_stats": dict(load_stats),
             "years_loaded": sorted({int(r.ymd[:4]) for r in races.values()})}
     assert max(meta["years_loaded"]) <= 2024, "探索で 2025 が読み込まれた"
