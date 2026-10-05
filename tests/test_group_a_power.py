@@ -56,9 +56,13 @@ def test_target_sql_contains_no_outcome_columns(tmp_path, monkeypatch):
 
 
 def test_target_sql_guard_rejects_an_outcome_column(monkeypatch):
-    monkeypatch.setattr(pw, "TARGET_SELECT", pw.TARGET_SELECT + ("h.confirmed_order",))
+    monkeypatch.setattr(pw, "TARGET_SELECT", pw.TARGET_SELECT + (("h.confirmed_order", "c"),))
     with pytest.raises(pw.PowerError, match="結果の列"):
         pw.target_sql()
+    for expr in ("h.*", "r.lap_times", "r.front3f_time", "h.leg_quality_code", "r.starter_count"):
+        monkeypatch.setattr(pw, "TARGET_SELECT", pw.TARGET_SELECT[:12] + ((expr, "x"),))
+        with pytest.raises(pw.PowerError):
+            pw.target_sql()
 
 
 def test_outcome_blind_rows_drop_refunds_renormalise_and_have_no_won(tmp_path):
@@ -135,3 +139,37 @@ def test_fisher_information_uses_the_market_probabilities_exactly():
             for p, s in zip(ps, (1.0, 0.0, 0.0))]
     out = pw.fisher_se_at_null(rows + [{**r, "race_id": "q", "S": 1.0 - r["S"]} for r in rows])
     assert out["info"][1][1] == pytest.approx(0.24 + (0.4 - 0.4 ** 2))      # 2 レース目は S = (0, 1, 1)
+
+
+
+def test_returned_columns_must_match_the_allow_list_exactly(tmp_path, monkeypatch):
+    path = _db(tmp_path)
+    assert pw.TARGET_COLUMNS == ("race_year", "race_month_day", "track_code", "kaiji", "nichiji", "race_num",
+                                 "track_type_code", "distance", "horse_num", "blood_register_num", "is_refunded", "win_odds")
+    # 文字列の検査を通り抜けた SQL (余分な列を 1 つ返す) を差し込んでも、返る列の完全一致で止まる
+    leaky = ("SELECT h.race_year, h.race_month_day, h.track_code, h.kaiji, h.nichiji, h.race_num, r.track_type_code, "
+             "r.distance, h.horse_num, h.blood_register_num, 0, h.win_odds, h.abnormal_code FROM horse_races h JOIN races r "
+             "USING (race_year, race_month_day, track_code, kaiji, nichiji, race_num) WHERE h.race_year = ?")
+    monkeypatch.setattr(pw, "target_sql", lambda: leaky)
+    with pytest.raises(pw.PowerError, match="allow-list と違う"):
+        pw.load_target_fields(2025, path)
+
+
+def test_outcome_blind_rows_do_not_change_when_target_results_change(tmp_path):
+    """植え込み試験: 対象レースの着順・時計・上がり・中止の異常コードを書き換えても、検出力の行は 1 ビットも変わらない。"""
+    import json
+    path = _db(tmp_path)
+    before = json.dumps(pw.outcome_blind_rows(pw.load_target_fields(2025, path), {}, Counter()), sort_keys=True)
+    con = sqlite3.connect(path)
+    con.execute("UPDATE horse_races SET confirmed_order = 9, finish_time = 9999, final_3f = 999 WHERE race_year = '2025'")
+    con.execute("UPDATE horse_races SET abnormal_code = '5' WHERE abnormal_code = '4'")      # 中止 → 失格 (どちらも返還でない)
+    con.commit()
+    con.close()
+    after = json.dumps(pw.outcome_blind_rows(pw.load_target_fields(2025, path), {}, Counter()), sort_keys=True)
+    assert before == after
+
+
+def test_fisher_reports_the_within_race_correlation():
+    lo = pw.fisher_se_at_null([{k: v for k, v in r.items() if k != "won"} for r in _null_world(3, rho=0.0)])
+    hi = pw.fisher_se_at_null([{k: v for k, v in r.items() if k != "won"} for r in _null_world(3, rho=0.8)])
+    assert abs(lo["rho_within_race_market_weighted"]) < 0.15 < 0.5 < hi["rho_within_race_market_weighted"]

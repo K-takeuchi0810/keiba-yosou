@@ -23,7 +23,7 @@ import sys
 from bisect import bisect_left
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import numpy as np
@@ -152,7 +152,7 @@ def load_races(max_year: int, *, min_year: int = 2021, db_path: Path | str = DB_
     `allow_primary_year` は主検定の年を読むとき (検出力の計算の履歴 / 主検定) だけ True にし、`primary_purpose` に目的を書く
     (成果物の stats に残る監査の記録)。探索のコードからは渡さない。
     """
-    if max_year >= 2025 and not allow_primary_year:
+    if max_year >= PRIMARY_YEAR and not allow_primary_year:
         raise GroupAError(f"探索で 2025 年以降を読もうとした (max_year={max_year})。主検定の年は探索で読まない")
     if allow_primary_year and not primary_purpose:
         raise GroupAError("主検定の年を読むときは primary_purpose (目的) を書く")
@@ -239,7 +239,10 @@ class ParModel:
         b = self.base(race)
         if math.isnan(b) or race.age is None or race.cls is None:
             return math.nan
-        return b + self.coef.get(f"class={race.cls}", 0.0) + self.coef.get(f"age={race.age}", 0.0)
+        ck, ak = f"class={race.cls}", f"age={race.age}"
+        if (race.cls != REF_CLASS and ck not in self.coef) or (race.age != REF_AGE and ak not in self.coef):
+            return math.nan          # 推定期間に無かったクラス・年齢の区分は基準扱いにしない (評価値なし)
+        return b + self.coef.get(ck, 0.0) + self.coef.get(ak, 0.0)
 
     def level_of(self, race: Race):
         return self.cell_level.get((race.track, race.track_type, race.distance))
@@ -467,6 +470,8 @@ def rate_runs(races: dict[str, Race], tables: RatingTables) -> tuple[dict[str, l
 
 def horse_components(history: list[tuple[int, float]], target_ordinal: int) -> dict[str, float]:
     """対象日の 365 日前から前日までの評価値から、last / best3 / trend を作る (rank は別)。"""
+    if any(history[i][0] > history[i + 1][0] for i in range(len(history) - 1)):
+        raise GroupAError("評価値の履歴が日付順でない (bisect の前提)")
     lo = bisect_left(history, (target_ordinal - WINDOW_DAYS, -math.inf))
     hi = bisect_left(history, (target_ordinal, -math.inf))
     window = history[lo:hi]
@@ -588,7 +593,9 @@ def add_market_logit(rows: list[dict]) -> None:
 
 def fit_composite(fit_rows: list[dict]) -> dict:
     """学習の行で、市場 + 標準化した 4 成分の条件付きロジットを解き、逆符号の成分は重み 0 (§8-4 の手順 3)。"""
-    check_est_years(sorted({r["year"] for r in fit_rows if "year" in r}))
+    if any("year" not in r for r in fit_rows):
+        raise GroupAError("合成の学習の行に year が無い (主検定の年のガードを通せない)")
+    check_est_years(sorted({r["year"] for r in fit_rows}))
     std = standardizer(fit_rows, COMPONENTS)
     apply_standardizer(fit_rows, std)
     cols = ["logit_p_market"] + [c + "_z" for c in COMPONENTS]
@@ -621,18 +628,22 @@ def apply_composite(rows: list[dict], comp: dict) -> None:
 
 # ---------------------------------------------------------------------------------------------------- 凍結物と来歴
 
-def _key(t) -> str:
-    return "|".join(str(x) for x in t)
+PAYLOAD_VERSION = "group_a_payload_v1"
+SPEC_AXES = {"scale": ("S1", "S2"), "variant": ("V0", "V1", "V2"), "weight": ("W0", "W1")}
+
+
+def current_constants() -> dict:
+    return {"WINDOW_DAYS": WINDOW_DAYS, "MIN_CELL_RACES": MIN_CELL_RACES, "MIN_VARIANT_RACES": MIN_VARIANT_RACES,
+            "CLIP_SEC_PER_KM": CLIP_SEC_PER_KM, "BASE_WEIGHT_KG": BASE_WEIGHT_KG, "DIST_BANDS": list(DIST_BANDS),
+            "REF_CLASS": REF_CLASS, "REF_AGE": REF_AGE, "OBSTACLE_FROM": OBSTACLE_FROM, "REFUNDED": sorted(REFUNDED)}
 
 
 def freeze_payload(tables: RatingTables, comp: dict) -> dict:
     """評価値と S の計算に要る物を JSON にできる形で書き出す (§8-4 の手順 6)。馬場差は凍結しない (その日のレースから作る)。"""
     par = tables.par
     return {
-        "spec": tables.spec.name, "est_years": list(par.est_years),
-        "constants": {"WINDOW_DAYS": WINDOW_DAYS, "MIN_CELL_RACES": MIN_CELL_RACES, "MIN_VARIANT_RACES": MIN_VARIANT_RACES,
-                      "CLIP_SEC_PER_KM": CLIP_SEC_PER_KM, "BASE_WEIGHT_KG": BASE_WEIGHT_KG, "DIST_BANDS": list(DIST_BANDS),
-                      "REF_CLASS": REF_CLASS, "REF_AGE": REF_AGE, "OBSTACLE_FROM": OBSTACLE_FROM, "REFUNDED": sorted(REFUNDED)},
+        "payload_version": PAYLOAD_VERSION, "spec": tables.spec.name, "est_years": list(par.est_years),
+        "constants": current_constants(),
         "par": {"cell_level": [[list(c), list(lv) if lv is not None else None] for c, lv in sorted(par.cell_level.items(), key=str)],
                 "coef": par.coef, "columns": par.columns, "counts": par.counts},
         "w": tables.w, "weight_fit": tables.weight_fit,
@@ -645,8 +656,15 @@ def freeze_payload(tables: RatingTables, comp: dict) -> dict:
 
 def tables_from_payload(payload: dict, races: dict[str, Race]) -> tuple[RatingTables, dict]:
     """凍結物を読み込む。補正テーブル・斤量・尺度・合成は再推定しない。馬場差だけ、読み込んだレースから凍結した模型で作る。"""
+    if payload.get("payload_version") != PAYLOAD_VERSION:
+        raise GroupAError(f"凍結物の版が違う: {payload.get('payload_version')!r} (この code は {PAYLOAD_VERSION})")
+    if payload.get("constants") != current_constants():
+        raise GroupAError(f"凍結物の定数が今の code と違う: {payload.get('constants')} vs {current_constants()}")
     spec_name = payload["spec"]
     spec = Spec(spec_name[:2], spec_name[2:4], spec_name[4:6])
+    if (len(spec_name) != 6 or spec.scale not in SPEC_AXES["scale"] or spec.variant not in SPEC_AXES["variant"]
+            or spec.weight not in SPEC_AXES["weight"]):
+        raise GroupAError(f"凍結物の候補の名前が不正: {spec_name!r}")
     p = payload["par"]
     cell_level = {tuple(int(x) if i == 2 else x for i, x in enumerate(c)):
                   (tuple(int(x) if (i == 2 and str(x).isdigit()) else x for i, x in enumerate(lv)) if lv is not None else None)
@@ -660,13 +678,21 @@ def tables_from_payload(payload: dict, races: dict[str, Race]) -> tuple[RatingTa
     return RatingTables(spec, par, variants, float(payload["w"]), payload["weight_fit"], scales), comp
 
 
-DEPENDENCIES = ("scripts/group_a.py", "scripts/group_a_explore.py", "predictor/eval_stats.py", "config.py", "db.py",
+DEPENDENCIES = ("scripts/group_a.py", "scripts/group_a_explore.py", "scripts/group_a_power.py",
+                "predictor/eval_stats.py", "config.py", "db.py",
                 "data/backtest/group_a_class_20261005/class_table.csv", "docs/PHASE05_5_PREREG.md",
                 "docs/PHASE05_5_EXPLORATION.md")
 
 
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _dependency_hashes(files) -> dict:
+    missing = [f for f in files if not (ROOT / f).exists()]
+    if missing:
+        raise GroupAError(f"来歴の依存ファイルが無い: {missing}")
+    return {f: sha256_file(ROOT / f) for f in files}
 
 
 def provenance(db_path, argv: list[str] | None = None, extra_files: tuple[str, ...] = ()) -> dict:
@@ -681,9 +707,9 @@ def provenance(db_path, argv: list[str] | None = None, extra_files: tuple[str, .
         "git_sha": head.stdout.strip() if head.returncode == 0 else "unknown",
         "git_dirty": (bool(status.stdout.strip()) if status.returncode == 0 else None),
         "git_status": status.stdout.strip().splitlines() if status.returncode == 0 else None,
-        "files_sha256": {f: sha256_file(ROOT / f) for f in DEPENDENCIES + tuple(extra_files) if (ROOT / f).exists()},
+        "files_sha256": _dependency_hashes(DEPENDENCIES + tuple(extra_files)),
         "python": platform.python_version(), "numpy": np.__version__, "argv": list(argv if argv is not None else sys.argv),
         "db": {"path": str(dbp), "bytes": st.st_size if st else None,
-               "mtime": __import__("datetime").datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds") if st else None},
+               "mtime": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds") if st else None},
     }
 

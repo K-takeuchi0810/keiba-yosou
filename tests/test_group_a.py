@@ -307,7 +307,7 @@ def _clogit_world(seed=1, n_races=300, beta_s=0.6):
         w = rng.choice(n, p=p)
         pm = np.exp(m) / np.exp(m).sum()
         for i in range(n):
-            rows.append({"race_id": f"r{k}", "won": int(i == w), "p_market": float(pm[i]),
+            rows.append({"race_id": f"r{k}", "year": 2023, "won": int(i == w), "p_market": float(pm[i]),
                          "perf_rating_last": float(good[i]), "perf_rating_best3_365": float(bad[i]),
                          "perf_rating_trend_365": math.nan if i == 0 else float(rng.normal()),
                          "perf_rating_rank_in_race": float(rng.normal())})
@@ -381,7 +381,7 @@ def test_all_reverse_sign_components_stop_instead_of_a_constant_s():
         w = rng.choice(8, p=np.exp(u) / np.exp(u).sum())
         pm = np.exp(m) / np.exp(m).sum()
         for i in range(8):
-            rows.append({"race_id": f"r{k}", "won": int(i == w), "p_market": float(pm[i]),
+            rows.append({"race_id": f"r{k}", "year": 2023, "won": int(i == w), "p_market": float(pm[i]),
                          **{c: float(cs[j, i]) for j, c in enumerate(g.COMPONENTS)}})
     g.add_market_logit(rows)
     with pytest.raises(g.GroupAError, match="全成分が逆符号"):
@@ -539,3 +539,62 @@ def test_weight_outlier_filter_uses_the_same_coordinate_as_p3():
 def test_reading_the_primary_year_needs_a_recorded_purpose(tmp_path):
     with pytest.raises(g.GroupAError, match="primary_purpose"):
         g.load_races(2025, db_path="does-not-exist.db", allow_primary_year=True)
+
+
+
+# --- 2026-10-05 限定再レビュー (c9688b5 の 4 名) の指摘の反映 -----------------------------------------------
+
+def _frozen(spec=g.Spec("S1", "V1", "W0")):
+    import json
+    races, *_ = _synthetic_world()
+    t = g.fit_tables(races, spec, (2023,))
+    rows = _clogit_world(seed=5)
+    g.add_market_logit(rows)
+    comp = g.fit_composite(rows)
+    return races, json.loads(json.dumps(g.freeze_payload(t, comp)))
+
+
+def test_frozen_payload_version_and_constants_are_checked(monkeypatch):
+    races, payload = _frozen()
+    bad = {**payload, "payload_version": "old"}
+    with pytest.raises(g.GroupAError, match="版が違う"):
+        g.tables_from_payload(bad, races)
+    monkeypatch.setattr(g, "CLIP_SEC_PER_KM", 2.5)          # 凍結の後に定数を変えたら読み込みで止まる
+    with pytest.raises(g.GroupAError, match="定数"):
+        g.tables_from_payload(payload, races)
+
+
+def test_frozen_payload_spec_name_is_validated():
+    races, payload = _frozen()
+    with pytest.raises(g.GroupAError, match="候補の名前"):
+        g.tables_from_payload({**payload, "spec": "S3V1W0"}, races)
+
+
+def test_composite_without_year_stops():
+    rows = _clogit_world(seed=7)
+    for r in rows:
+        del r["year"]
+    g.add_market_logit(rows)
+    with pytest.raises(g.GroupAError, match="year が無い"):
+        g.fit_composite(rows)
+
+
+def test_unsorted_history_stops():
+    t = g.day_ordinal("20240601")
+    with pytest.raises(g.GroupAError, match="日付順"):
+        g.horse_components([(t - 10, 1.0), (t - 100, 2.0)], t)
+
+
+def test_unknown_class_or_age_level_is_not_treated_as_the_reference():
+    par = g.ParModel((2023,), {("05", "11", 1600): ("05", "11", 1600)}, {"intercept": 60.0, "class=703": 1.0}, [], {})
+    ok = _race("ok", "20230105", cls="703")
+    new_cls = _race("nc", "20230105", cls="016")            # 推定期間に無かったクラス
+    new_age = _race("na", "20230105", cls="005", age="2yo")  # 推定期間に無かった年齢の区分
+    assert par.fitted(ok) == pytest.approx(61.0)
+    assert math.isnan(par.fitted(new_cls)) and math.isnan(par.fitted(new_age))
+
+
+def test_provenance_stops_on_a_missing_dependency(monkeypatch, tmp_path):
+    monkeypatch.setattr(g, "DEPENDENCIES", g.DEPENDENCIES + ("scripts/does_not_exist.py",))
+    with pytest.raises(g.GroupAError, match="依存ファイルが無い"):
+        g.provenance(tmp_path / "x.db")

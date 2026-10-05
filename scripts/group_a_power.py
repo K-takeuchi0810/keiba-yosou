@@ -25,16 +25,21 @@ Z_ALPHA_2SIDED_001 = 2.5758293035489004      # 両側 α = 0.01
 Z_POWER_080 = 0.8416212335729143             # 検出力 80%
 CRITICAL_MULTIPLIER = Z_ALPHA_2SIDED_001 + Z_POWER_080   # ≈ 3.418
 
-# 対象レースから読んでよい列 (allow-list)。ここに無い列は SQL に現れない
+_REFUND_SQL = ", ".join(f"'{c}'" for c in sorted(g.REFUNDED))
+# 対象レースから読んでよい列 (allow-list、(式, 別名))。返る列の名前が別名と **完全一致** することを実行時に確かめる
 TARGET_SELECT = (
-    "h.race_year", "h.race_month_day", "h.track_code", "h.kaiji", "h.nichiji", "h.race_num",
-    "r.track_type_code", "r.distance", "h.horse_num", "h.blood_register_num",
-    "CASE WHEN h.abnormal_code IN ('1','2','3') THEN 1 ELSE 0 END",   # 返還の真偽だけ (4 / 5 / 7 は出さない)
-    "h.win_odds",                                                     # 市場 (§8-5 の主検定の市場)
+    ("h.race_year", "race_year"), ("h.race_month_day", "race_month_day"), ("h.track_code", "track_code"),
+    ("h.kaiji", "kaiji"), ("h.nichiji", "nichiji"), ("h.race_num", "race_num"),
+    ("r.track_type_code", "track_type_code"), ("r.distance", "distance"), ("h.horse_num", "horse_num"),
+    ("h.blood_register_num", "blood_register_num"),
+    (f"CASE WHEN h.abnormal_code IN ({_REFUND_SQL}) THEN 1 ELSE 0 END", "is_refunded"),   # 返還の真偽だけ (4 / 5 / 7 は出さない)
+    ("h.win_odds", "win_odds"),                                                          # 市場 (§8-5 の主検定の市場)
 )
-# 対象レースの結果の列。対象レースを読む SQL にこの名前が現れたら止める (テストでも強制)
+TARGET_COLUMNS = tuple(alias for _, alias in TARGET_SELECT)
+# 対象レースの結果・発走後に決まる列。対象レースを読む SQL にこの名前が現れたら止める (補助の検査。本線は返る列の完全一致)
 FORBIDDEN_COLUMNS = ("confirmed_order", "finish_order", "finish_time", "final_3f", "same_finish", "time_diff",
-                     "corner_order", "mining", "payout", "refund", "popularity")
+                     "corner_order", "mining", "payout", "refund_", "popularity", "front3f", "front4f", "last3f", "last4f",
+                     "lap_times", "leg_quality", "starter_count", "horse_weight", "weight_change")
 
 
 class PowerError(RuntimeError):
@@ -52,7 +57,7 @@ class TargetRunner:
 
 
 def target_sql() -> str:
-    sql = f"""SELECT {', '.join(TARGET_SELECT)}
+    sql = f"""SELECT {', '.join(f'{expr} AS {alias}' for expr, alias in TARGET_SELECT)}
                 FROM horse_races h
                 JOIN races r ON r.race_year = h.race_year AND r.race_month_day = h.race_month_day
                  AND r.track_code = h.track_code AND r.kaiji = h.kaiji AND r.nichiji = h.nichiji AND r.race_num = h.race_num
@@ -63,13 +68,20 @@ def target_sql() -> str:
     bad = [c for c in FORBIDDEN_COLUMNS if c in low]
     if bad:
         raise PowerError(f"対象レースの SQL に結果の列が入っている: {bad}")
+    if "*" in low:
+        raise PowerError("対象レースの SQL に * がある (全列を引ける)")
     return sql
 
 
 def load_target_fields(year: int, db_path) -> dict[str, list[TargetRunner]]:
     """対象レース (JRA・確定・平地) の選択集合の材料だけを読む。結果の列は読まない。"""
     conn = sqlite3.connect(f"file:{Path(db_path).as_posix()}?mode=ro", uri=True)
-    rows = conn.execute(target_sql(), (str(year),)).fetchall()
+    cur = conn.execute(target_sql(), (str(year),))
+    names = tuple(d[0] for d in cur.description)
+    if names != TARGET_COLUMNS:
+        conn.close()
+        raise PowerError(f"対象レースの返る列が allow-list と違う: {names}")
+    rows = cur.fetchall()
     conn.close()
     out: dict[str, list[TargetRunner]] = defaultdict(list)
     for (ry, rmd, tc, ka, ni, rn, tt, dist, hn, bn, refunded, odds) in rows:
@@ -134,10 +146,12 @@ def fisher_se_at_null(rows: list[dict], s_col: str = "S", z_col: str = "logit_p_
         schur_terms.append(V)
     inv = np.linalg.inv(info)
     se = float(math.sqrt(inv[1, 1]))
-    # レース内の市場の確率で重み付けた S の分散 (シューア補元の前と後) を診断として残す
+    # レース内の市場の確率で重み付けた S の分散 (シューア補元の前と後) と、S と市場のレース内の相関 ρ を診断として残す
     var_s = float(info[1, 1])
     schur = float(info[1, 1] - info[0, 1] ** 2 / info[0, 0])
+    rho = float(info[0, 1] / math.sqrt(info[0, 0] * info[1, 1]))
     return {"se": se, "n_races": len(by), "info": info.tolist(), "var_s_within": var_s, "schur_complement": schur,
+            "rho_within_race_market_weighted": rho,
             "assumption": "beta_S=0, beta_market=1 (win probability = renormalised market probability)"}
 
 
