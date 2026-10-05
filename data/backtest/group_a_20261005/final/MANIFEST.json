@@ -1,26 +1,24 @@
 {
  "kind": "group_a_freeze",
- "started_at": "2026-10-06T01:01:58+09:00",
- "ended_at": "2026-10-06T01:05:02+09:00",
+ "started_at": "2026-10-06T01:42:59+09:00",
+ "ended_at": "2026-10-06T01:45:55+09:00",
  "provenance": {
-  "git_sha": "cd35b4ff198a2afe77f3cd4d8e9af2907e78acb7",
+  "git_sha": "b2582cf4398cd5a14ca2c7a7f41f5ebce6d39b91",
   "git_dirty": false,
   "own_output": "data/backtest/group_a_20261005/final",
-  "git_status": [
-   "?? data/backtest/group_a_20261005/final/"
-  ],
+  "git_status": [],
   "files_sha256": {
    "scripts/group_a.py": "e269773d42aeb1f917951a70efc1a05d4c1a35b7fcbf21634e5a893f598bd2e2",
    "scripts/group_a_explore.py": "174db7671bbf1eb5ea445bb602f43c9ce3ab2c5254eb2a993ea668f318aac269",
    "scripts/group_a_power.py": "953785f1e084dd342827e82e31a259d9d4ddfa2dd9b7a775bffc16db5db240e7",
-   "scripts/group_a_run.py": "ae332d9a750df4797e06e1466a691b531ea8bb9bcc68cdb98121937debc7751a",
+   "scripts/group_a_run.py": "5a3d9b705e660ef431c4b9591387f9dedf96404d755b95fc3e991bf24efb9a25",
    "scripts/group_a_stats.py": "576adb29dcc327e20d748f35903e08bef516cebbde232eab7b20ea23fcf7f8fb",
    "predictor/eval_stats.py": "a0888d270c949461becdd97aa9ae75a8c623378216f0e8c7e6af546606ece940",
    "config.py": "290e03f576976f92910a00fc83cc86c96aed15e32bc7a1027d1165143f4c936d",
    "db.py": "d950031d22203847b91f27d2998f4dbad48e08c54b604ebcb1a914d9a5647a40",
    "data/backtest/group_a_class_20261005/class_table.csv": "24d8bbc9784c9a59b26a80ae6cc9c7efe69561b11aacffe6dbbf490eb6a01817",
    "docs/PHASE05_5_PREREG.md": "721706c1f2fefbfe81a8ca2f39e398f1cc74e5eee0057bd3d4214ab70f4c9012",
-   "docs/PHASE05_5_EXPLORATION.md": "d2e1d63ff758edcaf38b16cbfae4067be2f4786bd65a9b50a14cdb2b6641d9ea"
+   "docs/PHASE05_5_EXPLORATION.md": "d8200a4828134b94151e271ad83187d10a486394d5b80cc956a170b9b65cb246"
   },
   "python": "3.14.5",
   "numpy": "2.4.4",
@@ -685,7 +683,7 @@
   "n_valid": 1000,
   "n_discarded": 0,
   "max_discard": 10,
-  "seconds": 142.3,
+  "seconds": 135.0,
   "se": 0.022741316377061737
  },
  "leave_one_year_out": {
