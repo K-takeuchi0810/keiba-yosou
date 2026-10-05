@@ -1,0 +1,9 @@
+audited_at 2026-10-05T22:13:32 (read-only, after prod apply fb44fb8)
+target rows 262885
+c4 NULL 772
+c4 NULL by races.data_div [('9', 772)]
+all 4 corners NULL 772
+values <0 or >18 in any corner 0
+months 66 min monthly c4>0 among confirmed ('202410', 0.9655643618474993)
+JRA rows after 20260630 with c4 (untouched range) 12527
+journal_mode wal

@@ -1,0 +1,45 @@
+{
+ "db": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\keiba.db",
+ "apply": false,
+ "range": [
+  "20210101",
+  "20260630"
+ ],
+ "threshold": 0.95,
+ "state_before": {
+  "keiba.db": {
+   "bytes": 20203466752,
+   "mtime": "2026-10-05T20:00:13+09:00"
+  },
+  "keiba.db-wal": {
+   "bytes": 0,
+   "mtime": "2026-10-05T20:45:21+09:00"
+  },
+  "keiba.db-shm": {
+   "bytes": 32768,
+   "mtime": "2026-10-05T22:04:44+09:00"
+  }
+ },
+ "db_rows": 262885,
+ "nonnull_before": 0,
+ "planned_updates": 262113,
+ "null_remaining_after": 772,
+ "raw_keys": 262113,
+ "raw_records_used": 309865,
+ "raw_keys_not_in_db": 0,
+ "result": "dry_run",
+ "state_after": {
+  "keiba.db": {
+   "bytes": 20203466752,
+   "mtime": "2026-10-05T20:00:13+09:00"
+  },
+  "keiba.db-wal": {
+   "bytes": 0,
+   "mtime": "2026-10-05T20:45:21+09:00"
+  },
+  "keiba.db-shm": {
+   "bytes": 32768,
+   "mtime": "2026-10-05T22:05:31+09:00"
+  }
+ }
+}

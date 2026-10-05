@@ -83,5 +83,5 @@ ai-builder のコードとタスクには触れずに、次を確かめる。
 | `odds_snapshots` の主キーに source が無く、同じ秒の観測が片方消える | 監査文書 3-bis |
 | 7 月前半の 0B31 が DB に無い (raw から復元可能) | 監査文書 3-ter |
 | `backfill_announced_at.py` が同じ秒の発表時刻を別の取得元の値で上書きする | 監査文書 3-quater |
-| JV-Link の呼び出しで止まったプロセスが残る (4 分の上限は wscript しか止めない)。再開すると古い対象日で 0B14 の照合が走り、その日の記録を削除しうる | 監査文書 5-bis、2026-09-26 に 90 個を停止 (`data/logs/ai_builder_stale_processes_20260926_*`) |
+| JV-Link の呼び出しで止まったプロセスが残る (4 分の上限は wscript しか止めない)。再開すると古い対象日で 0B14 の照合が走り、その日の記録を削除しうる | 監査文書 5-bis、2026-09-26 に 90 個を停止 (`data/logs/ai_builder_stale_processes_20260926_*`)。同じ観測パターン (原因の API は未特定) で 10/03・10/04 の 21 組 63 個が残り、2026-10-05 21:59 にユーザーが停止 (`data/logs/ai_builder_stale_processes_20261004_*`)。開催日ごとに溜まる運用障害 |
 | 開催日の日中に、keiba-yosou と ai-builder が同じ JV-Link と DB を並行して使う (concurrent writer) | 監査文書 5 |

@@ -1,0 +1,67 @@
+{
+ "db": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\keiba.db",
+ "apply": true,
+ "range": [
+  "20210101",
+  "20260630"
+ ],
+ "threshold": 0.95,
+ "state_before": {
+  "keiba.db": {
+   "bytes": 20203466752,
+   "mtime": "2026-10-05T20:00:13+09:00"
+  },
+  "keiba.db-wal": {
+   "bytes": 0,
+   "mtime": "2026-10-05T20:45:21+09:00"
+  },
+  "keiba.db-shm": {
+   "bytes": 32768,
+   "mtime": "2026-10-05T22:05:31+09:00"
+  }
+ },
+ "outside_before": {
+  "rows": 491531,
+  "sha256": "e3ff6fc719ec61e274df378073fb88b2cffe868ef68d015af29ac725063d2333"
+ },
+ "db_rows": 262885,
+ "nonnull_before": 0,
+ "planned_updates": 262113,
+ "null_remaining_after": 772,
+ "raw_keys": 262113,
+ "raw_records_used": 309865,
+ "raw_keys_not_in_db": 0,
+ "outside_after": {
+  "rows": 491531,
+  "sha256": "e3ff6fc719ec61e274df378073fb88b2cffe868ef68d015af29ac725063d2333"
+ },
+ "state_after_commit": {
+  "keiba.db": {
+   "bytes": 20203466752,
+   "mtime": "2026-10-05T22:12:46+09:00"
+  },
+  "keiba.db-wal": {
+   "bytes": 78267672,
+   "mtime": "2026-10-05T22:12:46+09:00"
+  },
+  "keiba.db-shm": {
+   "bytes": 163840,
+   "mtime": "2026-10-05T22:12:32+09:00"
+  }
+ },
+ "updated_rows": 262113,
+ "result": "applied",
+ "wal_checkpoint": {
+  "busy": 0,
+  "log_frames": 0,
+  "checkpointed_frames": 0
+ },
+ "state_after": {
+  "keiba.db": {
+   "bytes": 20203466752,
+   "mtime": "2026-10-05T22:12:46+09:00"
+  },
+  "keiba.db-wal": null,
+  "keiba.db-shm": null
+ }
+}

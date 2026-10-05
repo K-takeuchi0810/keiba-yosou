@@ -108,3 +108,42 @@ clone には対象の行しか入れていないので、対象外の行のチ�
     特徴のキャッシュの鍵に DB の中身が無いので、再起動するまで古い recent_4corner_* を持ち続ける
 11. **ai-builder の互換確認** (読み取り側の import と特徴の生成。ai-builder のコードには触れない)、2 つのレポートを main にコミット
 12. 取り消しの経路は上の手順 5 のとおり (`--expected-nonnull-before 0` で通った適用にだけ有効)
+
+## 本番の実行記録 (2026-10-05、ユーザーの明示の承認の後)
+
+- 前提: 10/05 (月) は非開催 (本番の races に 10/05・10/06 の JRA 行 0、JRA の最大日付 20261004)。
+  前夜までの ai-builder の残留プロセス 21 組 (63 プロセス) は、ユーザーが 10/05 21:59:05 に停止した (証拠は data/logs、git の外)
+- 書き手: `MAIBuilder Live JRA Data` Disabled / fresh odds・morning odds・auto_predict の次の起動は 10/06 08:00 以降 /
+  20:00 の傾向収集は済み / lock なし / fetch-live-jvdata のプロセス 0
+- 手順書に無かった常駐: Windows サービス `MAIBuilder` (keiba-yosou の `.venv64` の pythonservice、127.0.0.1:8780)。
+  読み取りで調べ、keiba.db は `db.open_db_readonly` (mode=ro + query_only) と mode=ro でしか開かないことを確認 (書き手ではない)。
+  shm の mtime を動かしていたのはこのサービスの 15 分ごとの再構築と確認者の読み取り
+- **運用の例外 (明示)**: `MAIBuilder Live JRA Data Controller` は無効にしなかった。
+  Controller enabled/Ready but quiescent; next scheduled run 2026-10-06 00:05, outside the approved apply window.
+  外部の指示者が選択肢 A として判断し (23:45 を過ぎたら失効)、ユーザーが承認した。手動の無効化 → 有効化は戻し忘れの危険を増やすため取らなかった
+- 静止: keiba.db の mtime 20:00:13、WAL は 20:45:21 から 0 B
+- 固定した worktree: `.claude/worktrees/backfill-prod` (detached、`fb44fb8`、git status 空)。script の sha256
+  `caa3f7dafebc015917ad1a2a39a158ff07fcd667f28c11dc1ffaa34816cbef56`。3103f53 からの差分は eval_stats.py と予想の公開だけ。
+  PROJECT_ROOT は worktree、CORNER_BYTES_VERIFIED True
+- dry-run (22:05:08〜22:05:38、29 秒、rc 0): `prod_dryrun_fb44fb8.json`。`check_prod_dryrun.py` で照合し ALL_OK
+  - (a) Scratch B の 335 ファイルが全部含まれ、sha256 全件一致
+  - (b) 追加は `SESW2026100320261005134142.jvd` と `SESW2026100420261005134143.jvd` (どちらも 20260630 より後)
+  - (c) raw_records_used 309,865 / raw_keys 262,113 / planned 262,113 / db_rows 262,885 / null 772 / nonnull_before 0 /
+    raw_keys_not_in_db 0 / acceptance_planned.ok
+- apply の直前の再確認 (22:11:42): HEAD・script の sha256・git status・Live Disabled・Controller Ready (次 00:05)・プロセス 0・
+  lock なし・DB の mtime / WAL 0 B・raw の SE 337 ファイル、すべて dry-run の時と同じ
+- apply (22:11:59〜22:12:48、49 秒、rc 0、`--apply --expected-nonnull-before 0`): `prod_apply_fb44fb8.json`
+  - result applied / updated_rows 262,113 = planned / acceptance_after.ok (月ごとの最小 0.9656、over_field 0)
+  - outside_before == outside_after (491,531 行、sha256 e3ff6fc7…2333)。接続の総変更件数 = 更新件数の検査は
+    トランザクションの中で通った (不一致なら rollback して result は error になる。レポートに件数のキーは無い)
+  - state_after_commit の WAL 78,267,672 B → wal_checkpoint busy 0 → state_after の WAL / shm は無し (最後の接続で消えた)
+- 適用後の監査 (読み取り、22:13:32): `prod_postaudit_fb44fb8.txt`。対象 262,885 行のうち c4 が NULL は 772 で、すべて
+  races.data_div 9 (4 角とも NULL)。範囲外 (0〜18 の外) 0。66 か月、確定着順のある行での c4 > 0 の月ごとの最小は 202410 の 0.9656
+- ai-builder の互換確認 (読み取り、固定した worktree のコード): `ai_builder_compat_postbackfill.py/.txt` ALL_OK。
+  import が通る / 2025-09-28 と 2026-10-04 の各 2 レースで recent_4corner_* が出て範囲外 0 /
+  predict_race の予想 (馬番・score・印) がフラグ True / False で同一 (通過順位は scoring に未配線)
+- 常駐プロセスの再起動: keiba-yosou の GUI / webapp は動いていなかった。ai-builder の `MAIBuilder` サービス (9/29 起動) は
+  行列をメモリに持つので、再起動するまで古い recent_4corner_* を持つ。再起動は ai-builder の操作なのでユーザーに提案する
+  (この記録の時点で未実施)
+- ai_builder_impact: requires_followup (MAIBuilder サービスの再起動。ai-builder は corner 列を直接読まず、学習の重みは 0)
+- 取り消しの経路は上の手順 5 のとおり (この適用は `--expected-nonnull-before 0` で通った)

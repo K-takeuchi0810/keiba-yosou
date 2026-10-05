@@ -1,0 +1,9 @@
+1. import OK (code = backfill-prod, config = C:\Users\kizun\dev\keiba-yosou\.claude\worktrees\backfill-prod); CORNER_BYTES_VERIFIED = True
+2. 20250928 track 06 R01: 12 頭中 12 頭で recent_4corner_* あり、範囲外 0 (例 avg=1.0 n=1)
+2. 20250928 track 06 R02: 16 頭中 15 頭で recent_4corner_* あり、範囲外 0 (例 avg=4.0 n=1)
+3. 20250928 predict_race: True 12 頭 / False 12 頭、予想 (馬番・score・印) が同一: True
+2. 20261004 track 05 R01: 12 頭中 12 頭で recent_4corner_* あり、範囲外 0 (例 avg=10.0 n=2)
+2. 20261004 track 05 R02: 16 頭中 16 頭で recent_4corner_* あり、範囲外 0 (例 avg=1.5 n=2)
+3. 20261004 predict_race: True 12 頭 / False 12 頭、予想 (馬番・score・印) が同一: True
+ALL_OK
+rc=0
