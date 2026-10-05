@@ -606,3 +606,17 @@ def test_own_output_is_not_counted_as_dirty():
     assert not g._is_own_output(" M scripts/group_a.py", "data/backtest/group_a_20261005/e1b")
     assert not g._is_own_output("?? data/backtest/group_a_20261005/e1bx/", "data/backtest/group_a_20261005/e1b")
     assert not g._is_own_output("?? data/backtest/group_a_20261005/e1b/", None)
+
+
+
+def test_provenance_dirty_parsing_keeps_the_status_columns(monkeypatch):
+    class R:
+        def __init__(self, out):
+            self.stdout, self.returncode = out, 0
+    outs = iter(["abc\n", " M scripts/group_a.py\n?? data/backtest/out/\n"])
+    monkeypatch.setattr(g.subprocess, "run", lambda *a, **k: R(next(outs)))
+    p = g.provenance("none.db", ["x"], own_output="data/backtest/out")
+    assert p["git_dirty"] is True                   # 先頭の行の " M" の空白を落としてパスを読み違えない
+    outs2 = iter(["abc\n", "?? data/backtest/out/\n"])
+    monkeypatch.setattr(g.subprocess, "run", lambda *a, **k: R(next(outs2)))
+    assert g.provenance("none.db", ["x"], own_output="data/backtest/out")["git_dirty"] is False

@@ -714,7 +714,7 @@ def provenance(db_path, argv: list[str] | None = None, extra_files: tuple[str, .
     st = dbp.stat() if dbp.exists() else None
     return {
         "git_sha": head.stdout.strip() if head.returncode == 0 else "unknown",
-        "git_dirty": (any(not _is_own_output(line, own_output) for line in status.stdout.strip().splitlines())
+        "git_dirty": (any(not _is_own_output(line, own_output) for line in status.stdout.splitlines() if line.strip())
                       if status.returncode == 0 else None),
         "own_output": own_output,
         "git_status": status.stdout.strip().splitlines() if status.returncode == 0 else None,
