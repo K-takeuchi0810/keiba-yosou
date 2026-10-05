@@ -1,6 +1,6 @@
 {
  "created_by": "scripts/group_a_class_table.py build",
- "built_at": "2026-10-05T22:50:52+09:00",
+ "built_at": "2026-10-05T22:53:00+09:00",
  "argv": [
   "build",
   "--raw-dir",
@@ -9,10 +9,10 @@
   "data/backtest/group_a_class_20261005"
  ],
  "raw_dir": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\raw\\RACE",
- "git_sha": "adc8a4ed491f7b25923e8e42de1727a2fd8a9ab6",
+ "git_sha": "219382aada84578e4c10d4a848b011c17fafd36f",
  "git_dirty": false,
  "parser_sha256": "9b8cf34186190c5966c228ac33a5679a016dbc9b23f475f3a953a20de720ec2b",
- "script_sha256": "813e6f8a50b0fd71430c6b640694d3e06c1f538a0cad5ed91858f69d418f70f6",
+ "script_sha256": "6907f6bf9d9545773610528f7437ede6ea6b611f5a081015b03f659b19f27252",
  "mapping_version": "class_v1",
  "range": [
   "20210101",
