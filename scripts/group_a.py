@@ -1,0 +1,535 @@
+"""Phase 0.5-5 Group A — 走破時計の内容で能力を評価する特徴 (Performance Rating) の計算 (2026-10-05)。
+
+仕様: `docs/PHASE05_5_PREREG.md` §8-4 / §8-4b / §8-4b-2、`docs/PHASE05_5_EXPLORATION.md` の A-0〜A-3b。
+ここにあるのは計算の部品だけで、どの年を読むか・どの候補を試すかは呼び出し側 (`scripts/group_a_explore.py`) が決める。
+
+- 時計は MSSt を秒に復号し、**秒 / km** で扱う (P1)。0 は NaN。障害 (`track_type_code` 51 以上) は使わない
+- 標準タイムの模型 (レース単位、勝ち時計 / km): セル + 芝ダ×馬場状態 + クラス + 年齢の制限の区分。クラスと年齢の区分は
+  馬場差の材料 (ε) を作るための局外の補正で、評価値からは引かない (2a)
+- 馬ごとの過去走の残差だけを ±3.0 秒 / km で clip する (P3)
+- 成分は対象日の 365 日前から前日までの過去走だけで作る
+"""
+from __future__ import annotations
+
+import csv
+import math
+import sqlite3
+from bisect import bisect_left
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
+from datetime import date
+from pathlib import Path
+
+import numpy as np
+
+from config import guard_analysis_window
+
+ROOT = Path(__file__).resolve().parent.parent
+DB_PATH = ROOT / "data" / "keiba.db"
+CLASS_TABLE = ROOT / "data" / "backtest" / "group_a_class_20261005" / "class_table.csv"
+
+OBSTACLE_FROM = 51                 # track_type_code がこれ以上なら障害 (§8-4b-2)
+DIRT_CODES = range(23, 30)         # 23〜29 がダート。10〜22 が芝
+REFUNDED = frozenset({"1", "2", "3"})   # 出走取消・発走除外・競走除外 (db.REFUNDED_ABNORMAL_CODES と同じ)
+WINDOW_DAYS = 365
+MIN_CELL_RACES = 20
+MIN_VARIANT_RACES = 3
+CLIP_SEC_PER_KM = 3.0              # P3 (固定)
+BASE_WEIGHT_KG = 55.0
+HANDICAP = "1"                     # races.weight_type_code: 1 = ハンデ
+REF_CLASS, REF_AGE = "005", "3up"  # 標準タイムの模型の基準の水準 (定数のずれはレース内の比較で消える)
+COMPONENTS = ("perf_rating_last", "perf_rating_best3_365", "perf_rating_trend_365", "perf_rating_rank_in_race")
+DIST_BANDS = (1400, 1800, 2200)    # S2 の帯: 1400 未満 / 1400〜1799 / 1800〜2199 / 2200 以上
+
+
+class GroupAError(RuntimeError):
+    pass
+
+
+# ---------------------------------------------------------------------------------------------------- 復号・分類
+
+def decode_msst(value) -> float:
+    """MSSt (例 1122 = 1 分 12 秒 2) を秒にする。0・空・不正は NaN。生の値どうしの引き算はしない (§8-4b)。"""
+    try:
+        t = int(value)
+    except (TypeError, ValueError):
+        return math.nan
+    if t <= 0 or t % 1000 >= 600:          # 秒の欄が 60 以上は MSSt として不正 (2021-2024 の JRA で 0 件)
+        return math.nan
+    return t // 1000 * 60 + (t % 1000) / 10.0
+
+
+def surface_of(track_type_code) -> str | None:
+    """'T' (芝) / 'D' (ダート) / None (障害・不明)。"""
+    try:
+        tt = int(track_type_code)
+    except (TypeError, ValueError):
+        return None
+    if tt >= OBSTACLE_FROM:
+        return None
+    if tt in DIRT_CODES:
+        return "D"
+    if 10 <= tt <= 22:
+        return "T"
+    return None
+
+
+def age_restriction(c2: str, c3: str, c4: str, c5: str) -> str | None:
+    """年齢の制限の区分 (固定の規則、探索台帳 A-1)。000 でない欄の並びで決め、それ以外は None (推測しない)。"""
+    pat = tuple(c != "000" for c in (c2, c3, c4, c5))
+    return {(True, False, False, False): "2yo", (False, True, False, False): "3yo",
+            (False, True, True, True): "3up", (False, False, True, True): "4up"}.get(pat)
+
+
+def dist_band(distance: int) -> int:
+    return sum(distance >= b for b in DIST_BANDS)
+
+
+def day_ordinal(ymd: str) -> int:
+    return date(int(ymd[:4]), int(ymd[4:6]), int(ymd[6:])).toordinal()
+
+
+# ---------------------------------------------------------------------------------------------------- 読み込み
+
+@dataclass
+class Race:
+    race_id: str
+    ymd: str
+    track: str
+    track_type: str
+    surface: str
+    distance: int
+    going: str                 # 芝ダ × 馬場状態 (例 'T1')
+    weight_type: str
+    cls: str | None
+    age: str | None
+    runs: list = field(default_factory=list)
+
+
+@dataclass
+class Run:
+    race_id: str
+    ymd: str
+    ordinal: int
+    horse: str
+    horse_num: str
+    abnormal: str
+    finish: int
+    sec_per_km: float          # NaN なら時計なし
+    burden_kg: float
+    win_odds: float            # 倍。0 以下は価格なし
+
+
+def load_class_table(path: Path = CLASS_TABLE) -> dict[str, tuple[str, str | None]]:
+    """{race_id: (canonical_class, 年齢の制限の区分)}。"""
+    out = {}
+    with Path(path).open(encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            out[r["race_id"]] = (r["canonical_class"], age_restriction(r["c2"], r["c3"], r["c4"], r["c5"]))
+    return out
+
+
+def load_races(max_year: int, *, min_year: int = 2021, db_path: Path | str = DB_PATH,
+               class_table: dict | None = None, allow_primary_year: bool = False) -> tuple[dict[str, Race], Counter]:
+    """JRA・確定 (`data_div = 7`)・平地のレースと走を読む。**探索は 2024 年以前だけ** (2025 は主検定の年)。
+
+    `allow_primary_year` は主検定の実行のときだけ True にする (探索のコードからは渡さない)。
+    """
+    if max_year >= 2025 and not allow_primary_year:
+        raise GroupAError(f"探索で 2025 年以降を読もうとした (max_year={max_year})。主検定の年は探索で読まない")
+    from_date, to_date, _sealed = guard_analysis_window(f"{min_year}0101", f"{max_year}1231",
+                                                        context="group_a.load_races")
+    classes = class_table if class_table is not None else load_class_table()
+    conn = sqlite3.connect(f"file:{Path(db_path).as_posix()}?mode=ro", uri=True)
+    rows = conn.execute(
+        """SELECT h.race_year||h.race_month_day, h.track_code, h.kaiji, h.nichiji, h.race_num,
+                  r.track_type_code, r.distance, r.turf_condition, r.dirt_condition, r.weight_type_code,
+                  h.horse_num, h.blood_register_num, h.abnormal_code, h.confirmed_order, h.finish_time,
+                  h.burden_weight, h.win_odds
+             FROM horse_races h
+             JOIN races r ON r.race_year = h.race_year AND r.race_month_day = h.race_month_day
+              AND r.track_code = h.track_code AND r.kaiji = h.kaiji AND r.nichiji = h.nichiji AND r.race_num = h.race_num
+            WHERE (h.race_year||h.race_month_day) BETWEEN ? AND ?
+              AND CAST(h.track_code AS INTEGER) BETWEEN 1 AND 10
+              AND r.data_div = '7' AND h.horse_num NOT IN ('', '00')
+            ORDER BY 1, h.track_code, h.race_num, h.horse_num""", (from_date, to_date)).fetchall()
+    conn.close()
+    stats: Counter = Counter()
+    races: dict[str, Race] = {}
+    for (ymd, tc, ka, ni, rn, tt, dist, tcond, dcond, wt, hn, bn, abn, fin, ftime, bw, odds) in rows:
+        surf = surface_of(tt)
+        if surf is None:
+            stats["skip_obstacle_rows"] += 1
+            continue
+        rid = f"{ymd}_{tc}_{ka}_{ni}_{rn}"
+        race = races.get(rid)
+        if race is None:
+            if rid not in classes:
+                raise GroupAError(f"{rid}: クラスの表に無い (表は 2021-2025 の JRA の全レース)")
+            cls, age = classes[rid]
+            cond = str(dcond if surf == "D" else tcond).strip()
+            race = Race(rid, ymd, tc, str(tt).strip(), surf, int(dist or 0), f"{surf}{cond}", str(wt or "").strip(),
+                        cls, age)
+            races[rid] = race
+        km = race.distance / 1000.0
+        sec = decode_msst(ftime)
+        race.runs.append(Run(rid, ymd, day_ordinal(ymd), str(bn or "").strip(), str(hn).strip(),
+                             str(abn or "0").strip(), int(fin or 0), sec / km if km > 0 else math.nan,
+                             float(bw or 0) / 10.0, float(odds or 0) / 10.0))
+        stats["rows"] += 1
+    stats["races"] = len(races)
+    return races, stats
+
+
+# ---------------------------------------------------------------------------------------------------- 標準タイム
+
+def winner_sec_per_km(race: Race) -> float:
+    vals = {r.sec_per_km for r in race.runs if r.finish == 1 and not math.isnan(r.sec_per_km)}
+    return vals.pop() if len(vals) == 1 else math.nan     # 同着は同じ値。違う値なら使わない
+
+
+@dataclass
+class ParModel:
+    est_years: tuple[int, ...]
+    cell_level: dict           # 元のセル → 使う水準 (自身 / 共有 / None)
+    coef: dict                 # 列名 → 係数
+    columns: list
+    counts: dict
+
+    def base(self, race: Race) -> float:
+        """評価値の基準 a[セル] + g[芝ダ×馬場状態] (秒 / km)。クラスと年齢の区分は含めない (2a)。"""
+        level = self.level_of(race)
+        if level is None:
+            return math.nan
+        return self.coef["intercept"] + self.coef.get(f"cell={level}", 0.0) + self.coef.get(f"going={race.going}", 0.0)
+
+    def fitted(self, race: Race) -> float:
+        """局外の補正も含めた期待勝ち時計 (秒 / km)。年齢の区分が欠損なら NaN。"""
+        b = self.base(race)
+        if math.isnan(b) or race.age is None or race.cls is None:
+            return math.nan
+        return b + self.coef.get(f"class={race.cls}", 0.0) + self.coef.get(f"age={race.age}", 0.0)
+
+    def level_of(self, race: Race):
+        return self.cell_level.get((race.track, race.track_type, race.distance))
+
+
+def fit_par_model(races: dict[str, Race], est_years: tuple[int, ...]) -> ParModel:
+    """推定期間のレースだけで、勝ち時計 / km の最小二乗を解く (1 レース 1 観測)。疎なセルは探索台帳 A-1 の規則。"""
+    est = [r for r in races.values() if int(r.ymd[:4]) in est_years]
+    usable = [r for r in est if not math.isnan(winner_sec_per_km(r)) and r.age is not None and r.cls is not None]
+    cell_n = Counter((r.track, r.track_type, r.distance) for r in usable)
+    sparse_n = Counter(("pooled", r.surface, r.distance) for r in usable if cell_n[(r.track, r.track_type, r.distance)] < MIN_CELL_RACES)
+    cell_level: dict = {}
+    for cell, n in cell_n.items():
+        if n >= MIN_CELL_RACES:
+            cell_level[cell] = cell
+    surface_of_type = {r.track_type: r.surface for r in usable}
+    for cell, n in cell_n.items():
+        if n < MIN_CELL_RACES:
+            pooled = ("pooled", surface_of_type[cell[1]], cell[2])
+            cell_level[cell] = pooled if sparse_n[pooled] >= MIN_CELL_RACES else None
+    fit_races = [r for r in usable if cell_level.get((r.track, r.track_type, r.distance)) is not None]
+    levels = sorted({cell_level[(r.track, r.track_type, r.distance)] for r in fit_races}, key=str)
+    goings = sorted({r.going for r in fit_races})
+    classes = sorted({r.cls for r in fit_races} - {REF_CLASS})
+    ages = sorted({r.age for r in fit_races} - {REF_AGE})
+    columns = (["intercept"] + [f"cell={lv}" for lv in levels[1:]] + [f"going={g}" for g in goings[1:]]
+               + [f"class={c}" for c in classes] + [f"age={a}" for a in ages])
+    idx = {c: i for i, c in enumerate(columns)}
+    X = np.zeros((len(fit_races), len(columns)))
+    y = np.zeros(len(fit_races))
+    for i, r in enumerate(fit_races):
+        X[i, 0] = 1.0
+        for key in (f"cell={cell_level[(r.track, r.track_type, r.distance)]}", f"going={r.going}",
+                    f"class={r.cls}", f"age={r.age}"):
+            if key in idx:
+                X[i, idx[key]] = 1.0
+        y[i] = winner_sec_per_km(r)
+    beta, *_ = np.linalg.lstsq(X, y, rcond=None)
+    coef = dict(zip(columns, (float(b) for b in beta)))
+    counts = {"est_races": len(est), "usable_races": len(usable), "fit_races": len(fit_races),
+              "cells": len(cell_n), "sparse_cells": sum(n < MIN_CELL_RACES for n in cell_n.values()),
+              "races_in_sparse_cells": sum(n for n in cell_n.values() if n < MIN_CELL_RACES),
+              "races_unrated_cells": len(usable) - len(fit_races),
+              "races_age_unknown": sum(r.age is None for r in est)}
+    return ParModel(tuple(est_years), cell_level, coef, columns, counts)
+
+
+# ---------------------------------------------------------------------------------------------------- 馬場差・斤量・尺度
+
+def day_variants(races: dict[str, Race], par: ParModel, how: str) -> dict[tuple, float]:
+    """{(日, 競馬場, 芝ダ): 馬場差 (秒 / km)}。V0 は空。1 レース 1 観測で、自レースを含む。3 未満の区分は 0 (= 載せない)。"""
+    if how == "V0":
+        return {}
+    eps: dict[tuple, list[float]] = defaultdict(list)
+    for r in races.values():
+        w = winner_sec_per_km(r)
+        f = par.fitted(r)
+        if not math.isnan(w) and not math.isnan(f):
+            eps[(r.ymd, r.track, r.surface)].append(w - f)
+    agg = {"V1": lambda v: float(np.mean(v)), "V2": lambda v: float(np.median(v))}[how]
+    return {k: agg(v) for k, v in eps.items() if len(v) >= MIN_VARIANT_RACES}
+
+
+def raw_residual(run: Run, race: Race, par: ParModel, variants: dict, w: float) -> float:
+    """馬の 1 走の残差 (秒 / km、clip の前)。遅いほど大。"""
+    base = par.base(race)
+    if math.isnan(base) or math.isnan(run.sec_per_km):
+        return math.nan
+    return run.sec_per_km - base - variants.get((race.ymd, race.track, race.surface), 0.0) - w * (run.burden_kg - BASE_WEIGHT_KG)
+
+
+def fit_weight_effect(races: dict[str, Race], par: ParModel, variants: dict, est_years: tuple[int, ...]) -> dict:
+    """W1: 推定期間の走で、同じ馬の中で斤量 1 kg あたりの残差 (秒 / km) を最小二乗で推定する。ハンデ戦は除く。
+
+    係数が 0 以下 (重いほど速い) なら W1 は無効 (`valid` False、呼び出し側は w = 0 = W0 として扱う)。
+    """
+    by_horse: dict[str, list[tuple[float, float]]] = defaultdict(list)
+    for r in races.values():
+        if int(r.ymd[:4]) not in est_years or r.weight_type == HANDICAP:
+            continue
+        for run in r.runs:
+            if run.abnormal in REFUNDED or not run.horse:
+                continue
+            res = raw_residual(run, r, par, variants, 0.0)
+            if not math.isnan(res) and abs(res) <= CLIP_SEC_PER_KM:
+                by_horse[run.horse].append((run.burden_kg, res))
+    xs, ys = [], []
+    for obs in by_horse.values():
+        if len(obs) < 2:
+            continue
+        mx = sum(o[0] for o in obs) / len(obs)
+        my = sum(o[1] for o in obs) / len(obs)
+        xs += [o[0] - mx for o in obs]
+        ys += [o[1] - my for o in obs]
+    x, y = np.array(xs), np.array(ys)
+    w = float(x @ y / (x @ x)) if len(x) and (x @ x) > 0 else math.nan
+    return {"w": w, "valid": bool(w > 0), "n_runs": len(x)}
+
+
+def clip_residual(res: float) -> float:
+    if math.isnan(res):
+        return res
+    return max(-CLIP_SEC_PER_KM, min(CLIP_SEC_PER_KM, res))
+
+
+def fit_scale(races: dict[str, Race], par: ParModel, variants: dict, w: float, est_years: tuple[int, ...]) -> dict:
+    """S2: 推定期間の (芝ダ, 距離の帯) ごとの、馬単位の残差 (clip の後) の SD。"""
+    vals: dict[tuple, list[float]] = defaultdict(list)
+    for r in races.values():
+        if int(r.ymd[:4]) not in est_years:
+            continue
+        for run in r.runs:
+            if run.abnormal in REFUNDED:
+                continue
+            res = clip_residual(raw_residual(run, r, par, variants, w))
+            if not math.isnan(res):
+                vals[(r.surface, dist_band(r.distance))].append(res)
+    return {k: float(np.std(v)) for k, v in vals.items() if len(v) >= 2}
+
+
+@dataclass
+class Spec:
+    scale: str      # S1 / S2
+    variant: str    # V0 / V1 / V2
+    weight: str     # W0 / W1
+
+    @property
+    def name(self) -> str:
+        return f"{self.scale}{self.variant}{self.weight}"
+
+
+@dataclass
+class RatingTables:
+    """ある推定期間で凍結した、評価値の計算に要る物一式。"""
+    spec: Spec
+    par: ParModel
+    variants: dict
+    w: float
+    weight_fit: dict | None
+    scales: dict | None
+
+
+def fit_tables(races: dict[str, Race], spec: Spec, est_years: tuple[int, ...]) -> RatingTables:
+    par = fit_par_model(races, est_years)
+    variants = day_variants(races, par, spec.variant)
+    weight_fit = None
+    w = 0.0
+    if spec.weight == "W1":
+        weight_fit = fit_weight_effect(races, par, variants, est_years)
+        w = weight_fit["w"] if weight_fit["valid"] else 0.0
+    scales = fit_scale(races, par, variants, w, est_years) if spec.scale == "S2" else None
+    return RatingTables(spec, par, variants, w, weight_fit, scales)
+
+
+def rate_runs(races: dict[str, Race], tables: RatingTables) -> tuple[dict[str, list[tuple[int, float]]], Counter]:
+    """{馬: [(日の通し番号, 評価値)] (日付順)}。評価値は速いほど大。時計・基準の無い走は入れない。"""
+    out: dict[str, list[tuple[int, float]]] = defaultdict(list)
+    stats: Counter = Counter()
+    for r in sorted(races.values(), key=lambda x: x.ymd):
+        for run in r.runs:
+            if run.abnormal in REFUNDED or not run.horse:
+                continue
+            res = raw_residual(run, r, tables.par, tables.variants, tables.w)
+            if math.isnan(res):
+                stats["unrated_runs"] += 1
+                continue
+            stats["rated_runs"] += 1
+            if res > CLIP_SEC_PER_KM:
+                stats["clipped_slow"] += 1
+            elif res < -CLIP_SEC_PER_KM:
+                stats["clipped_fast"] += 1
+            res = clip_residual(res)
+            if tables.scales is not None:
+                sd = tables.scales.get((r.surface, dist_band(r.distance)))
+                if not sd:
+                    stats["unrated_no_scale"] += 1
+                    continue
+                res = res / sd
+            out[run.horse].append((run.ordinal, -res))
+    return out, stats
+
+
+# ---------------------------------------------------------------------------------------------------- 成分
+
+def horse_components(history: list[tuple[int, float]], target_ordinal: int) -> dict[str, float]:
+    """対象日の 365 日前から前日までの評価値から、last / best3 / trend を作る (rank は別)。"""
+    lo = bisect_left(history, (target_ordinal - WINDOW_DAYS, -math.inf))
+    hi = bisect_left(history, (target_ordinal, -math.inf))
+    window = history[lo:hi]
+    if not window:
+        return {"perf_rating_last": math.nan, "perf_rating_best3_365": math.nan, "perf_rating_trend_365": math.nan}
+    vals = [v for _, v in window]
+    best3 = sorted(vals, reverse=True)[:3]
+    trend = math.nan
+    if len(window) >= 3:
+        x = np.array([d for d, _ in window], dtype=float) / 100.0
+        y = np.array(vals)
+        x = x - x.mean()
+        if (x @ x) > 0:
+            trend = float(x @ (y - y.mean()) / (x @ x))
+    return {"perf_rating_last": window[-1][1], "perf_rating_best3_365": float(np.mean(best3)),
+            "perf_rating_trend_365": trend}
+
+
+def rank_in_race(values: list[float]) -> list[float]:
+    """欠損でない馬だけで順位を付け (1 = 最良、同値は平均順位)、(n − rank + 0.5) / n。欠損は NaN。"""
+    valid = [v for v in values if not math.isnan(v)]
+    n = len(valid)
+    out = []
+    for v in values:
+        if math.isnan(v):
+            out.append(math.nan)
+            continue
+        better = sum(u > v for u in valid)
+        ties = sum(u == v for u in valid)
+        rank = better + (ties + 1) / 2.0
+        out.append((n - rank + 0.5) / n)
+    return out
+
+
+def target_samples(races: dict[str, Race], years: tuple[int, ...], ratings: dict, counts: Counter) -> list[dict]:
+    """対象レースの標本 (選択集合の馬ごとに 1 行)。市場の確率は選択集合の中で正規化し直す (§8-6)。"""
+    out = []
+    for r in sorted(races.values(), key=lambda x: x.race_id):
+        if int(r.ymd[:4]) not in years:
+            continue
+        counts["target_races_seen"] += 1
+        winners = [x for x in r.runs if x.finish == 1]
+        if len(winners) != 1:
+            counts["drop_dead_heat_or_no_winner"] += 1
+            continue
+        choice = [x for x in r.runs if x.abnormal not in REFUNDED]
+        if any(x.win_odds <= 0 for x in choice):
+            counts["drop_runner_without_price"] += 1
+            continue
+        if not choice or winners[0] not in choice:
+            counts["drop_winner_not_in_choice_set"] += 1
+            continue
+        inv = [1.0 / x.win_odds for x in choice]
+        total = sum(inv)
+        target_ord = day_ordinal(r.ymd)
+        rows = []
+        for x, q in zip(choice, inv):
+            comp = horse_components(ratings.get(x.horse, []), target_ord)
+            rows.append({"race_id": r.race_id, "year": int(r.ymd[:4]), "horse_num": x.horse_num, "horse": x.horse,
+                         "won": 1 if x.finish == 1 else 0, "p_market": q / total, **comp})
+        for row, rk in zip(rows, rank_in_race([row["perf_rating_best3_365"] for row in rows])):
+            row["perf_rating_rank_in_race"] = rk
+        out.extend(rows)
+        counts["target_races_used"] += 1
+    return out
+
+
+# ---------------------------------------------------------------------------------------------------- 標準化・合成・推定
+
+def standardizer(rows: list[dict], cols) -> dict[str, tuple[float, float]]:
+    """欠損でない行だけで平均・SD (§8-4 の手順 4)。"""
+    out = {}
+    for c in cols:
+        v = np.array([r[c] for r in rows if not math.isnan(r[c])])
+        out[c] = (float(v.mean()), float(v.std())) if len(v) > 1 and v.std() > 0 else (0.0, 1.0)
+    return out
+
+
+def apply_standardizer(rows: list[dict], std: dict, suffix: str = "_z") -> None:
+    for r in rows:
+        for c, (m, s) in std.items():
+            r[c + suffix] = 0.0 if math.isnan(r[c]) else (r[c] - m) / s
+
+
+def clogit_with_se(samples: list[dict], cols: list[str]) -> dict:
+    """条件付きロジットの係数と、ヘッセ行列からの SE (選択の基準の z 用。主検定の区間には使わない)。"""
+    from predictor.eval_stats import conditional_logit
+    beta, ok = conditional_logit(samples, cols, with_status=True)
+    if not ok:
+        return {"beta": beta, "se": [math.nan] * len(cols), "converged": False}
+    by_race: dict[str, list[dict]] = defaultdict(list)
+    for s in samples:
+        by_race[s["race_id"]].append(s)
+    b = np.array(beta)
+    info = np.zeros((len(cols), len(cols)))
+    for rows in by_race.values():
+        if sum(r["won"] for r in rows) <= 0:
+            continue
+        X = np.array([[r[c] for c in cols] for r in rows], dtype=float)
+        u = X @ b
+        u -= u.max()
+        p = np.exp(u)
+        p /= p.sum()
+        info += X.T @ (np.diag(p) - np.outer(p, p)) @ X
+    se = np.sqrt(np.diag(np.linalg.inv(info)))
+    return {"beta": [float(x) for x in b], "se": [float(x) for x in se], "converged": True}
+
+
+def add_market_logit(rows: list[dict]) -> None:
+    for r in rows:
+        p = min(max(r["p_market"], 1e-6), 1 - 1e-6)
+        r["logit_p_market"] = math.log(p / (1 - p))
+
+
+def fit_composite(fit_rows: list[dict]) -> dict:
+    """学習の行で、市場 + 標準化した 4 成分の条件付きロジットを解き、逆符号の成分は重み 0 (§8-4 の手順 3)。"""
+    std = standardizer(fit_rows, COMPONENTS)
+    apply_standardizer(fit_rows, std)
+    cols = ["logit_p_market"] + [c + "_z" for c in COMPONENTS]
+    res = clogit_with_se(fit_rows, cols)
+    raw_w = dict(zip(COMPONENTS, res["beta"][1:]))
+    weights = {c: (w if (not math.isnan(w) and w > 0) else 0.0) for c, w in raw_w.items()}
+    for r in fit_rows:
+        r["S_raw"] = sum(weights[c] * r[c + "_z"] for c in COMPONENTS)
+        r["S_missing"] = all(math.isnan(r[c]) for c in COMPONENTS)
+    s_vals = np.array([r["S_raw"] for r in fit_rows if not r["S_missing"]])
+    s_std = (float(s_vals.mean()), float(s_vals.std())) if len(s_vals) > 1 and s_vals.std() > 0 else (0.0, 1.0)
+    return {"standardizer": std, "raw_weights": raw_w, "weights": weights, "S_standardizer": s_std,
+            "fit_clogit": res, "zeroed": [c for c, w in raw_w.items() if weights[c] == 0.0]}
+
+
+def apply_composite(rows: list[dict], comp: dict) -> None:
+    apply_standardizer(rows, comp["standardizer"])
+    m, s = comp["S_standardizer"]
+    for r in rows:
+        missing = all(math.isnan(r[c]) for c in COMPONENTS)
+        raw = sum(comp["weights"][c] * r[c + "_z"] for c in COMPONENTS)
+        r["S"] = 0.0 if missing else (raw - m) / s
