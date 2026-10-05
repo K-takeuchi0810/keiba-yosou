@@ -1,7 +1,18 @@
 {
  "created_by": "scripts/group_a_class_table.py build",
- "git_sha": "5f8976ebb4719839db56332e9add096097a39010",
- "script_sha256": "16140eb6c3c625a7f667c581e9f23574e079f818a559813b9f3e69eb35eef501",
+ "built_at": "2026-10-05T22:50:52+09:00",
+ "argv": [
+  "build",
+  "--raw-dir",
+  "C:/Users/kizun/dev/keiba-yosou/data/raw/RACE",
+  "--out-dir",
+  "data/backtest/group_a_class_20261005"
+ ],
+ "raw_dir": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\raw\\RACE",
+ "git_sha": "adc8a4ed491f7b25923e8e42de1727a2fd8a9ab6",
+ "git_dirty": false,
+ "parser_sha256": "9b8cf34186190c5966c228ac33a5679a016dbc9b23f475f3a953a20de720ec2b",
+ "script_sha256": "813e6f8a50b0fd71430c6b640694d3e06c1f538a0cad5ed91858f69d418f70f6",
  "mapping_version": "class_v1",
  "range": [
   "20210101",
@@ -18,7 +29,14 @@
   "c5": 632,
   "cmin": 635
  },
+ "note": "表は JRA の全レースの超集合 (障害・data_div 9 を含む)。利用側が平地・data_div 7 に絞る",
  "n_races": 17292,
+ "record_counts": {
+  "records_read": 41828,
+  "records_used": 19621,
+  "skipped_non_jra": 13115,
+  "skipped_out_of_range": 9092
+ },
  "counts_by_year_class": {
   "2021": {
    "703": 1242,
@@ -59,6 +77,48 @@
    "010": 466,
    "016": 217,
    "999": 312
+  }
+ },
+ "counts_by_year_class_data_div_7": {
+  "2021": {
+   "703": 1242,
+   "701": 297,
+   "005": 925,
+   "010": 477,
+   "016": 214,
+   "999": 301
+  },
+  "2022": {
+   "703": 1237,
+   "701": 301,
+   "005": 933,
+   "010": 467,
+   "016": 213,
+   "999": 305
+  },
+  "2023": {
+   "703": 1228,
+   "701": 302,
+   "005": 934,
+   "010": 468,
+   "016": 212,
+   "999": 312
+  },
+  "2024": {
+   "703": 1230,
+   "701": 302,
+   "005": 933,
+   "016": 212,
+   "999": 309,
+   "010": 468
+  },
+  "2025": {
+   "703": 1252,
+   "701": 304,
+   "005": 909,
+   "010": 464,
+   "016": 216,
+   "999": 310
   }
  },
  "n_races_with_different_age_slot_codes": 0,
