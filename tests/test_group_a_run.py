@@ -307,8 +307,25 @@ def test_history_mismatch_stops_the_arm_before_the_lock(patched, tmp_path, monke
         con.close()
 
 
-def test_lock_is_committed_checks_git(tmp_path):
-    f = g.ROOT / "data" / "backtest" / "group_a_20261005" / "mutation" / "README.md"     # 追跡されているファイル
-    assert run._lock_is_committed(f) is True
-    assert run._lock_is_committed(g.ROOT / "data" / "backtest" / "group_a_20261005" / "no_such_lock.json") is False
-
+def test_lock_is_committed_checks_git(tmp_path, monkeypatch):
+    """自分で作った一時の git repo で、コミット済み / 変更あり / 未追跡 / repo の外 を確かめる (環境の repo に依存しない)。"""
+    import subprocess
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    def git(*a):
+        subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)
+    git("init", "-q")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "t")
+    lock = repo / "PRIMARY_LOCK.json"
+    lock.write_text("{}", encoding="utf-8")
+    git("add", "PRIMARY_LOCK.json")
+    git("commit", "-q", "-m", "lock")
+    monkeypatch.setattr(g, "ROOT", repo)
+    assert run._lock_is_committed(lock) is True
+    lock.write_text('{"x": 1}', encoding="utf-8")                     # コミットの後に書き換えた
+    assert run._lock_is_committed(lock) is False
+    other = repo / "OTHER.json"
+    other.write_text("{}", encoding="utf-8")                          # 未追跡
+    assert run._lock_is_committed(other) is False
+    assert run._lock_is_committed(tmp_path / "outside.json") is False   # repo の外
