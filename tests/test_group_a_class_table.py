@@ -105,3 +105,73 @@ def test_probe_checks_the_age_slot_as_well(tmp_path, monkeypatch):
     assert rep["ok"] is False and rep["mismatch"] == 1
     _file(raw, "RAVM1.jvd", _ra(c2="000", c3="000", c4="005", c5="005", cmin="005"))
     assert g.probe(raw)["ok"] is True
+
+
+# --- 2026-10-05 レビューの指摘 (4 名) の反映 ---------------------------------------------------------
+
+def test_short_record_stops(tmp_path):
+    f = _file(tmp_path, "RAVM1.jvd", _ra()[:640])
+    with pytest.raises(g.ClassTableError, match="短いレコード"):
+        g.extract([f])
+
+
+def test_cancelled_race_is_kept_with_its_data_div(tmp_path):
+    f = _file(tmp_path, "RAVM1.jvd", _ra(div="9"))
+    assert g.extract([f])["20230603_05_03_01_05"]["data_divs"] == {"9"}
+
+
+def test_distance_conflict_for_the_same_race_stops(tmp_path):
+    a = _file(tmp_path, "RAVM1.jvd", _ra())
+    rec = bytearray(_ra()); rec[697:701] = b"1800"
+    b = _file(tmp_path, "RASW1.jvd", bytes(rec))
+    with pytest.raises(g.ClassTableError, match="食い違う"):
+        g.extract([a, b])
+
+
+def test_skipped_records_are_counted(tmp_path):
+    f = _file(tmp_path, "RAVM1.jvd", _ra(tc="30"), _ra(ymd="20201231"), _ra(ymd="2023XX03"), _ra())
+    counts = g.Counter()
+    g.extract([f], counts=counts)
+    assert counts == {"records_read": 4, "skipped_non_jra": 1, "skipped_out_of_range": 1,
+                      "skipped_non_numeric_date": 1, "records_used": 1}
+
+
+def test_empty_raw_dir_stops(tmp_path):
+    with pytest.raises(g.ClassTableError, match=r"RA\*\.jvd が無い"):
+        g.build(tmp_path, tmp_path / "out")
+
+
+def test_failed_build_leaves_no_table(tmp_path):
+    raw = tmp_path / "raw"; raw.mkdir()
+    _file(raw, "RAVM1.jvd", _ra(rn="01"), _ra(rn="02", cmin="000"))
+    with pytest.raises(g.ClassTableError):
+        g.build(raw, tmp_path / "out")
+    assert not (tmp_path / "out").exists() or not list((tmp_path / "out").iterdir())
+
+
+def test_probe_reports_a_race_missing_from_raw(tmp_path, monkeypatch):
+    raw = tmp_path / "raw"; raw.mkdir()
+    _file(raw, "RAVM1.jvd", _ra())
+    monkeypatch.setattr(g, "_load_expected", lambda: {"20230603_05_03_01_05": ("701", 2),
+                                                      "20230603_05_03_01_06": ("703", 3)})
+    rep = g.probe(raw)
+    assert rep["mismatch"] == 1 and [r.get("reason") for r in rep["rows"]] == [None, "raw に無い"]
+
+
+def test_git_provenance_is_unknown_when_git_fails(monkeypatch):
+    def boom(*a, **k):
+        raise FileNotFoundError("git")
+    monkeypatch.setattr(g.subprocess, "run", boom)
+    p = g.git_provenance()
+    assert p["git_sha"] == "unknown" and p["git_dirty"] is None and len(p["parser_sha256"]) == 64
+
+
+def test_manifest_records_counts_and_provenance(tmp_path):
+    raw = tmp_path / "raw"; raw.mkdir()
+    _file(raw, "RAVM1.jvd", _ra(), _ra(rn="06", div="9", c2="703", cmin="703"))
+    m = g.build(raw, tmp_path / "out", argv=["build", "--raw-dir", str(raw)])
+    assert m["record_counts"] == {"records_read": 2, "records_used": 2}
+    assert m["counts_by_year_class"] == {"2023": {"701": 1, "703": 1}}
+    assert m["counts_by_year_class_data_div_7"] == {"2023": {"701": 1}}
+    assert m["argv"][0] == "build" and m["raw_files"][0]["sha256"] == g.sha256(raw / "RAVM1.jvd")
+    assert {"git_sha", "git_dirty", "parser_sha256", "built_at"} <= set(m)

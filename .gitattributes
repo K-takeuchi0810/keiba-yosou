@@ -20,3 +20,6 @@ data/backtest/frozen_*/*model*.txt -text
 data/backtest/post_demotion_*/*model*.txt -text
 # Group A のクラスの凍結した表 (2026-10-05)。MANIFEST.json の sha256 と合わせるため改行を変換しない
 data/backtest/group_a_class_*/class_table.csv -text
+# Group A のクラスの抽出 script と probe の期待値は sha256 を記録しているので、新規 clone でも LF のままにする (2026-10-05)
+scripts/group_a_class_table.py text eol=lf
+data/backtest/group_a_class_*/expected_jra_official.py text eol=lf
