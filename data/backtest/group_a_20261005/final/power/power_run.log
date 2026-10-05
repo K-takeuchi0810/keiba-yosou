@@ -1,0 +1,23 @@
+{
+ "power": {
+  "se_analytic_2025": 0.037887352664103834,
+  "se_train_boot": 0.022741316377061737,
+  "n_train_races": 9974,
+  "n_target_races": 3335,
+  "se_train_scaled": 0.03932804543624754,
+  "se_fixed": 0.03932804543624754,
+  "critical_multiplier": 3.4174505371218147,
+  "mde": 0.13440165000005527,
+  "beta_target": 0.11157177565710488,
+  "inconclusive_by_power": true,
+  "rule": "MDE > beta_target なら、主検定は結果に関係なく PRIMARY_INCONCLUSIVE (§8-4)。主検定は 1 回実行して記録する"
+ },
+ "fisher_se": 0.037887352664103834,
+ "rho": 0.44269703046747544,
+ "purchase": {
+  "threshold_S": 2.0,
+  "n_horses": 97,
+  "n_rows": 46320
+ }
+}
+rc=0 git=38c89e7 end=2026-10-06 01:05:45
