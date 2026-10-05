@@ -126,3 +126,12 @@ def test_power_module_never_estimates_beta(monkeypatch):
     import inspect
     src = inspect.getsource(pw)
     assert "conditional_logit" not in src.replace("条件付きロジット", "") and "clogit_with_se" not in src
+
+
+def test_fisher_information_uses_the_market_probabilities_exactly():
+    """1 レース 3 頭、p = (0.6, 0.3, 0.1)、S = (1, 0, 0): 市場の確率で重み付けた S の分散 = 0.6 − 0.6² = 0.24。"""
+    ps = (0.6, 0.3, 0.1)
+    rows = [{"race_id": "r", "p_market": p, "S": s, "logit_p_market": math.log(p / (1 - p))}
+            for p, s in zip(ps, (1.0, 0.0, 0.0))]
+    out = pw.fisher_se_at_null(rows + [{**r, "race_id": "q", "S": 1.0 - r["S"]} for r in rows])
+    assert out["info"][1][1] == pytest.approx(0.24 + (0.4 - 0.4 ** 2))      # 2 レース目は S = (0, 1, 1)
