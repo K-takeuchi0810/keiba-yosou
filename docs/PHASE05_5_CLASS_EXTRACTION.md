@@ -54,7 +54,7 @@
 - MANIFEST には build の時点の HEAD・作業ツリーの未コミットの変更の有無 (`git_dirty`)・script と parser の sha256・argv・
   読んだ / 飛ばしたレコードの件数を残す。script と期待値のファイルは `.gitattributes` で `eol=lf` に固定する
 - canonical class のカテゴリを足すときは、`MAPPING_VERSION` を上げ、この文書・`TARGETS.md` の写像・期待値の docstring も直す
-- parser の private な `_split_fixed` に依存する (名前が変われば import の段で止まる。黙って壊れない)
+- parser の private な `_split_fixed` に依存する (名前が変われば、最初の呼び出しで AttributeError で止まる。黙って壊れない)
 
 ## クラスの補正の意味 (外部の指示者の決定 2a、`PHASE05_5_PREREG.md` §8-4b に明文化)
 

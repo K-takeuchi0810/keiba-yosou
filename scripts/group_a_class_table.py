@@ -2,7 +2,7 @@
 
 仕様: `docs/PHASE05_5_CLASS_EXTRACTION.md`。DB には書かない (raw の読み取りだけ)。共有の `jvlink_client/parser.py` には
 足さない (ai-builder が import する経路を変えないため)。parser からはレコードの分割 (`_split_fixed`、private。名前が
-変わればこの script は import の段で止まる) と、レースを特定する項目の読み取り (`parse_ra`) だけを使う。
+変われば最初の呼び出しで AttributeError で止まる) と、レースを特定する項目の読み取り (`parse_ra`) だけを使う。
 
 表は **JRA の全レースの超集合** (障害・中止 `data_div = 9` を含む)。Group A の利用側が平地・`data_div = 7` に絞る。
 
