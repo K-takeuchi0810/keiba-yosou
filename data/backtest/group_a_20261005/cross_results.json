@@ -1,0 +1,2083 @@
+{
+ "mode": "cross",
+ "git_sha": "7203b2b244ecbd0124b050fb20b438aadfa542b0",
+ "git_dirty": false,
+ "db": "C:/Users/kizun/dev/keiba-yosou/data/keiba.db",
+ "load_stats": {
+  "rows": 184146,
+  "skip_obstacle_rows": 5748,
+  "races": 13316
+ },
+ "years_loaded": [
+  2021,
+  2022,
+  2023,
+  2024
+ ],
+ "results": [
+  {
+   "spec": "S1V0W0",
+   "est_years": [
+    2022
+   ],
+   "eval_years": [
+    2023
+   ],
+   "z": 0.9140893501628329,
+   "beta_S": 0.04134932311703926,
+   "se_S": 0.045235537543100605,
+   "beta_market": 0.8740308539475533,
+   "converged": true,
+   "w1": null,
+   "w_used": 0.0,
+   "raw_weights": {
+    "perf_rating_last": -0.07718888398641671,
+    "perf_rating_best3_365": 0.05194512549866207,
+    "perf_rating_trend_365": -0.02528325921257273,
+    "perf_rating_rank_in_race": -0.01012774545976543
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.05194512549866207,
+    "perf_rating_trend_365": 0.0,
+    "perf_rating_rank_in_race": 0.0
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_trend_365",
+    "perf_rating_rank_in_race"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 50.86993885227033,
+    "perf_rating_last": -1.608436975957057,
+    "perf_rating_best3_365": 0.5164857787472412,
+    "perf_rating_trend_365": -0.9416343276571006,
+    "perf_rating_rank_in_race": -0.22310968157996555
+   },
+   "par_counts": {
+    "est_races": 3331,
+    "usable_races": 3331,
+    "fit_races": 3234,
+    "cells": 89,
+    "sparse_cells": 32,
+    "races_in_sparse_cells": 239,
+    "races_unrated_cells": 97,
+    "races_age_unknown": 0
+   },
+   "n_variants": 0,
+   "rating_stats": {
+    "rated_runs": 163707,
+    "clipped_slow": 13224,
+    "unrated_runs": 19760
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.12400539153876255,
+    "perf_rating_best3_365": 0.12400539153876255,
+    "perf_rating_trend_365": 0.347254228444715,
+    "perf_rating_rank_in_race": 0.12400539153876255
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11195420952213864,
+    "perf_rating_best3_365": 0.11195420952213864,
+    "perf_rating_trend_365": 0.32831860347814645,
+    "perf_rating_rank_in_race": 0.11195420952213864
+   },
+   "counts_fit": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "counts_eval": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "n_eval_rows": 45998,
+   "corr_S_market_within_race": 0.4563422774601461,
+   "corr_S_past_field_size_within_race": -0.07215648786599223,
+   "seconds": 5.6
+  },
+  {
+   "spec": "S1V0W0",
+   "est_years": [
+    2023
+   ],
+   "eval_years": [
+    2022
+   ],
+   "z": -1.9655710201405834,
+   "beta_S": -0.08276179686600804,
+   "se_S": 0.04210572704724181,
+   "beta_market": 0.914916052335684,
+   "converged": true,
+   "w1": null,
+   "w_used": 0.0,
+   "raw_weights": {
+    "perf_rating_last": 0.027876817673301628,
+    "perf_rating_best3_365": 0.15410119207674308,
+    "perf_rating_trend_365": 0.0402674262677279,
+    "perf_rating_rank_in_race": -0.07264294750525932
+   },
+   "weights": {
+    "perf_rating_last": 0.027876817673301628,
+    "perf_rating_best3_365": 0.15410119207674308,
+    "perf_rating_trend_365": 0.0402674262677279,
+    "perf_rating_rank_in_race": 0.0
+   },
+   "zeroed": [
+    "perf_rating_rank_in_race"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 49.63253602124597,
+    "perf_rating_last": 0.5956876170766384,
+    "perf_rating_best3_365": 1.4885851456700212,
+    "perf_rating_trend_365": 1.5220018735952061,
+    "perf_rating_rank_in_race": -1.5627373551591908
+   },
+   "par_counts": {
+    "est_races": 3329,
+    "usable_races": 3329,
+    "fit_races": 3237,
+    "cells": 103,
+    "sparse_cells": 39,
+    "races_in_sparse_cells": 312,
+    "races_unrated_cells": 92,
+    "races_age_unknown": 0
+   },
+   "n_variants": 0,
+   "rating_stats": {
+    "rated_runs": 178439,
+    "clipped_slow": 13358,
+    "unrated_runs": 5028
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.11050680935985438,
+    "perf_rating_best3_365": 0.11050680935985438,
+    "perf_rating_trend_365": 0.32408605451873945,
+    "perf_rating_rank_in_race": 0.11050680935985438
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11191790947432496,
+    "perf_rating_best3_365": 0.11191790947432496,
+    "perf_rating_trend_365": 0.33034044958476455,
+    "perf_rating_rank_in_race": 0.11191790947432496
+   },
+   "counts_fit": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "counts_eval": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "n_eval_rows": 45599,
+   "corr_S_market_within_race": 0.5027147045253647,
+   "corr_S_past_field_size_within_race": -0.027056599271679947,
+   "seconds": 5.5
+  },
+  {
+   "spec": "S1V0W1",
+   "est_years": [
+    2022
+   ],
+   "eval_years": [
+    2023
+   ],
+   "z": 0.8051314367007992,
+   "beta_S": 0.036729915521769685,
+   "se_S": 0.04561977566331093,
+   "beta_market": 0.8747166138618646,
+   "converged": true,
+   "w1": {
+    "w": 0.05005514594154261,
+    "valid": true,
+    "n_runs": 36139
+   },
+   "w_used": 0.05005514594154261,
+   "raw_weights": {
+    "perf_rating_last": -0.08088863264711017,
+    "perf_rating_best3_365": 0.05088870789596601,
+    "perf_rating_trend_365": -0.027625410324596204,
+    "perf_rating_rank_in_race": -0.010531909791789138
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.05088870789596601,
+    "perf_rating_trend_365": 0.0,
+    "perf_rating_rank_in_race": 0.0
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_trend_365",
+    "perf_rating_rank_in_race"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 50.97177747151283,
+    "perf_rating_last": -1.6577653509941643,
+    "perf_rating_best3_365": 0.5008330736599609,
+    "perf_rating_trend_365": -1.0339980298697555,
+    "perf_rating_rank_in_race": -0.23267608840635234
+   },
+   "par_counts": {
+    "est_races": 3331,
+    "usable_races": 3331,
+    "fit_races": 3234,
+    "cells": 89,
+    "sparse_cells": 32,
+    "races_in_sparse_cells": 239,
+    "races_unrated_cells": 97,
+    "races_age_unknown": 0
+   },
+   "n_variants": 0,
+   "rating_stats": {
+    "rated_runs": 163707,
+    "clipped_slow": 13665,
+    "unrated_runs": 19760
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.12400539153876255,
+    "perf_rating_best3_365": 0.12400539153876255,
+    "perf_rating_trend_365": 0.347254228444715,
+    "perf_rating_rank_in_race": 0.12400539153876255
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11195420952213864,
+    "perf_rating_best3_365": 0.11195420952213864,
+    "perf_rating_trend_365": 0.32831860347814645,
+    "perf_rating_rank_in_race": 0.11195420952213864
+   },
+   "counts_fit": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "counts_eval": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "n_eval_rows": 45998,
+   "corr_S_market_within_race": 0.45513432500078843,
+   "corr_S_past_field_size_within_race": -0.07215184758326813,
+   "seconds": 5.4
+  },
+  {
+   "spec": "S1V0W1",
+   "est_years": [
+    2023
+   ],
+   "eval_years": [
+    2022
+   ],
+   "z": -1.9233636554286344,
+   "beta_S": -0.08298221199332734,
+   "se_S": 0.04314431738330534,
+   "beta_market": 0.9145986030617531,
+   "converged": true,
+   "w1": {
+    "w": 0.01607846190051128,
+    "valid": true,
+    "n_runs": 36514
+   },
+   "w_used": 0.01607846190051128,
+   "raw_weights": {
+    "perf_rating_last": 0.028289891480000415,
+    "perf_rating_best3_365": 0.17394969969205798,
+    "perf_rating_trend_365": 0.039180085829942146,
+    "perf_rating_rank_in_race": -0.08507944026911309
+   },
+   "weights": {
+    "perf_rating_last": 0.028289891480000415,
+    "perf_rating_best3_365": 0.17394969969205798,
+    "perf_rating_trend_365": 0.039180085829942146,
+    "perf_rating_rank_in_race": 0.0
+   },
+   "zeroed": [
+    "perf_rating_rank_in_race"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 49.676107077814734,
+    "perf_rating_last": 0.5991549487423817,
+    "perf_rating_best3_365": 1.674837153364394,
+    "perf_rating_trend_365": 1.4820143620505601,
+    "perf_rating_rank_in_race": -1.833508519786215
+   },
+   "par_counts": {
+    "est_races": 3329,
+    "usable_races": 3329,
+    "fit_races": 3237,
+    "cells": 103,
+    "sparse_cells": 39,
+    "races_in_sparse_cells": 312,
+    "races_unrated_cells": 92,
+    "races_age_unknown": 0
+   },
+   "n_variants": 0,
+   "rating_stats": {
+    "rated_runs": 178439,
+    "clipped_slow": 13505,
+    "unrated_runs": 5028
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.11050680935985438,
+    "perf_rating_best3_365": 0.11050680935985438,
+    "perf_rating_trend_365": 0.32408605451873945,
+    "perf_rating_rank_in_race": 0.11050680935985438
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11191790947432496,
+    "perf_rating_best3_365": 0.11191790947432496,
+    "perf_rating_trend_365": 0.33034044958476455,
+    "perf_rating_rank_in_race": 0.11191790947432496
+   },
+   "counts_fit": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "counts_eval": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "n_eval_rows": 45599,
+   "corr_S_market_within_race": 0.5037469588124794,
+   "corr_S_past_field_size_within_race": -0.029902244617017536,
+   "seconds": 5.5
+  },
+  {
+   "spec": "S1V1W0",
+   "est_years": [
+    2022
+   ],
+   "eval_years": [
+    2023
+   ],
+   "z": 1.5626496217283123,
+   "beta_S": 0.03602650603263479,
+   "se_S": 0.023054756185707816,
+   "beta_market": 0.8702385794123629,
+   "converged": true,
+   "w1": null,
+   "w_used": 0.0,
+   "raw_weights": {
+    "perf_rating_last": -0.024556201661677227,
+    "perf_rating_best3_365": -0.1318912176551992,
+    "perf_rating_trend_365": -0.0353153267109215,
+    "perf_rating_rank_in_race": 0.08769977235371386
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.0,
+    "perf_rating_trend_365": 0.0,
+    "perf_rating_rank_in_race": 0.08769977235371386
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_best3_365",
+    "perf_rating_trend_365"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 49.71489136524732,
+    "perf_rating_last": -0.46415620770085253,
+    "perf_rating_best3_365": -1.2556730418009887,
+    "perf_rating_trend_365": -1.284397014136315,
+    "perf_rating_rank_in_race": 1.9995005273663429
+   },
+   "par_counts": {
+    "est_races": 3331,
+    "usable_races": 3331,
+    "fit_races": 3234,
+    "cells": 89,
+    "sparse_cells": 32,
+    "races_in_sparse_cells": 239,
+    "races_unrated_cells": 97,
+    "races_age_unknown": 0
+   },
+   "n_variants": 2121,
+   "rating_stats": {
+    "rated_runs": 163707,
+    "clipped_slow": 11877,
+    "unrated_runs": 19760
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.12400539153876255,
+    "perf_rating_best3_365": 0.12400539153876255,
+    "perf_rating_trend_365": 0.347254228444715,
+    "perf_rating_rank_in_race": 0.12400539153876255
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11195420952213864,
+    "perf_rating_best3_365": 0.11195420952213864,
+    "perf_rating_trend_365": 0.32831860347814645,
+    "perf_rating_rank_in_race": 0.11195420952213864
+   },
+   "counts_fit": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "counts_eval": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "n_eval_rows": 45998,
+   "corr_S_market_within_race": 0.4908565053949293,
+   "corr_S_past_field_size_within_race": -0.06100535962433961,
+   "seconds": 5.7
+  },
+  {
+   "spec": "S1V1W0",
+   "est_years": [
+    2023
+   ],
+   "eval_years": [
+    2022
+   ],
+   "z": -0.6231323189101143,
+   "beta_S": -0.029819652699251818,
+   "se_S": 0.047854447272784206,
+   "beta_market": 0.9051541922514615,
+   "converged": true,
+   "w1": null,
+   "w_used": 0.0,
+   "raw_weights": {
+    "perf_rating_last": -0.0166660011182547,
+    "perf_rating_best3_365": 0.2393528323614554,
+    "perf_rating_trend_365": 0.048553745177449224,
+    "perf_rating_rank_in_race": -0.042782691656318754
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.2393528323614554,
+    "perf_rating_trend_365": 0.048553745177449224,
+    "perf_rating_rank_in_race": 0.0
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_rank_in_race"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 48.29967298317954,
+    "perf_rating_last": -0.317456994673651,
+    "perf_rating_best3_365": 2.21016291960509,
+    "perf_rating_trend_365": 1.817240270763955,
+    "perf_rating_rank_in_race": -0.9703985917236088
+   },
+   "par_counts": {
+    "est_races": 3329,
+    "usable_races": 3329,
+    "fit_races": 3237,
+    "cells": 103,
+    "sparse_cells": 39,
+    "races_in_sparse_cells": 312,
+    "races_unrated_cells": 92,
+    "races_age_unknown": 0
+   },
+   "n_variants": 2302,
+   "rating_stats": {
+    "rated_runs": 178439,
+    "clipped_slow": 12500,
+    "unrated_runs": 5028
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.11050680935985438,
+    "perf_rating_best3_365": 0.11050680935985438,
+    "perf_rating_trend_365": 0.32408605451873945,
+    "perf_rating_rank_in_race": 0.11050680935985438
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11191790947432496,
+    "perf_rating_best3_365": 0.11191790947432496,
+    "perf_rating_trend_365": 0.33034044958476455,
+    "perf_rating_rank_in_race": 0.11191790947432496
+   },
+   "counts_fit": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "counts_eval": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "n_eval_rows": 45599,
+   "corr_S_market_within_race": 0.5251233412711205,
+   "corr_S_past_field_size_within_race": -0.018164451789949514,
+   "seconds": 5.7
+  },
+  {
+   "spec": "S1V1W1",
+   "est_years": [
+    2022
+   ],
+   "eval_years": [
+    2023
+   ],
+   "z": 1.2100435749674314,
+   "beta_S": 0.02781317357640458,
+   "se_S": 0.02298526611089454,
+   "beta_market": 0.8724225851098175,
+   "converged": true,
+   "w1": {
+    "w": 0.034484832298340456,
+    "valid": true,
+    "n_runs": 36349
+   },
+   "w_used": 0.034484832298340456,
+   "raw_weights": {
+    "perf_rating_last": -0.031163950477392472,
+    "perf_rating_best3_365": -0.09128617783885573,
+    "perf_rating_trend_365": -0.03614909043368445,
+    "perf_rating_rank_in_race": 0.06594338744359868
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.0,
+    "perf_rating_trend_365": 0.0,
+    "perf_rating_rank_in_race": 0.06594338744359868
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_best3_365",
+    "perf_rating_trend_365"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 49.86286506822298,
+    "perf_rating_last": -0.5818707315672351,
+    "perf_rating_best3_365": -0.859620838881896,
+    "perf_rating_trend_365": -1.318902619302806,
+    "perf_rating_rank_in_race": 1.5012262409918462
+   },
+   "par_counts": {
+    "est_races": 3331,
+    "usable_races": 3331,
+    "fit_races": 3234,
+    "cells": 89,
+    "sparse_cells": 32,
+    "races_in_sparse_cells": 239,
+    "races_unrated_cells": 97,
+    "races_age_unknown": 0
+   },
+   "n_variants": 2121,
+   "rating_stats": {
+    "rated_runs": 163707,
+    "clipped_slow": 12244,
+    "unrated_runs": 19760
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.12400539153876255,
+    "perf_rating_best3_365": 0.12400539153876255,
+    "perf_rating_trend_365": 0.347254228444715,
+    "perf_rating_rank_in_race": 0.12400539153876255
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11195420952213864,
+    "perf_rating_best3_365": 0.11195420952213864,
+    "perf_rating_trend_365": 0.32831860347814645,
+    "perf_rating_rank_in_race": 0.11195420952213864
+   },
+   "counts_fit": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "counts_eval": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "n_eval_rows": 45998,
+   "corr_S_market_within_race": 0.4882447241195428,
+   "corr_S_past_field_size_within_race": -0.0628318113953874,
+   "seconds": 5.4
+  },
+  {
+   "spec": "S1V1W1",
+   "est_years": [
+    2023
+   ],
+   "eval_years": [
+    2022
+   ],
+   "z": -0.6110807011398707,
+   "beta_S": -0.0296806846459328,
+   "se_S": 0.04857081002651263,
+   "beta_market": 0.9050693296133157,
+   "converged": true,
+   "w1": {
+    "w": 0.013366973192244782,
+    "valid": true,
+    "n_runs": 36823
+   },
+   "w_used": 0.013366973192244782,
+   "raw_weights": {
+    "perf_rating_last": -0.0177531641686452,
+    "perf_rating_best3_365": 0.2558749167846113,
+    "perf_rating_trend_365": 0.04773953469336764,
+    "perf_rating_rank_in_race": -0.052412801690468136
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.2558749167846113,
+    "perf_rating_trend_365": 0.04773953469336764,
+    "perf_rating_rank_in_race": 0.0
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_rank_in_race"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 48.3581474038615,
+    "perf_rating_last": -0.335252517212888,
+    "perf_rating_best3_365": 2.349547544972378,
+    "perf_rating_trend_365": 1.7879262006200558,
+    "perf_rating_rank_in_race": -1.1886556035975675
+   },
+   "par_counts": {
+    "est_races": 3329,
+    "usable_races": 3329,
+    "fit_races": 3237,
+    "cells": 103,
+    "sparse_cells": 39,
+    "races_in_sparse_cells": 312,
+    "races_unrated_cells": 92,
+    "races_age_unknown": 0
+   },
+   "n_variants": 2302,
+   "rating_stats": {
+    "rated_runs": 178439,
+    "clipped_slow": 12646,
+    "unrated_runs": 5028
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.11050680935985438,
+    "perf_rating_best3_365": 0.11050680935985438,
+    "perf_rating_trend_365": 0.32408605451873945,
+    "perf_rating_rank_in_race": 0.11050680935985438
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11191790947432496,
+    "perf_rating_best3_365": 0.11191790947432496,
+    "perf_rating_trend_365": 0.33034044958476455,
+    "perf_rating_rank_in_race": 0.11191790947432496
+   },
+   "counts_fit": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "counts_eval": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "n_eval_rows": 45599,
+   "corr_S_market_within_race": 0.5261604600110917,
+   "corr_S_past_field_size_within_race": -0.01934032343017457,
+   "seconds": 5.5
+  },
+  {
+   "spec": "S1V2W0",
+   "est_years": [
+    2022
+   ],
+   "eval_years": [
+    2023
+   ],
+   "z": 0.9441702396746883,
+   "beta_S": 0.021634615223609523,
+   "se_S": 0.02291389234113509,
+   "beta_market": 0.8740385220871558,
+   "converged": true,
+   "w1": null,
+   "w_used": 0.0,
+   "raw_weights": {
+    "perf_rating_last": -0.03217934268638952,
+    "perf_rating_best3_365": -0.036606478678286036,
+    "perf_rating_trend_365": -0.02837434999807392,
+    "perf_rating_rank_in_race": 0.04238395893232238
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.0,
+    "perf_rating_trend_365": 0.0,
+    "perf_rating_rank_in_race": 0.04238395893232238
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_best3_365",
+    "perf_rating_trend_365"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 49.921035560306414,
+    "perf_rating_last": -0.6190333361027774,
+    "perf_rating_best3_365": -0.35724429470612806,
+    "perf_rating_trend_365": -1.0319973398640572,
+    "perf_rating_rank_in_race": 0.9802403096076866
+   },
+   "par_counts": {
+    "est_races": 3331,
+    "usable_races": 3331,
+    "fit_races": 3234,
+    "cells": 89,
+    "sparse_cells": 32,
+    "races_in_sparse_cells": 239,
+    "races_unrated_cells": 97,
+    "races_age_unknown": 0
+   },
+   "n_variants": 2121,
+   "rating_stats": {
+    "rated_runs": 163707,
+    "clipped_slow": 12116,
+    "unrated_runs": 19760
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.12400539153876255,
+    "perf_rating_best3_365": 0.12400539153876255,
+    "perf_rating_trend_365": 0.347254228444715,
+    "perf_rating_rank_in_race": 0.12400539153876255
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11195420952213864,
+    "perf_rating_best3_365": 0.11195420952213864,
+    "perf_rating_trend_365": 0.32831860347814645,
+    "perf_rating_rank_in_race": 0.11195420952213864
+   },
+   "counts_fit": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "counts_eval": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "n_eval_rows": 45998,
+   "corr_S_market_within_race": 0.4848767394490952,
+   "corr_S_past_field_size_within_race": -0.05595735107854317,
+   "seconds": 5.3
+  },
+  {
+   "spec": "S1V2W0",
+   "est_years": [
+    2023
+   ],
+   "eval_years": [
+    2022
+   ],
+   "z": -0.4393417205755994,
+   "beta_S": -0.02019429854471088,
+   "se_S": 0.04596490066605446,
+   "beta_market": 0.9036711085764101,
+   "converged": true,
+   "w1": null,
+   "w_used": 0.0,
+   "raw_weights": {
+    "perf_rating_last": -0.019975700219434282,
+    "perf_rating_best3_365": 0.20392543054587675,
+    "perf_rating_trend_365": 0.05076582406482125,
+    "perf_rating_rank_in_race": -0.03825911445034719
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.20392543054587675,
+    "perf_rating_trend_365": 0.05076582406482125,
+    "perf_rating_rank_in_race": 0.0
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_rank_in_race"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 48.719949582125274,
+    "perf_rating_last": -0.38920870369461796,
+    "perf_rating_best3_365": 1.9147013453157982,
+    "perf_rating_trend_365": 1.9137935410645392,
+    "perf_rating_rank_in_race": -0.8740664744508054
+   },
+   "par_counts": {
+    "est_races": 3329,
+    "usable_races": 3329,
+    "fit_races": 3237,
+    "cells": 103,
+    "sparse_cells": 39,
+    "races_in_sparse_cells": 312,
+    "races_unrated_cells": 92,
+    "races_age_unknown": 0
+   },
+   "n_variants": 2302,
+   "rating_stats": {
+    "rated_runs": 178439,
+    "clipped_slow": 12761,
+    "unrated_runs": 5028
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.11050680935985438,
+    "perf_rating_best3_365": 0.11050680935985438,
+    "perf_rating_trend_365": 0.32408605451873945,
+    "perf_rating_rank_in_race": 0.11050680935985438
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11191790947432496,
+    "perf_rating_best3_365": 0.11191790947432496,
+    "perf_rating_trend_365": 0.33034044958476455,
+    "perf_rating_rank_in_race": 0.11191790947432496
+   },
+   "counts_fit": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "counts_eval": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "n_eval_rows": 45599,
+   "corr_S_market_within_race": 0.5199321319919602,
+   "corr_S_past_field_size_within_race": -0.010300955111052777,
+   "seconds": 5.4
+  },
+  {
+   "spec": "S1V2W1",
+   "est_years": [
+    2022
+   ],
+   "eval_years": [
+    2023
+   ],
+   "z": 0.8589093034504796,
+   "beta_S": 0.019658560202251544,
+   "se_S": 0.022887818449838178,
+   "beta_market": 0.8745887297917191,
+   "converged": true,
+   "w1": {
+    "w": 0.03498812707961666,
+    "valid": true,
+    "n_runs": 36257
+   },
+   "w_used": 0.03498812707961666,
+   "raw_weights": {
+    "perf_rating_last": -0.036538163387599715,
+    "perf_rating_best3_365": -0.02222615566033288,
+    "perf_rating_trend_365": -0.029516619368122318,
+    "perf_rating_rank_in_race": 0.03436730156943362
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.0,
+    "perf_rating_trend_365": 0.0,
+    "perf_rating_rank_in_race": 0.03436730156943362
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_best3_365",
+    "perf_rating_trend_365"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 50.03258593832849,
+    "perf_rating_last": -0.6937310802370934,
+    "perf_rating_best3_365": -0.21365112066711384,
+    "perf_rating_trend_365": -1.0772328872564763,
+    "perf_rating_rank_in_race": 0.7899108774148988
+   },
+   "par_counts": {
+    "est_races": 3331,
+    "usable_races": 3331,
+    "fit_races": 3234,
+    "cells": 89,
+    "sparse_cells": 32,
+    "races_in_sparse_cells": 239,
+    "races_unrated_cells": 97,
+    "races_age_unknown": 0
+   },
+   "n_variants": 2121,
+   "rating_stats": {
+    "rated_runs": 163707,
+    "clipped_slow": 12519,
+    "unrated_runs": 19760
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.12400539153876255,
+    "perf_rating_best3_365": 0.12400539153876255,
+    "perf_rating_trend_365": 0.347254228444715,
+    "perf_rating_rank_in_race": 0.12400539153876255
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11195420952213864,
+    "perf_rating_best3_365": 0.11195420952213864,
+    "perf_rating_trend_365": 0.32831860347814645,
+    "perf_rating_rank_in_race": 0.11195420952213864
+   },
+   "counts_fit": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "counts_eval": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "n_eval_rows": 45998,
+   "corr_S_market_within_race": 0.48218022210451517,
+   "corr_S_past_field_size_within_race": -0.05653573443559375,
+   "seconds": 5.4
+  },
+  {
+   "spec": "S1V2W1",
+   "est_years": [
+    2023
+   ],
+   "eval_years": [
+    2022
+   ],
+   "z": -0.39380210598879184,
+   "beta_S": -0.018566224619000565,
+   "se_S": 0.04714607752638323,
+   "beta_market": 0.9033471950234955,
+   "converged": true,
+   "w1": {
+    "w": 0.01403488158319657,
+    "valid": true,
+    "n_runs": 36741
+   },
+   "w_used": 0.01403488158319657,
+   "raw_weights": {
+    "perf_rating_last": -0.021011109387555304,
+    "perf_rating_best3_365": 0.22810208759719966,
+    "perf_rating_trend_365": 0.049907685029302505,
+    "perf_rating_rank_in_race": -0.05189251254165497
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.22810208759719966,
+    "perf_rating_trend_365": 0.049907685029302505,
+    "perf_rating_rank_in_race": 0.0
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_rank_in_race"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 48.791433681198164,
+    "perf_rating_last": -0.40584855936258296,
+    "perf_rating_best3_365": 2.1314922406907866,
+    "perf_rating_trend_365": 1.8824372261687088,
+    "perf_rating_rank_in_race": -1.186049037636618
+   },
+   "par_counts": {
+    "est_races": 3329,
+    "usable_races": 3329,
+    "fit_races": 3237,
+    "cells": 103,
+    "sparse_cells": 39,
+    "races_in_sparse_cells": 312,
+    "races_unrated_cells": 92,
+    "races_age_unknown": 0
+   },
+   "n_variants": 2302,
+   "rating_stats": {
+    "rated_runs": 178439,
+    "clipped_slow": 12919,
+    "unrated_runs": 5028
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.11050680935985438,
+    "perf_rating_best3_365": 0.11050680935985438,
+    "perf_rating_trend_365": 0.32408605451873945,
+    "perf_rating_rank_in_race": 0.11050680935985438
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11191790947432496,
+    "perf_rating_best3_365": 0.11191790947432496,
+    "perf_rating_trend_365": 0.33034044958476455,
+    "perf_rating_rank_in_race": 0.11191790947432496
+   },
+   "counts_fit": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "counts_eval": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "n_eval_rows": 45599,
+   "corr_S_market_within_race": 0.5222465279367015,
+   "corr_S_past_field_size_within_race": -0.011644517366972907,
+   "seconds": 5.6
+  },
+  {
+   "spec": "S2V0W0",
+   "est_years": [
+    2022
+   ],
+   "eval_years": [
+    2023
+   ],
+   "z": 0.4126646772308518,
+   "beta_S": 0.010854875305805449,
+   "se_S": 0.026304348069347942,
+   "beta_market": 0.8770837712527789,
+   "converged": true,
+   "w1": null,
+   "w_used": 0.0,
+   "raw_weights": {
+    "perf_rating_last": -0.07743367642356286,
+    "perf_rating_best3_365": 0.010748410944510026,
+    "perf_rating_trend_365": -0.025466124983010215,
+    "perf_rating_rank_in_race": 0.011261470866502744
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.010748410944510026,
+    "perf_rating_trend_365": 0.0,
+    "perf_rating_rank_in_race": 0.011261470866502744
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_trend_365"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 51.00094274400819,
+    "perf_rating_last": -1.6417748058762065,
+    "perf_rating_best3_365": 0.10802784462453842,
+    "perf_rating_trend_365": -0.9561838616677774,
+    "perf_rating_rank_in_race": 0.24903330571663107
+   },
+   "par_counts": {
+    "est_races": 3331,
+    "usable_races": 3331,
+    "fit_races": 3234,
+    "cells": 89,
+    "sparse_cells": 32,
+    "races_in_sparse_cells": 239,
+    "races_unrated_cells": 97,
+    "races_age_unknown": 0
+   },
+   "n_variants": 0,
+   "rating_stats": {
+    "rated_runs": 163707,
+    "clipped_slow": 13224,
+    "unrated_runs": 19760
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.12400539153876255,
+    "perf_rating_best3_365": 0.12400539153876255,
+    "perf_rating_trend_365": 0.347254228444715,
+    "perf_rating_rank_in_race": 0.12400539153876255
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11195420952213864,
+    "perf_rating_best3_365": 0.11195420952213864,
+    "perf_rating_trend_365": 0.32831860347814645,
+    "perf_rating_rank_in_race": 0.11195420952213864
+   },
+   "counts_fit": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "counts_eval": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "n_eval_rows": 45998,
+   "corr_S_market_within_race": 0.4731076228578326,
+   "corr_S_past_field_size_within_race": -0.08044551831579388,
+   "seconds": 5.5
+  },
+  {
+   "spec": "S2V0W0",
+   "est_years": [
+    2023
+   ],
+   "eval_years": [
+    2022
+   ],
+   "z": -2.145294479978393,
+   "beta_S": -0.08849164799732727,
+   "se_S": 0.041249184586639384,
+   "beta_market": 0.9161073599119192,
+   "converged": true,
+   "w1": null,
+   "w_used": 0.0,
+   "raw_weights": {
+    "perf_rating_last": 0.031488749767881845,
+    "perf_rating_best3_365": 0.14035867952165412,
+    "perf_rating_trend_365": 0.0375591293473143,
+    "perf_rating_rank_in_race": -0.0681828886950649
+   },
+   "weights": {
+    "perf_rating_last": 0.031488749767881845,
+    "perf_rating_best3_365": 0.14035867952165412,
+    "perf_rating_trend_365": 0.0375591293473143,
+    "perf_rating_rank_in_race": 0.0
+   },
+   "zeroed": [
+    "perf_rating_rank_in_race"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 49.747861109500654,
+    "perf_rating_last": 0.682352098590909,
+    "perf_rating_best3_365": 1.3605610278326392,
+    "perf_rating_trend_365": 1.4261941380901844,
+    "perf_rating_rank_in_race": -1.4644859790998865
+   },
+   "par_counts": {
+    "est_races": 3329,
+    "usable_races": 3329,
+    "fit_races": 3237,
+    "cells": 103,
+    "sparse_cells": 39,
+    "races_in_sparse_cells": 312,
+    "races_unrated_cells": 92,
+    "races_age_unknown": 0
+   },
+   "n_variants": 0,
+   "rating_stats": {
+    "rated_runs": 178439,
+    "clipped_slow": 13358,
+    "unrated_runs": 5028
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.11050680935985438,
+    "perf_rating_best3_365": 0.11050680935985438,
+    "perf_rating_trend_365": 0.32408605451873945,
+    "perf_rating_rank_in_race": 0.11050680935985438
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11191790947432496,
+    "perf_rating_best3_365": 0.11191790947432496,
+    "perf_rating_trend_365": 0.33034044958476455,
+    "perf_rating_rank_in_race": 0.11191790947432496
+   },
+   "counts_fit": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "counts_eval": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "n_eval_rows": 45599,
+   "corr_S_market_within_race": 0.5000447889360482,
+   "corr_S_past_field_size_within_race": -0.029802834887621407,
+   "seconds": 5.6
+  },
+  {
+   "spec": "S2V0W1",
+   "est_years": [
+    2022
+   ],
+   "eval_years": [
+    2023
+   ],
+   "z": 0.8533132457113572,
+   "beta_S": 0.03864088972347656,
+   "se_S": 0.045283358623202805,
+   "beta_market": 0.8744750916947872,
+   "converged": true,
+   "w1": {
+    "w": 0.05005514594154261,
+    "valid": true,
+    "n_runs": 36139
+   },
+   "w_used": 0.05005514594154261,
+   "raw_weights": {
+    "perf_rating_last": -0.08214704891581101,
+    "perf_rating_best3_365": 0.04669151065962037,
+    "perf_rating_trend_365": -0.027649064385139324,
+    "perf_rating_rank_in_race": -0.009616906170647692
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.04669151065962037,
+    "perf_rating_trend_365": 0.0,
+    "perf_rating_rank_in_race": 0.0
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_trend_365",
+    "perf_rating_rank_in_race"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 51.1285048000318,
+    "perf_rating_last": -1.7117637104377217,
+    "perf_rating_best3_365": 0.46278349059225105,
+    "perf_rating_trend_365": -1.04289289605349,
+    "perf_rating_rank_in_race": -0.2128264958553452
+   },
+   "par_counts": {
+    "est_races": 3331,
+    "usable_races": 3331,
+    "fit_races": 3234,
+    "cells": 89,
+    "sparse_cells": 32,
+    "races_in_sparse_cells": 239,
+    "races_unrated_cells": 97,
+    "races_age_unknown": 0
+   },
+   "n_variants": 0,
+   "rating_stats": {
+    "rated_runs": 163707,
+    "clipped_slow": 13665,
+    "unrated_runs": 19760
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.12400539153876255,
+    "perf_rating_best3_365": 0.12400539153876255,
+    "perf_rating_trend_365": 0.347254228444715,
+    "perf_rating_rank_in_race": 0.12400539153876255
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11195420952213864,
+    "perf_rating_best3_365": 0.11195420952213864,
+    "perf_rating_trend_365": 0.32831860347814645,
+    "perf_rating_rank_in_race": 0.11195420952213864
+   },
+   "counts_fit": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "counts_eval": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "n_eval_rows": 45998,
+   "corr_S_market_within_race": 0.4525986604519952,
+   "corr_S_past_field_size_within_race": -0.07851974130157464,
+   "seconds": 5.6
+  },
+  {
+   "spec": "S2V0W1",
+   "est_years": [
+    2023
+   ],
+   "eval_years": [
+    2022
+   ],
+   "z": -2.1322781551998253,
+   "beta_S": -0.08972003059965603,
+   "se_S": 0.04207707628616022,
+   "beta_market": 0.91602384213904,
+   "converged": true,
+   "w1": {
+    "w": 0.01607846190051128,
+    "valid": true,
+    "n_runs": 36514
+   },
+   "w_used": 0.01607846190051128,
+   "raw_weights": {
+    "perf_rating_last": 0.03214724848031729,
+    "perf_rating_best3_365": 0.15221142138656094,
+    "perf_rating_trend_365": 0.036525065837192706,
+    "perf_rating_rank_in_race": -0.07627677085500849
+   },
+   "weights": {
+    "perf_rating_last": 0.03214724848031729,
+    "perf_rating_best3_365": 0.15221142138656094,
+    "perf_rating_trend_365": 0.036525065837192706,
+    "perf_rating_rank_in_race": 0.0
+   },
+   "zeroed": [
+    "perf_rating_rank_in_race"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 49.78921808795372,
+    "perf_rating_last": 0.690408532751449,
+    "perf_rating_best3_365": 1.4677496358649431,
+    "perf_rating_trend_365": 1.3881544777953765,
+    "perf_rating_rank_in_race": -1.6393468484702793
+   },
+   "par_counts": {
+    "est_races": 3329,
+    "usable_races": 3329,
+    "fit_races": 3237,
+    "cells": 103,
+    "sparse_cells": 39,
+    "races_in_sparse_cells": 312,
+    "races_unrated_cells": 92,
+    "races_age_unknown": 0
+   },
+   "n_variants": 0,
+   "rating_stats": {
+    "rated_runs": 178439,
+    "clipped_slow": 13505,
+    "unrated_runs": 5028
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.11050680935985438,
+    "perf_rating_best3_365": 0.11050680935985438,
+    "perf_rating_trend_365": 0.32408605451873945,
+    "perf_rating_rank_in_race": 0.11050680935985438
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11191790947432496,
+    "perf_rating_best3_365": 0.11191790947432496,
+    "perf_rating_trend_365": 0.33034044958476455,
+    "perf_rating_rank_in_race": 0.11191790947432496
+   },
+   "counts_fit": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "counts_eval": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "n_eval_rows": 45599,
+   "corr_S_market_within_race": 0.5013245184144423,
+   "corr_S_past_field_size_within_race": -0.03212538610355019,
+   "seconds": 5.7
+  },
+  {
+   "spec": "S2V1W0",
+   "est_years": [
+    2022
+   ],
+   "eval_years": [
+    2023
+   ],
+   "z": 1.5482328360768949,
+   "beta_S": 0.03558879580721734,
+   "se_S": 0.02298672071663114,
+   "beta_market": 0.870323575449301,
+   "converged": true,
+   "w1": null,
+   "w_used": 0.0,
+   "raw_weights": {
+    "perf_rating_last": -0.022911627995256926,
+    "perf_rating_best3_365": -0.15332695057357035,
+    "perf_rating_trend_365": -0.03523929739363863,
+    "perf_rating_rank_in_race": 0.09690477137492662
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.0,
+    "perf_rating_trend_365": 0.0,
+    "perf_rating_rank_in_race": 0.09690477137492662
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_best3_365",
+    "perf_rating_trend_365"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 49.81930832805656,
+    "perf_rating_last": -0.44321465975226404,
+    "perf_rating_best3_365": -1.4737429423652901,
+    "perf_rating_trend_365": -1.286554109505786,
+    "perf_rating_rank_in_race": 2.2143940247135525
+   },
+   "par_counts": {
+    "est_races": 3331,
+    "usable_races": 3331,
+    "fit_races": 3234,
+    "cells": 89,
+    "sparse_cells": 32,
+    "races_in_sparse_cells": 239,
+    "races_unrated_cells": 97,
+    "races_age_unknown": 0
+   },
+   "n_variants": 2121,
+   "rating_stats": {
+    "rated_runs": 163707,
+    "clipped_slow": 11877,
+    "unrated_runs": 19760
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.12400539153876255,
+    "perf_rating_best3_365": 0.12400539153876255,
+    "perf_rating_trend_365": 0.347254228444715,
+    "perf_rating_rank_in_race": 0.12400539153876255
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11195420952213864,
+    "perf_rating_best3_365": 0.11195420952213864,
+    "perf_rating_trend_365": 0.32831860347814645,
+    "perf_rating_rank_in_race": 0.11195420952213864
+   },
+   "counts_fit": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "counts_eval": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "n_eval_rows": 45998,
+   "corr_S_market_within_race": 0.4926004290589154,
+   "corr_S_past_field_size_within_race": -0.059622507654096414,
+   "seconds": 5.6
+  },
+  {
+   "spec": "S2V1W0",
+   "est_years": [
+    2023
+   ],
+   "eval_years": [
+    2022
+   ],
+   "z": -0.6008647949139347,
+   "beta_S": -0.02880140584465154,
+   "se_S": 0.047933255681549665,
+   "beta_market": 0.9049140722888898,
+   "converged": true,
+   "w1": null,
+   "w_used": 0.0,
+   "raw_weights": {
+    "perf_rating_last": -0.008258678249181787,
+    "perf_rating_best3_365": 0.2417887653940057,
+    "perf_rating_trend_365": 0.04271913378121038,
+    "perf_rating_rank_in_race": -0.04787049260780794
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.2417887653940057,
+    "perf_rating_trend_365": 0.04271913378121038,
+    "perf_rating_rank_in_race": 0.0
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_rank_in_race"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 48.38787128688375,
+    "perf_rating_last": -0.1601442126957493,
+    "perf_rating_best3_365": 2.231256482551012,
+    "perf_rating_trend_365": 1.6103128231561614,
+    "perf_rating_rank_in_race": -1.0786981346129454
+   },
+   "par_counts": {
+    "est_races": 3329,
+    "usable_races": 3329,
+    "fit_races": 3237,
+    "cells": 103,
+    "sparse_cells": 39,
+    "races_in_sparse_cells": 312,
+    "races_unrated_cells": 92,
+    "races_age_unknown": 0
+   },
+   "n_variants": 2302,
+   "rating_stats": {
+    "rated_runs": 178439,
+    "clipped_slow": 12500,
+    "unrated_runs": 5028
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.11050680935985438,
+    "perf_rating_best3_365": 0.11050680935985438,
+    "perf_rating_trend_365": 0.32408605451873945,
+    "perf_rating_rank_in_race": 0.11050680935985438
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11191790947432496,
+    "perf_rating_best3_365": 0.11191790947432496,
+    "perf_rating_trend_365": 0.33034044958476455,
+    "perf_rating_rank_in_race": 0.11191790947432496
+   },
+   "counts_fit": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "counts_eval": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "n_eval_rows": 45599,
+   "corr_S_market_within_race": 0.5236683258355547,
+   "corr_S_past_field_size_within_race": -0.01831338976430977,
+   "seconds": 5.6
+  },
+  {
+   "spec": "S2V1W1",
+   "est_years": [
+    2022
+   ],
+   "eval_years": [
+    2023
+   ],
+   "z": 1.230871968615616,
+   "beta_S": 0.028248471681520608,
+   "se_S": 0.022949967504168754,
+   "beta_market": 0.8722572872629798,
+   "converged": true,
+   "w1": {
+    "w": 0.034484832298340456,
+    "valid": true,
+    "n_runs": 36349
+   },
+   "w_used": 0.034484832298340456,
+   "raw_weights": {
+    "perf_rating_last": -0.028934655878832864,
+    "perf_rating_best3_365": -0.1201099241895331,
+    "perf_rating_trend_365": -0.03617756523564777,
+    "perf_rating_rank_in_race": 0.07897700420029764
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.0,
+    "perf_rating_trend_365": 0.0,
+    "perf_rating_rank_in_race": 0.07897700420029764
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_best3_365",
+    "perf_rating_trend_365"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 49.97701290321366,
+    "perf_rating_last": -0.5523819187652966,
+    "perf_rating_best3_365": -1.138563532428589,
+    "perf_rating_trend_365": -1.3246930724392085,
+    "perf_rating_rank_in_race": 1.7980461517863493
+   },
+   "par_counts": {
+    "est_races": 3331,
+    "usable_races": 3331,
+    "fit_races": 3234,
+    "cells": 89,
+    "sparse_cells": 32,
+    "races_in_sparse_cells": 239,
+    "races_unrated_cells": 97,
+    "races_age_unknown": 0
+   },
+   "n_variants": 2121,
+   "rating_stats": {
+    "rated_runs": 163707,
+    "clipped_slow": 12244,
+    "unrated_runs": 19760
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.12400539153876255,
+    "perf_rating_best3_365": 0.12400539153876255,
+    "perf_rating_trend_365": 0.347254228444715,
+    "perf_rating_rank_in_race": 0.12400539153876255
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11195420952213864,
+    "perf_rating_best3_365": 0.11195420952213864,
+    "perf_rating_trend_365": 0.32831860347814645,
+    "perf_rating_rank_in_race": 0.11195420952213864
+   },
+   "counts_fit": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "counts_eval": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "n_eval_rows": 45998,
+   "corr_S_market_within_race": 0.4905254843783054,
+   "corr_S_past_field_size_within_race": -0.06268565499696416,
+   "seconds": 5.6
+  },
+  {
+   "spec": "S2V1W1",
+   "est_years": [
+    2023
+   ],
+   "eval_years": [
+    2022
+   ],
+   "z": -0.5822255876904447,
+   "beta_S": -0.02831325314494358,
+   "se_S": 0.048629352167869774,
+   "beta_market": 0.90477329926813,
+   "converged": true,
+   "w1": {
+    "w": 0.013366973192244782,
+    "valid": true,
+    "n_runs": 36823
+   },
+   "w_used": 0.013366973192244782,
+   "raw_weights": {
+    "perf_rating_last": -0.009027492064064741,
+    "perf_rating_best3_365": 0.26162939539663255,
+    "perf_rating_trend_365": 0.041849463328629204,
+    "perf_rating_rank_in_race": -0.05939468805430574
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.26162939539663255,
+    "perf_rating_trend_365": 0.041849463328629204,
+    "perf_rating_rank_in_race": 0.0
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_rank_in_race"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 48.46108712933959,
+    "perf_rating_last": -0.173539101281435,
+    "perf_rating_best3_365": 2.4056035075079785,
+    "perf_rating_trend_365": 1.57884740400159,
+    "perf_rating_rank_in_race": -1.3416909652001263
+   },
+   "par_counts": {
+    "est_races": 3329,
+    "usable_races": 3329,
+    "fit_races": 3237,
+    "cells": 103,
+    "sparse_cells": 39,
+    "races_in_sparse_cells": 312,
+    "races_unrated_cells": 92,
+    "races_age_unknown": 0
+   },
+   "n_variants": 2302,
+   "rating_stats": {
+    "rated_runs": 178439,
+    "clipped_slow": 12646,
+    "unrated_runs": 5028
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.11050680935985438,
+    "perf_rating_best3_365": 0.11050680935985438,
+    "perf_rating_trend_365": 0.32408605451873945,
+    "perf_rating_rank_in_race": 0.11050680935985438
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11191790947432496,
+    "perf_rating_best3_365": 0.11191790947432496,
+    "perf_rating_trend_365": 0.33034044958476455,
+    "perf_rating_rank_in_race": 0.11191790947432496
+   },
+   "counts_fit": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "counts_eval": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "n_eval_rows": 45599,
+   "corr_S_market_within_race": 0.5242073595730584,
+   "corr_S_past_field_size_within_race": -0.01948430900091216,
+   "seconds": 5.8
+  },
+  {
+   "spec": "S2V2W0",
+   "est_years": [
+    2022
+   ],
+   "eval_years": [
+    2023
+   ],
+   "z": 0.9633564756051884,
+   "beta_S": 0.022006706353977588,
+   "se_S": 0.022843783076407716,
+   "beta_market": 0.8739183006821414,
+   "converged": true,
+   "w1": null,
+   "w_used": 0.0,
+   "raw_weights": {
+    "perf_rating_last": -0.02974126108322055,
+    "perf_rating_best3_365": -0.08802728114055154,
+    "perf_rating_trend_365": -0.028020113524371566,
+    "perf_rating_rank_in_race": 0.06661977747456997
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.0,
+    "perf_rating_trend_365": 0.0,
+    "perf_rating_rank_in_race": 0.06661977747456997
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_best3_365",
+    "perf_rating_trend_365"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 50.011947076829614,
+    "perf_rating_last": -0.5848255112216373,
+    "perf_rating_best3_365": -0.866787905418337,
+    "perf_rating_trend_365": -1.0233308677677655,
+    "perf_rating_rank_in_race": 1.540419489844753
+   },
+   "par_counts": {
+    "est_races": 3331,
+    "usable_races": 3331,
+    "fit_races": 3234,
+    "cells": 89,
+    "sparse_cells": 32,
+    "races_in_sparse_cells": 239,
+    "races_unrated_cells": 97,
+    "races_age_unknown": 0
+   },
+   "n_variants": 2121,
+   "rating_stats": {
+    "rated_runs": 163707,
+    "clipped_slow": 12116,
+    "unrated_runs": 19760
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.12400539153876255,
+    "perf_rating_best3_365": 0.12400539153876255,
+    "perf_rating_trend_365": 0.347254228444715,
+    "perf_rating_rank_in_race": 0.12400539153876255
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11195420952213864,
+    "perf_rating_best3_365": 0.11195420952213864,
+    "perf_rating_trend_365": 0.32831860347814645,
+    "perf_rating_rank_in_race": 0.11195420952213864
+   },
+   "counts_fit": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "counts_eval": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "n_eval_rows": 45998,
+   "corr_S_market_within_race": 0.4865405836582763,
+   "corr_S_past_field_size_within_race": -0.05328456862024204,
+   "seconds": 5.6
+  },
+  {
+   "spec": "S2V2W0",
+   "est_years": [
+    2023
+   ],
+   "eval_years": [
+    2022
+   ],
+   "z": -0.3717281082325837,
+   "beta_S": -0.017242740830082173,
+   "se_S": 0.04638535652325139,
+   "beta_market": 0.9031304226834143,
+   "converged": true,
+   "w1": null,
+   "w_used": 0.0,
+   "raw_weights": {
+    "perf_rating_last": -0.012174041222738467,
+    "perf_rating_best3_365": 0.2139879227306756,
+    "perf_rating_trend_365": 0.045338755405595295,
+    "perf_rating_rank_in_race": -0.04768367269000846
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.2139879227306756,
+    "perf_rating_trend_365": 0.045338755405595295,
+    "perf_rating_rank_in_race": 0.0
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_rank_in_race"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 48.84018081067777,
+    "perf_rating_last": -0.24147388000043218,
+    "perf_rating_best3_365": 2.011600810593857,
+    "perf_rating_trend_365": 1.7232143836816551,
+    "perf_rating_rank_in_race": -1.0844692600497476
+   },
+   "par_counts": {
+    "est_races": 3329,
+    "usable_races": 3329,
+    "fit_races": 3237,
+    "cells": 103,
+    "sparse_cells": 39,
+    "races_in_sparse_cells": 312,
+    "races_unrated_cells": 92,
+    "races_age_unknown": 0
+   },
+   "n_variants": 2302,
+   "rating_stats": {
+    "rated_runs": 178439,
+    "clipped_slow": 12761,
+    "unrated_runs": 5028
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.11050680935985438,
+    "perf_rating_best3_365": 0.11050680935985438,
+    "perf_rating_trend_365": 0.32408605451873945,
+    "perf_rating_rank_in_race": 0.11050680935985438
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11191790947432496,
+    "perf_rating_best3_365": 0.11191790947432496,
+    "perf_rating_trend_365": 0.33034044958476455,
+    "perf_rating_rank_in_race": 0.11191790947432496
+   },
+   "counts_fit": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "counts_eval": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "n_eval_rows": 45599,
+   "corr_S_market_within_race": 0.5189949278456559,
+   "corr_S_past_field_size_within_race": -0.010651632172854992,
+   "seconds": 5.6
+  },
+  {
+   "spec": "S2V2W1",
+   "est_years": [
+    2022
+   ],
+   "eval_years": [
+    2023
+   ],
+   "z": 0.6767796128115584,
+   "beta_S": 0.015463731026413111,
+   "se_S": 0.022848990622178822,
+   "beta_market": 0.8755956768530435,
+   "converged": true,
+   "w1": {
+    "w": 0.03498812707961666,
+    "valid": true,
+    "n_runs": 36257
+   },
+   "w_used": 0.03498812707961666,
+   "raw_weights": {
+    "perf_rating_last": -0.03360315330477761,
+    "perf_rating_best3_365": -0.08726601542078449,
+    "perf_rating_trend_365": -0.029364687662002103,
+    "perf_rating_rank_in_race": 0.06600238827237569
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.0,
+    "perf_rating_trend_365": 0.0,
+    "perf_rating_rank_in_race": 0.06600238827237569
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_best3_365",
+    "perf_rating_trend_365"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 50.126994107414276,
+    "perf_rating_last": -0.6516652149820433,
+    "perf_rating_best3_365": -0.84664427930186,
+    "perf_rating_trend_365": -1.0759143612356228,
+    "perf_rating_rank_in_race": 1.5185517794300354
+   },
+   "par_counts": {
+    "est_races": 3331,
+    "usable_races": 3331,
+    "fit_races": 3234,
+    "cells": 89,
+    "sparse_cells": 32,
+    "races_in_sparse_cells": 239,
+    "races_unrated_cells": 97,
+    "races_age_unknown": 0
+   },
+   "n_variants": 2121,
+   "rating_stats": {
+    "rated_runs": 163707,
+    "clipped_slow": 12519,
+    "unrated_runs": 19760
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.12400539153876255,
+    "perf_rating_best3_365": 0.12400539153876255,
+    "perf_rating_trend_365": 0.347254228444715,
+    "perf_rating_rank_in_race": 0.12400539153876255
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11195420952213864,
+    "perf_rating_best3_365": 0.11195420952213864,
+    "perf_rating_trend_365": 0.32831860347814645,
+    "perf_rating_rank_in_race": 0.11195420952213864
+   },
+   "counts_fit": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "counts_eval": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "n_eval_rows": 45998,
+   "corr_S_market_within_race": 0.48391182340656885,
+   "corr_S_past_field_size_within_race": -0.05573449929601849,
+   "seconds": 5.7
+  },
+  {
+   "spec": "S2V2W1",
+   "est_years": [
+    2023
+   ],
+   "eval_years": [
+    2022
+   ],
+   "z": -0.33381990976996717,
+   "beta_S": -0.0158089852169557,
+   "se_S": 0.047357826044137255,
+   "beta_market": 0.9028561875541765,
+   "converged": true,
+   "w1": {
+    "w": 0.01403488158319657,
+    "valid": true,
+    "n_runs": 36741
+   },
+   "w_used": 0.01403488158319657,
+   "raw_weights": {
+    "perf_rating_last": -0.013104102765205555,
+    "perf_rating_best3_365": 0.23825211791252296,
+    "perf_rating_trend_365": 0.04448852634219813,
+    "perf_rating_rank_in_race": -0.061536662521207895
+   },
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.23825211791252296,
+    "perf_rating_trend_365": 0.04448852634219813,
+    "perf_rating_rank_in_race": 0.0
+   },
+   "zeroed": [
+    "perf_rating_last",
+    "perf_rating_rank_in_race"
+   ],
+   "fit_component_z": {
+    "logit_p_market": 48.91640180932475,
+    "perf_rating_last": -0.2575707233254086,
+    "perf_rating_best3_365": 2.231145871238944,
+    "perf_rating_trend_365": 1.6920246681529658,
+    "perf_rating_rank_in_race": -1.4031776533665266
+   },
+   "par_counts": {
+    "est_races": 3329,
+    "usable_races": 3329,
+    "fit_races": 3237,
+    "cells": 103,
+    "sparse_cells": 39,
+    "races_in_sparse_cells": 312,
+    "races_unrated_cells": 92,
+    "races_age_unknown": 0
+   },
+   "n_variants": 2302,
+   "rating_stats": {
+    "rated_runs": 178439,
+    "clipped_slow": 12919,
+    "unrated_runs": 5028
+   },
+   "missing_rates_eval": {
+    "perf_rating_last": 0.11050680935985438,
+    "perf_rating_best3_365": 0.11050680935985438,
+    "perf_rating_trend_365": 0.32408605451873945,
+    "perf_rating_rank_in_race": 0.11050680935985438
+   },
+   "missing_rates_fit": {
+    "perf_rating_last": 0.11191790947432496,
+    "perf_rating_best3_365": 0.11191790947432496,
+    "perf_rating_trend_365": 0.33034044958476455,
+    "perf_rating_rank_in_race": 0.11191790947432496
+   },
+   "counts_fit": {
+    "target_races_seen": 3329,
+    "target_races_used": 3326,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "counts_eval": {
+    "target_races_seen": 3331,
+    "target_races_used": 3327,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "n_eval_rows": 45599,
+   "corr_S_market_within_race": 0.5202368366775915,
+   "corr_S_past_field_size_within_race": -0.011876888115604093,
+   "seconds": 5.9
+  }
+ ],
+ "selection": {
+  "selected": "S1V1W0",
+  "best_mean_z": 0.47368402058148007,
+  "tie_set": [
+   "S1V1W0",
+   "S1V2W0",
+   "S2V1W0",
+   "S1V1W1",
+   "S2V2W0",
+   "S1V2W1",
+   "S2V1W1"
+  ],
+  "ranking": [
+   [
+    "S2V1W0",
+    0.47368402058148007
+   ],
+   [
+    "S1V1W0",
+    0.469758651409099
+   ],
+   [
+    "S2V1W1",
+    0.3243231904625856
+   ],
+   [
+    "S1V1W1",
+    0.2994814369137804
+   ],
+   [
+    "S2V2W0",
+    0.2958141836863024
+   ],
+   [
+    "S1V2W0",
+    0.25241425954954444
+   ],
+   [
+    "S1V2W1",
+    0.23255359873084386
+   ],
+   [
+    "S2V2W1",
+    0.17147985152079562
+   ],
+   [
+    "S1V0W0",
+    -0.5257408349888752
+   ],
+   [
+    "S1V0W1",
+    -0.5591161093639176
+   ],
+   [
+    "S2V0W1",
+    -0.639482454744234
+   ],
+   [
+    "S2V0W0",
+    -0.8663149013737705
+   ]
+  ],
+  "excluded": []
+ },
+ "seconds": 137.4
+}

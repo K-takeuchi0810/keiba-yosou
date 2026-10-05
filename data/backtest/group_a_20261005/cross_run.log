@@ -1,0 +1,89 @@
+S1V0W0 est=(2022,) eval=(2023,) z=0.914 beta=0.0413 zeroed=['perf_rating_last', 'perf_rating_trend_365', 'perf_rating_rank_in_race'] w=0.0000 (5.6s)
+S1V0W0 est=(2023,) eval=(2022,) z=-1.966 beta=-0.0828 zeroed=['perf_rating_rank_in_race'] w=0.0000 (5.5s)
+S1V0W1 est=(2022,) eval=(2023,) z=0.805 beta=0.0367 zeroed=['perf_rating_last', 'perf_rating_trend_365', 'perf_rating_rank_in_race'] w=0.0501 (5.4s)
+S1V0W1 est=(2023,) eval=(2022,) z=-1.923 beta=-0.0830 zeroed=['perf_rating_rank_in_race'] w=0.0161 (5.5s)
+S1V1W0 est=(2022,) eval=(2023,) z=1.563 beta=0.0360 zeroed=['perf_rating_last', 'perf_rating_best3_365', 'perf_rating_trend_365'] w=0.0000 (5.7s)
+S1V1W0 est=(2023,) eval=(2022,) z=-0.623 beta=-0.0298 zeroed=['perf_rating_last', 'perf_rating_rank_in_race'] w=0.0000 (5.7s)
+S1V1W1 est=(2022,) eval=(2023,) z=1.210 beta=0.0278 zeroed=['perf_rating_last', 'perf_rating_best3_365', 'perf_rating_trend_365'] w=0.0345 (5.4s)
+S1V1W1 est=(2023,) eval=(2022,) z=-0.611 beta=-0.0297 zeroed=['perf_rating_last', 'perf_rating_rank_in_race'] w=0.0134 (5.5s)
+S1V2W0 est=(2022,) eval=(2023,) z=0.944 beta=0.0216 zeroed=['perf_rating_last', 'perf_rating_best3_365', 'perf_rating_trend_365'] w=0.0000 (5.3s)
+S1V2W0 est=(2023,) eval=(2022,) z=-0.439 beta=-0.0202 zeroed=['perf_rating_last', 'perf_rating_rank_in_race'] w=0.0000 (5.4s)
+S1V2W1 est=(2022,) eval=(2023,) z=0.859 beta=0.0197 zeroed=['perf_rating_last', 'perf_rating_best3_365', 'perf_rating_trend_365'] w=0.0350 (5.4s)
+S1V2W1 est=(2023,) eval=(2022,) z=-0.394 beta=-0.0186 zeroed=['perf_rating_last', 'perf_rating_rank_in_race'] w=0.0140 (5.6s)
+S2V0W0 est=(2022,) eval=(2023,) z=0.413 beta=0.0109 zeroed=['perf_rating_last', 'perf_rating_trend_365'] w=0.0000 (5.5s)
+S2V0W0 est=(2023,) eval=(2022,) z=-2.145 beta=-0.0885 zeroed=['perf_rating_rank_in_race'] w=0.0000 (5.6s)
+S2V0W1 est=(2022,) eval=(2023,) z=0.853 beta=0.0386 zeroed=['perf_rating_last', 'perf_rating_trend_365', 'perf_rating_rank_in_race'] w=0.0501 (5.6s)
+S2V0W1 est=(2023,) eval=(2022,) z=-2.132 beta=-0.0897 zeroed=['perf_rating_rank_in_race'] w=0.0161 (5.7s)
+S2V1W0 est=(2022,) eval=(2023,) z=1.548 beta=0.0356 zeroed=['perf_rating_last', 'perf_rating_best3_365', 'perf_rating_trend_365'] w=0.0000 (5.6s)
+S2V1W0 est=(2023,) eval=(2022,) z=-0.601 beta=-0.0288 zeroed=['perf_rating_last', 'perf_rating_rank_in_race'] w=0.0000 (5.6s)
+S2V1W1 est=(2022,) eval=(2023,) z=1.231 beta=0.0282 zeroed=['perf_rating_last', 'perf_rating_best3_365', 'perf_rating_trend_365'] w=0.0345 (5.6s)
+S2V1W1 est=(2023,) eval=(2022,) z=-0.582 beta=-0.0283 zeroed=['perf_rating_last', 'perf_rating_rank_in_race'] w=0.0134 (5.8s)
+S2V2W0 est=(2022,) eval=(2023,) z=0.963 beta=0.0220 zeroed=['perf_rating_last', 'perf_rating_best3_365', 'perf_rating_trend_365'] w=0.0000 (5.6s)
+S2V2W0 est=(2023,) eval=(2022,) z=-0.372 beta=-0.0172 zeroed=['perf_rating_last', 'perf_rating_rank_in_race'] w=0.0000 (5.6s)
+S2V2W1 est=(2022,) eval=(2023,) z=0.677 beta=0.0155 zeroed=['perf_rating_last', 'perf_rating_best3_365', 'perf_rating_trend_365'] w=0.0350 (5.7s)
+S2V2W1 est=(2023,) eval=(2022,) z=-0.334 beta=-0.0158 zeroed=['perf_rating_last', 'perf_rating_rank_in_race'] w=0.0140 (5.9s)
+{
+ "selected": "S1V1W0",
+ "best_mean_z": 0.47368402058148007,
+ "tie_set": [
+  "S1V1W0",
+  "S1V2W0",
+  "S2V1W0",
+  "S1V1W1",
+  "S2V2W0",
+  "S1V2W1",
+  "S2V1W1"
+ ],
+ "ranking": [
+  [
+   "S2V1W0",
+   0.47368402058148007
+  ],
+  [
+   "S1V1W0",
+   0.469758651409099
+  ],
+  [
+   "S2V1W1",
+   0.3243231904625856
+  ],
+  [
+   "S1V1W1",
+   0.2994814369137804
+  ],
+  [
+   "S2V2W0",
+   0.2958141836863024
+  ],
+  [
+   "S1V2W0",
+   0.25241425954954444
+  ],
+  [
+   "S1V2W1",
+   0.23255359873084386
+  ],
+  [
+   "S2V2W1",
+   0.17147985152079562
+  ],
+  [
+   "S1V0W0",
+   -0.5257408349888752
+  ],
+  [
+   "S1V0W1",
+   -0.5591161093639176
+  ],
+  [
+   "S2V0W1",
+   -0.639482454744234
+  ],
+  [
+   "S2V0W0",
+   -0.8663149013737705
+  ]
+ ],
+ "excluded": []
+}
+rc=0 git=7203b2b end=2026-10-05 23:09:52
