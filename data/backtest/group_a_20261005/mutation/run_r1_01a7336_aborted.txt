@@ -1,0 +1,13 @@
+﻿python.exe : ABORT: 変異 'R6 検出力の判定不能を無視する' の実行で本番が変わった: ['data/keiba.db-wal']
+At line:1 char:502
++ ...  = 'utf-8'; & .\.venv64\Scripts\python.exe -m scripts.mutation_sandbo ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ABORT: 変異 'R6 検.../keiba.db-wal']:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+KILLED R1 E1b の選択と違う候補を凍結できる FAILED tests/test_group_a_run.py::test_freeze_refuses_a_spec_other_than_the_e1b_selection
+KILLED R2 主検定を 2 回走らせられる FAILED tests/test_group_a_run.py::test_end_to_end_freeze_power_primary - Fail...
+KILLED R3 凍結物の sha256 を見ない FAILED tests/test_group_a_run.py::test_frozen_file_tampering_is_detected - Fa...
+KILLED R4 別の凍結物の検出力を受け入れる FAILED tests/test_group_a_run.py::test_primary_refuses_power_from_another_freeze
+KILLED R5 valid より先に検出力を見る FAILED tests/test_group_a_run.py::test_verdict_rules[ci1-True-expected1] - As...
+ABORTED R6 検出力の判定不能を無視する data/keiba.db-wal
