@@ -1,0 +1,10 @@
+# Group A の変異テストの記録 (2026-10-05)
+
+- spec: `tests/mutation_specs/group_a_spec.py` (34 個: scripts/group_a.py 29 + scripts/group_a_class_table.py 5)
+- 実行: `git archive <sha>` の隔離コピー (scratchpad、`.git` 無し) + `.venv64` のジャンクション (実行後に `rmdir` で外した)
+- run1 (`cc1c711`): KILLED 31 / SURVIVED 3 (G3・G14・G28)
+  - G14 (ハンデ戦を斤量の推定に入れる): テストのハンデ戦のゴミ値が ±3 の clip の外で、除外を通らずに捨てられていた → 値を clip の内側に直した
+  - G28 (期待勝ち時計から年齢の区分を外す): テストが選んだレースが基準の区分 (係数 0) だった → 2 歳・999 のレースで明示的に確かめた
+- run2 (`d5290f2`): KILLED 33 / SURVIVED 1 (G3)
+  - G3 (障害の境界 `OBSTACLE_FROM` を 51 → 60) は **等価な変異**: `surface_of` は 10〜29 以外をすべて None (使わない) にするので、
+    境界の定数は振る舞いを変えない (定数は定義の明示として残す)
