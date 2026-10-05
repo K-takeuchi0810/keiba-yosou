@@ -42,6 +42,12 @@ FROZEN_FILE = "frozen_tables.json"
 MANIFEST_FILE = "MANIFEST.json"
 POWER_FILE = "power.json"
 PRIMARY_FILE = "primary_result.json"
+SIDE_FILE = "primary_side_records.json"
+LOCK_FILE = "PRIMARY_LOCK.json"     # 凍結物のディレクトリに置く。主検定を始めた時点で書く (途中で落ちても残る)
+# 主検定の前に、凍結の時点と一致しなければならない依存ファイル (探索台帳は追記が続くので外す)
+PINNED_FILES = ("scripts/group_a.py", "scripts/group_a_power.py", "scripts/group_a_run.py", "scripts/group_a_stats.py",
+                "predictor/eval_stats.py", "config.py", "db.py",
+                "data/backtest/group_a_class_20261005/class_table.csv", "docs/PHASE05_5_PREREG.md")
 
 
 class RunError(RuntimeError):
@@ -63,10 +69,34 @@ def _rel(path: Path) -> str | None:
         return None
 
 
+def _nan_to_none(obj):
+    if isinstance(obj, float) and not math.isfinite(obj):
+        return None
+    if isinstance(obj, dict):
+        return {k: _nan_to_none(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_nan_to_none(v) for v in obj]
+    return obj
+
+
 def _write_json(path: Path, obj) -> None:
+    """原子的に書く。NaN / inf は null にする (標準の JSON で読めるように)。"""
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+    tmp.write_text(json.dumps(_nan_to_none(obj), ensure_ascii=False, indent=1, default=str, allow_nan=False),
+                   encoding="utf-8")
     tmp.replace(path)
+
+
+def history_digest(races: dict, years) -> dict:
+    """指定の年の走の内容の sha256 (凍結の時点と、検出力・主検定の時点で、履歴の DB の中身が同じことの照合用)。"""
+    h = hashlib.sha256()
+    n = 0
+    for rid in sorted(r for r in races if int(r[:4]) in years):
+        for x in races[rid].runs:
+            h.update(f"{rid}|{x.horse}|{x.horse_num}|{x.abnormal}|{x.finish}|{x.sec_per_km!r}|{x.burden_kg!r}|{x.win_odds!r}\n"
+                     .encode("utf-8"))
+            n += 1
+    return {"years": sorted(years), "runs": n, "sha256": h.hexdigest()}
 
 
 def missing_by_year(rows: list[dict]) -> dict:
@@ -111,10 +141,6 @@ def choice_set_contract(rows: list[dict], counts: Counter) -> dict:
     return {"counts": dict(counts), "n_races": len(by), "n_rows": len(rows), "max_abs_prob_sum_dev": dev}
 
 
-def year_rows(rows: list[dict], years) -> list[dict]:
-    return [r for r in rows if r["year"] in years]
-
-
 # ---------------------------------------------------------------------------------------------------- freeze
 
 def run_freeze(db: str, spec_name: str, out: Path, e1b: Path, argv: list[str]) -> dict:
@@ -152,19 +178,22 @@ def run_freeze(db: str, spec_name: str, out: Path, e1b: Path, argv: list[str]) -
     loyo = {}
     for y in EST_YEARS:
         rest = tuple(x for x in EST_YEARS if x != y)
-        t_y = g.fit_tables(races, spec, rest)
-        r_y, _ = g.rate_runs(races, t_y)
-        c1, c2 = Counter(), Counter()
-        fit_y = g.target_samples(races, rest, r_y, c1)
-        ev_y = g.target_samples(races, (y,), r_y, c2)
-        g.add_market_logit(fit_y)
-        g.add_market_logit(ev_y)
-        comp_y = g.fit_composite(fit_y)
-        g.apply_composite(ev_y, comp_y)
-        res = g.clogit_with_se(ev_y, COLS)
-        loyo[str(y)] = {"est_years": list(rest), "beta_S": res["beta"][1], "se_S": res["se"][1],
-                        "sign": (None if math.isnan(res["beta"][1]) else int(np.sign(res["beta"][1]))),
-                        "weights": comp_y["weights"]}
+        try:
+            t_y = g.fit_tables(races, spec, rest)
+            r_y, _ = g.rate_runs(races, t_y)
+            c1, c2 = Counter(), Counter()
+            fit_y = g.target_samples(races, rest, r_y, c1)
+            ev_y = g.target_samples(races, (y,), r_y, c2)
+            g.add_market_logit(fit_y)
+            g.add_market_logit(ev_y)
+            comp_y = g.fit_composite(fit_y)
+            g.apply_composite(ev_y, comp_y)
+            res = g.clogit_with_se(ev_y, COLS)
+            loyo[str(y)] = {"est_years": list(rest), "beta_S": res["beta"][1], "se_S": res["se"][1],
+                            "sign": (None if math.isnan(res["beta"][1]) else int(np.sign(res["beta"][1]))),
+                            "weights": comp_y["weights"]}
+        except g.GroupAError as e:                    # 判定に使わない記録なので、fold の失敗は記録して続ける
+            loyo[str(y)] = {"est_years": list(rest), "error": str(e)}
     payload = g.freeze_payload(tables, comp)
     _write_json(out / FROZEN_FILE, payload)
     manifest = {
@@ -173,6 +202,7 @@ def run_freeze(db: str, spec_name: str, out: Path, e1b: Path, argv: list[str]) -
         "spec": spec_name, "est_years": list(EST_YEARS), "e1b_selection_file": str(e1b), "e1b_selected": sel,
         "frozen_file": FROZEN_FILE, "frozen_sha256": _sha(out / FROZEN_FILE), "payload_version": payload["payload_version"],
         "load_stats": dict(load_stats), "par_counts": tables.par.counts, "n_variants": len(tables.variants),
+        "history_digest": history_digest(races, (2021,) + EST_YEARS),
         "choice_set": contract, "n_train_races": contract["n_races"],
         "missing_by_year": missing_by_year(rows),
         "clip_audit": clip_audit(rstats, (2021,) + EST_YEARS),
@@ -205,6 +235,28 @@ def _within_corr(rows, a, b) -> float:
     return float(np.corrcoef(xs, ys)[0, 1]) if len(xs) > 2 else math.nan
 
 
+def _check_history(races: dict, man: dict) -> None:
+    d = history_digest(races, tuple(man["history_digest"]["years"]))
+    if d != man["history_digest"]:
+        raise RunError(f"2021-2024 の履歴が凍結の時点と違う (DB が変わった): {d} vs {man['history_digest']}")
+
+
+def _check_pinned(man: dict, power: dict) -> dict:
+    """主検定の前提: 作業ツリーに未コミットの変更が無く、固定する依存ファイルの sha256 が凍結・検出力の時点と同じ。"""
+    now = g.provenance(man["provenance"]["db"]["path"], ["check"])
+    if now["git_dirty"]:
+        raise RunError(f"作業ツリーに未コミットの変更がある: {now['git_status']}")
+    bad = {}
+    for f in PINNED_FILES:
+        cur = now["files_sha256"].get(f)
+        for name, src in (("freeze", man["provenance"]["files_sha256"]), ("power", power["provenance"]["files_sha256"])):
+            if src.get(f) != cur:
+                bad[f"{f} ({name})"] = (src.get(f), cur)
+    if bad:
+        raise RunError(f"主検定の前提のファイルが凍結・検出力の時点と違う: {bad}")
+    return {"git_sha": now["git_sha"], "pinned": {f: now["files_sha256"][f] for f in PINNED_FILES}}
+
+
 def _load_frozen(frozen: Path) -> tuple[dict, dict]:
     man = json.loads((frozen / MANIFEST_FILE).read_text(encoding="utf-8"))
     if _sha(frozen / FROZEN_FILE) != man["frozen_sha256"]:
@@ -221,6 +273,7 @@ def run_power(db: str, frozen: Path, out: Path, argv: list[str]) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     races, load_stats = g.load_races(max(PRIMARY_YEARS), db_path=db, allow_primary_year=True,
                                      primary_purpose="power: 2025 の過去走の時計を S の履歴として読む (対象レースの結果は対象の行に付けない)")
+    _check_history(races, man)
     tables, comp = g.tables_from_payload(payload, races)
     ratings, _ = g.rate_runs(races, tables)
     del races                                        # 以降、対象レースは allow-list の読み込みだけ
@@ -278,7 +331,13 @@ def _target_ages(db: str, year: int) -> dict:
     rows = conn.execute("""SELECT race_year||race_month_day||'_'||track_code||'_'||kaiji||'_'||nichiji||'_'||race_num, horse_num, age
                              FROM horse_races WHERE race_year = ?""", (str(year),)).fetchall()
     conn.close()
-    return {(rid, str(hn).strip()): float(age or 0) for rid, hn, age in rows}
+    out = {}
+    for rid, hn, age in rows:
+        try:
+            out[(rid, str(hn).strip())] = float(age) if age not in (None, "", 0, "0") else math.nan
+        except (TypeError, ValueError):
+            out[(rid, str(hn).strip())] = math.nan
+    return out
 
 
 def _residualised(rows: list[dict], x: str) -> list[dict]:
@@ -302,17 +361,31 @@ def verdict(ci: dict, power: dict) -> tuple[str, str]:
     return ("PRIMARY_PASS", "ci_lower_above_zero") if ci["lo"] > 0 else ("PRIMARY_FAIL", "ci_lower_not_above_zero")
 
 
-def run_primary(db: str, frozen: Path, power_path: Path, out: Path, argv: list[str]) -> dict:
-    out.mkdir(parents=True, exist_ok=True)
-    if (out / PRIMARY_FILE).exists():
-        raise RunError(f"主検定の結果が既にある: {out / PRIMARY_FILE} (主検定は 1 回だけ)")
-    started = _now()
+def run_primary(db: str, frozen: Path, power_path: Path, out: Path, argv: list[str],
+                rerun_reason: str | None = None) -> dict:
+    """主検定。凍結物のディレクトリの錠 (LOCK_FILE) で 1 回だけに限る。錠は 2025 の結果を読む前に書く (途中で落ちても残る)。
+
+    再実行は、実行の前に欠陥を特定して記録した場合だけ (§8-4)。`rerun_reason` を書くと run_index を 1 つ進めて走る。
+    """
     man, payload = _load_frozen(frozen)
     power = json.loads(Path(power_path).read_text(encoding="utf-8"))
-    if power["frozen_sha256"] != man["frozen_sha256"]:
+    if power["frozen_sha256"] != man["frozen_sha256"] or power.get("frozen_manifest_sha256") != _sha(frozen / MANIFEST_FILE):
         raise RunError("検出力の結果が別の凍結物から作られている")
+    lock_path = frozen / LOCK_FILE
+    previous = json.loads(lock_path.read_text(encoding="utf-8")) if lock_path.exists() else None
+    if previous is not None and not rerun_reason:
+        raise RunError(f"主検定は既に始まっている (錠 {lock_path}、run_index {previous['run_index']})。主検定は 1 回だけ")
+    pinned = _check_pinned(man, power)
+    run_index = (previous["run_index"] + 1) if previous else 1
+    started = _now()
+    out.mkdir(parents=True, exist_ok=True)
+    history = (previous.get("history", []) + [previous]) if previous else []
+    _write_json(lock_path, {"run_index": run_index, "started_at": started, "out": str(out), "rerun_reason": rerun_reason,
+                            "frozen_sha256": man["frozen_sha256"], "power_sha256": _sha(power_path), **pinned,
+                            "history": history})
     races, load_stats = g.load_races(max(PRIMARY_YEARS), db_path=db, allow_primary_year=True,
-                                     primary_purpose="primary: Group A の主検定 (run_index 1)")
+                                     primary_purpose=f"primary: Group A の主検定 (run_index {run_index})")
+    _check_history(races, man)
     tables, comp = g.tables_from_payload(payload, races)
     ratings, _ = g.rate_runs(races, tables)
     counts: Counter = Counter()
@@ -328,38 +401,55 @@ def run_primary(db: str, frozen: Path, power_path: Path, out: Path, argv: list[s
     if ok != ok_pk or (ok and max(abs(a - b) for a, b in zip(beta, beta_pk)) > 1e-8):
         raise RunError(f"配列版と eval_stats の条件付きロジットが一致しない: {beta_pk} vs {beta}")
     t0 = time.time()
-    ci = es.primary_block_ci(rows, st.make_beta_stat(packed, "S"), level=0.99)
+    ci = es.primary_block_ci(rows, st.make_beta_stat(packed, "S"), level=es.PRIMARY_CI_LEVEL)
     ci_seconds = round(time.time() - t0, 1)
-    assert ci["level"] == 0.99 and ci["n_boot"] == 5000 and ci["seed"] == 20261004
+    if (ci["level"], ci["n_boot"], ci["seed"]) != (es.PRIMARY_CI_LEVEL, es.PRIMARY_N_BOOT, es.PRIMARY_SEED):
+        raise RunError(f"主検定の区間の設定が事前登録と違う: {ci}")
     hess = g.clogit_with_se(rows, COLS)
     cat, reason = verdict(ci, power["power"])
-    # 判定に使わない記録 (§8-4、2025 で 1 回だけ)
+    z = pw.Z_ALPHA_2SIDED_001
+    result = {
+        "kind": "group_a_primary", "run_index": run_index, "rerun_reason": rerun_reason,
+        "started_at": started, "ended_at": _now(),
+        "provenance": g.provenance(db, argv, own_output=_rel(out)), "pinned": pinned,
+        "frozen_sha256": man["frozen_sha256"], "power_sha256": _sha(power_path),
+        "load_stats": dict(load_stats), "choice_set": contract,
+        "n_races_power_minus_primary": power["fisher"]["n_races"] - contract["n_races"],
+        "beta": {"market": beta[0], "S": beta[1], "converged": ok},
+        "ci_99": ci, "ci_seconds": ci_seconds,
+        "wald_diagnostic": {"se_hessian": hess["se"][1], "lo": beta[1] - z * hess["se"][1], "hi": beta[1] + z * hess["se"][1],
+                            "note": "診断だけ。判定に使わない"},
+        "power": power["power"], "category": cat, "category_reason": reason,
+    }
+    _write_json(out / PRIMARY_FILE, result)          # 判定までを先に書く (判定に使わない記録で落ちても残る)
+    try:
+        side = _side_records(races, rows, db)
+    except Exception as e:                           # 判定に使わない記録の失敗は、判定を変えずに記録だけする
+        side = {"error": f"{type(e).__name__}: {e}"}
+    _write_json(out / SIDE_FILE, {"run_index": run_index, "primary_file": PRIMARY_FILE, **side})
+    return {**result, "side_records_not_for_decision": side}
+
+
+def _side_records(races: dict, rows: list[dict], db: str) -> dict:
+    """§8-4 の判定に使わない記録 (2025 で 1 回だけ)。"""
     hist = _history_with_finish(races)
     _attach_last_run(rows, hist)
-    ages = _target_ages(db, 2025)
+    ages = _target_ages(db, max(PRIMARY_YEARS))
+    matched = 0
     for r in rows:
         r["age"] = ages.get((r["race_id"], r["horse_num"]), math.nan)
+        matched += not math.isnan(r["age"])
     side = {"rho_S_market_within_race": _within_corr(rows, "S", "logit_p_market"),
             "corr_S_starts_365_within_race": _within_corr(rows, "S", "starts_365"),
-            "corr_S_age_within_race": _within_corr([r for r in rows if not math.isnan(r["age"])], "S", "age")}
+            "corr_S_age_within_race": _within_corr([r for r in rows if not math.isnan(r["age"])], "S", "age"),
+            "age_matched_rows": matched, "n_rows": len(rows)}
     for x in ("last_finish", "last_popularity"):
         rr = _residualised(rows, x)
         res = g.clogit_with_se(rr, ["logit_p_market", "S_res"])
-        side[f"beta_S_residualised_on_{x}"] = {"beta": res["beta"][1], "se": res["se"][1], "converged": res["converged"]}
-    result = {
-        "kind": "group_a_primary", "run_index": 1, "started_at": started, "ended_at": _now(),
-        "provenance": g.provenance(db, argv, own_output=_rel(out)),
-        "frozen_sha256": man["frozen_sha256"], "power_sha256": _sha(power_path),
-        "load_stats": dict(load_stats), "choice_set": contract,
-        "beta": {"market": beta[0], "S": beta[1], "converged": ok},
-        "ci_99": ci, "ci_seconds": ci_seconds,
-        "wald_diagnostic": {"se": hess["se"][1], "lo": beta[1] - 2.5758293035489004 * hess["se"][1],
-                            "hi": beta[1] + 2.5758293035489004 * hess["se"][1], "note": "診断だけ。判定に使わない"},
-        "power": power["power"], "category": cat, "category_reason": reason,
-        "side_records_not_for_decision": side,
-    }
-    _write_json(out / PRIMARY_FILE, result)
-    return result
+        side[f"beta_S_residualised_on_{x}"] = {"beta": res["beta"][1], "se": res["se"][1], "converged": res["converged"],
+                                               "x_missing_rows": int(sum(math.isnan(r[x]) for r in rows)),
+                                               "note": "残差化はレース間を含む pooled の最小二乗 (x の欠損は平均で埋める)"}
+    return side
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -374,6 +464,7 @@ def main(argv: list[str] | None = None) -> int:
     q = sub.add_parser("primary")
     q.add_argument("--db", required=True); q.add_argument("--frozen", required=True); q.add_argument("--power", required=True)
     q.add_argument("--out", required=True)
+    q.add_argument("--rerun-reason", help="再実行のときだけ。実行の前に特定して記録した欠陥 (§8-4)")
     a = ap.parse_args(argv)
     full = ["group_a_run", *argv]
     if a.cmd == "freeze":
@@ -385,7 +476,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"power": r["power"], "fisher_se": r["fisher"]["se"], "rho": r["fisher"]["rho_within_race_market_weighted"],
                           "purchase": r["purchase_count_at_beta_target"]}, ensure_ascii=False, indent=1))
     else:
-        r = run_primary(a.db, Path(a.frozen), Path(a.power), Path(a.out), full)
+        r = run_primary(a.db, Path(a.frozen), Path(a.power), Path(a.out), full, rerun_reason=a.rerun_reason)
         print(json.dumps({k: r[k] for k in ("beta", "ci_99", "category", "category_reason")}, ensure_ascii=False, indent=1, default=str))
     return 0
 

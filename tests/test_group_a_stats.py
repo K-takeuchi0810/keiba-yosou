@@ -114,9 +114,9 @@ def test_step_cap_matters_and_matches_eval_stats_on_heavy_tails():
 
 def test_races_without_a_winner_do_not_enter_the_scale():
     """勝ち馬のいないレース (極端な値) は、標準化の SD にも入れない (eval_stats と同じ)。上限の効き方が変わるので結果も変わる。"""
-    rows = _heavy_tail_world(seed=0, n_races=15, b=6.0)
+    rows = _heavy_tail_world(seed=1, n_races=15, b=6.0)
     rows += [{"race_id": "z", "won": 0, "x": v} for v in (900.0, -900.0, 0.0, 450.0)]
     ref, ok_ref = es.conditional_logit(rows, ["x"], with_status=True)
     got, ok = st.clogit_packed(st.pack(rows, ["x"]))
-    assert ok == ok_ref
+    assert ok == ok_ref and ok_ref is True        # SD に勝ち馬なしのレースを入れると、この世界は収束しなくなる (変異 S4)
     assert (math.isnan(got[0]) and math.isnan(ref[0])) or got[0] == pytest.approx(ref[0], rel=1e-9)
