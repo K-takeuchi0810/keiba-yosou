@@ -491,3 +491,51 @@ def test_provenance_records_dirty_and_dependencies(tmp_path):
     p = g.provenance(tmp_path / "none.db", ["x"])
     assert p["git_sha"] and isinstance(p["git_dirty"], (bool, type(None)))
     assert "scripts/group_a.py" in p["files_sha256"] and p["argv"] == ["x"] and p["db"]["bytes"] is None
+
+
+# --- 2026-10-05 事前登録 §8-4b-3 (P3 の座標の改訂 B) ------------------------------------------------------
+
+def _b_par():
+    return g.ParModel((2023,), {("05", "11", 1600): ("05", "11", 1600)},
+                      {"intercept": 60.0, "class=703": 2.0, "class=999": -1.5, "age=2yo": 0.5}, [], {})
+
+
+def test_p3_clips_relative_to_the_class_and_age_expectation_and_keeps_the_class_level():
+    par = _b_par()
+    low = _race("low", "20230105", cls="703")
+    ref = _race("ref", "20230106", cls="005")
+    top = _race("top", "20230107", cls="999")
+    young = _race("yng", "20230108", cls="703", age="2yo")
+    _run(low, "a", 1, 64.0)       # 残差 +4.0、c = +2.0 → 期待からは +2.0 (切らない) → 評価値 −4.0
+    _run(ref, "b", 1, 64.0)       # 残差 +4.0、c = 0 → +4.0 を +3.0 に切る → 評価値 −3.0
+    _run(top, "c", 1, 55.0)       # 残差 −5.0、c = −1.5 → −3.5 を −3.0 に切って c を戻す → −4.5 → 評価値 +4.5
+    _run(young, "d", 1, 66.0)     # 残差 +6.0、c + d = +2.5 → +3.5 を +3.0 に → +5.5 → 評価値 −5.5
+    out, st = g.rate_runs({x.race_id: x for x in (low, ref, top, young)}, _tables(par))
+    assert out["a"][0][1] == pytest.approx(-4.0) and out["b"][0][1] == pytest.approx(-3.0)
+    assert out["c"][0][1] == pytest.approx(4.5) and out["d"][0][1] == pytest.approx(-5.5)
+    assert st["clipped_slow"] == 2 and st["clipped_fast"] == 1
+    assert st["group|2023|703|3up|rated"] == 1 and "group|2023|703|3up|clipped_slow" not in st
+    assert st["group|2023|005|3up|clipped_slow"] == 1 and st["group|2023|999|3up|clipped_fast"] == 1
+
+
+def test_p3_without_a_nuisance_value_leaves_the_run_unrated():
+    par = _b_par()
+    r = _race("u", "20230105", cls="703", age=None)
+    _run(r, "a", 1, 61.0)
+    out, st = g.rate_runs({"u": r}, _tables(par))
+    assert "a" not in out and st["unrated_no_nuisance"] == 1
+
+
+def test_weight_outlier_filter_uses_the_same_coordinate_as_p3():
+    races, par = _weight_world(0.05)
+    par.coef["class=703"] = 2.5
+    for r in races.values():                      # 全レースを 703 にし、時計を +2.5 遅くする (期待からは同じ)
+        r.cls = "703"
+        r.runs[0].sec_per_km += 2.5
+    fit = g.fit_weight_effect(races, par, {}, (2023,))
+    assert fit["w"] == pytest.approx(0.05, abs=1e-6) and fit["n_runs"] == 120   # 残差 +2.5〜+2.7 でも除外されない
+
+
+def test_reading_the_primary_year_needs_a_recorded_purpose(tmp_path):
+    with pytest.raises(g.GroupAError, match="primary_purpose"):
+        g.load_races(2025, db_path="does-not-exist.db", allow_primary_year=True)

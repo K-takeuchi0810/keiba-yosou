@@ -3,10 +3,11 @@
     python -m scripts.mutation_sandbox --copy <隔離コピー> --spec tests/mutation_specs/group_a_spec.py
 """
 
-TESTS = ["tests/test_group_a.py", "tests/test_group_a_class_table.py"]
+TESTS = ["tests/test_group_a.py", "tests/test_group_a_class_table.py", "tests/test_group_a_power.py"]
 
 GA = "scripts/group_a.py"
 GC = "scripts/group_a_class_table.py"
+GP = "scripts/group_a_power.py"
 
 MUTANTS = [
     ("G1 MSSt を復号しない", GA,
@@ -129,4 +130,34 @@ MUTANTS = [
     ("G35 読み込みを書き込み可にする", GA,
      '    conn = sqlite3.connect(f"file:{Path(db_path).as_posix()}?mode=ro", uri=True)',
      '    conn = sqlite3.connect(f"file:{Path(db_path).as_posix()}?mode=rw", uri=True)'),
+    ("G36 P3 (B) を外して残差そのものに clip", GA,
+     "    adj = res - nu\n",
+     "    adj = res\n    nu = 0.0\n"),
+    ("G37 斤量の外れ値の除外を残差そのもので行う", GA,
+     "and abs(res - nu) <= CLIP_SEC_PER_KM:",
+     "and abs(res) <= CLIP_SEC_PER_KM:"),
+    ("G38 主検定の年を目的なしで読める", GA,
+     "    if allow_primary_year and not primary_purpose:",
+     "    if False:"),
+    ("P1 対象レースの SQL の禁止列の検査を外す", GP,
+     "    bad = [c for c in FORBIDDEN_COLUMNS if c in low]",
+     "    bad = []"),
+    ("P2 返還の判定から出走取消を外す", GP,
+     "\"CASE WHEN h.abnormal_code IN ('1','2','3') THEN 1 ELSE 0 END\",",
+     "\"CASE WHEN h.abnormal_code IN ('2','3') THEN 1 ELSE 0 END\","),
+    ("P3 検出力の行で市場の確率を正規化し直さない", GP,
+     '"p_market": q / total, **comp})',
+     '"p_market": q, **comp})'),
+    ("P4 Fisher 情報を一様の確率で作る", GP,
+     "        p = p / p.sum()\n        X = np.array([[r[z_col], r[s_col]] for r in rs], dtype=float)",
+     "        p = np.ones_like(p) / len(p)\n        X = np.array([[r[z_col], r[s_col]] for r in rs], dtype=float)"),
+    ("P5 SE の小さい方を採る", GP,
+     "    se_fixed = max(se_analytic, se_scaled)",
+     "    se_fixed = min(se_analytic, se_scaled)"),
+    ("P6 臨界の倍率から検出力の項を外す", GP,
+     "CRITICAL_MULTIPLIER = Z_ALPHA_2SIDED_001 + Z_POWER_080",
+     "CRITICAL_MULTIPLIER = Z_ALPHA_2SIDED_001"),
+    ("P7 勝ちの列がある行を通す", GP,
+     '    if any("won" in r for r in rows):',
+     "    if False:"),
 ]

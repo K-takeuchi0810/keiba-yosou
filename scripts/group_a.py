@@ -6,7 +6,8 @@
 - 時計は MSSt を秒に復号し、**秒 / km** で扱う (P1)。0 は NaN。障害 (`track_type_code` 51 以上) は使わない
 - 標準タイムの模型 (レース単位、勝ち時計 / km): セル + 芝ダ×馬場状態 + クラス + 年齢の制限の区分。クラスと年齢の区分は
   馬場差の材料 (ε) を作るための局外の補正で、評価値からは引かない (2a)
-- 馬ごとの過去走の残差だけを ±3.0 秒 / km で clip する (P3)
+- 馬ごとの過去走の残差だけを ±3.0 秒 / km で clip する (P3)。clip は残差から局外の補正 (クラス + 年齢の区分) を一度外した値に
+  当て、その後に戻す (事前登録 §8-4b-3、2026-10-05 改訂 B。2a を保ったまま、クラス・年齢による系統的な打ち切りを避ける)
 - 成分は対象日の 365 日前から前日までの過去走だけで作る
 """
 from __future__ import annotations
@@ -144,13 +145,17 @@ def load_class_table(path: Path = CLASS_TABLE) -> dict[str, tuple[str, str | Non
 
 
 def load_races(max_year: int, *, min_year: int = 2021, db_path: Path | str = DB_PATH,
-               class_table: dict | None = None, allow_primary_year: bool = False) -> tuple[dict[str, Race], Counter]:
+               class_table: dict | None = None, allow_primary_year: bool = False,
+               primary_purpose: str | None = None) -> tuple[dict[str, Race], Counter]:
     """JRA・確定 (`data_div = 7`)・平地のレースと走を読む。**探索は 2024 年以前だけ** (2025 は主検定の年)。
 
-    `allow_primary_year` は主検定の実行のときだけ True にする (探索のコードからは渡さない)。
+    `allow_primary_year` は主検定の年を読むとき (検出力の計算の履歴 / 主検定) だけ True にし、`primary_purpose` に目的を書く
+    (成果物の stats に残る監査の記録)。探索のコードからは渡さない。
     """
     if max_year >= 2025 and not allow_primary_year:
         raise GroupAError(f"探索で 2025 年以降を読もうとした (max_year={max_year})。主検定の年は探索で読まない")
+    if allow_primary_year and not primary_purpose:
+        raise GroupAError("主検定の年を読むときは primary_purpose (目的) を書く")
     from_date, to_date, _sealed = guard_analysis_window(f"{min_year}0101", f"{max_year}1231",
                                                         context="group_a.load_races")
     classes = class_table if class_table is not None else load_class_table()
@@ -195,6 +200,8 @@ def load_races(max_year: int, *, min_year: int = 2021, db_path: Path | str = DB_
         stats["rows"] += 1
     stats["races"] = len(races)
     stats["guard_from"], stats["guard_to"] = from_date, to_date
+    if allow_primary_year:
+        stats["primary_year_purpose"] = primary_purpose
     return races, stats
 
 
@@ -327,7 +334,9 @@ def fit_weight_effect(races: dict[str, Race], par: ParModel, variants: dict, est
             if run.abnormal in REFUNDED or not run.horse:
                 continue
             res = raw_residual(run, r, par, variants, 0.0)
-            if not math.isnan(res) and abs(res) <= CLIP_SEC_PER_KM:
+            nu = nuisance(r, par)
+            # 外れ値の除外は P3 と同じ座標 (残差 − c − d) で行う (事前登録 §8-4b-3)
+            if not (math.isnan(res) or math.isnan(nu)) and abs(res - nu) <= CLIP_SEC_PER_KM:
                 by_horse[run.horse].append((run.burden_kg, res))
     xs, ys = [], []
     for obs in by_horse.values():
@@ -348,6 +357,29 @@ def clip_residual(res: float) -> float:
     return max(-CLIP_SEC_PER_KM, min(CLIP_SEC_PER_KM, res))
 
 
+def nuisance(race: Race, par: ParModel) -> float:
+    """そのレースの局外の補正 c[クラス] + d[年齢の区分] (秒 / km)。年齢の区分が欠損なら NaN。"""
+    f = par.fitted(race)
+    b = par.base(race)
+    return f - b if not (math.isnan(f) or math.isnan(b)) else math.nan
+
+
+def bounded_residual(run: Run, race: Race, par: ParModel, variants: dict, w: float) -> tuple[float, str]:
+    """P3 (改訂 B) を当てた残差と、その状態 ('ok' / 'clipped_slow' / 'clipped_fast' / 'no_time' / 'no_nuisance')。
+
+    残差 − (c + d) を ±3.0 で clip してから (c + d) を戻す。評価値にはクラスの水準が残る (2a)。
+    """
+    res = raw_residual(run, race, par, variants, w)
+    if math.isnan(res):
+        return math.nan, "no_time"
+    nu = nuisance(race, par)
+    if math.isnan(nu):
+        return math.nan, "no_nuisance"
+    adj = res - nu
+    state = "clipped_slow" if adj > CLIP_SEC_PER_KM else ("clipped_fast" if adj < -CLIP_SEC_PER_KM else "ok")
+    return clip_residual(adj) + nu, state
+
+
 def fit_scale(races: dict[str, Race], par: ParModel, variants: dict, w: float, est_years: tuple[int, ...]) -> dict:
     """S2: 推定期間の (芝ダ, 距離の帯) ごとの、馬単位の残差 (clip の後) の SD。"""
     check_est_years(est_years)
@@ -358,7 +390,7 @@ def fit_scale(races: dict[str, Race], par: ParModel, variants: dict, w: float, e
         for run in r.runs:
             if run.abnormal in REFUNDED or not run.horse:
                 continue
-            res = clip_residual(raw_residual(run, r, par, variants, w))
+            res, _state = bounded_residual(run, r, par, variants, w)
             if not math.isnan(res):
                 vals[(r.surface, dist_band(r.distance))].append(res)
     return {k: float(np.std(v)) for k, v in vals.items() if len(v) >= 2}
@@ -399,23 +431,28 @@ def fit_tables(races: dict[str, Race], spec: Spec, est_years: tuple[int, ...]) -
 
 
 def rate_runs(races: dict[str, Race], tables: RatingTables) -> tuple[dict[str, list[tuple[int, float]]], Counter]:
-    """{馬: [(日の通し番号, 評価値)] (日付順)}。評価値は速いほど大。時計・基準の無い走は入れない。"""
+    """{馬: [(日の通し番号, 評価値)] (日付順)}。評価値は速いほど大。時計・基準の無い走は入れない。
+
+    stats には全体の件数と、clip の監査用の `group|<年>|<クラス>|<年齢の区分>|<rated / clipped_slow / clipped_fast>` を入れる。
+    """
     out: dict[str, list[tuple[int, float]]] = defaultdict(list)
     stats: Counter = Counter()
     for r in sorted(races.values(), key=lambda x: x.ymd):
         for run in r.runs:
             if run.abnormal in REFUNDED or not run.horse:
                 continue
-            res = raw_residual(run, r, tables.par, tables.variants, tables.w)
+            res, state = bounded_residual(run, r, tables.par, tables.variants, tables.w)
             if math.isnan(res):
                 stats["unrated_runs"] += 1
+                if state == "no_nuisance":
+                    stats["unrated_no_nuisance"] += 1
                 continue
             stats["rated_runs"] += 1
-            if res > CLIP_SEC_PER_KM:
-                stats["clipped_slow"] += 1
-            elif res < -CLIP_SEC_PER_KM:
-                stats["clipped_fast"] += 1
-            res = clip_residual(res)
+            grp = f"group|{r.ymd[:4]}|{r.cls}|{r.age}"
+            stats[f"{grp}|rated"] += 1
+            if state != "ok":
+                stats[state] += 1
+                stats[f"{grp}|{state}"] += 1
             if tables.scales is not None:
                 sd = tables.scales.get((r.surface, dist_band(r.distance)))
                 if not sd:
