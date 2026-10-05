@@ -1,0 +1,8 @@
+﻿python.exe : ABORT: 変異なしでテストが赤い (結果が信用できない): ['FAILED tests/test_group_a_run.py::test_lock_is_committed_checks_git - As
+serti...']
+At line:1 char:611
++ ...  = 'utf-8'; & .\.venv64\Scripts\python.exe -m scripts.mutation_sandbo ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ABORT: 変異なしでテスト... - Asserti...']:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
