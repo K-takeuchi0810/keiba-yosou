@@ -145,5 +145,13 @@ clone には対象の行しか入れていないので、対象外の行のチ�
 - 常駐プロセスの再起動: keiba-yosou の GUI / webapp は動いていなかった。ai-builder の `MAIBuilder` サービス (9/29 起動) は
   行列をメモリに持つので、再起動するまで古い recent_4corner_* を持つ。再起動は ai-builder の操作なのでユーザーに提案する
   → 2026-10-05 22:24:06 にユーザーが再起動した (Restart-MAIBuilder.ps1)。22:24:53 に Running・/api/health ok=True (date 20261005) を確認
-- ai_builder_impact: requires_followup (MAIBuilder サービスの再起動。ai-builder は corner 列を直接読まず、学習の重みは 0)
+- ai_builder_impact: **requires_followup (維持)**. MAIBuilder service restarted successfully after corner backfill. Daily matrices created after the backfill are expected to use the updated DB values. Historical/monthly backtest caches remain stale because cache keys do not include DB content/version. The stale recent_4corner_* values are currently non-scoring/retired and are not expected to affect predictions. Cache invalidation/rebuild is deferred to the ai-builder remediation work.
+  - 再起動の後の確認 (読み取り、22:24〜): Running / `/api/health` ok / keiba.db の mtime は apply の 22:12:46 のまま・WAL 0 B /
+    起動時に backtest の行列を「3,702 レース (20250701〜20261005)」で組み立てたが、月のキャッシュ (07-26 作成) をそのまま使い、
+    2025-09 (3,129 頭)・2026-07 (3,297 頭) で `recent_4corner_avg_position` は全頭 NULL。範囲の行列のファイルは 09-18 版・09-29 版と
+    同じ 891,798,639 B。キャッシュの欠陥は docs/EXTERNAL_DEPENDENTS.md の `AI_BUILDER_MATRIX_CACHE_INVALIDATION_DEFECT`
+  - 外部の指示者の判断 (A): キャッシュは作り直さず、stale を無害として記録する (作り直しても鍵の欠陥で再発するため、ai-builder 側でまとめて直す)
+  - **手順の逸脱**: Restart-MAIBuilder.ps1 を、中身を読む前にユーザーへ提示し、ユーザーが実行した。事後に読み、対象は MAIBuilder だけ・
+    `Restart-Service -Force` の後に health を 60 秒待つ・他のタスクやサービスには触れない、と確認した。今後 ai-builder の操作は
+    「読み取りで確認 → 承認 → 実行」の順に固定する
 - 取り消しの経路は上の手順 5 のとおり (この適用は `--expected-nonnull-before 0` で通った)
