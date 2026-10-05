@@ -144,6 +144,6 @@ clone には対象の行しか入れていないので、対象外の行のチ�
   predict_race の予想 (馬番・score・印) がフラグ True / False で同一 (通過順位は scoring に未配線)
 - 常駐プロセスの再起動: keiba-yosou の GUI / webapp は動いていなかった。ai-builder の `MAIBuilder` サービス (9/29 起動) は
   行列をメモリに持つので、再起動するまで古い recent_4corner_* を持つ。再起動は ai-builder の操作なのでユーザーに提案する
-  (この記録の時点で未実施)
+  → 2026-10-05 22:24:06 にユーザーが再起動した (Restart-MAIBuilder.ps1)。22:24:53 に Running・/api/health ok=True (date 20261005) を確認
 - ai_builder_impact: requires_followup (MAIBuilder サービスの再起動。ai-builder は corner 列を直接読まず、学習の重みは 0)
 - 取り消しの経路は上の手順 5 のとおり (この適用は `--expected-nonnull-before 0` で通った)
