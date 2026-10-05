@@ -4,6 +4,7 @@
 
     python -m scripts.group_a_run freeze  --db <db> --spec S1V1W0 --out <dir>       # 学習期 2022-2024 だけ
     python -m scripts.group_a_run power   --db <db> --frozen <dir> --out <dir>      # 2025 の対象レースの結果を読まない
+    python -m scripts.group_a_run arm     --db <db> --frozen <dir> --power <power.json>             # 錠を書く → git にコミット
     python -m scripts.group_a_run primary --db <db> --frozen <dir> --power <power.json> --out <dir>   # 1 回だけ
 
 - freeze: E1b の規則の選択と `--spec` が一致しなければ止める。補正テーブル・標準化・合成の重みを 2022-2024 で推定して凍結する
@@ -47,7 +48,8 @@ MANIFEST_FILE = "MANIFEST.json"
 POWER_FILE = "power.json"
 PRIMARY_FILE = "primary_result.json"
 SIDE_FILE = "primary_side_records.json"
-LOCK_FILE = "PRIMARY_LOCK.json"     # 凍結物のディレクトリに置く。主検定を始めた時点で書く (途中で落ちても残る)
+LOCK_FILE = "PRIMARY_LOCK.json"     # 凍結物のディレクトリに置く。arm で書き、git にコミットしてから primary を走らせる
+STARTED_FILE = "PRIMARY_RUN_{}_STARTED.json"   # primary が 2025 の結果を読む前に書く (同じ run_index で 2 回走らせない)
 # 主検定の前に、凍結の時点と一致しなければならない依存ファイル (探索台帳は追記が続くので外す)
 PINNED_FILES = ("scripts/group_a.py", "scripts/group_a_power.py", "scripts/group_a_run.py", "scripts/group_a_stats.py",
                 "predictor/eval_stats.py", "config.py", "db.py",
@@ -356,40 +358,78 @@ def _residualised(rows: list[dict], x: str) -> list[dict]:
 
 
 def verdict(ci: dict, power: dict) -> tuple[str, str]:
-    """§8-4: valid を先に見る → 検出力で判定不能が確定していれば INCONCLUSIVE → 下限 > 0 なら PASS、そうでなければ FAIL。"""
+    """§8-4: 検出力で判定不能が確定していれば、区間の valid に関係なく INCONCLUSIVE (理由 mde_above_beta_target。区間が無効なら
+    boot_na も足す。外部の指示者の決定 2026-10-06: 主検定の前に確定した MDE の理由を上書きしない) → 区間が無効なら INCONCLUSIVE
+    (boot_na) → 下限 > 0 なら PASS、そうでなければ FAIL。valid は PASS / FAIL を決める前に必ず見る (NaN > 0 は False なので)。"""
+    if power["inconclusive_by_power"]:
+        return "PRIMARY_INCONCLUSIVE", ("mde_above_beta_target" if ci["valid"] else "mde_above_beta_target+boot_na")
     if not ci["valid"]:
         return "PRIMARY_INCONCLUSIVE", "boot_na"
-    if power["inconclusive_by_power"]:
-        return "PRIMARY_INCONCLUSIVE", "mde_above_beta_target"
     return ("PRIMARY_PASS", "ci_lower_above_zero") if ci["lo"] > 0 else ("PRIMARY_FAIL", "ci_lower_not_above_zero")
 
 
-def run_primary(db: str, frozen: Path, power_path: Path, out: Path, argv: list[str],
-                rerun_reason: str | None = None) -> dict:
-    """主検定。凍結物のディレクトリの錠 (LOCK_FILE) で 1 回だけに限る。錠は 2025 の結果を読む前に書く (途中で落ちても残る)。
-
-    再実行は、実行の前に欠陥を特定して記録した場合だけ (§8-4)。`rerun_reason` を書くと run_index を 1 つ進めて走る。
-    """
+def _frozen_and_power(frozen: Path, power_path: Path) -> tuple[dict, dict, dict]:
     man, payload = _load_frozen(frozen)
     power = json.loads(Path(power_path).read_text(encoding="utf-8"))
     if power["frozen_sha256"] != man["frozen_sha256"] or power.get("frozen_manifest_sha256") != _sha(frozen / MANIFEST_FILE):
         raise RunError("検出力の結果が別の凍結物から作られている")
+    return man, payload, power
+
+
+def run_arm(db: str, frozen: Path, power_path: Path, argv: list[str], rerun_reason: str | None = None) -> dict:
+    """主検定の錠を書く (2025 の結果は読まない)。書いた錠を git にコミットしてから primary を走らせる (外部の指示者の決定 2026-10-06)。
+
+    再実行は、実行の前に欠陥を特定して記録した場合だけ (§8-4)。`rerun_reason` を書くと run_index を 1 つ進めた錠を書く。
+    """
+    man, payload, power = _frozen_and_power(frozen, power_path)
     lock_path = frozen / LOCK_FILE
     previous = json.loads(lock_path.read_text(encoding="utf-8")) if lock_path.exists() else None
     if previous is not None and not rerun_reason:
-        raise RunError(f"主検定は既に始まっている (錠 {lock_path}、run_index {previous['run_index']})。主検定は 1 回だけ")
+        raise RunError(f"主検定の錠が既にある ({lock_path}、run_index {previous['run_index']})。主検定は 1 回だけ")
     pinned = _check_pinned(man, power)
     # 2021-2024 の履歴の照合は、錠を書く前に (2025 を読まずに) 行う。DB がずれていたら run_index を消費せずに止まる
     hist_races, _ = g.load_races(max(EST_YEARS), db_path=db)
     _check_history(hist_races, man)
     del hist_races
     run_index = (previous["run_index"] + 1) if previous else 1
+    lock = {"run_index": run_index, "armed_at": _now(), "argv": argv, "rerun_reason": rerun_reason,
+            "frozen_sha256": man["frozen_sha256"], "power_sha256": _sha(power_path), **pinned,
+            "history": (previous.get("history", []) + [previous]) if previous else []}
+    _write_json(lock_path, lock)
+    return lock
+
+
+def _lock_is_committed(lock_path: Path) -> bool:
+    rel = _rel(lock_path)
+    if rel is None:                                  # repo の外の錠は git で証明できない
+        return False
+    tracked = g.subprocess.run(["git", "-C", str(g.ROOT), "ls-files", "--error-unmatch", rel], capture_output=True, text=True)
+    status = g.subprocess.run(["git", "-C", str(g.ROOT), "status", "--porcelain", "--", rel], capture_output=True, text=True)
+    return tracked.returncode == 0 and status.returncode == 0 and not status.stdout.strip()
+
+
+def run_primary(db: str, frozen: Path, power_path: Path, out: Path, argv: list[str]) -> dict:
+    """主検定。arm で書いて **git にコミットした** 錠の run_index で 1 回だけ走る。2025 の結果を読む前に開始の印を書く。"""
+    man, payload, power = _frozen_and_power(frozen, power_path)
+    lock_path = frozen / LOCK_FILE
+    if not lock_path.exists():
+        raise RunError("主検定の錠が無い (先に arm で錠を書き、git にコミットする)")
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    if not _lock_is_committed(lock_path):
+        raise RunError(f"主検定の錠が git にコミットされていない ({lock_path})。結果を読む前にコミットする")
+    if lock["frozen_sha256"] != man["frozen_sha256"] or lock["power_sha256"] != _sha(power_path):
+        raise RunError("錠が別の凍結物・検出力のもの")
+    run_index = lock["run_index"]
+    started_path = frozen / STARTED_FILE.format(run_index)
+    if started_path.exists():
+        raise RunError(f"run_index {run_index} の主検定は既に始まっている ({started_path})。主検定は 1 回だけ")
+    pinned = _check_pinned(man, power)
+    if pinned["pinned"] != lock["pinned"]:
+        raise RunError("固定したファイルが錠を書いた時点と違う")
     started = _now()
     out.mkdir(parents=True, exist_ok=True)
-    history = (previous.get("history", []) + [previous]) if previous else []
-    _write_json(lock_path, {"run_index": run_index, "started_at": started, "out": str(out), "rerun_reason": rerun_reason,
-                            "frozen_sha256": man["frozen_sha256"], "power_sha256": _sha(power_path), **pinned,
-                            "history": history})
+    _write_json(started_path, {"run_index": run_index, "started_at": started, "out": str(out), "argv": argv})
+    rerun_reason = lock.get("rerun_reason")
     races, load_stats = g.load_races(max(PRIMARY_YEARS), db_path=db, allow_primary_year=True,
                                      primary_purpose=f"primary: Group A の主検定 (run_index {run_index})")
     _check_history(races, man)
@@ -468,22 +508,28 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--e1b", default=str(g.ROOT / "data" / "backtest" / "group_a_20261005" / "e1b" / "cross_results.json"))
     p = sub.add_parser("power")
     p.add_argument("--db", required=True); p.add_argument("--frozen", required=True); p.add_argument("--out", required=True)
+    am = sub.add_parser("arm")
+    am.add_argument("--db", required=True); am.add_argument("--frozen", required=True); am.add_argument("--power", required=True)
+    am.add_argument("--rerun-reason", help="再実行のときだけ。実行の前に特定して記録した欠陥 (§8-4)")
     q = sub.add_parser("primary")
     q.add_argument("--db", required=True); q.add_argument("--frozen", required=True); q.add_argument("--power", required=True)
     q.add_argument("--out", required=True)
-    q.add_argument("--rerun-reason", help="再実行のときだけ。実行の前に特定して記録した欠陥 (§8-4)")
     a = ap.parse_args(argv)
     full = ["group_a_run", *argv]
     if a.cmd == "freeze":
         m = run_freeze(a.db, a.spec, Path(a.out), Path(a.e1b), full)
         print(json.dumps({k: m[k] for k in ("spec", "frozen_sha256", "n_train_races", "bootstrap", "leave_one_year_out",
                                             "train_in_sample")}, ensure_ascii=False, indent=1, default=str))
+    elif a.cmd == "arm":
+        lock = run_arm(a.db, Path(a.frozen), Path(a.power), full, rerun_reason=a.rerun_reason)
+        print(json.dumps({k: lock[k] for k in ("run_index", "armed_at", "frozen_sha256", "power_sha256", "git_sha")},
+                         ensure_ascii=False, indent=1))
     elif a.cmd == "power":
         r = run_power(a.db, Path(a.frozen), Path(a.out), full)
         print(json.dumps({"power": r["power"], "fisher_se": r["fisher"]["se"], "rho": r["fisher"]["rho_within_race_market_weighted"],
                           "purchase": r["purchase_count_at_beta_target"]}, ensure_ascii=False, indent=1))
     else:
-        r = run_primary(a.db, Path(a.frozen), Path(a.power), Path(a.out), full, rerun_reason=a.rerun_reason)
+        r = run_primary(a.db, Path(a.frozen), Path(a.power), Path(a.out), full)
         print(json.dumps({k: r[k] for k in ("beta", "ci_99", "category", "category_reason")}, ensure_ascii=False, indent=1, default=str))
     return 0
 

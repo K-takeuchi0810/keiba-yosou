@@ -16,7 +16,8 @@ from scripts import group_a_run as run
 
 @pytest.mark.parametrize("ci, inconclusive, expected", [
     ({"valid": False, "lo": math.nan, "hi": math.nan}, False, ("PRIMARY_INCONCLUSIVE", "boot_na")),
-    ({"valid": False, "lo": math.nan, "hi": math.nan}, True, ("PRIMARY_INCONCLUSIVE", "boot_na")),       # valid を先に見る
+    ({"valid": False, "lo": math.nan, "hi": math.nan}, True,
+     ("PRIMARY_INCONCLUSIVE", "mde_above_beta_target+boot_na")),                                     # MDE の理由を上書きしない
     ({"valid": True, "lo": 0.05, "hi": 0.2}, True, ("PRIMARY_INCONCLUSIVE", "mde_above_beta_target")),  # 下限 > 0 でも
     ({"valid": True, "lo": -0.3, "hi": -0.1}, True, ("PRIMARY_INCONCLUSIVE", "mde_above_beta_target")),
     ({"valid": True, "lo": 0.01, "hi": 0.2}, False, ("PRIMARY_PASS", "ci_lower_above_zero")),
@@ -88,6 +89,7 @@ def patched(world, monkeypatch):
         return {**real(*a, **k), "git_dirty": False, "git_status": []}
 
     monkeypatch.setattr(g, "provenance", clean)
+    monkeypatch.setattr(run, "_lock_is_committed", lambda p: True)   # 一時ディレクトリは repo の外 (判定そのものは別のテスト)
     return world
 
 
@@ -110,6 +112,12 @@ def test_end_to_end_freeze_power_primary(patched, tmp_path):
     assert power["frozen_sha256"] == man["frozen_sha256"] and power["fisher"]["se"] > 0
     assert set(power["power"]) >= {"se_fixed", "mde", "inconclusive_by_power"}
     prim = tmp_path / "primary"
+    with pytest.raises(run.RunError, match="錠が無い"):                  # arm の前は走らない
+        run.run_primary(str(path), frozen, pw_out / run.POWER_FILE, prim, ["t"])
+    lock = run.run_arm(str(path), frozen, pw_out / run.POWER_FILE, ["t"])
+    assert lock["run_index"] == 1
+    with pytest.raises(run.RunError, match="錠が既にある"):              # 2 回目の arm は拒む
+        run.run_arm(str(path), frozen, pw_out / run.POWER_FILE, ["t"])
     res = run.run_primary(str(path), frozen, pw_out / run.POWER_FILE, prim, ["t"])
     assert res["ci_99"]["level"] == 0.99 and res["ci_99"]["n_boot"] == 5000 and res["ci_99"]["seed"] == 20261004
     assert res["category"] in {"PRIMARY_PASS", "PRIMARY_FAIL", "PRIMARY_INCONCLUSIVE"}
@@ -119,7 +127,7 @@ def test_end_to_end_freeze_power_primary(patched, tmp_path):
         run.run_primary(str(path), frozen, pw_out / run.POWER_FILE, prim, ["t"])
     with pytest.raises(run.RunError, match="1 回だけ"):                  # 出力先を変えても拒む (錠は凍結物の側)
         run.run_primary(str(path), frozen, pw_out / run.POWER_FILE, tmp_path / "other", ["t"])
-    assert (prim / run.SIDE_FILE).exists() and json.loads((frozen / run.LOCK_FILE).read_text(encoding="utf-8"))["run_index"] == 1
+    assert (prim / run.SIDE_FILE).exists() and (frozen / run.STARTED_FILE.format(1)).exists()
     assert res["n_races_power_minus_primary"] >= 0
 
 
@@ -170,31 +178,10 @@ def _frozen_and_power(path, e1b, tmp_path):
     return frozen, tmp_path / "power" / run.POWER_FILE
 
 
-def test_lock_survives_a_crash_and_a_rerun_needs_a_reason(patched, tmp_path, monkeypatch):
-    tmp, path, classes, e1b = patched
-    frozen, power = _frozen_and_power(path, e1b, tmp_path)
-
-    def boom(*a, **k):
-        raise RuntimeError("区間の計算の途中で落ちた")
-
-    monkeypatch.setattr(run.es, "primary_block_ci", boom)
-    with pytest.raises(RuntimeError):
-        run.run_primary(str(path), frozen, power, tmp_path / "p1", ["t"])
-    monkeypatch.undo()
-    monkeypatch.setattr(g, "load_class_table", lambda *a, **k: classes)
-    real = g.provenance
-    monkeypatch.setattr(g, "provenance", lambda *a, **k: {**real(*a, **k), "git_dirty": False, "git_status": []})
-    with pytest.raises(run.RunError, match="既に始まっている"):            # 落ちても錠は残る
-        run.run_primary(str(path), frozen, power, tmp_path / "p2", ["t"])
-    res = run.run_primary(str(path), frozen, power, tmp_path / "p3", ["t"], rerun_reason="区間の計算の例外 (テスト)")
-    assert res["run_index"] == 2 and res["rerun_reason"]
-    lock = json.loads((frozen / run.LOCK_FILE).read_text(encoding="utf-8"))
-    assert lock["run_index"] == 2 and lock["history"][0]["run_index"] == 1
-
-
 def test_side_record_failure_keeps_the_primary_result(patched, tmp_path, monkeypatch):
     tmp, path, classes, e1b = patched
     frozen, power = _frozen_and_power(path, e1b, tmp_path)
+    run.run_arm(str(path), frozen, power, ["t"])
 
     def boom(*a, **k):
         raise ValueError("年齢の読み込みで落ちた")
@@ -204,25 +191,6 @@ def test_side_record_failure_keeps_the_primary_result(patched, tmp_path, monkeyp
     saved = json.loads((tmp_path / "p" / run.PRIMARY_FILE).read_text(encoding="utf-8"))
     side = json.loads((tmp_path / "p" / run.SIDE_FILE).read_text(encoding="utf-8"))
     assert saved["category"] == res["category"] and "ValueError" in side["error"]
-
-
-def test_primary_refuses_a_dirty_tree_or_changed_pinned_files(patched, tmp_path, monkeypatch):
-    tmp, path, classes, e1b = patched
-    frozen, power = _frozen_and_power(path, e1b, tmp_path)
-    real = g.provenance
-    monkeypatch.setattr(g, "provenance", lambda *a, **k: {**real(*a, **k), "git_dirty": True, "git_status": [" M x"]})
-    with pytest.raises(run.RunError, match="未コミット"):
-        run.run_primary(str(path), frozen, power, tmp_path / "p", ["t"])
-
-    def changed(*a, **k):
-        p = real(*a, **k)
-        return {**p, "git_dirty": False, "git_status": [],
-                "files_sha256": {**p["files_sha256"], "docs/PHASE05_5_PREREG.md": "0" * 64}}
-
-    monkeypatch.setattr(g, "provenance", changed)
-    with pytest.raises(run.RunError, match="前提のファイル"):
-        run.run_primary(str(path), frozen, power, tmp_path / "p", ["t"])
-    assert not (frozen / run.LOCK_FILE).exists()                     # 照合で止まったときは錠を書かない
 
 
 def test_power_refuses_a_changed_history(patched, tmp_path):
@@ -250,22 +218,97 @@ def test_json_writes_nan_as_null(tmp_path):
     assert json.loads((tmp_path / "x.json").read_text(encoding="utf-8")) == {"a": None, "b": [1.0, None]}
 
 
-def test_history_mismatch_stops_the_primary_before_the_lock(patched, tmp_path, monkeypatch):
+def test_pinned_files_are_all_in_the_provenance_dependencies():
+    assert set(run.PINNED_FILES) <= set(g.DEPENDENCIES)
+
+
+def test_a_crash_after_start_consumes_the_run_and_a_rerun_needs_a_new_arm(patched, tmp_path, monkeypatch):
+    tmp, path, classes, e1b = patched
+    frozen, power = _frozen_and_power(path, e1b, tmp_path)
+    run.run_arm(str(path), frozen, power, ["t"])
+
+    def boom(*a, **k):
+        raise RuntimeError("区間の計算の途中で落ちた")
+
+    real_ci = run.es.primary_block_ci
+    monkeypatch.setattr(run.es, "primary_block_ci", boom)
+    with pytest.raises(RuntimeError):
+        run.run_primary(str(path), frozen, power, tmp_path / "p1", ["t"])
+    monkeypatch.setattr(run.es, "primary_block_ci", real_ci)
+    with pytest.raises(run.RunError, match="既に始まっている"):            # 落ちても開始の印は残る
+        run.run_primary(str(path), frozen, power, tmp_path / "p2", ["t"])
+    lock = run.run_arm(str(path), frozen, power, ["t"], rerun_reason="区間の計算の例外 (テスト)")
+    assert lock["run_index"] == 2 and lock["history"][0]["run_index"] == 1
+    res = run.run_primary(str(path), frozen, power, tmp_path / "p3", ["t"])
+    assert res["run_index"] == 2 and res["rerun_reason"]
+
+
+def test_primary_refuses_an_uncommitted_lock(world, tmp_path, monkeypatch):
+    """錠が git にコミットされていなければ、2025 の結果を読む前に止まる (本物の判定。一時ディレクトリは repo の外 = 未追跡)。"""
+    tmp, path, classes, e1b = world
+    monkeypatch.setattr(g, "load_class_table", lambda *a, **k: classes)
+    monkeypatch.setattr(run, "BOOT_N", 200)
+    real = g.provenance
+    monkeypatch.setattr(g, "provenance", lambda *a, **k: {**real(*a, **k), "git_dirty": False, "git_status": []})
+    frozen, power = _frozen_and_power(path, e1b, tmp_path)
+    run.run_arm(str(path), frozen, power, ["t"])
+    with pytest.raises(run.RunError, match="コミットされていない"):
+        run.run_primary(str(path), frozen, power, tmp_path / "p", ["t"])
+    assert not (frozen / run.STARTED_FILE.format(1)).exists()
+
+
+def test_arm_refuses_a_dirty_tree_or_changed_pinned_files(patched, tmp_path, monkeypatch):
+    tmp, path, classes, e1b = patched
+    frozen, power = _frozen_and_power(path, e1b, tmp_path)
+    real = g.provenance
+    monkeypatch.setattr(g, "provenance", lambda *a, **k: {**real(*a, **k), "git_dirty": True, "git_status": [" M x"]})
+    with pytest.raises(run.RunError, match="未コミット"):
+        run.run_arm(str(path), frozen, power, ["t"])
+
+    def changed(*a, **k):
+        p = real(*a, **k)
+        return {**p, "git_dirty": False, "git_status": [],
+                "files_sha256": {**p["files_sha256"], "docs/PHASE05_5_PREREG.md": "0" * 64}}
+
+    monkeypatch.setattr(g, "provenance", changed)
+    with pytest.raises(run.RunError, match="前提のファイル"):
+        run.run_arm(str(path), frozen, power, ["t"])
+    assert not (frozen / run.LOCK_FILE).exists()                     # 照合で止まったときは錠を書かない
+
+
+def test_primary_refuses_pinned_files_changed_after_arm(patched, tmp_path, monkeypatch):
+    tmp, path, classes, e1b = patched
+    frozen, power = _frozen_and_power(path, e1b, tmp_path)
+    run.run_arm(str(path), frozen, power, ["t"])
+    lock = json.loads((frozen / run.LOCK_FILE).read_text(encoding="utf-8"))
+    run._write_json(frozen / run.LOCK_FILE, {**lock, "pinned": {**lock["pinned"], "config.py": "0" * 64}})
+    with pytest.raises(run.RunError, match="錠を書いた時点と違う"):
+        run.run_primary(str(path), frozen, power, tmp_path / "p", ["t"])
+
+
+def test_history_mismatch_stops_the_arm_before_the_lock(patched, tmp_path, monkeypatch):
     """2021-2024 の履歴がずれていたら、錠を書く前に止まる (run_index を消費しない)。"""
     tmp, path, classes, e1b = patched
     frozen, power = _frozen_and_power(path, e1b, tmp_path)
-    man = json.loads((frozen / run.MANIFEST_FILE).read_text(encoding="utf-8"))
-    bad = {**man, "history_digest": {**man["history_digest"], "sha256": "0" * 64}}
-    monkeypatch.setattr(run, "_load_frozen", lambda f: (bad, json.loads((frozen / run.FROZEN_FILE).read_text(encoding="utf-8"))))
-    monkeypatch.setattr(run, "_check_pinned", lambda m, p: {"git_sha": "x", "pinned": {}})
-    pj = json.loads(power.read_text(encoding="utf-8"))
-    monkeypatch.setattr(run, "_sha", lambda p: (pj["frozen_manifest_sha256"] if p.name == run.MANIFEST_FILE else
-                                               __import__("hashlib").sha256(p.read_bytes()).hexdigest()))
-    with pytest.raises(run.RunError, match="履歴が凍結の時点と違う"):
-        run.run_primary(str(path), frozen, power, tmp_path / "p", ["t"])
-    assert not (frozen / run.LOCK_FILE).exists()
+    con = sqlite3.connect(path)
+    q = ("UPDATE horse_races SET finish_time = finish_time {} 1 WHERE race_year = '2023' AND horse_num = '01' "
+         "AND race_month_day = (SELECT min(race_month_day) FROM races WHERE race_year = '2023')")
+    con.execute(q.format("+"))
+    con.commit()
+    con.close()
+    try:
+        with pytest.raises(run.RunError, match="履歴が凍結の時点と違う"):
+            run.run_arm(str(path), frozen, power, ["t"])
+        assert not (frozen / run.LOCK_FILE).exists()
+    finally:
+        con = sqlite3.connect(path)
+        con.execute(q.format("-"))
+        con.commit()
+        con.close()
 
 
-def test_pinned_files_are_all_in_the_provenance_dependencies():
-    assert set(run.PINNED_FILES) <= set(g.DEPENDENCIES)
+def test_lock_is_committed_checks_git(tmp_path):
+    f = g.ROOT / "data" / "backtest" / "group_a_20261005" / "mutation" / "README.md"     # 追跡されているファイル
+    assert run._lock_is_committed(f) is True
+    assert run._lock_is_committed(g.ROOT / "data" / "backtest" / "group_a_20261005" / "no_such_lock.json") is False
 

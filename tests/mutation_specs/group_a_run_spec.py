@@ -21,15 +21,15 @@ MUTANTS = [
     ("R4 別の凍結物の検出力を受け入れる", GR,
      '    if power["frozen_sha256"] != man["frozen_sha256"] or power.get("frozen_manifest_sha256") != _sha(frozen / MANIFEST_FILE):',
      "    if False:"),
-    ("R5 valid より先に検出力を見る", GR,
+    ("R5 区間が無効なら MDE の理由を上書きする", GR,
+     '''    if power["inconclusive_by_power"]:
+        return "PRIMARY_INCONCLUSIVE", ("mde_above_beta_target" if ci["valid"] else "mde_above_beta_target+boot_na")
+    if not ci["valid"]:
+        return "PRIMARY_INCONCLUSIVE", "boot_na"''',
      '''    if not ci["valid"]:
         return "PRIMARY_INCONCLUSIVE", "boot_na"
     if power["inconclusive_by_power"]:
-        return "PRIMARY_INCONCLUSIVE", "mde_above_beta_target"''',
-     '''    if power["inconclusive_by_power"]:
-        return "PRIMARY_INCONCLUSIVE", "mde_above_beta_target"
-    if not ci["valid"]:
-        return "PRIMARY_INCONCLUSIVE", "boot_na"'''),
+        return "PRIMARY_INCONCLUSIVE", ("mde_above_beta_target" if ci["valid"] else "mde_above_beta_target+boot_na")'''),
     ("R6 検出力の判定不能を無視する", GR,
      '    if power["inconclusive_by_power"]:',
      "    if False:"),
@@ -54,9 +54,9 @@ MUTANTS = [
     ("S5 再抽出のレースの並びを使わない", GS,
      "        beta, ok = clogit_packed(p, races_of_draw(draw))",
      "        beta, ok = clogit_packed(p)"),
-    ("R9 錠を 2025 を読んだ後に書く (途中で落ちると錠が残らない)", GR,
-     '    _write_json(lock_path, {"run_index": run_index,',
-     '    _write_json(out / "lock_moved.json", {"run_index": run_index,'),
+    ("R9 開始の印を 2025 を読む前に書かない (同じ run_index で 2 回走れる)", GR,
+     '    _write_json(started_path, {"run_index": run_index,',
+     '    _write_json(out / "started_moved.json", {"run_index": run_index,'),
     ("R10 主検定の前に未コミットの変更を見ない", GR,
      '    if now["git_dirty"]:',
      "    if False:"),
@@ -75,4 +75,19 @@ MUTANTS = [
     ("R15 JSON の NaN を残す", GR,
      "    if isinstance(obj, float) and not math.isfinite(obj):\n        return None",
      "    if False:\n        return None"),
+    ("R16 錠が git にコミットされているかを見ない", GR,
+     "    if not _lock_is_committed(lock_path):",
+     "    if False:"),
+    ("R17 開始の印があっても走る", GR,
+     "    if started_path.exists():",
+     "    if False:"),
+    ("R18 錠を書いた後に固定のファイルが変わっても走る", GR,
+     '    if pinned["pinned"] != lock["pinned"]:',
+     "    if False:"),
+    ("R19 錠が無くても走る", GR,
+     "    if not lock_path.exists():\n        raise RunError(\"主検定の錠が無い",
+     "    if False:\n        raise RunError(\"主検定の錠が無い"),
+    ("R20 repo の外の錠をコミット済みとみなす", GR,
+     "    if rel is None:                                  # repo の外の錠は git で証明できない\n        return False",
+     "    if rel is None:                                  # repo の外の錠は git で証明できない\n        return True"),
 ]

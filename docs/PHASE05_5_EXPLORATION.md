@@ -253,4 +253,10 @@
 5. 結果 (`primary_result.json` / `primary_side_records.json`) をコミット → `config.CONSUMED_WINDOWS` に「validation (2025) の再利用:
    Phase 0.5-5 Group A primary run_index 1」を追記 → この台帳に凍結物・検出力・主検定の sha と run_index を記録
 6. 2・3・4 は DB が動かない窓の中で続けて行う (2021-2024 の行が再 upsert されると履歴の照合で止まり、凍結からやり直しになる)
+- **手順の改訂 (2026-10-06、外部の指示者の要件)**: 錠は 2025 の結果を読む **前に git にコミット済み** であること。そのため 4 を 2 段に分ける:
+  4a. `python -m scripts.group_a_run arm --db … --frozen …/final --power …/final/power/power.json` (照合 → 錠 `final/PRIMARY_LOCK.json`
+  を書く。2025 の結果は読まない) → **錠をコミット** / 4b. `primary` (錠がコミットされていなければ拒む。2025 の結果を読む前に
+  `final/PRIMARY_RUN_<n>_STARTED.json` を書く。同じ run_index の 2 回目は拒む)。再実行は `arm --rerun-reason` で run_index を進める
+- 判定の理由: 検出力で判定不能が確定していれば、区間が無効でも理由 `mde_above_beta_target` を上書きせず `+boot_na` を足す
+- 実行の script を変えたので (arm の分離)、freeze と power を同じ規則で流し直す (計算は決定的で、凍結物の sha256 は変わらない見込み)
 
