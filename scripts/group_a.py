@@ -12,8 +12,13 @@
 from __future__ import annotations
 
 import csv
+import hashlib
+import json
 import math
+import platform
 import sqlite3
+import subprocess
+import sys
 from bisect import bisect_left
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -23,6 +28,7 @@ from pathlib import Path
 import numpy as np
 
 from config import guard_analysis_window
+from db import REFUNDED_ABNORMAL_CODES
 
 ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = ROOT / "data" / "keiba.db"
@@ -30,7 +36,8 @@ CLASS_TABLE = ROOT / "data" / "backtest" / "group_a_class_20261005" / "class_tab
 
 OBSTACLE_FROM = 51                 # track_type_code がこれ以上なら障害 (§8-4b-2)
 DIRT_CODES = range(23, 30)         # 23〜29 がダート。10〜22 が芝
-REFUNDED = frozenset({"1", "2", "3"})   # 出走取消・発走除外・競走除外 (db.REFUNDED_ABNORMAL_CODES と同じ)
+REFUNDED = REFUNDED_ABNORMAL_CODES      # 出走取消・発走除外・競走除外 (単一の出典は db)
+PRIMARY_YEAR = 2025                # 主検定の年。推定 (fit_*) には渡さない
 WINDOW_DAYS = 365
 MIN_CELL_RACES = 20
 MIN_VARIANT_RACES = 3
@@ -59,8 +66,15 @@ def decode_msst(value) -> float:
     return t // 1000 * 60 + (t % 1000) / 10.0
 
 
+def is_obstacle(track_type_code) -> bool:
+    try:
+        return int(track_type_code) >= OBSTACLE_FROM
+    except (TypeError, ValueError):
+        return False
+
+
 def surface_of(track_type_code) -> str | None:
-    """'T' (芝) / 'D' (ダート) / None (障害・不明)。"""
+    """'T' (芝) / 'D' (ダート) / None (障害・不明)。読み込みでは、障害は飛ばし、平地の未知のコードは止める。"""
     try:
         tt = int(track_type_code)
     except (TypeError, ValueError):
@@ -157,10 +171,12 @@ def load_races(max_year: int, *, min_year: int = 2021, db_path: Path | str = DB_
     stats: Counter = Counter()
     races: dict[str, Race] = {}
     for (ymd, tc, ka, ni, rn, tt, dist, tcond, dcond, wt, hn, bn, abn, fin, ftime, bw, odds) in rows:
-        surf = surface_of(tt)
-        if surf is None:
+        if is_obstacle(tt):
             stats["skip_obstacle_rows"] += 1
             continue
+        surf = surface_of(tt)
+        if surf is None:
+            raise GroupAError(f"{ymd}_{tc}_{ka}_{ni}_{rn}: 平地の未知の track_type_code {tt!r} (黙って落とさない)")
         rid = f"{ymd}_{tc}_{ka}_{ni}_{rn}"
         race = races.get(rid)
         if race is None:
@@ -178,10 +194,18 @@ def load_races(max_year: int, *, min_year: int = 2021, db_path: Path | str = DB_
                              float(bw or 0) / 10.0, float(odds or 0) / 10.0))
         stats["rows"] += 1
     stats["races"] = len(races)
+    stats["guard_from"], stats["guard_to"] = from_date, to_date
     return races, stats
 
 
 # ---------------------------------------------------------------------------------------------------- 標準タイム
+
+def check_est_years(est_years) -> None:
+    """推定 (補正テーブル・斤量・尺度・合成) に主検定の年を渡したら止める。凍結物は 2022-2024 だけで作る。"""
+    bad = [y for y in est_years if int(y) >= PRIMARY_YEAR]
+    if bad:
+        raise GroupAError(f"推定の年に主検定の年 {bad} が入っている (凍結物は 2022-2024 だけで作る)")
+
 
 def winner_sec_per_km(race: Race) -> float:
     vals = {r.sec_per_km for r in race.runs if r.finish == 1 and not math.isnan(r.sec_per_km)}
@@ -215,7 +239,14 @@ class ParModel:
 
 
 def fit_par_model(races: dict[str, Race], est_years: tuple[int, ...]) -> ParModel:
-    """推定期間のレースだけで、勝ち時計 / km の最小二乗を解く (1 レース 1 観測)。疎なセルは探索台帳 A-1 の規則。"""
+    """推定期間のレースだけで、勝ち時計 / km の最小二乗を解く (1 レース 1 観測)。疎なセルは探索台帳 A-1 の規則。
+
+    馬場状態のダミーは芝ダの両面で参照を 1 つ (D1) だけ落とすので、セルが芝ダに入れ子になっていることと合わせて
+    設計行列の rank が 1 落ちる (2026-10-05 prediction-logic の指摘)。lstsq は最小ノルムの解を返し、個々の係数は
+    解釈できないが、`base` (セル + 馬場状態) と `fitted` が使う列の組は零空間と直交するので、評価値と ε は一意に決まる。
+    rank を counts に残す。
+    """
+    check_est_years(est_years)
     est = [r for r in races.values() if int(r.ymd[:4]) in est_years]
     usable = [r for r in est if not math.isnan(winner_sec_per_km(r)) and r.age is not None and r.cls is not None]
     cell_n = Counter((r.track, r.track_type, r.distance) for r in usable)
@@ -247,12 +278,14 @@ def fit_par_model(races: dict[str, Race], est_years: tuple[int, ...]) -> ParMode
                 X[i, idx[key]] = 1.0
         y[i] = winner_sec_per_km(r)
     beta, *_ = np.linalg.lstsq(X, y, rcond=None)
+    rank = int(np.linalg.matrix_rank(X))
     coef = dict(zip(columns, (float(b) for b in beta)))
     counts = {"est_races": len(est), "usable_races": len(usable), "fit_races": len(fit_races),
               "cells": len(cell_n), "sparse_cells": sum(n < MIN_CELL_RACES for n in cell_n.values()),
               "races_in_sparse_cells": sum(n for n in cell_n.values() if n < MIN_CELL_RACES),
               "races_unrated_cells": len(usable) - len(fit_races),
-              "races_age_unknown": sum(r.age is None for r in est)}
+              "races_age_unknown": sum(r.age is None for r in est),
+              "design_cols": len(columns), "design_rank": rank}
     return ParModel(tuple(est_years), cell_level, coef, columns, counts)
 
 
@@ -285,6 +318,7 @@ def fit_weight_effect(races: dict[str, Race], par: ParModel, variants: dict, est
 
     係数が 0 以下 (重いほど速い) なら W1 は無効 (`valid` False、呼び出し側は w = 0 = W0 として扱う)。
     """
+    check_est_years(est_years)
     by_horse: dict[str, list[tuple[float, float]]] = defaultdict(list)
     for r in races.values():
         if int(r.ymd[:4]) not in est_years or r.weight_type == HANDICAP:
@@ -316,12 +350,13 @@ def clip_residual(res: float) -> float:
 
 def fit_scale(races: dict[str, Race], par: ParModel, variants: dict, w: float, est_years: tuple[int, ...]) -> dict:
     """S2: 推定期間の (芝ダ, 距離の帯) ごとの、馬単位の残差 (clip の後) の SD。"""
+    check_est_years(est_years)
     vals: dict[tuple, list[float]] = defaultdict(list)
     for r in races.values():
         if int(r.ymd[:4]) not in est_years:
             continue
         for run in r.runs:
-            if run.abnormal in REFUNDED:
+            if run.abnormal in REFUNDED or not run.horse:
                 continue
             res = clip_residual(raw_residual(run, r, par, variants, w))
             if not math.isnan(res):
@@ -329,7 +364,7 @@ def fit_scale(races: dict[str, Race], par: ParModel, variants: dict, w: float, e
     return {k: float(np.std(v)) for k, v in vals.items() if len(v) >= 2}
 
 
-@dataclass
+@dataclass(frozen=True)
 class Spec:
     scale: str      # S1 / S2
     variant: str    # V0 / V1 / V2
@@ -452,7 +487,7 @@ def target_samples(races: dict[str, Race], years: tuple[int, ...], ratings: dict
         target_ord = day_ordinal(r.ymd)
         rows = []
         for x, q in zip(choice, inv):
-            comp = horse_components(ratings.get(x.horse, []), target_ord)
+            comp = horse_components(ratings.get(x.horse, []) if x.horse else [], target_ord)
             rows.append({"race_id": r.race_id, "year": int(r.ymd[:4]), "horse_num": x.horse_num, "horse": x.horse,
                          "won": 1 if x.finish == 1 else 0, "p_market": q / total, **comp})
         for row, rk in zip(rows, rank_in_race([row["perf_rating_best3_365"] for row in rows])):
@@ -469,7 +504,9 @@ def standardizer(rows: list[dict], cols) -> dict[str, tuple[float, float]]:
     out = {}
     for c in cols:
         v = np.array([r[c] for r in rows if not math.isnan(r[c])])
-        out[c] = (float(v.mean()), float(v.std())) if len(v) > 1 and v.std() > 0 else (0.0, 1.0)
+        if len(v) < 2 or not v.std() > 0:
+            raise GroupAError(f"{c}: 標準化できない (欠損でない行 {len(v)}、SD {v.std() if len(v) else 'n/a'})")
+        out[c] = (float(v.mean()), float(v.std()))
     return out
 
 
@@ -484,7 +521,7 @@ def clogit_with_se(samples: list[dict], cols: list[str]) -> dict:
     from predictor.eval_stats import conditional_logit
     beta, ok = conditional_logit(samples, cols, with_status=True)
     if not ok:
-        return {"beta": beta, "se": [math.nan] * len(cols), "converged": False}
+        return {"beta": beta, "se": [math.nan] * len(cols), "converged": False, "status": "not_converged"}
     by_race: dict[str, list[dict]] = defaultdict(list)
     for s in samples:
         by_race[s["race_id"]].append(s)
@@ -499,8 +536,11 @@ def clogit_with_se(samples: list[dict], cols: list[str]) -> dict:
         p = np.exp(u)
         p /= p.sum()
         info += X.T @ (np.diag(p) - np.outer(p, p)) @ X
-    se = np.sqrt(np.diag(np.linalg.inv(info)))
-    return {"beta": [float(x) for x in b], "se": [float(x) for x in se], "converged": True}
+    try:
+        se = np.sqrt(np.diag(np.linalg.inv(info)))
+    except np.linalg.LinAlgError:
+        return {"beta": [float(x) for x in b], "se": [math.nan] * len(cols), "converged": True, "status": "singular_information"}
+    return {"beta": [float(x) for x in b], "se": [float(x) for x in se], "converged": True, "status": "ok"}
 
 
 def add_market_logit(rows: list[dict]) -> None:
@@ -511,17 +551,24 @@ def add_market_logit(rows: list[dict]) -> None:
 
 def fit_composite(fit_rows: list[dict]) -> dict:
     """学習の行で、市場 + 標準化した 4 成分の条件付きロジットを解き、逆符号の成分は重み 0 (§8-4 の手順 3)。"""
+    check_est_years(sorted({r["year"] for r in fit_rows if "year" in r}))
     std = standardizer(fit_rows, COMPONENTS)
     apply_standardizer(fit_rows, std)
     cols = ["logit_p_market"] + [c + "_z" for c in COMPONENTS]
     res = clogit_with_se(fit_rows, cols)
+    if not res["converged"]:
+        raise GroupAError("合成の条件付きロジットが収束しない")
     raw_w = dict(zip(COMPONENTS, res["beta"][1:]))
     weights = {c: (w if (not math.isnan(w) and w > 0) else 0.0) for c, w in raw_w.items()}
+    if not any(w > 0 for w in weights.values()):
+        raise GroupAError(f"全成分が逆符号 (重みが全部 0): {raw_w}。S は定数になり、主検定の係数は識別できない")
     for r in fit_rows:
         r["S_raw"] = sum(weights[c] * r[c + "_z"] for c in COMPONENTS)
         r["S_missing"] = all(math.isnan(r[c]) for c in COMPONENTS)
     s_vals = np.array([r["S_raw"] for r in fit_rows if not r["S_missing"]])
-    s_std = (float(s_vals.mean()), float(s_vals.std())) if len(s_vals) > 1 and s_vals.std() > 0 else (0.0, 1.0)
+    if len(s_vals) < 2 or not s_vals.std() > 0:
+        raise GroupAError("S を標準化できない (欠損でない行が足りないか SD が 0)")
+    s_std = (float(s_vals.mean()), float(s_vals.std()))
     return {"standardizer": std, "raw_weights": raw_w, "weights": weights, "S_standardizer": s_std,
             "fit_clogit": res, "zeroed": [c for c, w in raw_w.items() if weights[c] == 0.0]}
 
@@ -533,3 +580,73 @@ def apply_composite(rows: list[dict], comp: dict) -> None:
         missing = all(math.isnan(r[c]) for c in COMPONENTS)
         raw = sum(comp["weights"][c] * r[c + "_z"] for c in COMPONENTS)
         r["S"] = 0.0 if missing else (raw - m) / s
+
+
+# ---------------------------------------------------------------------------------------------------- 凍結物と来歴
+
+def _key(t) -> str:
+    return "|".join(str(x) for x in t)
+
+
+def freeze_payload(tables: RatingTables, comp: dict) -> dict:
+    """評価値と S の計算に要る物を JSON にできる形で書き出す (§8-4 の手順 6)。馬場差は凍結しない (その日のレースから作る)。"""
+    par = tables.par
+    return {
+        "spec": tables.spec.name, "est_years": list(par.est_years),
+        "constants": {"WINDOW_DAYS": WINDOW_DAYS, "MIN_CELL_RACES": MIN_CELL_RACES, "MIN_VARIANT_RACES": MIN_VARIANT_RACES,
+                      "CLIP_SEC_PER_KM": CLIP_SEC_PER_KM, "BASE_WEIGHT_KG": BASE_WEIGHT_KG, "DIST_BANDS": list(DIST_BANDS),
+                      "REF_CLASS": REF_CLASS, "REF_AGE": REF_AGE, "OBSTACLE_FROM": OBSTACLE_FROM, "REFUNDED": sorted(REFUNDED)},
+        "par": {"cell_level": [[list(c), list(lv) if lv is not None else None] for c, lv in sorted(par.cell_level.items(), key=str)],
+                "coef": par.coef, "columns": par.columns, "counts": par.counts},
+        "w": tables.w, "weight_fit": tables.weight_fit,
+        "scales": [[list(k), v] for k, v in sorted(tables.scales.items())] if tables.scales is not None else None,
+        "composite": {"standardizer": {c: list(v) for c, v in comp["standardizer"].items()},
+                      "raw_weights": comp["raw_weights"], "weights": comp["weights"], "zeroed": comp["zeroed"],
+                      "S_standardizer": list(comp["S_standardizer"])},
+    }
+
+
+def tables_from_payload(payload: dict, races: dict[str, Race]) -> tuple[RatingTables, dict]:
+    """凍結物を読み込む。補正テーブル・斤量・尺度・合成は再推定しない。馬場差だけ、読み込んだレースから凍結した模型で作る。"""
+    spec_name = payload["spec"]
+    spec = Spec(spec_name[:2], spec_name[2:4], spec_name[4:6])
+    p = payload["par"]
+    cell_level = {tuple(int(x) if i == 2 else x for i, x in enumerate(c)):
+                  (tuple(int(x) if (i == 2 and str(x).isdigit()) else x for i, x in enumerate(lv)) if lv is not None else None)
+                  for c, lv in p["cell_level"]}
+    par = ParModel(tuple(payload["est_years"]), cell_level, dict(p["coef"]), list(p["columns"]), dict(p["counts"]))
+    variants = day_variants(races, par, spec.variant)
+    scales = {(k[0], int(k[1])): v for k, v in payload["scales"]} if payload["scales"] is not None else None
+    c = payload["composite"]
+    comp = {"standardizer": {k: tuple(v) for k, v in c["standardizer"].items()}, "raw_weights": c["raw_weights"],
+            "weights": c["weights"], "zeroed": c["zeroed"], "S_standardizer": tuple(c["S_standardizer"])}
+    return RatingTables(spec, par, variants, float(payload["w"]), payload["weight_fit"], scales), comp
+
+
+DEPENDENCIES = ("scripts/group_a.py", "scripts/group_a_explore.py", "predictor/eval_stats.py", "config.py", "db.py",
+                "data/backtest/group_a_class_20261005/class_table.csv", "docs/PHASE05_5_PREREG.md",
+                "docs/PHASE05_5_EXPLORATION.md")
+
+
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def provenance(db_path, argv: list[str] | None = None, extra_files: tuple[str, ...] = ()) -> dict:
+    """成果物の来歴を 1 か所で作る: HEAD・全ツリーの未コミットの変更・依存ファイルの sha256・版・DB の状態・argv。"""
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True)
+    head = git("rev-parse", "HEAD")
+    status = git("status", "--porcelain")
+    dbp = Path(db_path)
+    st = dbp.stat() if dbp.exists() else None
+    return {
+        "git_sha": head.stdout.strip() if head.returncode == 0 else "unknown",
+        "git_dirty": (bool(status.stdout.strip()) if status.returncode == 0 else None),
+        "git_status": status.stdout.strip().splitlines() if status.returncode == 0 else None,
+        "files_sha256": {f: sha256_file(ROOT / f) for f in DEPENDENCIES + tuple(extra_files) if (ROOT / f).exists()},
+        "python": platform.python_version(), "numpy": np.__version__, "argv": list(argv if argv is not None else sys.argv),
+        "db": {"path": str(dbp), "bytes": st.st_size if st else None,
+               "mtime": __import__("datetime").datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds") if st else None},
+    }
+

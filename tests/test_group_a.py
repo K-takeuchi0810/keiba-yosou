@@ -350,3 +350,144 @@ def test_clogit_se_shrinks_with_more_data():
     se_s = g.clogit_with_se(small, ["logit_p_market", "perf_rating_last"])["se"][1]
     se_b = g.clogit_with_se(big, ["logit_p_market", "perf_rating_last"])["se"][1]
     assert se_b == pytest.approx(se_s / 2, rel=0.25)
+
+
+# --- 2026-10-05 レビュー (74cf5ff の 4 名) の指摘の反映 -----------------------------------------------------
+
+def test_estimation_refuses_the_primary_year():
+    races, *_ = _synthetic_world()
+    with pytest.raises(g.GroupAError, match="主検定の年"):
+        g.fit_par_model(races, (2024, 2025))
+    par = g.fit_par_model(races, (2023,))
+    with pytest.raises(g.GroupAError, match="主検定の年"):
+        g.fit_weight_effect(races, par, {}, (2025,))
+    with pytest.raises(g.GroupAError, match="主検定の年"):
+        g.fit_scale(races, par, {}, 0.0, (2025,))
+    rows = _clogit_world()
+    for r in rows:
+        r["year"] = 2025
+    g.add_market_logit(rows)
+    with pytest.raises(g.GroupAError, match="主検定の年"):
+        g.fit_composite(rows)
+
+
+def test_all_reverse_sign_components_stop_instead_of_a_constant_s():
+    rng = np.random.default_rng(9)
+    rows = []
+    for k in range(400):                             # 4 成分とも独立で、どれも勝ちと逆向き
+        m = rng.normal(size=8)
+        cs = rng.normal(size=(4, 8))
+        u = m - 0.5 * cs.sum(axis=0)
+        w = rng.choice(8, p=np.exp(u) / np.exp(u).sum())
+        pm = np.exp(m) / np.exp(m).sum()
+        for i in range(8):
+            rows.append({"race_id": f"r{k}", "won": int(i == w), "p_market": float(pm[i]),
+                         **{c: float(cs[j, i]) for j, c in enumerate(g.COMPONENTS)}})
+    g.add_market_logit(rows)
+    with pytest.raises(g.GroupAError, match="全成分が逆符号"):
+        g.fit_composite(rows)
+
+
+def test_standardizer_stops_on_zero_sd():
+    with pytest.raises(g.GroupAError, match="標準化できない"):
+        g.standardizer([{"x": 1.0}, {"x": 1.0}, {"x": math.nan}], ["x"])
+
+
+def test_invalid_w1_is_wired_to_zero_in_fit_tables():
+    races, _ = _weight_world(-0.05)
+    t = g.fit_tables(races, g.Spec("S1", "V0", "W1"), (2023,))
+    assert t.weight_fit["valid"] is False and t.w == 0.0
+    races, _ = _weight_world(0.05)
+    t = g.fit_tables(races, g.Spec("S1", "V0", "W1"), (2023,))
+    assert t.weight_fit["valid"] is True and t.w == pytest.approx(0.05, abs=1e-3)
+
+
+def test_run_without_a_scale_band_is_counted_and_unrated():
+    par = g.ParModel((2023,), {("05", "11", 1600): ("05", "11", 1600)}, {"intercept": 60.0}, [], {})
+    r = _race("a", "20230105")
+    _run(r, "h", 1, 59.0)
+    out, st = g.rate_runs({"a": r}, _tables(par, scales={("D", 1): 0.5}))
+    assert "h" not in out and st["unrated_no_scale"] == 1
+
+
+def test_frozen_tables_reproduce_ratings_and_s_exactly():
+    import json
+    races, *_ = _synthetic_world()
+    for spec in (g.Spec("S1", "V1", "W0"), g.Spec("S2", "V2", "W0")):
+        t = g.fit_tables(races, spec, (2023,))
+        comp_rows = _clogit_world(seed=5)
+        g.add_market_logit(comp_rows)
+        comp = g.fit_composite(comp_rows)
+        payload = json.loads(json.dumps(g.freeze_payload(t, comp)))
+        t2, comp2 = g.tables_from_payload(payload, races)
+        assert g.rate_runs(races, t)[0] == g.rate_runs(races, t2)[0]
+        a, b = _clogit_world(seed=6), _clogit_world(seed=6)
+        for rows in (a, b):
+            g.add_market_logit(rows)
+        g.apply_composite(a, comp)
+        g.apply_composite(b, comp2)
+        assert [r["S"] for r in a] == [r["S"] for r in b]
+
+
+def _fixture_db(tmp_path, extra_race=None):
+    import sqlite3
+    path = tmp_path / "f.db"
+    con = sqlite3.connect(path)
+    con.execute("""CREATE TABLE races (race_year, race_month_day, track_code, kaiji, nichiji, race_num, data_div,
+                   track_type_code, distance, turf_condition, dirt_condition, weight_type_code)""")
+    con.execute("""CREATE TABLE horse_races (race_year, race_month_day, track_code, kaiji, nichiji, race_num, horse_num,
+                   blood_register_num, abnormal_code, confirmed_order, finish_time, burden_weight, win_odds)""")
+    rows = [("2023", "0105", "05", "01", "01", "01", "7", "11", 1600, "1", "0", "3"),
+            ("2023", "0105", "05", "01", "01", "02", "7", "52", 3000, "1", "0", "3"),      # 障害
+            ("2023", "0105", "05", "01", "01", "03", "9", "24", 1400, "0", "1", "3")]      # 中止
+    if extra_race:
+        rows.append(extra_race)
+    con.executemany("INSERT INTO races VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", rows)
+    con.executemany("INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", [
+        ("2023", "0105", "05", "01", "01", "01", "01", "H1", "0", 1, 1341, 550, 32),
+        ("2023", "0105", "05", "01", "01", "01", "02", "H2", "1", 0, 0, 550, 0),
+        ("2023", "0105", "05", "01", "01", "01", "00", "H3", "0", 2, 1350, 550, 50),      # 仮の馬番 00 は読まない
+        ("2023", "0105", "05", "01", "01", "02", "01", "H4", "0", 1, 3300, 600, 20),
+        ("2023", "0105", "05", "01", "01", "03", "01", "H5", "0", 1, 1300, 550, 20),
+        ("2023", "0105", "05", "01", "01", "04", "01", "H6", "0", 1, 1300, 550, 20)])
+    con.commit()
+    con.close()
+    return path
+
+
+def test_load_races_sql_decoding_and_read_only(tmp_path, monkeypatch):
+    import sqlite3
+    path = _fixture_db(tmp_path)
+    seen = []
+    real = sqlite3.connect
+
+    def spy(database, *a, **k):
+        seen.append(database)
+        return real(database, *a, **k)
+
+    monkeypatch.setattr(g.sqlite3, "connect", spy)
+    classes = {"20230105_05_01_01_01": ("005", "3up"), "20230105_05_01_01_02": ("703", "3up")}
+    races, st = g.load_races(2023, min_year=2023, db_path=path, class_table=classes)
+    assert all("mode=ro" in u for u in seen)
+    assert list(races) == ["20230105_05_01_01_01"]                  # 障害・中止・仮の馬番は読まない
+    runs = races["20230105_05_01_01_01"].runs
+    assert [(x.horse, x.abnormal, x.finish) for x in runs] == [("H1", "0", 1), ("H2", "1", 0)]
+    assert runs[0].sec_per_km == pytest.approx(94.1 / 1.6) and runs[0].burden_kg == 55.0 and runs[0].win_odds == 3.2
+    assert math.isnan(runs[1].sec_per_km) and st["skip_obstacle_rows"] == 1
+
+
+def test_load_races_stops_on_unknown_flat_track_type_and_missing_class(tmp_path):
+    path = _fixture_db(tmp_path, ("2023", "0105", "05", "01", "01", "04", "7", "30", 1600, "1", "0", "3"))
+    classes = {"20230105_05_01_01_01": ("005", "3up"), "20230105_05_01_01_04": ("005", "3up")}
+    with pytest.raises(g.GroupAError, match="未知の track_type_code"):
+        g.load_races(2023, min_year=2023, db_path=path, class_table=classes)
+    (tmp_path / "b").mkdir()
+    path2 = _fixture_db(tmp_path / "b")
+    with pytest.raises(g.GroupAError, match="クラスの表に無い"):
+        g.load_races(2023, min_year=2023, db_path=path2, class_table={})
+
+
+def test_provenance_records_dirty_and_dependencies(tmp_path):
+    p = g.provenance(tmp_path / "none.db", ["x"])
+    assert p["git_sha"] and isinstance(p["git_dirty"], (bool, type(None)))
+    assert "scripts/group_a.py" in p["files_sha256"] and p["argv"] == ["x"] and p["db"]["bytes"] is None

@@ -12,9 +12,9 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import subprocess
 import sys
 import time
+from datetime import datetime
 from bisect import bisect_left
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -136,11 +136,6 @@ def select(results: list[dict]) -> dict:
             "ranking": sorted(table, key=lambda t: -t[1]), "excluded": excluded}
 
 
-def git_info() -> dict:
-    run = lambda *a: subprocess.run(["git", "-C", str(g.ROOT), *a], capture_output=True, text=True).stdout.strip()
-    return {"git_sha": run("rev-parse", "HEAD"), "git_dirty": bool(run("status", "--porcelain", "--", "scripts", "tests"))}
-
-
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", required=True)
@@ -151,9 +146,11 @@ def main(argv: list[str] | None = None) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
+    started = datetime.now().astimezone().isoformat(timespec="seconds")
     races, load_stats = g.load_races(2024, db_path=a.db)
     fs = past_field_size(races)
-    meta = {"mode": a.mode, **git_info(), "db": a.db, "load_stats": dict(load_stats),
+    meta = {"mode": a.mode, "started_at": started, "provenance": g.provenance(a.db, ["group_a_explore", *(argv or sys.argv[1:])]),
+            "load_stats": dict(load_stats),
             "years_loaded": sorted({int(r.ymd[:4]) for r in races.values()})}
     assert max(meta["years_loaded"]) <= 2024, "探索で 2025 が読み込まれた"
     if a.mode == "cross":
@@ -165,15 +162,19 @@ def main(argv: list[str] | None = None) -> int:
                       f"zeroed={r['zeroed']} w={r['w_used']:.4f} ({r['seconds']}s)", flush=True)
                 results.append(r)
         sel = select(results)
-        payload = {**meta, "results": results, "selection": sel, "seconds": round(time.time() - t0, 1)}
+        payload = {**meta, "results": results, "selection": sel, "seconds": round(time.time() - t0, 1),
+                   "ended_at": datetime.now().astimezone().isoformat(timespec="seconds")}
         (out / "cross_results.json").write_text(json.dumps(payload, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
         print(json.dumps(sel, ensure_ascii=False, indent=1))
         return 0
     if not a.spec:
         ap.error("dryrun には --spec が要る")
-    spec = next(s for s in SPECS if s.name == a.spec)
+    spec = next((s for s in SPECS if s.name == a.spec), None)
+    if spec is None:
+        ap.error(f"未知の候補: {a.spec} (候補: {', '.join(s.name for s in SPECS)})")
     r = evaluate(races, spec, (2022, 2023), (2024,), fs)
-    payload = {**meta, "dryrun": r, "seconds": round(time.time() - t0, 1)}
+    payload = {**meta, "dryrun": r, "seconds": round(time.time() - t0, 1),
+               "ended_at": datetime.now().astimezone().isoformat(timespec="seconds")}
     (out / f"dryrun_2024_{spec.name}.json").write_text(json.dumps(payload, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
     print(json.dumps({k: r[k] for k in ("spec", "z", "beta_S", "se_S", "zeroed", "w_used")}, ensure_ascii=False))
     return 0
