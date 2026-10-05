@@ -85,3 +85,38 @@ def test_singular_information_returns_nan_and_the_stat_returns_none():
     ref, ok_ref = es.conditional_logit(rows, ["s"], with_status=True)
     assert ok is False and ok_ref is False and math.isnan(beta[0])
     assert st.make_beta_stat(p, "s")(rows) is None
+
+
+
+def _heavy_tail_world(seed=5, n_races=20, b=4.0):
+    """裾の重い特徴 (t 分布、自由度 1) で効果が大きい世界。1 歩の上限が収束の判定を変える (上限なしの Newton は別の値で止まる)。"""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for k in range(n_races):
+        x = rng.standard_t(1, size=8)
+        u = b * x
+        p = np.exp(u - u.max())
+        p /= p.sum()
+        w = rng.choice(8, p=p)
+        for i in range(8):
+            rows.append({"race_id": f"r{k}", "won": int(i == w), "x": float(x[i])})
+    return rows
+
+
+def test_step_cap_matters_and_matches_eval_stats_on_heavy_tails():
+    rows = _heavy_tail_world()
+    ref, ok_ref = es.conditional_logit(rows, ["x"], with_status=True)
+    got, ok = st.clogit_packed(st.pack(rows, ["x"]))
+    assert ok == ok_ref
+    assert (math.isnan(got[0]) and math.isnan(ref[0])) or got[0] == pytest.approx(ref[0], rel=1e-9)
+    assert ok_ref is False                       # この世界は上限ありだと 100 回で収束しない (上限なしだと 2.85 で止まる)
+
+
+def test_races_without_a_winner_do_not_enter_the_scale():
+    """勝ち馬のいないレース (極端な値) は、標準化の SD にも入れない (eval_stats と同じ)。上限の効き方が変わるので結果も変わる。"""
+    rows = _heavy_tail_world(seed=0, n_races=15, b=6.0)
+    rows += [{"race_id": "z", "won": 0, "x": v} for v in (900.0, -900.0, 0.0, 450.0)]
+    ref, ok_ref = es.conditional_logit(rows, ["x"], with_status=True)
+    got, ok = st.clogit_packed(st.pack(rows, ["x"]))
+    assert ok == ok_ref
+    assert (math.isnan(got[0]) and math.isnan(ref[0])) or got[0] == pytest.approx(ref[0], rel=1e-9)
