@@ -1,0 +1,105 @@
+{
+ "kind": "group_a_power",
+ "started_at": "2026-10-06T01:46:11+09:00",
+ "ended_at": "2026-10-06T01:46:17+09:00",
+ "provenance": {
+  "git_sha": "d6c48e631035bb3e09d69a1d89e387041e8b080c",
+  "git_dirty": false,
+  "own_output": "data/backtest/group_a_20261005/final/power",
+  "git_status": [],
+  "files_sha256": {
+   "scripts/group_a.py": "e269773d42aeb1f917951a70efc1a05d4c1a35b7fcbf21634e5a893f598bd2e2",
+   "scripts/group_a_explore.py": "174db7671bbf1eb5ea445bb602f43c9ce3ab2c5254eb2a993ea668f318aac269",
+   "scripts/group_a_power.py": "953785f1e084dd342827e82e31a259d9d4ddfa2dd9b7a775bffc16db5db240e7",
+   "scripts/group_a_run.py": "5a3d9b705e660ef431c4b9591387f9dedf96404d755b95fc3e991bf24efb9a25",
+   "scripts/group_a_stats.py": "576adb29dcc327e20d748f35903e08bef516cebbde232eab7b20ea23fcf7f8fb",
+   "predictor/eval_stats.py": "a0888d270c949461becdd97aa9ae75a8c623378216f0e8c7e6af546606ece940",
+   "config.py": "290e03f576976f92910a00fc83cc86c96aed15e32bc7a1027d1165143f4c936d",
+   "db.py": "d950031d22203847b91f27d2998f4dbad48e08c54b604ebcb1a914d9a5647a40",
+   "data/backtest/group_a_class_20261005/class_table.csv": "24d8bbc9784c9a59b26a80ae6cc9c7efe69561b11aacffe6dbbf490eb6a01817",
+   "docs/PHASE05_5_PREREG.md": "721706c1f2fefbfe81a8ca2f39e398f1cc74e5eee0057bd3d4214ab70f4c9012",
+   "docs/PHASE05_5_EXPLORATION.md": "d8200a4828134b94151e271ad83187d10a486394d5b80cc956a170b9b65cb246"
+  },
+  "python": "3.14.5",
+  "numpy": "2.4.4",
+  "argv": [
+   "group_a_run",
+   "power",
+   "--db",
+   "C:/Users/kizun/dev/keiba-yosou/data/keiba.db",
+   "--frozen",
+   "data/backtest/group_a_20261005/final",
+   "--out",
+   "data/backtest/group_a_20261005/final/power"
+  ],
+  "db": {
+   "path": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\keiba.db",
+   "bytes": 20203466752,
+   "mtime": "2026-10-05T22:12:46"
+  }
+ },
+ "frozen_sha256": "860846b68e76ef7e4080a9be9c7ee5d48a425688ce591ceb64837dcdfedb272a",
+ "frozen_manifest_sha256": "742678a96a8f88a9f86e6da43fc413f94c6b147815a8f266dd37fe16e723216a",
+ "load_stats_history": {
+  "rows": 230629,
+  "skip_obstacle_rows": 7149,
+  "races": 16651,
+  "guard_from": "20210101",
+  "guard_to": "20251231",
+  "primary_year_purpose": "power: 2025 の過去走の時計を S の履歴として読む (対象レースの結果は対象の行に付けない)"
+ },
+ "target_counts": {
+  "target_races_seen": 3335,
+  "refunded_runners": 163,
+  "target_races_used": 3335,
+  "runners_before_refund": 46483,
+  "runners_in_choice_set": 46320
+ },
+ "fisher": {
+  "se": 0.037887352664103834,
+  "n_races": 3335,
+  "info": [
+   [
+    3968.1897101935615,
+    820.8717580767063
+   ],
+   [
+    820.8717580767063,
+    866.4529485464031
+   ]
+  ],
+  "var_s_within": 866.4529485464031,
+  "schur_complement": 696.6449271514093,
+  "rho_within_race_market_weighted": 0.44269703046747544,
+  "assumption": "beta_S=0, beta_market=1 (win probability = renormalised market probability)"
+ },
+ "power": {
+  "se_analytic_2025": 0.037887352664103834,
+  "se_train_boot": 0.022741316377061737,
+  "n_train_races": 9974,
+  "n_target_races": 3335,
+  "se_train_scaled": 0.03932804543624754,
+  "se_fixed": 0.03932804543624754,
+  "critical_multiplier": 3.4174505371218147,
+  "mde": 0.13440165000005527,
+  "beta_target": 0.11157177565710488,
+  "inconclusive_by_power": true,
+  "rule": "MDE > beta_target なら、主検定は結果に関係なく PRIMARY_INCONCLUSIVE (§8-4)。主検定は 1 回実行して記録する"
+ },
+ "purchase_count_at_beta_target": {
+  "threshold_S": 2.0,
+  "n_horses": 97,
+  "n_rows": 46320
+ },
+ "missing_by_year": {
+  "2025": {
+   "perf_rating_last": 0.11511226252158895,
+   "perf_rating_best3_365": 0.11511226252158895,
+   "perf_rating_trend_365": 0.3344559585492228,
+   "perf_rating_rank_in_race": 0.11511226252158895,
+   "S_all_missing": 0.11511226252158895
+  }
+ },
+ "n_rows": 46320,
+ "note": "対象レース自身の結果は読んでいない (allow-list の読み込み、行に won なし)。β は推定していない"
+}

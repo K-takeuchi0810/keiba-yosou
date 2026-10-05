@@ -1,0 +1,23 @@
+{
+ "beta": {
+  "market": 0.8673418187457063,
+  "S": 0.04885243325312167,
+  "converged": true
+ },
+ "ci_99": {
+  "level": 0.99,
+  "n_boot": 5000,
+  "seed": 20261004,
+  "n_valid": 5000,
+  "n_discarded": 0,
+  "max_discard": 50,
+  "lower_quantile": 0.0050000000000000044,
+  "upper_quantile": 0.995,
+  "lo": -0.051127343456369156,
+  "hi": 0.14540303487840522,
+  "valid": true
+ },
+ "category": "PRIMARY_INCONCLUSIVE",
+ "category_reason": "mde_above_beta_target"
+}
+rc=0 git=954b954 end=2026-10-06 02:29:26

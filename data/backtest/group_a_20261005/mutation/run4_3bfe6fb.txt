@@ -1,0 +1,50 @@
+﻿KILLED G1 MSSt を復号しない FAILED tests/test_group_a.py::test_decode_msst[1122-72.2] - assert 112.2 == 7...
+KILLED G2 秒の欄の検査を外す FAILED tests/test_group_a.py::test_decode_msst_missing_is_nan[959] - assert F...
+KILLED G3 障害の境界をずらす FAILED tests/test_group_a.py::test_load_races_sql_decoding_and_read_only - sc...
+KILLED G4 ダートの範囲を狭める FAILED tests/test_group_a.py::test_surface_of[23-D] - AssertionError: assert ...
+KILLED G5 3 歳限定を 3 歳以上と取り違える FAILED tests/test_group_a.py::test_age_restriction_rule[codes1-3yo] - Asserti...
+KILLED G6 探索で 2025 を読めるようにする FAILED tests/test_group_a.py::test_loader_refuses_the_primary_year_without_the_flag
+KILLED G7 評価値の基準からクラスを引く (2b) FAILED tests/test_group_a.py::test_par_model_recovers_known_effects_and_keeps_class_out_of_the_base
+KILLED G8 疎なセルの閾値を下げる FAILED tests/test_group_a.py::test_sparse_cells_pool_and_very_sparse_cells_are_unrated
+KILLED G9 共有の水準の閾値を見ない FAILED tests/test_group_a.py::test_sparse_cells_pool_and_very_sparse_cells_are_unrated
+KILLED G10 推定期間以外の年も推定に使う FAILED tests/test_group_a.py::test_par_model_uses_only_the_estimation_years
+KILLED G11 馬場差の件数の下限を外す FAILED tests/test_group_a.py::test_day_variant_mean_and_median_include_the_own_race_and_need_three
+KILLED G12 V2 を平均にする FAILED tests/test_group_a.py::test_day_variant_mean_and_median_include_the_own_race_and_need_three
+KILLED G13 斤量の補正の向きを逆にする FAILED tests/test_group_a.py::test_raw_residual_subtracts_base_variant_and_weight_but_not_class
+KILLED G14 ハンデ戦を斤量の推定に入れる FAILED tests/test_group_a.py::test_weight_effect_excludes_handicap_races - as...
+KILLED G15 負の斤量の係数を有効にする FAILED tests/test_group_a.py::test_non_positive_weight_effect_disables_w1 - a...
+KILLED G16 clip を片側にする FAILED tests/test_group_a.py::test_clip_is_symmetric_at_three[-5.0--3.0] - as...
+KILLED G17 評価値の符号を逆にする FAILED tests/test_group_a.py::test_rate_runs_faster_is_larger_refunds_excluded_and_clip_counted
+KILLED G18 対象日の走を窓に入れる FAILED tests/test_group_a.py::test_components_use_the_365_day_window_before_the_target_day
+KILLED G19 窓を 400 日にする FAILED tests/test_group_a.py::test_components_use_the_365_day_window_before_the_target_day
+KILLED G20 trend を 2 走から作る FAILED tests/test_group_a.py::test_components_window_edges - assert (1.5 == 1...
+KILLED G21 best3 を上位 2 走にする FAILED tests/test_group_a.py::test_components_use_the_365_day_window_before_the_target_day
+KILLED G22 同値の順位を平均にしない FAILED tests/test_group_a.py::test_rank_in_race_ties_and_missing - assert (0....
+KILLED G23 市場の確率を正規化し直さない FAILED tests/test_group_a.py::test_target_samples_renormalise_and_drop_bad_races
+KILLED G24 価格の無い馬がいるレースを残す FAILED tests/test_group_a.py::test_target_samples_renormalise_and_drop_bad_races
+KILLED G25 返還の馬を選択集合に残す FAILED tests/test_group_a.py::test_target_samples_renormalise_and_drop_bad_races
+KILLED G26 逆符号の成分の重みを残す FAILED tests/test_group_a.py::test_composite_zeroes_reverse_sign_components
+KILLED G27 標準化に欠損を 0 で混ぜる FAILED tests/test_group_a.py::test_standardizer_uses_non_missing_rows_only - ...
+KILLED G28 期待勝ち時計から年齢の区分を外す FAILED tests/test_group_a.py::test_par_model_recovers_known_effects_and_keeps_class_out_of_the_base
+KILLED G29 同着のレースを残す FAILED tests/test_group_a.py::test_target_samples_renormalise_and_drop_bad_races
+KILLED K1 最若年の位置を 1 ずらす FAILED tests/test_group_a_class_table.py::test_reads_the_five_condition_codes_at_the_spec_positions
+KILLED K2 同じレースの食い違いを見ない FAILED tests/test_group_a_class_table.py::test_conflicting_codes_for_the_same_race_stop
+KILLED K3 短いレコードの下限を緩める FAILED tests/test_group_a_class_table.py::test_short_record_stops - Failed: D...
+KILLED K4 000 をクラスとして受け入れる FAILED tests/test_group_a_class_table.py::test_unexpected_min_age_code_stops[000]
+KILLED K5 probe で年齢の欄を見ない FAILED tests/test_group_a_class_table.py::test_probe_checks_the_age_slot_as_well
+KILLED G30 推定の年のガードを外す FAILED tests/test_group_a.py::test_estimation_refuses_the_primary_year - Valu...
+KILLED G31 全成分が逆符号でも止めない FAILED tests/test_group_a.py::test_all_reverse_sign_components_stop_instead_of_a_constant_s
+KILLED G32 凍結物から尺度を落とす FAILED tests/test_group_a.py::test_frozen_tables_reproduce_ratings_and_s_exactly
+KILLED G33 平地の未知のコードを黙って落とす FAILED tests/test_group_a.py::test_load_races_stops_on_unknown_flat_track_type_and_missing_class
+KILLED G34 標準化の SD 0 を通す FAILED tests/test_group_a.py::test_standardizer_stops_on_zero_sd - Failed: DI...
+KILLED G35 読み込みを書き込み可にする FAILED tests/test_group_a.py::test_load_races_sql_decoding_and_read_only - as...
+KILLED G36 P3 (B) を外して残差そのものに clip FAILED tests/test_group_a.py::test_p3_clips_relative_to_the_class_and_age_expectation_and_keeps_the_class_level
+KILLED G37 斤量の外れ値の除外を残差そのもので行う FAILED tests/test_group_a.py::test_weight_outlier_filter_uses_the_same_coordinate_as_p3
+KILLED G38 主検定の年を目的なしで読める FAILED tests/test_group_a.py::test_reading_the_primary_year_needs_a_recorded_purpose
+KILLED P1 対象レースの SQL の禁止列の検査を外す FAILED tests/test_group_a_power.py::test_target_sql_guard_rejects_an_outcome_column
+KILLED P2 返還の判定から出走取消を外す FAILED tests/test_group_a_power.py::test_target_sql_contains_no_outcome_columns
+KILLED P3 検出力の行で市場の確率を正規化し直さない FAILED tests/test_group_a_power.py::test_outcome_blind_rows_drop_refunds_renormalise_and_have_no_won
+SURVIVED P4 Fisher 情報を一様の確率で作る
+KILLED P5 SE の小さい方を採る FAILED tests/test_group_a_power.py::test_fixed_power_takes_the_larger_se_and_sets_the_category
+KILLED P6 臨界の倍率から検出力の項を外す FAILED tests/test_group_a_power.py::test_fixed_power_takes_the_larger_se_and_sets_the_category
+KILLED P7 勝ちの列がある行を通す FAILED tests/test_group_a_power.py::test_fisher_se_refuses_rows_with_outcomes

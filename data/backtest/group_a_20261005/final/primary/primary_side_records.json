@@ -1,0 +1,23 @@
+{
+ "run_index": 1,
+ "primary_file": "primary_result.json",
+ "rho_S_market_within_race": 0.5485969756153513,
+ "corr_S_starts_365_within_race": 0.37166961302794677,
+ "corr_S_age_within_race": -0.037799188250646126,
+ "age_matched_rows": 46248,
+ "n_rows": 46248,
+ "beta_S_residualised_on_last_finish": {
+  "beta": 0.08559426003089786,
+  "se": 0.0365997574138618,
+  "converged": true,
+  "x_missing_rows": 5092,
+  "note": "残差化はレース間を含む pooled の最小二乗 (x の欠損は平均で埋める)"
+ },
+ "beta_S_residualised_on_last_popularity": {
+  "beta": 0.0629617956391429,
+  "se": 0.03622403578822598,
+  "converged": true,
+  "x_missing_rows": 4990,
+  "note": "残差化はレース間を含む pooled の最小二乗 (x の欠損は平均で埋める)"
+ }
+}

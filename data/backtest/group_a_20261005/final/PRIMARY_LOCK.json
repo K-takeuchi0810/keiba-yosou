@@ -1,0 +1,30 @@
+{
+ "run_index": 1,
+ "armed_at": "2026-10-06T02:25:44+09:00",
+ "argv": [
+  "group_a_run",
+  "arm",
+  "--db",
+  "C:/Users/kizun/dev/keiba-yosou/data/keiba.db",
+  "--frozen",
+  "data/backtest/group_a_20261005/final",
+  "--power",
+  "data/backtest/group_a_20261005/final/power/power.json"
+ ],
+ "rerun_reason": null,
+ "frozen_sha256": "860846b68e76ef7e4080a9be9c7ee5d48a425688ce591ceb64837dcdfedb272a",
+ "power_sha256": "346045bfdbc5cffaa0e621575b2abb5c2beee93b203b5a429014d1ec7a400cd7",
+ "git_sha": "a34ae9198037699e4dc37865bd01d61a2e815718",
+ "pinned": {
+  "scripts/group_a.py": "e269773d42aeb1f917951a70efc1a05d4c1a35b7fcbf21634e5a893f598bd2e2",
+  "scripts/group_a_power.py": "953785f1e084dd342827e82e31a259d9d4ddfa2dd9b7a775bffc16db5db240e7",
+  "scripts/group_a_run.py": "5a3d9b705e660ef431c4b9591387f9dedf96404d755b95fc3e991bf24efb9a25",
+  "scripts/group_a_stats.py": "576adb29dcc327e20d748f35903e08bef516cebbde232eab7b20ea23fcf7f8fb",
+  "predictor/eval_stats.py": "a0888d270c949461becdd97aa9ae75a8c623378216f0e8c7e6af546606ece940",
+  "config.py": "290e03f576976f92910a00fc83cc86c96aed15e32bc7a1027d1165143f4c936d",
+  "db.py": "d950031d22203847b91f27d2998f4dbad48e08c54b604ebcb1a914d9a5647a40",
+  "data/backtest/group_a_class_20261005/class_table.csv": "24d8bbc9784c9a59b26a80ae6cc9c7efe69561b11aacffe6dbbf490eb6a01817",
+  "docs/PHASE05_5_PREREG.md": "721706c1f2fefbfe81a8ca2f39e398f1cc74e5eee0057bd3d4214ab70f4c9012"
+ },
+ "history": []
+}

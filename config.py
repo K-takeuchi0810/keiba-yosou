@@ -163,6 +163,11 @@ CONSUMED_WINDOWS: list[dict[str, str]] = [
              "受理条件は学習の前に固定 (docs/PHASE05_RESULTS.md)。新しい validation ではない"},
     {"from": "20260509", "to": "20260831", "by": "post_demotion_30f feature_domain_audit",
      "note": "特徴の分布のみ (成績は見ていない)。4B 比の域外率の確認 (2026-10-04)"},
+    # --- validation 2025 の再利用 (Phase 0.5-5 の主検定、事前登録 §8-4) ---
+    {"from": "20250101", "to": "20251231", "by": "phase05_5 group_a primary run_index 1",
+     "note": "validation (2025) の再利用: Group A の主検定を 1 回 (2026-10-06、data/backtest/group_a_20261005/final/primary)。"
+             "判定の区分は主検定の前に検出力で PRIMARY_INCONCLUSIVE に確定済み。2025 は 0.5-4A / 4B の早期停止・選択にも"
+             "使った年なので、新しい OOS の証拠とは呼ばない"},
 ]
 
 # 候補の事前登録後に「1 度だけ」使う確認窓の開始日。

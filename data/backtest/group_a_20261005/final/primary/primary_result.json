@@ -1,0 +1,123 @@
+{
+ "kind": "group_a_primary",
+ "run_index": 1,
+ "rerun_reason": null,
+ "started_at": "2026-10-06T02:26:01+09:00",
+ "ended_at": "2026-10-06T02:29:22+09:00",
+ "provenance": {
+  "git_sha": "954b9545587b42f93952013c480cae487623dd8f",
+  "git_dirty": true,
+  "own_output": "data/backtest/group_a_20261005/final/primary",
+  "git_status": [
+   "?? data/backtest/group_a_20261005/final/PRIMARY_RUN_1_STARTED.json"
+  ],
+  "files_sha256": {
+   "scripts/group_a.py": "e269773d42aeb1f917951a70efc1a05d4c1a35b7fcbf21634e5a893f598bd2e2",
+   "scripts/group_a_explore.py": "174db7671bbf1eb5ea445bb602f43c9ce3ab2c5254eb2a993ea668f318aac269",
+   "scripts/group_a_power.py": "953785f1e084dd342827e82e31a259d9d4ddfa2dd9b7a775bffc16db5db240e7",
+   "scripts/group_a_run.py": "5a3d9b705e660ef431c4b9591387f9dedf96404d755b95fc3e991bf24efb9a25",
+   "scripts/group_a_stats.py": "576adb29dcc327e20d748f35903e08bef516cebbde232eab7b20ea23fcf7f8fb",
+   "predictor/eval_stats.py": "a0888d270c949461becdd97aa9ae75a8c623378216f0e8c7e6af546606ece940",
+   "config.py": "290e03f576976f92910a00fc83cc86c96aed15e32bc7a1027d1165143f4c936d",
+   "db.py": "d950031d22203847b91f27d2998f4dbad48e08c54b604ebcb1a914d9a5647a40",
+   "data/backtest/group_a_class_20261005/class_table.csv": "24d8bbc9784c9a59b26a80ae6cc9c7efe69561b11aacffe6dbbf490eb6a01817",
+   "docs/PHASE05_5_PREREG.md": "721706c1f2fefbfe81a8ca2f39e398f1cc74e5eee0057bd3d4214ab70f4c9012",
+   "docs/PHASE05_5_EXPLORATION.md": "d8200a4828134b94151e271ad83187d10a486394d5b80cc956a170b9b65cb246"
+  },
+  "python": "3.14.5",
+  "numpy": "2.4.4",
+  "argv": [
+   "group_a_run",
+   "primary",
+   "--db",
+   "C:/Users/kizun/dev/keiba-yosou/data/keiba.db",
+   "--frozen",
+   "data/backtest/group_a_20261005/final",
+   "--power",
+   "data/backtest/group_a_20261005/final/power/power.json",
+   "--out",
+   "data/backtest/group_a_20261005/final/primary"
+  ],
+  "db": {
+   "path": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\keiba.db",
+   "bytes": 20203466752,
+   "mtime": "2026-10-05T22:12:46"
+  }
+ },
+ "pinned": {
+  "git_sha": "954b9545587b42f93952013c480cae487623dd8f",
+  "pinned": {
+   "scripts/group_a.py": "e269773d42aeb1f917951a70efc1a05d4c1a35b7fcbf21634e5a893f598bd2e2",
+   "scripts/group_a_power.py": "953785f1e084dd342827e82e31a259d9d4ddfa2dd9b7a775bffc16db5db240e7",
+   "scripts/group_a_run.py": "5a3d9b705e660ef431c4b9591387f9dedf96404d755b95fc3e991bf24efb9a25",
+   "scripts/group_a_stats.py": "576adb29dcc327e20d748f35903e08bef516cebbde232eab7b20ea23fcf7f8fb",
+   "predictor/eval_stats.py": "a0888d270c949461becdd97aa9ae75a8c623378216f0e8c7e6af546606ece940",
+   "config.py": "290e03f576976f92910a00fc83cc86c96aed15e32bc7a1027d1165143f4c936d",
+   "db.py": "d950031d22203847b91f27d2998f4dbad48e08c54b604ebcb1a914d9a5647a40",
+   "data/backtest/group_a_class_20261005/class_table.csv": "24d8bbc9784c9a59b26a80ae6cc9c7efe69561b11aacffe6dbbf490eb6a01817",
+   "docs/PHASE05_5_PREREG.md": "721706c1f2fefbfe81a8ca2f39e398f1cc74e5eee0057bd3d4214ab70f4c9012"
+  }
+ },
+ "frozen_sha256": "860846b68e76ef7e4080a9be9c7ee5d48a425688ce591ceb64837dcdfedb272a",
+ "power_sha256": "346045bfdbc5cffaa0e621575b2abb5c2beee93b203b5a429014d1ec7a400cd7",
+ "load_stats": {
+  "rows": 230629,
+  "skip_obstacle_rows": 7149,
+  "races": 16651,
+  "guard_from": "20210101",
+  "guard_to": "20251231",
+  "primary_year_purpose": "primary: Group A の主検定 (run_index 1)"
+ },
+ "choice_set": {
+  "counts": {
+   "target_races_seen": 3335,
+   "target_races_used": 3330,
+   "drop_dead_heat_or_no_winner": 5
+  },
+  "n_races": 3330,
+  "n_rows": 46248,
+  "max_abs_prob_sum_dev": 4.440892098500626e-16,
+  "refunded_runners_in_2025_races": 163
+ },
+ "n_races_power_minus_primary": 5,
+ "beta": {
+  "market": 0.8673418187457063,
+  "S": 0.04885243325312167,
+  "converged": true
+ },
+ "ci_99": {
+  "level": 0.99,
+  "n_boot": 5000,
+  "seed": 20261004,
+  "n_valid": 5000,
+  "n_discarded": 0,
+  "max_discard": 50,
+  "lower_quantile": 0.0050000000000000044,
+  "upper_quantile": 0.995,
+  "lo": -0.051127343456369156,
+  "hi": 0.14540303487840522,
+  "valid": true
+ },
+ "ci_seconds": 194.4,
+ "wald_diagnostic": {
+  "se_hessian": 0.03843191469511416,
+  "lo": -0.05014161881004498,
+  "hi": 0.14784648531628833,
+  "note": "診断だけ。判定に使わない"
+ },
+ "power": {
+  "se_analytic_2025": 0.037887352664103834,
+  "se_train_boot": 0.022741316377061737,
+  "n_train_races": 9974,
+  "n_target_races": 3335,
+  "se_train_scaled": 0.03932804543624754,
+  "se_fixed": 0.03932804543624754,
+  "critical_multiplier": 3.4174505371218147,
+  "mde": 0.13440165000005527,
+  "beta_target": 0.11157177565710488,
+  "inconclusive_by_power": true,
+  "rule": "MDE > beta_target なら、主検定は結果に関係なく PRIMARY_INCONCLUSIVE (§8-4)。主検定は 1 回実行して記録する"
+ },
+ "category": "PRIMARY_INCONCLUSIVE",
+ "category_reason": "mde_above_beta_target"
+}
