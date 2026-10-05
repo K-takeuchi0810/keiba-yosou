@@ -260,3 +260,17 @@
 - 判定の理由: 検出力で判定不能が確定していれば、区間が無効でも理由 `mde_above_beta_target` を上書きせず `+boot_na` を足す
 - 実行の script を変えたので (arm の分離)、freeze と power を同じ規則で流し直す (計算は決定的で、凍結物の sha256 は変わらない見込み)
 
+### 実行の記録 (2026-10-06)
+
+| 段 | コード | 出力 | 主な値 |
+|---|---|---|---|
+| freeze (流し直し) | `b2582cf` | `final/MANIFEST.json`・`final/frozen_tables.json` (sha256 `860846b6…272a`) | 学習 9,974 レース、boot SE 0.0227 |
+| power (流し直し) | `d6c48e6` | `final/power/power.json` (sha256 `346045bf…0cd7`) | MDE 0.1344 > 0.1116 → `inconclusive_by_power` |
+| 変異 (最終) | `34b847a` / `9d7f910` | `mutation/run10_*`・`run_r7_*` | 本体 58/58、実行 25/25 |
+| arm | `a34ae91` | `final/PRIMARY_LOCK.json` (run_index 1、`954b954` でコミット) | 2025 の結果を読む前 |
+| primary | `954b954` | `final/primary/primary_result.json`・`primary_side_records.json` | β_S +0.049、99% 区間 [−0.051, +0.145]、`PRIMARY_INCONCLUSIVE` (`mde_above_beta_target`) |
+
+- 結果の文書: `docs/PHASE05_5_GROUP_A_RESULT.md`。消費の記録: `config.CONSUMED_WINDOWS` (2025、phase05_5 group_a primary run_index 1)
+- primary の来歴の `git_dirty` は True だが、中身は `?? final/PRIMARY_RUN_1_STARTED.json` (この実行が 2025 を読む前に書いた開始の印) だけ。
+  固定のファイルの照合は開始の印を書く前に通っている
+
