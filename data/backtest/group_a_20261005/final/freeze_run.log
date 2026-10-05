@@ -1,0 +1,75 @@
+{
+ "spec": "S1V1W0",
+ "frozen_sha256": "860846b68e76ef7e4080a9be9c7ee5d48a425688ce591ceb64837dcdfedb272a",
+ "n_train_races": 9974,
+ "bootstrap": {
+  "n_boot": 1000,
+  "seed": 20261004,
+  "unit": "race",
+  "statistic": "beta_S of logit_p_market + S (frozen S)",
+  "n_valid": 1000,
+  "n_discarded": 0,
+  "max_discard": 10,
+  "seconds": 142.3,
+  "se": 0.022741316377061737
+ },
+ "leave_one_year_out": {
+  "2022": {
+   "est_years": [
+    2023,
+    2024
+   ],
+   "beta_S": -0.0357968422684065,
+   "se_S": 0.04232218323626091,
+   "sign": -1,
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.1251055392325072,
+    "perf_rating_trend_365": 0.05001687677522082,
+    "perf_rating_rank_in_race": 0.0
+   }
+  },
+  "2023": {
+   "est_years": [
+    2022,
+    2024
+   ],
+   "beta_S": 0.029033812492896674,
+   "se_S": 0.02341871045069401,
+   "sign": 1,
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.0,
+    "perf_rating_trend_365": 0.00044280205859368286,
+    "perf_rating_rank_in_race": 0.03357918170629235
+   }
+  },
+  "2024": {
+   "est_years": [
+    2022,
+    2023
+   ],
+   "beta_S": -0.027885897598401238,
+   "se_S": 0.0523247724516984,
+   "sign": -1,
+   "weights": {
+    "perf_rating_last": 0.0,
+    "perf_rating_best3_365": 0.0956480674956173,
+    "perf_rating_trend_365": 0.001109764925019548,
+    "perf_rating_rank_in_race": 0.0
+   }
+  }
+ },
+ "train_in_sample": {
+  "beta": [
+   0.8828662595196028,
+   0.04280296780665535
+  ],
+  "hessian_se": [
+   0.010072033978419909,
+   0.021613814361886256
+  ],
+  "note": "学習期の in-sample の値 (判定に使わない)"
+ }
+}
+rc=0 git=cd35b4f end=2026-10-06 01:05:03
