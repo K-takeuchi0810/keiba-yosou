@@ -18,3 +18,5 @@ predictor/lgbm_meta.json text eol=lf
 data/backtest/frozen_*/*model*.txt -text
 # post-demotion repaired 30-feature の学習成果物のコピーも同じ (2026-10-04)
 data/backtest/post_demotion_*/*model*.txt -text
+# Group A のクラスの凍結した表 (2026-10-05)。MANIFEST.json の sha256 と合わせるため改行を変換しない
+data/backtest/group_a_class_*/class_table.csv -text
