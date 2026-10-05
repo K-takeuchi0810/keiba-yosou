@@ -18,6 +18,7 @@ from pathlib import Path
 
 import numpy as np
 
+from config import guard_analysis_window
 from scripts import group_a as g
 
 BETA_TARGET = math.log(1.25) / 2.0           # §8-4: 学習期の 1 SD あたり
@@ -74,7 +75,8 @@ def target_sql() -> str:
 
 
 def load_target_fields(year: int, db_path) -> dict[str, list[TargetRunner]]:
-    """対象レース (JRA・確定・平地) の選択集合の材料だけを読む。結果の列は読まない。"""
+    """対象レース (JRA・確定・平地) の選択集合の材料だけを読む。結果の列は読まない。封印の門は通す (対象の年の窓)。"""
+    guard_analysis_window(f"{year}0101", f"{year}1231", context="group_a_power.load_target_fields")
     conn = sqlite3.connect(f"file:{Path(db_path).as_posix()}?mode=ro", uri=True)
     cur = conn.execute(target_sql(), (str(year),))
     names = tuple(d[0] for d in cur.description)

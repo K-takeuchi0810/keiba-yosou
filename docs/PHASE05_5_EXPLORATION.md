@@ -236,3 +236,21 @@
 
 次: 2022-2024 の 3 年で S1V1W0 を最終の推定 → 凍結物 (payload と MANIFEST) をコミット → 検出力の固定 (結果を読まない) → 主検定 1 回。
 
+## Group A の実行の手順 (2026-10-06、凍結・検出力・主検定の前に固定)
+
+コード: `scripts/group_a_run.py` (4 名レビュー → must-fix → 確認レビュー validation PASS 4.5 / code-quality PASS 4.4)。
+出力先: `data/backtest/group_a_20261005/final/` (凍結物・MANIFEST・錠)、`final/power/`、`final/primary/`。
+
+1. 作業ツリーが空であること (`git status --short`)。本番 DB に書き手がいないこと (2021-2025 の行が動かないこと。履歴の内容のハッシュで照合する)
+2. **freeze**: `python -m scripts.group_a_run freeze --db <本番 DB> --spec S1V1W0 --out data/backtest/group_a_20261005/final`
+   (2022-2024 だけ。E1b の選択と照合)。出力を **コミット**
+3. **power**: `python -m scripts.group_a_run power --db <本番 DB> --frozen …/final --out …/final/power`
+   (2025 の対象レースの結果を読まない)。出力を **コミット**。ここで MDE と判定の区分 (`inconclusive_by_power`) が確定する。
+   外部の指示者に報告する (主検定の前)
+4. **primary** (1 回だけ): `python -m scripts.group_a_run primary --db <本番 DB> --frozen …/final --power …/final/power/power.json
+   --out …/final/primary`。起動の時点で `final/PRIMARY_LOCK.json` が書かれる。**錠は、主検定の結果を見る前にコミットする**
+   (錠を手で消して痕跡を消す窓を作らない)。作業ツリーに未コミットの変更があると primary は拒む (freeze / power の出力は 2・3 でコミット済み)
+5. 結果 (`primary_result.json` / `primary_side_records.json`) をコミット → `config.CONSUMED_WINDOWS` に「validation (2025) の再利用:
+   Phase 0.5-5 Group A primary run_index 1」を追記 → この台帳に凍結物・検出力・主検定の sha と run_index を記録
+6. 2・3・4 は DB が動かない窓の中で続けて行う (2021-2024 の行が再 upsert されると履歴の照合で止まり、凍結からやり直しになる)
+
