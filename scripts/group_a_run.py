@@ -32,6 +32,10 @@ from scripts import group_a as g
 from scripts import group_a_power as pw
 from scripts import group_a_stats as st
 
+class RunError(RuntimeError):
+    pass
+
+
 EST_YEARS = (2022, 2023, 2024)
 PRIMARY_YEARS = (2025,)
 COLS = ["logit_p_market", "S"]
@@ -48,10 +52,9 @@ LOCK_FILE = "PRIMARY_LOCK.json"     # 凍結物のディレクトリに置く。
 PINNED_FILES = ("scripts/group_a.py", "scripts/group_a_power.py", "scripts/group_a_run.py", "scripts/group_a_stats.py",
                 "predictor/eval_stats.py", "config.py", "db.py",
                 "data/backtest/group_a_class_20261005/class_table.csv", "docs/PHASE05_5_PREREG.md")
-
-
-class RunError(RuntimeError):
-    pass
+_missing_pins = [f for f in PINNED_FILES if f not in g.DEPENDENCIES]
+if _missing_pins:                    # 照合は来歴の files_sha256 (= DEPENDENCIES) にある前提。外れたら import の段で止める
+    raise RunError(f"PINNED_FILES が group_a.DEPENDENCIES に無い: {_missing_pins}")
 
 
 def _now() -> str:
@@ -376,6 +379,10 @@ def run_primary(db: str, frozen: Path, power_path: Path, out: Path, argv: list[s
     if previous is not None and not rerun_reason:
         raise RunError(f"主検定は既に始まっている (錠 {lock_path}、run_index {previous['run_index']})。主検定は 1 回だけ")
     pinned = _check_pinned(man, power)
+    # 2021-2024 の履歴の照合は、錠を書く前に (2025 を読まずに) 行う。DB がずれていたら run_index を消費せずに止まる
+    hist_races, _ = g.load_races(max(EST_YEARS), db_path=db)
+    _check_history(hist_races, man)
+    del hist_races
     run_index = (previous["run_index"] + 1) if previous else 1
     started = _now()
     out.mkdir(parents=True, exist_ok=True)

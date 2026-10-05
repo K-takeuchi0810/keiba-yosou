@@ -249,3 +249,23 @@ def test_json_writes_nan_as_null(tmp_path):
     run._write_json(tmp_path / "x.json", {"a": float("nan"), "b": [1.0, float("inf")]})
     assert json.loads((tmp_path / "x.json").read_text(encoding="utf-8")) == {"a": None, "b": [1.0, None]}
 
+
+def test_history_mismatch_stops_the_primary_before_the_lock(patched, tmp_path, monkeypatch):
+    """2021-2024 の履歴がずれていたら、錠を書く前に止まる (run_index を消費しない)。"""
+    tmp, path, classes, e1b = patched
+    frozen, power = _frozen_and_power(path, e1b, tmp_path)
+    man = json.loads((frozen / run.MANIFEST_FILE).read_text(encoding="utf-8"))
+    bad = {**man, "history_digest": {**man["history_digest"], "sha256": "0" * 64}}
+    monkeypatch.setattr(run, "_load_frozen", lambda f: (bad, json.loads((frozen / run.FROZEN_FILE).read_text(encoding="utf-8"))))
+    monkeypatch.setattr(run, "_check_pinned", lambda m, p: {"git_sha": "x", "pinned": {}})
+    pj = json.loads(power.read_text(encoding="utf-8"))
+    monkeypatch.setattr(run, "_sha", lambda p: (pj["frozen_manifest_sha256"] if p.name == run.MANIFEST_FILE else
+                                               __import__("hashlib").sha256(p.read_bytes()).hexdigest()))
+    with pytest.raises(run.RunError, match="履歴が凍結の時点と違う"):
+        run.run_primary(str(path), frozen, power, tmp_path / "p", ["t"])
+    assert not (frozen / run.LOCK_FILE).exists()
+
+
+def test_pinned_files_are_all_in_the_provenance_dependencies():
+    assert set(run.PINNED_FILES) <= set(g.DEPENDENCIES)
+
