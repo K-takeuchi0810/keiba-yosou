@@ -94,4 +94,11 @@ MUTANTS = [
     ("C28 平地の未知の track_type_code を黙って通す", CP,
      '    raise CPrimeError(f"平地の未知の track_type_code: {track_type_code!r}")',
      "    return None"),
+    # --- 4 名レビュー (ddc12b6) の後に追加 ---
+    ("C29 履歴だけの読み込みで主検定の年の着順を NULL にしない", CP,
+     '        result_cols = (f"CASE WHEN CAST(h.race_year AS INTEGER) >= {PRIMARY_YEAR} THEN NULL ELSE h.confirmed_order END, "',
+     '        result_cols = ("h.confirmed_order, "'),
+    ("C30 推定の特異な情報行列を CPrimeError に包まない", CP,
+     "    except np.linalg.LinAlgError as e:\n        raise CPrimeError(f\"情報行列が特異 ({allcols})\") from e",
+     "    except ZeroDivisionError as e:\n        raise CPrimeError(f\"情報行列が特異 ({allcols})\") from e"),
 ]

@@ -25,3 +25,5 @@ scripts/group_a_class_table.py text eol=lf
 data/backtest/group_a_class_*/expected_jra_official.py text eol=lf
 # Group A の凍結物・検出力・主検定の成果物 (2026-10-06)。sha256 で照合するので改行を変換しない
 data/backtest/group_a_20261005/final/** -text
+# Group C′ の凍結物・検出力・主検定の成果物 (2026-10-06)。sha256 で照合するので改行を変換しない (凍結を走らせる前に追加)
+data/backtest/c_prime_20261006/final/** -text

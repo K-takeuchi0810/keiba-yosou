@@ -44,6 +44,7 @@ OBSTACLE_FROM = 51                  # track_type_code がこれ以上なら障�
 TURF_CODES = range(10, 23)
 DIRT_CODES = range(23, 30)
 COMPONENTS = ("style_x_pace_fit", "front_competition_signed")
+Z_DIRECTION = 2.0                   # 成分の |z| の最大がこれ未満なら「向きの定まらない合成」(台帳 C′-3)
 STD_SUFFIX = "_std"
 
 
@@ -94,17 +95,28 @@ class Race:
 
 
 def load_races(max_year: int, *, min_year: int = 2021, db_path: Path | str = DB_PATH,
-               allow_primary_year: bool = False, primary_purpose: str | None = None) -> tuple[dict[str, Race], Counter]:
-    """JRA (01〜10)・確定 (`data_div = 7`)・平地のレースと走。**探索は 2024 年以前だけ** (2025 は主検定の年)。"""
+               allow_primary_year: bool = False, primary_purpose: str | None = None,
+               primary_year_history_only: bool = False) -> tuple[dict[str, Race], Counter]:
+    """JRA (01〜10)・確定 (`data_div = 7`)・平地のレースと走。**探索は 2024 年以前だけ** (2025 は主検定の年)。
+
+    `primary_year_history_only=True` (検出力の計算): 主検定の年の行は、履歴に要る列 (日付・馬・馬番・異常コード・脚質コード) だけを読み、
+    着順とオッズは SQL の段で NULL にする (対象レースの結果を読まないことを、行ではなく SQL で保証する)。
+    """
     if max_year >= PRIMARY_YEAR and not allow_primary_year:
         raise CPrimeError(f"探索で {PRIMARY_YEAR} 年以降を読もうとした (max_year={max_year})")
     if allow_primary_year and not primary_purpose:
         raise CPrimeError("主検定の年を読むときは primary_purpose (目的) を書く")
     from_date, to_date, _sealed = guard_analysis_window(f"{min_year}0101", f"{max_year}1231", context="c_prime.load_races")
+    if primary_year_history_only:
+        result_cols = (f"CASE WHEN CAST(h.race_year AS INTEGER) >= {PRIMARY_YEAR} THEN NULL ELSE h.confirmed_order END, "
+                       f"CASE WHEN CAST(h.race_year AS INTEGER) >= {PRIMARY_YEAR} THEN NULL ELSE h.win_odds END")
+    else:
+        result_cols = "h.confirmed_order, h.win_odds"
     conn = sqlite3.connect(f"file:{Path(db_path).as_posix()}?mode=ro", uri=True)
-    rows = conn.execute(
-        """SELECT h.race_year||h.race_month_day, h.track_code, h.kaiji, h.nichiji, h.race_num, r.track_type_code,
-                  h.horse_num, h.blood_register_num, h.abnormal_code, h.confirmed_order, h.win_odds, h.leg_quality_code
+    try:
+        rows = conn.execute(
+        f"""SELECT h.race_year||h.race_month_day, h.track_code, h.kaiji, h.nichiji, h.race_num, r.track_type_code,
+                  h.horse_num, h.blood_register_num, h.abnormal_code, {result_cols}, h.leg_quality_code
              FROM horse_races h
              JOIN races r ON r.race_year = h.race_year AND r.race_month_day = h.race_month_day
               AND r.track_code = h.track_code AND r.kaiji = h.kaiji AND r.nichiji = h.nichiji AND r.race_num = h.race_num
@@ -112,7 +124,8 @@ def load_races(max_year: int, *, min_year: int = 2021, db_path: Path | str = DB_
               AND CAST(h.track_code AS INTEGER) BETWEEN 1 AND 10
               AND r.data_div = '7' AND h.horse_num NOT IN ('', '00')
             ORDER BY 1, h.track_code, h.race_num, h.horse_num""", (from_date, to_date)).fetchall()
-    conn.close()
+    finally:
+        conn.close()
     stats: Counter = Counter()
     races: dict[str, Race] = {}
     for ymd, tc, ka, ni, rn, tt, hn, bn, abn, fin, odds, leg in rows:
@@ -303,7 +316,10 @@ def clogit_with_se(rows: list[dict], cols: list[str]) -> dict:
         p /= p.sum()
         m = p @ X
         info += (X * p[:, None]).T @ X - np.outer(m, m)
-    se = np.sqrt(np.diag(np.linalg.inv(info)))
+    try:
+        se = np.sqrt(np.diag(np.linalg.inv(info)))
+    except np.linalg.LinAlgError as e:
+        raise CPrimeError(f"情報行列が特異 ({allcols})") from e
     return {"cols": allcols, "beta": [float(x) for x in b], "se": [float(x) for x in se],
             "z": [float(x / s) for x, s in zip(b, se)]}
 
@@ -330,9 +346,17 @@ def fit_composite(fit_rows: list[dict]) -> dict:
         r["S_raw"] = sum(weights[c] * r[c + STD_SUFFIX] for c in COMPONENTS)
     s_sd = within_sd(rows, "S_raw")
     zmax = max(abs(z) for z in fit["z"][1:])
-    return {"years": sorted({r["year"] for r in fit_rows}), "component_sd": comp_sd, "fit": fit,
+    single = {}                                      # 判定に使わない記録: 成分ごとの単独の当てはめ (共線性の読み分け、レビュー ddc12b6)
+    for c in COMPONENTS:
+        try:
+            one = clogit_with_se(rows, [c + STD_SUFFIX])
+            single[c] = {"beta": one["beta"][1], "z": one["z"][1]}
+        except CPrimeError as e:
+            single[c] = {"error": str(e)}
+    return {"single_component_fits": single,
+            "component_within_corr": within_race_corr(rows, *[c + STD_SUFFIX for c in COMPONENTS]),"years": sorted({r["year"] for r in fit_rows}), "component_sd": comp_sd, "fit": fit,
             "raw_coefficients": raw, "weights": weights, "s_sd": s_sd,
-            "component_z_max": zmax, "direction_undetermined": bool(zmax < 2.0),
+            "component_z_max": zmax, "direction_undetermined": bool(zmax < Z_DIRECTION),
             "n_races": len(_by_race(rows)), "n_rows": len(rows)}
 
 

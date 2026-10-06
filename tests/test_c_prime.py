@@ -355,3 +355,14 @@ def test_c_prime_code_does_not_use_group_a_market_functions_or_raw_logs(path):
     for bad in ("group_a_power", "scripts/group_a.py", "from scripts import group_a\n", "import group_a\n", "logit_p_market",
                 "add_market_logit", "math.log(", "np.log(", "estimate_leg_code"):
         assert bad not in src, bad
+
+
+def test_singular_information_in_clogit_is_a_c_prime_error(monkeypatch):
+    """特異な情報行列は CPrimeError (leave-one-year-out の記録が except CPrimeError で続けられるように)。"""
+    rows = _synthetic_rows(n_races=80, seed=6)
+
+    def singular(_):
+        raise np.linalg.LinAlgError("singular")
+    monkeypatch.setattr(cp.np.linalg, "inv", singular)
+    with pytest.raises(cp.CPrimeError, match="特異"):
+        cp.clogit_with_se(rows, ["style_x_pace_fit"])

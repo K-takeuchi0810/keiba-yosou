@@ -44,7 +44,10 @@ EST_YEARS = (2022, 2023, 2024)
 PRIMARY_YEAR = cp.PRIMARY_YEAR
 COLS = [mc.MARKET_COL, "S"]
 BETA_TARGET = math.log1p(0.25) / 2.0             # §8-4c-2: β_market = 1 で S が 2 単位違う 2 頭の相対オッズに 1.25 倍の差
-CRITICAL_MULTIPLIER = 2.5758293035489004 + 0.8416212335729143   # z_{0.995} + z_{0.80}
+Z_ALPHA_2SIDED_001 = 2.5758293035489004          # 両側 α = 0.01
+Z_POWER_080 = 0.8416212335729143                 # 検出力 80%
+CRITICAL_MULTIPLIER = Z_ALPHA_2SIDED_001 + Z_POWER_080
+SIGN_BOOT_N = 200                                # 合成の重みの符号一致率 (§8-4 の手順 3 の記録、判定に使わない)
 BOOT_N = 1000                                    # §8-7b
 BOOT_SEED = 20261004
 BOOT_MAX_DISCARD_FRAC = 0.01
@@ -63,6 +66,7 @@ if _missing:
 
 # 検出力の計算で対象レースから読んでよい列 (allow-list)。返る列の名前の完全一致を実行時に確かめる
 _REFUND_SQL = ", ".join(f"'{c}'" for c in sorted(REFUNDED_ABNORMAL_CODES))       # 単一の出典は db
+REFUND_PROXY_CODE = sorted(REFUNDED_ABNORMAL_CODES)[0]    # allow-list は返還の真偽だけを返すので、選択集合には返還の代表のコードで渡す
 TARGET_SELECT = (
     ("h.race_year", "race_year"), ("h.race_month_day", "race_month_day"), ("h.track_code", "track_code"),
     ("h.kaiji", "kaiji"), ("h.nichiji", "nichiji"), ("h.race_num", "race_num"), ("r.track_type_code", "track_type_code"),
@@ -118,11 +122,35 @@ def history_digest(races: dict, years) -> dict:
     return {"years": sorted(years), "runs": n, "sha256": h.hexdigest()}
 
 
+def primary_year_history_digest(races: dict, year: int) -> dict:
+    """主検定の年の履歴の材料 (馬・馬番・返還の真偽・脚質コード) だけの sha256。結果とオッズは含めない。
+    検出力の計算と主検定の間に DB が変わって S が黙って変わるのを止める。"""
+    h = hashlib.sha256()
+    n = 0
+    for rid in sorted(r for r in races if int(r[:4]) == year):
+        for x in races[rid].runs:
+            h.update(f"{rid}|{x.horse}|{x.horse_num}|{int(rm.is_refunded(x.abnormal))}|{x.leg}\n".encode("utf-8"))
+            n += 1
+    return {"year": year, "runs": n, "sha256": h.hexdigest()}
+
+
+def known_count_distribution(rows: list[dict]) -> dict:
+    by: dict = defaultdict(int)
+    races = set()
+    for r in rows:
+        races.add(r["race_id"])
+        by[r["race_id"]] += bool(r["style"])
+    dist = Counter(by[rid] for rid in races)
+    return {"n_races": len(races), "n_races_known_zero": dist.get(0, 0),
+            "distribution": {str(k): v for k, v in sorted(dist.items())}}
+
+
 def choice_set_contract(rows: list[dict], counts: Counter, exclusions: list[dict]) -> dict:
     by: dict = defaultdict(float)
     for r in rows:
         by[r["race_id"]] += r["p_market"]
     return {"counts": dict(counts), "n_races": len(by), "n_rows": len(rows), "exclusions": exclusions,
+            "known_count": known_count_distribution(rows),
             "max_abs_prob_sum_dev": max((abs(s - 1.0) for s in by.values()), default=0.0)}
 
 
@@ -142,8 +170,28 @@ def _beta_both(rows_m: list[dict]) -> tuple[list[float], bool, st.Packed]:
 
 # ---------------------------------------------------------------------------------------------------- freeze
 
+def weight_sign_agreement(rows: list[dict], comp: dict) -> dict:
+    """§8-4 の手順 3 の記録 (判定に使わない): 合成の条件付きロジットをレース単位で再抽出したときの、成分の係数の符号が
+    全体の推定と一致した割合。"""
+    std_rows = [dict(r) for r in rows]
+    for c in cp.COMPONENTS:
+        cp.standardize(std_rows, c, comp["component_sd"][c]["sd"], c + cp.STD_SUFFIX)
+    data = mc.add_market_feature(std_rows)
+    cols = [mc.MARKET_COL, *[c + cp.STD_SUFFIX for c in cp.COMPONENTS]]
+    packed = st.pack(data, cols)
+    out = {}
+    for c in cp.COMPONENTS:
+        vals, discarded = es._block_resample(data, st.make_beta_stat(packed, c + cp.STD_SUFFIX), SIGN_BOOT_N, BOOT_SEED)
+        sign = np.sign(comp["raw_coefficients"][c])
+        out[c] = {"agreement": float(np.mean([np.sign(v) == sign for v in vals])) if vals else None,
+                  "n_valid": len(vals), "n_discarded": discarded}
+    return {"n_boot": SIGN_BOOT_N, "seed": BOOT_SEED, "components": out}
+
+
 def run_freeze(db: str, out: Path, argv: list[str]) -> dict:
     started = _now()
+    if (out / FROZEN_FILE).exists() or (out / LOCK_FILE).exists():
+        raise RunError(f"凍結物か錠が既にある (上書きしない): {out}")
     out.mkdir(parents=True, exist_ok=True)
     races, load_stats = cp.load_races(max(EST_YEARS), min_year=2021, db_path=db)
     history, experience = cp.style_history(races), cp.experience_index(races)
@@ -179,7 +227,7 @@ def run_freeze(db: str, out: Path, argv: list[str]) -> dict:
         "load_stats": dict(load_stats), "history_digest": history_digest(races, (2021,) + EST_YEARS),
         "choice_set": choice_set_contract(rows, counts, exclusions), "n_train_races": len({r["race_id"] for r in rows}),
         "train_in_sample": {"beta": beta, "converged": ok, "hessian_se": hess["se"], "note": "学習期の in-sample (判定に使わない)"},
-        "bootstrap": boot, "leave_one_year_out": loyo,
+        "bootstrap": boot, "leave_one_year_out": loyo, "weight_sign_agreement": weight_sign_agreement(rows, comp),
         "S_variance_decomposition_train": cp.variance_decomposition(srows, "S"),
         "S_vs_n_runs_365_within_corr_train": cp.within_race_corr(srows, "S", "n_runs_365"),
         "component_within_share_train": {c: cp.within_share(rows, c) for c in cp.COMPONENTS},
@@ -254,7 +302,7 @@ def outcome_blind_rows(targets: dict, history: dict, experience: dict, counts: C
     for rid in sorted(targets):
         runners = targets[rid]
         counts["target_races_seen"] += 1
-        cs = rm.build_choice_set({x["horse_num"]: ("3" if x["refunded"] else "0") for x in runners},
+        cs = rm.build_choice_set({x["horse_num"]: (REFUND_PROXY_CODE if x["refunded"] else "0") for x in runners},
                                  {"final": {x["horse_num"]: x["win_odds"] for x in runners if x["win_odds"] > 0}})
         if isinstance(cs, rm.Excluded):
             counts[f"excluded:{cs.reason}"] += 1
@@ -288,9 +336,11 @@ def run_power(db: str, frozen: Path, out: Path, argv: list[str]) -> dict:
     man, payload = _load_frozen(frozen)
     out.mkdir(parents=True, exist_ok=True)
     races, load_stats = cp.load_races(PRIMARY_YEAR, min_year=2021, db_path=db, allow_primary_year=True,
-                                      primary_purpose="power: 2025 の対象日より前の走の脚質コードを履歴として読む (対象の行に結果を付けない)")
+                                      primary_purpose="power: 2025 の対象日より前の走の脚質コードを履歴として読む (対象の行に結果を付けない)",
+                                      primary_year_history_only=True)      # 2025 の着順・オッズは SQL の段で NULL
     _check_history(races, man)
     history, experience = cp.style_history(races), cp.experience_index(races)
+    primary_history = primary_year_history_digest(races, PRIMARY_YEAR)
     del races                                        # 以降、対象レースは allow-list の読み込みだけ
     targets = load_target_fields(PRIMARY_YEAR, db)
     counts, exclusions = Counter(), []
@@ -305,6 +355,7 @@ def run_power(db: str, frozen: Path, out: Path, argv: list[str]) -> dict:
         "provenance": cp.provenance(db, argv, own_output=_rel(out)),
         "frozen_sha256": man["frozen_sha256"], "frozen_manifest_sha256": _sha(frozen / MANIFEST_FILE),
         "load_stats_history": dict(load_stats), "target_counts": dict(counts), "exclusions": exclusions,
+        "primary_year_history_digest": primary_history, "known_count": known_count_distribution(rows),
         "fisher": fisher, "power": power,
         "purchase_projection": {"assumption": "beta_market=1, beta_S=beta_target (2025 の推定値は使わない)",
                                 "counting": "predictor.market_clogit.ratio_buys_at(rows, 1.0, beta_target)",
@@ -323,7 +374,7 @@ def run_power(db: str, frozen: Path, out: Path, argv: list[str]) -> dict:
 
 def _check_pinned(man: dict, power: dict) -> dict:
     now = cp.provenance(man["provenance"]["db"]["path"], ["check"])
-    if now["git_dirty"]:
+    if now["git_dirty"] is not False:                # None (git が使えない) も止める (fail-closed)
         raise RunError(f"作業ツリーに未コミットの変更がある: {now['git_status']}")
     bad = {}
     for f in PINNED_FILES:
@@ -344,6 +395,16 @@ def _frozen_and_power(frozen: Path, power_path: Path) -> tuple[dict, dict, dict]
     return man, payload, power
 
 
+def _check_histories_before_reading_results(db: str, man: dict, power: dict) -> None:
+    """2021-2024 の履歴と、2025 の履歴の材料 (脚質コード・返還) が凍結・検出力の時点と同じか。2025 の結果は読まない。"""
+    races, _ = cp.load_races(PRIMARY_YEAR, min_year=2021, db_path=db, allow_primary_year=True,
+                             primary_purpose="arm / primary の前の履歴の照合 (2025 の着順・オッズは SQL で NULL)",
+                             primary_year_history_only=True)
+    _check_history(races, man)
+    if primary_year_history_digest(races, PRIMARY_YEAR) != power["primary_year_history_digest"]:
+        raise RunError("2025 の履歴 (脚質コード・返還) が検出力の計算の時点と違う (DB が変わった)")
+
+
 def run_arm(db: str, frozen: Path, power_path: Path, argv: list[str], rerun_reason: str | None = None) -> dict:
     man, _payload, power = _frozen_and_power(frozen, power_path)
     lock_path = frozen / LOCK_FILE
@@ -351,9 +412,7 @@ def run_arm(db: str, frozen: Path, power_path: Path, argv: list[str], rerun_reas
     if previous is not None and not rerun_reason:
         raise RunError(f"主検定の錠が既にある ({lock_path}、run_index {previous['run_index']})。主検定は 1 回だけ")
     pinned = _check_pinned(man, power)
-    hist_races, _ = cp.load_races(max(EST_YEARS), min_year=2021, db_path=db)
-    _check_history(hist_races, man)
-    del hist_races
+    _check_histories_before_reading_results(db, man, power)
     run_index = (previous["run_index"] + 1) if previous else 1
     lock = {"run_index": run_index, "armed_at": _now(), "argv": argv, "rerun_reason": rerun_reason,
             "frozen_sha256": man["frozen_sha256"], "power_sha256": _sha(power_path), **pinned,
@@ -394,15 +453,20 @@ def run_primary(db: str, frozen: Path, power_path: Path, out: Path, argv: list[s
     started_path = frozen / STARTED_FILE.format(run_index)
     if started_path.exists():
         raise RunError(f"run_index {run_index} の主検定は既に始まっている ({started_path})")
+    if (out / PRIMARY_FILE).exists():
+        raise RunError(f"主検定の結果が出力先に既にある (上書きしない): {out}")
     pinned = _check_pinned(man, power)
     if pinned["pinned_blob_sha1"] != lock["pinned_blob_sha1"]:
         raise RunError("固定したファイルが錠を書いた時点と違う")
+    _check_histories_before_reading_results(db, man, power)   # 開始の印の前に (照合で止まっても run_index を消費しない)
     started = _now()
     out.mkdir(parents=True, exist_ok=True)
     _write_json(started_path, {"run_index": run_index, "started_at": started, "out": str(out), "argv": argv})
     races, load_stats = cp.load_races(PRIMARY_YEAR, min_year=2021, db_path=db, allow_primary_year=True,
                                       primary_purpose=f"primary: Group C′ の主検定 (run_index {run_index})")
     _check_history(races, man)
+    if primary_year_history_digest(races, PRIMARY_YEAR) != power["primary_year_history_digest"]:
+        raise RunError("2025 の履歴 (脚質コード・返還) が検出力の計算の時点と違う (DB が変わった)")
     history, experience = cp.style_history(races), cp.experience_index(races)
     counts, exclusions = Counter(), []
     rows = cp.apply_composite(cp.target_rows(races, (PRIMARY_YEAR,), history, experience, counts, exclusions),
@@ -416,7 +480,8 @@ def run_primary(db: str, frozen: Path, power_path: Path, out: Path, argv: list[s
         raise RunError(f"主検定の区間の設定が事前登録と違う: {ci}")
     hess = cp.clogit_with_se(rows, ["S"])
     cat, reason = verdict(ci, power["power"])
-    z = 2.5758293035489004
+    z = Z_ALPHA_2SIDED_001
+    comp = payload["composite"]
     result = {
         "kind": "c_prime_primary", "run_index": run_index, "rerun_reason": lock.get("rerun_reason"),
         "started_at": started, "ended_at": _now(),
@@ -428,6 +493,9 @@ def run_primary(db: str, frozen: Path, power_path: Path, out: Path, argv: list[s
         "wald_diagnostic": {"se_hessian": hess["se"][1], "lo": beta[1] - z * hess["se"][1], "hi": beta[1] + z * hess["se"][1],
                             "note": "診断だけ。判定に使わない"},
         "power": power["power"], "category": cat, "category_reason": reason,
+        "composite_echo": {"weights": comp["weights"], "component_z_max": comp["component_z_max"],
+                           "direction_undetermined": comp["direction_undetermined"]},
+        "after_primary": "config.CONSUMED_WINDOWS に 20250101-20251231 / 'phase05_5 c_prime primary run_index N' を追記する (Group A と同じ形)",
     }
     _write_json(out / PRIMARY_FILE, result)
     try:
@@ -461,6 +529,12 @@ def _side_records(rows: list[dict], beta: list[float]) -> dict:
         fill = (sum(vals[r["style"]] for r in rs if r["style"]) / len(known)) if known else 0.0
         rr.extend({**r, "style_rarity_in_race": vals.get(r["style"], fill) if r["style"] else fill} for r in rs)
     side["beta_style_rarity_in_race"] = cp.clogit_with_se(rr, ["style_rarity_in_race"])
+    # 脚質の主効果を同時に入れた当てはめ [market_feature, 脚質の指示, S] (レビュー ddc12b6 の prediction-logic、置換ではなく追加)
+    ind_rows = [{**r, "style_indicator": float(v)} for r, v in zip(rows, ind)]
+    side["beta_S_with_style_indicator_joint"] = cp.clogit_with_se(ind_rows, ["style_indicator", "S"])
+    # 非線形な本命・人気薄の偏りの切り分け [market_feature, market_feature², S]
+    sq_rows = [{**r, "market_feature_sq": rm.market_feature(r["p_market"]) ** 2} for r in rows]
+    side["beta_S_with_market_square"] = cp.clogit_with_se(sq_rows, ["market_feature_sq", "S"])
     # 金額の試験の診断の集合 (§8-6b。2025 の確定市場での件数の記録で、金額の判定ではない)
     try:
         unit = mc.fit_s_given_unit_market(rows)["beta_s_given_unit_market"]
@@ -507,6 +581,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         r = run_primary(a.db, Path(a.frozen), Path(a.power), Path(a.out), full)
         print(json.dumps({k: r[k] for k in ("beta", "ci_99", "category", "category_reason")}, ensure_ascii=False, indent=1, default=str))
+        print("次: " + r["after_primary"])
     return 0
 
 

@@ -59,6 +59,11 @@ def _synthetic_db(path: Path, races_per_year: int = 90, seed: int = 0) -> Path:
                 odds = round(0.8 / p[j], 1)
                 conn.execute("INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                              (*key, f"{j + 1:02d}", h, "0", "1" if j == win else str(j + 2), int(round(odds * 10)), styles[h]))
+        okey = (str(year), "1231", "05", "01", "01", "12")          # 障害のレース (読み込みで落とす)
+        conn.execute("INSERT INTO races VALUES (?,?,?,?,?,?,?,?)", (*okey, "53", "7"))
+        for j, h in enumerate(sorted(styles)[:6]):
+            conn.execute("INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                         (*okey, f"{j + 1:02d}", h, "0", str(j + 1), 50, "1"))
     conn.commit()
     conn.close()
     return path
@@ -348,3 +353,167 @@ def test_primary_refuses_pinned_files_changed_after_arming(frozen_and_power, syn
     with pytest.raises(run.RunError, match="錠を書いた時点と違う"):
         run.run_primary(str(synth_db), frozen, power_path, tmp_path / "p", ["t"])
     assert not (frozen / run.STARTED_FILE.format(1)).exists()
+
+
+# --- 4 名レビュー (ddc12b6) の後に追加 -------------------------------------------------------------------
+
+def test_check_pinned_refuses_when_git_state_is_unknown(monkeypatch):
+    base = {f: "a" for f in run.PINNED_FILES}
+    man = {"provenance": {"db": {"path": "x"}, "files_blob_sha1": dict(base)}}
+    power = {"provenance": {"files_blob_sha1": dict(base)}}
+    monkeypatch.setattr(cp, "provenance", lambda *a, **k: {"git_dirty": None, "git_status": None, "git_sha": "unknown",
+                                                           "files_blob_sha1": dict(base)})
+    with pytest.raises(run.RunError, match="未コミット"):
+        run._check_pinned(man, power)
+
+
+def test_outcome_blind_rows_never_use_the_target_day_leg_codes():
+    """検出力の経路でも、対象日の走 (対象レース自身の脚質コード) を履歴に入れない (主検定の経路の行動テストと同じ契約)。"""
+    rid = "20250601_05_01_01_01"
+    t = cp.day_ordinal("20250601")
+    targets = {rid: [{"race_id": rid, "ymd": "20250601", "horse": "A", "horse_num": "01", "refunded": False, "win_odds": 2.0},
+                     {"race_id": rid, "ymd": "20250601", "horse": "B", "horse_num": "02", "refunded": False, "win_odds": 3.0}]}
+    history = {"A": [(t - 10, "r1", "3"), (t - 5, "r2", "1"), (t, rid, "4")],     # 対象日の 4 は使わない
+               "B": [(t - 3, "r3", "3"), (t, rid, "1")]}
+    rows = run.outcome_blind_rows(targets, history, {}, Counter(), [])
+    assert [r["style"] for r in rows] == ["1", "3"]       # A は [3, 1] の同数 → 新しい 1、B は [3]
+
+
+def test_power_output_does_not_depend_on_2025_results(frozen_and_power, synth_db, tmp_path):
+    """2025 の着順をすべて書き換えても、検出力の出力 (時刻・来歴を除く) は変わらない。"""
+    out, _, pw = frozen_and_power
+    import shutil
+    db2 = tmp_path / "k2.db"
+    shutil.copy(synth_db, db2)
+    conn = sqlite3.connect(db2)
+    conn.execute("UPDATE horse_races SET confirmed_order = CAST((CAST(horse_num AS INTEGER) % 3) + 1 AS TEXT) "
+                 "WHERE race_year = '2025'")
+    conn.commit()
+    conn.close()
+    pw2 = run.run_power(str(db2), out / "frozen", tmp_path / "pw", ["t"])
+    for k in ("fisher", "power", "purchase_projection", "target_counts", "exclusions", "primary_year_history_digest",
+              "known_count", "S_variance_decomposition_2025", "n_rows", "style_unknown_rate"):
+        assert pw2[k] == pw[k], k
+
+
+def test_load_races_history_only_nulls_primary_year_results(synth_db):
+    races, _ = cp.load_races(2025, db_path=synth_db, allow_primary_year=True, primary_purpose="test",
+                             primary_year_history_only=True)
+    r25 = [x for r in races.values() if r.ymd.startswith("2025") for x in r.runs]
+    r24 = [x for r in races.values() if r.ymd.startswith("2024") for x in r.runs]
+    assert r25 and all(x.finish == 0 and x.win_odds == 0.0 for x in r25) and all(x.leg for x in r25)
+    assert any(x.finish == 1 for x in r24) and all(x.win_odds > 0 for x in r24)
+
+
+def test_power_reads_the_history_with_results_nulled(frozen_and_power, synth_db, tmp_path, monkeypatch):
+    out, _, _ = frozen_and_power
+    seen = []
+    real = cp.load_races
+
+    def spy(*a, **k):
+        seen.append(k.get("primary_year_history_only", False))
+        return real(*a, **k)
+    monkeypatch.setattr(cp, "load_races", spy)
+    run.run_power(str(synth_db), out / "frozen", tmp_path / "pw", ["t"])
+    assert seen == [True]
+
+
+def test_obstacle_races_are_not_targets(synth_db):
+    targets = run.load_target_fields(2025, synth_db)
+    assert targets and not [rid for rid in targets if rid.startswith("20251231")]
+
+
+def test_arm_refuses_a_changed_2025_history(frozen_and_power, synth_db, tmp_path, monkeypatch):
+    out, _, _ = frozen_and_power
+    import shutil
+    frozen = tmp_path / "frozen"
+    shutil.copytree(out / "frozen", frozen)
+    pw = json.loads((out / "power" / run.POWER_FILE).read_text(encoding="utf-8"))
+    pw["primary_year_history_digest"]["sha256"] = "0" * 64
+    monkeypatch.setattr(run, "_frozen_and_power", lambda f, p: (*run._load_frozen(f), pw))
+    monkeypatch.setattr(run, "_check_pinned", lambda m, p: {"git_sha": "s", "pinned_blob_sha1": {}})
+    with pytest.raises(run.RunError, match="2025 の履歴"):
+        run.run_arm(str(synth_db), frozen, out / "power" / run.POWER_FILE, ["t"])
+    assert not (frozen / run.LOCK_FILE).exists()
+
+
+def test_primary_refuses_a_changed_2025_history_before_the_started_marker(frozen_and_power, synth_db, tmp_path, monkeypatch):
+    out, _, _ = frozen_and_power
+    import shutil
+    frozen = tmp_path / "frozen"
+    shutil.copytree(out / "frozen", frozen)
+    power_path = out / "power" / run.POWER_FILE
+    monkeypatch.setattr(run, "_check_pinned", lambda m, p: {"git_sha": "s", "pinned_blob_sha1": {}})
+    run.run_arm(str(synth_db), frozen, power_path, ["t"])
+    monkeypatch.setattr(run, "_lock_is_committed", lambda p: True)
+    real = run.primary_year_history_digest
+    monkeypatch.setattr(run, "primary_year_history_digest", lambda races, y: {**real(races, y), "sha256": "f" * 64})
+    with pytest.raises(run.RunError, match="2025 の履歴"):
+        run.run_primary(str(synth_db), frozen, power_path, tmp_path / "p", ["t"])
+    assert not (frozen / run.STARTED_FILE.format(1)).exists()
+
+
+def test_arm_refuses_a_changed_2021_2024_history(frozen_and_power, synth_db, tmp_path, monkeypatch):
+    out, _, _ = frozen_and_power
+    import shutil
+    frozen = tmp_path / "frozen"
+    shutil.copytree(out / "frozen", frozen)
+    m = json.loads((frozen / run.MANIFEST_FILE).read_text(encoding="utf-8"))
+    m["history_digest"]["sha256"] = "0" * 64
+    monkeypatch.setattr(run, "_frozen_and_power",
+                        lambda f, p: (m, run._load_frozen(f)[1], json.loads(Path(p).read_text(encoding="utf-8"))))
+    monkeypatch.setattr(run, "_check_pinned", lambda mm, p: {"git_sha": "s", "pinned_blob_sha1": {}})
+    with pytest.raises(run.RunError, match="履歴"):
+        run.run_arm(str(synth_db), frozen, out / "power" / run.POWER_FILE, ["t"])
+    assert not (frozen / run.LOCK_FILE).exists()
+
+
+def test_freeze_and_primary_refuse_to_overwrite(frozen_and_power, synth_db, tmp_path, monkeypatch):
+    out, _, _ = frozen_and_power
+    with pytest.raises(run.RunError, match="上書きしない"):
+        run.run_freeze(str(synth_db), out / "frozen", ["t"])
+    import shutil
+    frozen = tmp_path / "frozen"
+    shutil.copytree(out / "frozen", frozen)
+    power_path = out / "power" / run.POWER_FILE
+    monkeypatch.setattr(run, "_check_pinned", lambda m, p: {"git_sha": "s", "pinned_blob_sha1": {}})
+    run.run_arm(str(synth_db), frozen, power_path, ["t"])
+    monkeypatch.setattr(run, "_lock_is_committed", lambda p: True)
+    (tmp_path / "p").mkdir()
+    (tmp_path / "p" / run.PRIMARY_FILE).write_text("{}", encoding="utf-8")
+    with pytest.raises(run.RunError, match="上書きしない"):
+        run.run_primary(str(synth_db), frozen, power_path, tmp_path / "p", ["t"])
+    assert not (frozen / run.STARTED_FILE.format(1)).exists()
+
+
+def test_side_record_failure_keeps_the_verdict(frozen_and_power, synth_db, tmp_path, monkeypatch):
+    out, _, _ = frozen_and_power
+    import shutil
+    frozen = tmp_path / "frozen"
+    shutil.copytree(out / "frozen", frozen)
+    power_path = out / "power" / run.POWER_FILE
+    monkeypatch.setattr(run, "_check_pinned", lambda m, p: {"git_sha": "s", "pinned_blob_sha1": {}})
+    run.run_arm(str(synth_db), frozen, power_path, ["t"])
+    monkeypatch.setattr(run, "_lock_is_committed", lambda p: True)
+    monkeypatch.setattr(es, "PRIMARY_N_BOOT", 120)
+
+    def boom(rows, beta):
+        assert (tmp_path / "p" / run.PRIMARY_FILE).exists()      # 判定を先に書いてから副次の記録
+        raise ValueError("side failed")
+    monkeypatch.setattr(run, "_side_records", boom)
+    res = run.run_primary(str(synth_db), frozen, power_path, tmp_path / "p", ["t"])
+    side = json.loads((tmp_path / "p" / run.SIDE_FILE).read_text(encoding="utf-8"))
+    assert side["error"] == "ValueError: side failed"
+    stored = json.loads((tmp_path / "p" / run.PRIMARY_FILE).read_text(encoding="utf-8"))
+    assert stored["category"] == res["category"] and stored["composite_echo"]["direction_undetermined"] in (True, False)
+
+
+def test_freeze_records_weight_sign_agreement_and_single_fits(frozen_and_power):
+    out, man, _ = frozen_and_power
+    sa = man["weight_sign_agreement"]
+    assert sa["n_boot"] == run.SIGN_BOOT_N
+    for c in cp.COMPONENTS:
+        d = sa["components"][c]
+        assert 0.0 <= d["agreement"] <= 1.0 and d["n_valid"] + d["n_discarded"] == run.SIGN_BOOT_N
+    payload = json.loads((out / "frozen" / run.FROZEN_FILE).read_text(encoding="utf-8"))
+    assert set(payload["composite"]["single_component_fits"]) == set(cp.COMPONENTS)
