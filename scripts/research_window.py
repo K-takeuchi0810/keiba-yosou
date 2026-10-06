@@ -159,6 +159,39 @@ def check_years(min_year: int, max_year: int, *, purpose: str, context: str, **k
     return check(f"{min_year}0101", f"{max_year}1231", purpose=purpose, context=context, **kw)
 
 
+# ------------------------------------------------------------------------------------------- 履歴としてだけの読み (§9 の改訂)
+
+HISTORY_LOOKBACK_DAYS = frozenset({365})          # 事前に固定した参照日数 (A″ は Group A と同じ 365 日)
+HISTORY_FORBIDDEN_FRAGMENTS = ("odds", "payout", "pay_", "popularity", "dividend", "*")
+
+
+def check_history_for_fresh_targets(target_from: str, target_to: str, *, lookback_days: int, history_columns: tuple[str, ...],
+                                    context: str) -> dict:
+    """fresh の対象の特徴を作るために、対象より前の履歴 (consumed・reserved・それ以前の fresh を含む) を読む許可 (§9 の改訂)。
+
+    条件: 対象がすべて fresh / 履歴の窓は [最初の対象日 − 参照日数, 最後の対象日 − 1 日] / 参照日数は HISTORY_LOOKBACK_DAYS /
+    履歴の列は allow-list で、オッズ・払戻・人気を含めない。**主検定の開封の中からだけ** 呼ぶ — 開封の手順 (primary_after_unlock) が
+    まだ無いので、条件を確かめた後に常に止まる。開封の手順を実装するときに、ここを開封の記録 (錠・開始の印) と結び付ける。
+    """
+    if not context:
+        raise ResearchWindowError("context (どの読み込みか) を書く")
+    periods = periods_spanned(target_from, target_to)
+    if periods != {"fresh"}:
+        raise ResearchWindowError(f"{context}: 履歴としてだけの読みは、対象がすべて fresh のときだけ (対象 {target_from}〜{target_to}: {sorted(periods)})")
+    if isinstance(lookback_days, bool) or lookback_days not in HISTORY_LOOKBACK_DAYS:
+        raise ResearchWindowError(f"{context}: 参照日数 {lookback_days!r} は事前に固定した値 {sorted(HISTORY_LOOKBACK_DAYS)} に無い")
+    cols = tuple(history_columns)
+    if not cols or not all(isinstance(c, str) and c for c in cols):
+        raise ResearchWindowError(f"{context}: 履歴の列の allow-list を渡す")
+    bad = [c for c in cols for f in HISTORY_FORBIDDEN_FRAGMENTS if f in c.lower()]
+    if bad:
+        raise ResearchWindowError(f"{context}: 履歴の列にオッズ・払戻・人気を含めない: {bad}")
+    history_from, history_to = _shift(target_from, -lookback_days), _shift(target_to, -1)
+    raise ResearchWindowError(
+        f"{context}: 履歴としてだけの読み ({history_from}〜{history_to}) は主検定の開封の中からだけ呼ぶ。開封の手順 (primary_after_unlock) は"
+        "まだ無い (最初の候補の事前登録と一緒に実装する)")
+
+
 # ------------------------------------------------------------------------------------------- 件数の点検 (lockbox_count_only)
 
 # JV-Data の競馬場コード 01〜10 が JRA (11 以降は地方・海外)。track_type_code 51 以上が障害 (`scripts.group_a.OBSTACLE_FROM` と同じ)

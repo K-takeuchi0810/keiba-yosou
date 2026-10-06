@@ -336,3 +336,43 @@ def test_schedule_sql_returned_columns_must_match(tmp_path, monkeypatch):
     monkeypatch.setattr(rw, "SCHEDULE_COLUMNS", ("x",))
     with pytest.raises(rw.ResearchWindowError, match="allow-list"):
         rw.determine_fresh_from(db)
+
+
+# ------------------------------------------------------------------------------------------------ 履歴としてだけの読み (§9 の改訂)
+
+HIST_COLS = ("race_date", "horse", "finish_time", "confirmed_order", "abnormal_code")
+
+
+def _hist(**kw):
+    args = {"lookback_days": 365, "history_columns": HIST_COLS, "context": "t"}
+    args.update(kw)
+    return rw.check_history_for_fresh_targets(args.pop("target_from", "20261010"), args.pop("target_to", "20261031"), **args)
+
+
+def test_history_read_is_only_from_inside_an_opening_for_now():
+    """条件を満たしても、開封の手順が無いので今は止まる。止まる理由に履歴の窓 [対象 − 365 日, 最後の対象 − 1 日] が出る。"""
+    with pytest.raises(rw.ResearchWindowError, match="20251010〜20261030.*開封の中からだけ"):
+        _hist()
+
+
+@pytest.mark.parametrize("frm,to", [("20261009", "20261031"), ("20260920", "20260930"), ("20250101", "20250131")])
+def test_history_read_needs_all_targets_in_fresh(frm, to):
+    with pytest.raises(rw.ResearchWindowError, match="対象がすべて fresh|RESERVED"):
+        _hist(target_from=frm, target_to=to)
+
+
+@pytest.mark.parametrize("days", [364, 366, 730, True, "365"])
+def test_history_lookback_must_be_the_fixed_value(days):
+    with pytest.raises(rw.ResearchWindowError, match="参照日数"):
+        _hist(lookback_days=days)
+
+
+@pytest.mark.parametrize("cols", [(), ("",), ("finish_time", "win_odds"), ("tan_payout",), ("popularity",), ("*",)])
+def test_history_columns_are_an_allow_list_without_market_or_payouts(cols):
+    with pytest.raises(rw.ResearchWindowError, match="履歴の列"):
+        _hist(history_columns=cols)
+
+
+def test_history_read_needs_a_context():
+    with pytest.raises(rw.ResearchWindowError, match="context"):
+        _hist(context="")
