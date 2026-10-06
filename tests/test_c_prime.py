@@ -377,3 +377,22 @@ def test_history_only_load_nulls_primary_year_results_in_sql(tmp_path):
     r24 = [x for r in loaded.values() if r.ymd.startswith("2024") for x in r.runs]
     assert [(x.finish, x.win_odds, x.leg) for x in r25] == [(0, 0.0, "2"), (0, 0.0, "4")]
     assert [(x.finish, x.win_odds) for x in r24] == [(1, 2.0), (2, 3.0)]
+
+
+def test_provenance_excludes_its_own_untracked_output_directory(tmp_path, monkeypatch):
+    """自分の出力先 (未追跡のディレクトリ) だけが増えた状態は dirty にしない。git はふつう未追跡のディレクトリを 1 行にまとめるので、
+    ファイルごとに列挙させる (凍結の来歴が git_dirty true になっていた、2026-10-06)。"""
+    import subprocess
+    repo = tmp_path / "repo"
+    (repo / "out" / "frozen").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "t"], check=True)
+    (repo / "a.txt").write_text("x", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "a.txt"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "a"], check=True)
+    (repo / "out" / "frozen" / "MANIFEST.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(cp, "ROOT", repo)
+    assert cp.provenance(tmp_path / "none.db", own_output="out/frozen")["git_dirty"] is False
+    (repo / "other.txt").write_text("y", encoding="utf-8")
+    assert cp.provenance(tmp_path / "none.db", own_output="out/frozen")["git_dirty"] is True

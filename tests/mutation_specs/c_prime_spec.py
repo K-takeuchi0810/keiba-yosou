@@ -101,4 +101,7 @@ MUTANTS = [
     ("C30 推定の特異な情報行列を CPrimeError に包まない", CP,
      "    except np.linalg.LinAlgError as e:\n        raise CPrimeError(f\"情報行列が特異 ({allcols})\") from e",
      "    except ZeroDivisionError as e:\n        raise CPrimeError(f\"情報行列が特異 ({allcols})\") from e"),
+    ("C31 来歴の git status で未追跡のディレクトリをまとめる", CP,
+     '    status = git("status", "--porcelain", "--untracked-files=all")',
+     '    status = git("status", "--porcelain")'),
 ]

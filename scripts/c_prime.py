@@ -426,7 +426,7 @@ def provenance(db_path, argv: list[str] | None = None, own_output: str | None = 
     def git(*args: str) -> subprocess.CompletedProcess:
         return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True)
     head = git("rev-parse", "HEAD")
-    status = git("status", "--porcelain")
+    status = git("status", "--porcelain", "--untracked-files=all")     # 未追跡のディレクトリを 1 行にまとめない (own_output の除外が効くように)
     lines = [ln for ln in status.stdout.splitlines() if ln.strip()] if status.returncode == 0 else None
 
     def own(line: str) -> bool:
