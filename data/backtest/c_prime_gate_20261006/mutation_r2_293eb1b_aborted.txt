@@ -1,0 +1,15 @@
+ABORT: 変異 'G14 当てはめの列の順を入れ替える' の実行で本番が変わった: ['data/keiba.db-wal']
+KILLED G1 市場の列を logit にする FAILED tests/test_market_clogit.py::test_market_feature_is_log - ZeroDivision...
+KILLED G2 不正な市場の確率を epsilon で丸める FAILED tests/test_market_clogit.py::test_market_feature_fails_closed_without_epsilon[0.0]
+KILLED G3 1 を超える市場の確率を通す FAILED tests/test_market_clogit.py::test_market_feature_fails_closed_without_epsilon[1.0000001]
+KILLED G4 canonical (和 1) を確かめない FAILED tests/test_market_clogit.py::test_non_canonical_market_probabilities_are_refused
+KILLED G5 尤度の列が自前の log を使う FAILED tests/test_market_clogit.py::test_a_zero_market_probability_stops_the_fit
+KILLED G6 Fisher の列が自前の log を使う FAILED tests/test_market_clogit.py::test_fisher_takes_both_the_column_and_the_null_weights_from_market_feature
+KILLED G7 Fisher の仮定の重みに P_market をそのまま使う FAILED tests/test_market_clogit.py::test_fisher_takes_both_the_column_and_the_null_weights_from_market_feature
+KILLED G8 検出力の行の勝ちの列を拒否しない FAILED tests/test_market_clogit.py::test_fisher_refuses_rows_with_outcomes - ...
+KILLED G9 比を正規化した P_new でなく exp(β·S) で取る FAILED tests/test_market_clogit.py::test_a_different_market_transform_changes_every_path
+KILLED G10 S-correction only を推定した β_market で作る FAILED tests/test_market_clogit.py::test_diagnostic_sets_separate_market_recalibration_from_s_correction
+SURVIVED G11 market-recalibration only に S を入れる
+KILLED G12 P_new が β_market を無視する FAILED tests/test_market_clogit.py::test_diagnostic_sets_separate_market_recalibration_from_s_correction
+KILLED G13 P_new が market_feature を通らない FAILED tests/test_market_clogit.py::test_likelihood_fisher_p_new_and_purchase_count_all_go_through_market_feature
+ABORTED G14 当てはめの列の順を入れ替える data/keiba.db-wal

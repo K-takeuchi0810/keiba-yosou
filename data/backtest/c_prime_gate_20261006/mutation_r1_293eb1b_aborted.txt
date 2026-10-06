@@ -1,0 +1,7 @@
+ABORT: 変異 'G6 Fisher の列が自前の log を使う' の実行で本番が変わった: ['data/logs/fresh_odds_health_20261006.log', 'data/runtime/fresh_odds_alert_state.json', 'data/runtime/fresh_odds_health_20261006_101503.json', 'data/runtime/fresh_odds_health_latest.json']
+KILLED G1 市場の列を logit にする FAILED tests/test_market_clogit.py::test_market_feature_is_log - ZeroDivision...
+KILLED G2 不正な市場の確率を epsilon で丸める FAILED tests/test_market_clogit.py::test_market_feature_fails_closed_without_epsilon[0.0]
+KILLED G3 1 を超える市場の確率を通す FAILED tests/test_market_clogit.py::test_market_feature_fails_closed_without_epsilon[1.0000001]
+KILLED G4 canonical (和 1) を確かめない FAILED tests/test_market_clogit.py::test_non_canonical_market_probabilities_are_refused
+KILLED G5 尤度の列が自前の log を使う FAILED tests/test_market_clogit.py::test_a_zero_market_probability_stops_the_fit
+ABORTED G6 Fisher の列が自前の log を使う data/logs/fresh_odds_health_20261006.log data/runtime/fresh_odds_alert_state.json data/runtime/fresh_odds_health_20261006_101503.json data/runtime/fresh_odds_health_latest.json
