@@ -168,6 +168,8 @@ def test_gate_passes_only_when_all_four_hold():
     assert ex.gate_verdict(**ok) == {"passed": True, "reasons": []}
     assert ex.gate_verdict(**{**ok, "construct_r2": 0.80})["reasons"] == ["STRUCTURAL_REJECT"]
     assert ex.gate_verdict(**{**ok, "within_var": 0.4999})["reasons"] == ["INSUFFICIENT_WITHIN_RACE_VARIATION"]
+    assert ex.gate_verdict(**{**ok, "within_var": 0.50})["passed"]                 # 境界ちょうどは通る (≥ 0.50)
+    assert ex.gate_verdict(**{**ok, "construct_r2": 0.7999})["passed"]             # < 0.80 は通る
     assert ex.gate_verdict(**{**ok, "n_calendar": 6801})["reasons"] == ["PRIMARY_INFEASIBLE"]
 
 
