@@ -370,7 +370,8 @@ def test_history_lookback_must_be_the_fixed_value(days):
 
 @pytest.mark.parametrize("cols", [(), ("",), ("finish_time",), ("horse_races.finish_time", "horse_races.win_odds"),
                                   ("payouts.tan_pop1",), ("horse_races.Win_Popularity",), ("vote_counts.combo",), ("Payouts.race_year",),
-                                  ("horse_races.*",), ("*",), ("a.b.c",), (".finish_time",)])
+                                  ("horse_races.*",), ("*",), ("a.b.c",), (".finish_time",),
+                                  ("horse_races.tan_pop1",)])      # 市場の表の外に将来できる人気の列 (今のスキーマには無い)
 def test_history_columns_are_an_allow_list_without_market_or_payouts(cols):
     with pytest.raises(rw.ResearchWindowError, match="履歴の列"):
         _hist(history_columns=cols)
