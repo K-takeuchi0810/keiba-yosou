@@ -1,0 +1,27 @@
+KILLED A1 推定に 2025 を許す FAILED tests/test_group_a2.py::test_composite_refuses_estimation_rows_from_2025
+KILLED A2 着順の分位を悪いほど大にする FAILED tests/test_group_a2.py::test_finish_history_percentile_is_good_high_and_skips_refunds
+KILLED A3 着順の履歴に返還の馬を入れる FAILED tests/test_group_a2.py::test_finish_history_percentile_is_good_high_and_skips_refunds
+KILLED A4 前走の着順に対象日を含める FAILED tests/test_group_a2.py::test_last_finish_pct_uses_the_latest_run_before_the_target
+KILLED A5 前走の着順の窓を 366 日に FAILED tests/test_group_a2.py::test_last_finish_pct_uses_the_latest_run_before_the_target
+KILLED A6 前走の着順を最古の走に FAILED tests/test_group_a2.py::test_last_finish_pct_uses_the_latest_run_before_the_target
+KILLED A7 価格の無い馬のレースを除かない FAILED tests/test_group_a2.py::test_target_rows_follow_the_choice_set_and_record_exclusions
+KILLED A8 返還の馬の数を記録しない FAILED tests/test_group_a2.py::test_target_rows_follow_the_choice_set_and_record_exclusions
+KILLED A9 逆符号の成分を 0 にしない FAILED tests/test_group_a2.py::test_composite_keeps_positive_components_and_zeroes_negative_ones
+KILLED A10 全成分が逆符号でも止めない FAILED tests/test_group_a2.py::test_all_negative_components_stop - scripts.c_...
+KILLED A11 S を σ_within で割らない FAILED tests/test_group_a2.py::test_composite_keeps_positive_components_and_zeroes_negative_ones
+KILLED A12 構造の量で勝ちの列を許す FAILED tests/test_group_a2.py::test_structural_quantities_refuse_outcomes_and_measure_the_finish_restatement
+KILLED A13 決定係数の回帰でレース内の中心化をしない FAILED tests/test_group_a2.py::test_structural_quantities_refuse_outcomes_and_measure_the_finish_restatement
+KILLED A14 検出力の必要レース数の臨界値を 2 乗しない FAILED tests/test_group_a2.py::test_power_reads_no_outcome_and_gives_the_required_races
+KILLED A16 ブートストラップの換算を大きい方にしない FAILED tests/test_group_a2.py::test_power_reads_no_outcome_and_gives_the_required_races
+KILLED A17 ブートストラップの換算の向きを逆にする FAILED tests/test_group_a2.py::test_power_reads_no_outcome_and_gives_the_required_races
+KILLED X10 判定で E2 を読まない FAILED tests/test_group_a2.py::test_verdict_reads_the_recorded_results_and_carries_the_inputs
+KILLED A15 sigma1 を sqrt N で戻さない FAILED tests/test_group_a2.py::test_power_reads_no_outcome_and_gives_the_required_races
+KILLED X1 構造の門の境界を <= にする FAILED tests/test_group_a2.py::test_gate_passes_only_when_all_four_hold - Ass...
+KILLED X2 正の本数の条件を 1 本に FAILED tests/test_group_a2.py::test_sign_stability_gate[betas0-0.01] - Assert...
+KILLED X3 z <= -2 を見ない FAILED tests/test_group_a2.py::test_sign_stability_gate[betas1-0.01] - Assert...
+KILLED X4 pooled の符号を見ない FAILED tests/test_group_a2.py::test_sign_stability_gate[betas2-0.0] - Asserti...
+KILLED X5 3 本そろっていなくても通す FAILED tests/test_group_a2.py::test_sign_stability_gate[betas3-0.01] - Assert...
+KILLED X6 レース内の分散の門の境界を > にする FAILED tests/test_group_a2.py::test_gate_passes_only_when_all_four_hold - ass...
+KILLED X7 検出力の門の境界を < にする FAILED tests/test_group_a2.py::test_gate_passes_only_when_all_four_hold - Ass...
+KILLED X8 金額の境界を < にする FAILED tests/test_group_a2.py::test_money_state_does_not_reject_and_marks_no_buys
+KILLED X9 購入 0 件を区別しない FAILED tests/test_group_a2.py::test_money_state_does_not_reject_and_marks_no_buys
