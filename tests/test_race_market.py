@@ -146,11 +146,11 @@ def test_p_new_with_unit_market_coefficient_and_zero_feature_is_exactly_the_mark
     assert lo["01"] / t > 0.6 + 0.1
 
 
-def test_market_term_is_log_and_p_new_goes_through_it(monkeypatch):
-    assert rm.market_term(0.25) == math.log(0.25)
+def test_market_feature_is_log_and_p_new_goes_through_it(monkeypatch):
+    assert rm.market_feature(0.25) == math.log(0.25) and rm.market_feature(1.0) == 0.0
     calls = []
-    real = rm.market_term
-    monkeypatch.setattr(rm, "market_term", lambda p: calls.append(p) or real(p))
+    real = rm.market_feature
+    monkeypatch.setattr(rm, "market_feature", lambda p: calls.append(p) or real(p))
     rm.p_new({"01": 0.5, "02": 0.5}, {"01": 0.0, "02": 0.0}, 1.0, 0.0)
     assert sorted(calls) == [0.5, 0.5]
 

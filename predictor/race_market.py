@@ -87,20 +87,30 @@ def build_choice_set(abnormal: dict[str, object], markets: dict[str, dict[str, f
     return ChoiceSet(choice=choice, refunded=refunded, implied=implied, refunded_priced=refunded_priced)
 
 
-def market_term(p: float) -> float:
-    """条件付きロジットの市場の列 (§8-6b)。**log P_market** (logit ではない)。C′ 以降の尤度・検出力・P_new はすべてこれを通す。"""
+class MarketFeatureError(ValueError):
+    """市場の確率が条件付きロジットの市場の列を作れない値 (0 以下・1 超・NaN・非有限)。"""
+
+
+def market_feature(p: float) -> float:
+    """条件付きロジットの市場の列の **唯一の** 変換 (§8-6b)。`log P_market` (logit ではない)。
+
+    C′ 以降の尤度の列・検出力の Fisher 情報・P_new・金額の評価はすべてこれを通す (`predictor/market_clogit.py`)。
+    `p` は §8-6 の選択集合の中で正規化し直した P_market。0 以下・1 超・NaN・非有限は **止める** (epsilon で丸めない。
+    丸めると、価格の欠けたデータが黙って極端な本命・人気薄の値として尤度に入る)。
+    """
+    if isinstance(p, bool) or not isinstance(p, (int, float)) or not math.isfinite(p) or not 0.0 < p <= 1.0:
+        raise MarketFeatureError(f"市場の確率が不正: {p!r} (0 < p ≤ 1 の有限の値だけ)")
     return math.log(p)
 
 
 def p_new(p_market: dict[str, float], s: dict[str, float], beta_market: float, beta_s: float) -> dict[str, float]:
     """§8-6b の P_new。`p_market` は選択集合の中で和 1 (build_choice_set の implied)。
 
-    2026-10-06 時点で本番の呼び出し元は無い (C′ から配線する。C′ の凍結の前提条件: 尤度の列と金額の P_new が
-    `market_term` と `p_new` を通ることをテストで強制する、事前登録 §8-6b)。
+    C′ の尤度・検出力・購入の件数の見込みは `predictor/market_clogit.py` からこれと `market_feature` を通す (事前登録 §8-6b)。
     """
     if set(p_market) != set(s):
         raise ValueError(f"P_market と S の馬の集合が違う: {sorted(set(p_market) ^ set(s))}")
-    u = {h: beta_market * market_term(p) + beta_s * s[h] for h, p in p_market.items()}
+    u = {h: beta_market * market_feature(p) + beta_s * s[h] for h, p in p_market.items()}
     m = max(u.values())
     e = {h: math.exp(v - m) for h, v in u.items()}
     total = sum(e.values())
