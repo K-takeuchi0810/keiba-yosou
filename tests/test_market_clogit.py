@@ -197,13 +197,15 @@ def test_ratio_is_taken_against_the_race_normalised_p_new_not_exp_beta_s():
 
 
 def test_diagnostic_sets_separate_market_recalibration_from_s_correction():
-    # 本命 (0.7) と人気薄 3 頭 (0.1)。S は 04 だけ高い
-    rows = [{"race_id": "A", "horse_num": "01", "p_market": 0.7, "S": 0.0}] + \
-           [{"race_id": "A", "horse_num": h, "p_market": 0.1, "S": 0.0} for h in ("02", "03")] + \
-           [{"race_id": "A", "horse_num": "04", "p_market": 0.1, "S": 4.0}]
+    # 本命 (0.7) と人気薄 3 頭 (0.1)。S は 04 が高く 02 が低い
+    rows = [{"race_id": "A", "horse_num": "01", "p_market": 0.7, "S": 0.0},
+            {"race_id": "A", "horse_num": "02", "p_market": 0.1, "S": -4.0},
+            {"race_id": "A", "horse_num": "03", "p_market": 0.1, "S": 0.0},
+            {"race_id": "A", "horse_num": "04", "p_market": 0.1, "S": 4.0}]
     d = mc.diagnostic_sets(rows, beta_market_hat=0.6, beta_s_hat=0.2)
-    # 市場の再校正 (β_m < 1) は人気薄 3 頭を押し上げる / S の補正だけなら 04 だけ
+    # 市場の再校正 (β_m < 1) は人気薄 3 頭を押し上げる / S の補正だけなら 04 だけ / full では S の低い 02 が落ちる
     assert d["n"]["market_recalibration_only"] == 3 and d["n"]["s_correction_only"] == 1
+    assert d["n"]["full"] == 2
     assert d["jaccard"]["market_recalibration_only|s_correction_only"] == pytest.approx(1 / 3)
     assert d["coefficients"]["s_correction_only"] == [1.0, 0.2]
     assert d["coefficients"]["market_recalibration_only"] == [0.6, 0.0]
