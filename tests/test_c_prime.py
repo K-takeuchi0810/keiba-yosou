@@ -127,8 +127,8 @@ def test_window_edges_are_365_days_back_and_the_day_before():
 
 def test_only_the_five_most_recent_runs_count():
     t = 1000
-    hist = _h((t - 70, "1"), (t - 60, "1"), (t - 50, "1"), (t - 40, "3"), (t - 30, "3"), (t - 20, "3"), (t - 10, "2"))
-    # 直近 5 走 = 1, 3, 3, 3, 2 → 最頻値 3
+    hist = _h((t - 70, "1"), (t - 60, "1"), (t - 50, "1"), (t - 40, "3"), (t - 30, "3"), (t - 20, "2"))
+    # 直近 5 走 = 1, 1, 3, 3, 2 → 最頻値 {1, 3} の同数 → 新しい方の 3。6 走を数えると 1 が 3 回で 1 になる
     assert cp.style_of(hist, t) == "3"
 
 
