@@ -223,8 +223,8 @@ def test_prereg_runner_check_pinned_is_fail_closed():
 
 
 def test_prereg_runner_fixed_power_and_verdict():
-    f = pr.fixed_power(0.02, 0.01, 10000, 2500)
-    assert f["se_fixed"] == pytest.approx(0.02) and f["status_before_primary"] == "PRIMARY_DECIDABLE"
+    f = pr.fixed_power(0.02, 0.015, 10000, 2500)                       # 換算 0.03 > 解析 0.02 → 大きい方
+    assert f["se_fixed"] == pytest.approx(0.03) and f["status_before_primary"] == "PRIMARY_DECIDABLE"
     g = pr.fixed_power(0.04, None, 10000, 2500)
     assert g["inconclusive_by_power"] and g["status_before_primary"] == "PRIMARY_INCONCLUSIVE"
     assert pr.verdict({"valid": True, "lo": 0.0}, {"inconclusive_by_power": False}) == ("PRIMARY_FAIL", "ci_lower_not_above_zero")
