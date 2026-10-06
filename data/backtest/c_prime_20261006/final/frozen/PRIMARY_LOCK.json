@@ -1,0 +1,30 @@
+{
+ "run_index": 1,
+ "armed_at": "2026-10-06T12:27:38+09:00",
+ "argv": [
+  "c_prime_run",
+  "arm",
+  "--db",
+  "C:/Users/kizun/dev/keiba-yosou/data/keiba.db",
+  "--frozen",
+  "data/backtest/c_prime_20261006/final/frozen",
+  "--power",
+  "data/backtest/c_prime_20261006/final/power/power.json"
+ ],
+ "rerun_reason": null,
+ "frozen_sha256": "ee540d6bd427567f6377d2a312528b03af22f33d903d8739f3a5db42a450fdcf",
+ "power_sha256": "6e201e73201a19a4bd3f2e7fa135866ac2fcd3b9fceead6987698f771616e267",
+ "git_sha": "69c9fe64e9b1d4f8fc7104cfee7ef4f0ff5e723a",
+ "pinned_blob_sha1": {
+  "scripts/c_prime.py": "55c2a84df09f76681eeedead6353243a55cf1f3e",
+  "scripts/c_prime_run.py": "b5f06e54dd4a6d20781b658402ad7ae435d37dae",
+  "predictor/market_clogit.py": "4f64cae668e20e7c16e525d5bd40dc855603877a",
+  "predictor/race_market.py": "3d0f6bc95401fcc808999139f0ff4dc0df85de0e",
+  "predictor/eval_stats.py": "9c4f9c3a7d4936800721377f53897393b28ac625",
+  "scripts/group_a_stats.py": "1c1ded61f7b8248872a45699f41f8b5d2bfb1909",
+  "config.py": "b2e03fdae68360aa0b99402bb942da25e56b8d60",
+  "db.py": "c89fae5180200254b5d37275d6dc3f4d1d13ca6a",
+  "docs/PHASE05_5_PREREG.md": "5dcaf6be443a890b0e986adfa0266542d0792e84"
+ },
+ "history": []
+}
