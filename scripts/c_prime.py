@@ -387,8 +387,9 @@ def within_race_corr(rows: list[dict], a: str, b: str) -> float:
 
 # ---------------------------------------------------------------------------------------------------- 来歴
 
-DEPENDENCIES = ("scripts/c_prime.py", "scripts/c_prime_explore.py", "predictor/market_clogit.py", "predictor/race_market.py",
-                "predictor/eval_stats.py", "config.py", "db.py", "docs/PHASE05_5_PREREG.md", "docs/PHASE05_5_EXPLORATION.md")
+DEPENDENCIES = ("scripts/c_prime.py", "scripts/c_prime_explore.py", "scripts/c_prime_run.py", "predictor/market_clogit.py",
+                "predictor/race_market.py", "predictor/eval_stats.py", "scripts/group_a_stats.py", "config.py", "db.py",
+                "docs/PHASE05_5_PREREG.md", "docs/PHASE05_5_EXPLORATION.md")
 
 
 def blob_sha(path: Path) -> str:

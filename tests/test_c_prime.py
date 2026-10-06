@@ -351,5 +351,7 @@ def test_blob_sha_matches_git_and_ignores_crlf(tmp_path):
 def test_c_prime_code_does_not_use_group_a_market_functions_or_raw_logs(path):
     """§8-6b の runner の前提条件: Group A (logit の仕様) の市場の関数を使わず、市場の列に log を直接書かない。"""
     src = (ROOT / path).read_text(encoding="utf-8")
-    for bad in ("group_a", "logit_p_market", "add_market_logit", "math.log(", "np.log(", "estimate_leg_code"):
+    # 汎用の推定 (scripts/group_a_stats.py、市場の変換を持たない) は依存として許す。Group A の市場・特徴のコードは使わない
+    for bad in ("group_a_power", "scripts/group_a.py", "from scripts import group_a\n", "import group_a\n", "logit_p_market",
+                "add_market_logit", "math.log(", "np.log(", "estimate_leg_code"):
         assert bad not in src, bad
