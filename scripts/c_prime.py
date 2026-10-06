@@ -30,6 +30,7 @@ from config import guard_analysis_window
 from predictor import market_clogit as mc
 from predictor import race_market as rm
 from predictor.eval_stats import conditional_logit
+from scripts import research_window
 
 ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = ROOT / "data" / "keiba.db"
@@ -106,6 +107,10 @@ def load_races(max_year: int, *, min_year: int = 2021, db_path: Path | str = DB_
         raise CPrimeError(f"探索で {PRIMARY_YEAR} 年以降を読もうとした (max_year={max_year})")
     if allow_primary_year and not primary_purpose:
         raise CPrimeError("主検定の年を読むときは primary_purpose (目的) を書く")
+    # 研究の窓の関所 (docs/LOCKBOX_GOVERNANCE.md、2026-10-06 追加): 2025 は reproduce_consumed、2026 以降 (RESERVED / fresh) は止まる
+    research_window.check_years(min_year, max_year, context="c_prime.load_races",
+                                purpose="reproduce_consumed" if allow_primary_year else "development",
+                                reproduces=primary_purpose)
     from_date, to_date, _sealed = guard_analysis_window(f"{min_year}0101", f"{max_year}1231", context="c_prime.load_races")
     if primary_year_history_only:
         result_cols = (f"CASE WHEN CAST(h.race_year AS INTEGER) >= {PRIMARY_YEAR} THEN NULL ELSE h.confirmed_order END, "

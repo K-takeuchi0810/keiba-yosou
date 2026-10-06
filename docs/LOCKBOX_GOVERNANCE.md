@@ -14,10 +14,10 @@
 ## 2. 開始日
 
 - **FRESH_FROM = この文書をコミットした日の翌日以降で、最初の JRA の開催日** (中央 10 場、`races` に平地・障害を問わずレースがある日)。
-  2026-10-06 時点の見込みは 2026-10-10 (出馬表の取り込みは木曜。取り込まれた後、この規則で機械的に確定して下の 7 の記録に書く。
-  開催の中止・順延があっても規則は変えない: 実際に最初にレースが行われた日)
+  2026-10-06 時点の見込みは 2026-10-10 (出馬表の取り込みは木曜。取り込まれた後、この規則で機械的に確定して下の 10 の記録に書く。
+  開催の中止・順延があっても規則は変えず、最初に確定した対象開催日を境界として保つ)
 - 2026-09-14 〜 FRESH_FROM の前日 (以下「間の期間」) は、**新しい窓には入れない**。ただし研究の目的で結果を見ることもしない
-  (従来の `CONFIRM_FROM = 20260914` の「未消費」の扱いを保つ)。扱いは外部の指示者に照会中 (7)
+  (従来の `CONFIRM_FROM = 20260914` の「未消費」の扱いを保つ)。→ 永久に `RESERVED_UNTOUCHED` (9)
 - 窓の終わり (`SEALED_UNTIL` 相当) は **固定の日付にしない**。開封の条件は時間ではなく情報量 (4)
 
 ## 3. 窓の性質
@@ -59,17 +59,55 @@
 A″ について: 消費済みの 2025 での診断は **急いで実行しない** (候補を選ばない制約を付けても、結果を知ることが次の仕様に影響しうる)。
 まず 2022-2024 だけで完成させ、検出力と件数の見込みまで評価する。
 
-## 7. 未決と記録
+## 7. コードでの強制 (2026-10-06 追補、外部の指示者の決定)
 
-- **コードでの強制は未実施**。`config.SEALED_FROM` を入れると、既存の関所 (`config.guard_analysis_window`、`scripts.backtest.list_races`) が
-  本番と ai-builder に効く。調査 (2026-10-06、`ai-builder/builder/matrix_daily.py:74` / `:565` を自分で確認) によると次のとおり:
-  - ai-builder の日次の行列は `list_races(conn, date, date, …)` を `live` なしで呼ぶ。封印日以降のレースは空になる (開催日の運用が止まる)
-  - weekly_monitor の pytest は封印が未設定であることを確かめる 3 本が落ちる
+- **既存の本番の封印 (`config.SEALED_FROM`) は使わない (None のまま)**。入れると既存の関所 (`config.guard_analysis_window`、
+  `scripts.backtest.list_races`) が本番と ai-builder に効くため (調査 2026-10-06、`ai-builder/builder/matrix_daily.py:74` / `:565` は自分で確認):
+  - ai-builder の日次の行列は `list_races(conn, date, date, …)` を `live` なしで呼ぶ。封印日以降のレースが空になり、開催日の運用が止まる
+  - weekly_monitor の pytest で、封印が未設定であることを確かめる 3 本が落ちる
   - monitor の Brier の窓が封印の前日で止まる
   - GUI の的中表示が空になる
 
-  これらはユーザーの承認と ai-builder の追従が要るので、強制の方式 (既存の `SEALED_FROM` を入れる / 研究の経路だけに効く別の関所を作る) を
-  決めるまで、上の規則は **運用の規則** として守る。研究のコードは 2022-2024 しか読まない (Group A 系の読み込みは 2025 以上を拒否する) ので、
-  A″ の開発は窓に触れない
-- FRESH_FROM の確定値: (出馬表の取り込みの後に追記する)
-- 間の期間 (2026-09-14 〜 FRESH_FROM の前日) の扱い: (外部の指示者の回答の後に追記する)
+  今回の窓の目的は次の世代の候補の確証の証拠を守ることで、本番モデルの凍結 (F3 の封印の目的) とは違う
+- **研究の経路だけに効く関所** `scripts/research_window.py` を新設した (`config.RESERVED_FROM` / `config.FRESH_FROM`)。期間は 4 つ:
+  development (〜2024) / consumed (2025〜2026-09-13) / reserved (2026-09-14〜FRESH_FROM の前日) / fresh (FRESH_FROM〜)。
+  読み込みは目的 (purpose) を必ず渡す:
+  - `development`: development だけ
+  - `reproduce_consumed`: development と consumed。過去の成果物の再現用で、何を再現するかを書く。新しい候補の仕様の選択には使わない
+  - `lockbox_count_only`: fresh だけで、結果を読まない。件数の SQL は allow-list で、結果・払戻・オッズの列を含めたら止まる
+  - `primary_after_unlock`: 開封の手順が無いので今は常に止まる。最初の候補の事前登録と一緒に実装する
+
+  reserved はどの目的でも止まる。FRESH_FROM が未確定の間は 2026-09-14 以降をすべて reserved として扱う (fail-closed)。
+  `scripts.group_a.load_races` / `scripts.c_prime.load_races` は関所を通る (2025 は `reproduce_consumed`、2026 以降は止まる)
+- **関所の範囲外 (運用の規則で守る)**:
+  - 旧来の研究スクリプト (0.5-3 / 0.5-4 系の `market_offset_eval` 等、`list_races` で日付の窓を読むもの) は窓の期間で実行しない
+  - 凍結済みの runner (`group_a_power` / `c_prime_run` / `group_d_run`) の `load_target_fields` は 2025 の定数でしか呼ばれない
+  - 次の候補の runner は、作るときに必ず関所を通す
+- **開封の後に履歴をどう読むかは未決**: fresh の対象レースの特徴 (365 日の過去走) には reserved・consumed の日の走が入る。
+  「対象としては読まず、対象日より前の履歴としてだけ読む」をどこまで許すかは、`primary_after_unlock` の実装と一緒に、最初の候補の事前登録で決める
+
+## 8. 本番の監視と研究の証拠の境界 (2026-10-06 追補、外部の指示者の決定)
+
+> Production monitoring of the already-deployed model does not constitute opening of the research lockbox, provided sealed-window outcomes
+> are not joined to candidate features/scores or used to modify candidate specifications.
+
+- 許すこと (本番モデルの運用の監視): 稼働の確認、既存の本番の KPI (Brier 等)、的中の表示、障害の検知
+- 研究の側で fresh の期間について禁じること:
+  - 候補の S と勝敗を結合する
+  - 候補の特徴ごとの成績、部分集団ごとの勝率・回収率、馬ごとの結果の分析
+  - 「最近こういう馬が勝っている」を根拠に仕様を変える
+  - 本番の監視の数字を候補の設計の根拠として引用する
+- つまり production observation ≠ research evidence
+
+## 9. 間の期間 (2026-09-14 〜 FRESH_FROM の前日) = `RESERVED_UNTOUCHED` (2026-10-06 追補、外部の指示者の決定)
+
+- 新しい窓には **含めない** (永久)。A″ の学習・探索・検出力・主検定・金額の試験のどれにも使わず、新しい確証の証拠とも呼ばず、
+  研究の目的で結果を開かない。「この 3 週を足せば件数が足りる」という使い方もしない
+- 理由: 窓の規則は 2026-10-06 に初めて固定された。9-14 に遡って窓に入れると、見ていなくても「窓の境界を後から選べる」余地が残る。
+  データを捨てるのではなく、設計の変更の前後を隔てる緩衝
+- 従来の `CONFIRM_FROM = 20260914` (F3 の確認窓) の定義は残すが、研究の経路では reserved として扱う
+
+## 10. 記録
+
+- FRESH_FROM の確定値: (出馬表の取り込みの後、規則・出典・判定の手順と一緒に同じコミットで追記する。中止・順延があっても、最初に確定した
+  対象開催日を境界として保つ)

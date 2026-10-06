@@ -30,6 +30,7 @@ import numpy as np
 
 from config import guard_analysis_window
 from db import REFUNDED_ABNORMAL_CODES
+from scripts import research_window
 
 ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = ROOT / "data" / "keiba.db"
@@ -156,6 +157,10 @@ def load_races(max_year: int, *, min_year: int = 2021, db_path: Path | str = DB_
         raise GroupAError(f"探索で 2025 年以降を読もうとした (max_year={max_year})。主検定の年は探索で読まない")
     if allow_primary_year and not primary_purpose:
         raise GroupAError("主検定の年を読むときは primary_purpose (目的) を書く")
+    # 研究の窓の関所 (docs/LOCKBOX_GOVERNANCE.md、2026-10-06 追加): 2025 は reproduce_consumed、2026 以降 (RESERVED / fresh) は止まる
+    window = research_window.check_years(min_year, max_year, context="group_a.load_races",
+                                         purpose="reproduce_consumed" if allow_primary_year else "development",
+                                         reproduces=primary_purpose)
     from_date, to_date, _sealed = guard_analysis_window(f"{min_year}0101", f"{max_year}1231",
                                                         context="group_a.load_races")
     classes = class_table if class_table is not None else load_class_table()
@@ -200,6 +205,7 @@ def load_races(max_year: int, *, min_year: int = 2021, db_path: Path | str = DB_
         stats["rows"] += 1
     stats["races"] = len(races)
     stats["guard_from"], stats["guard_to"] = from_date, to_date
+    stats["research_window_purpose"] = window["purpose"]
     if allow_primary_year:
         stats["primary_year_purpose"] = primary_purpose
     return races, stats

@@ -178,6 +178,18 @@ CONSUMED_WINDOWS: list[dict[str, str]] = [
 # 上の台帳で消費済みの日より **後** でなければならない。
 CONFIRM_FROM: str = "20260914"
 
+# **次の世代の研究の新しい窓** (docs/LOCKBOX_GOVERNANCE.md、外部の指示者の決定 2026-10-06)。
+# 本番の封印 (下の SEALED_FROM) とは別物で、研究の経路 (`scripts/research_window.py` を通る読み込み) だけに効く。
+# 本番の予想・monitor・GUI・ai-builder には効かない (SEALED_FROM は None のまま)。
+# - RESERVED_FROM 〜 FRESH_FROM の前日: RESERVED_UNTOUCHED。学習・探索・検出力・主検定・金額のどれにも使わない (永久)
+# - FRESH_FROM 以降: 新しい窓。蓄積の間は結果を読まない件数だけ
+# FRESH_FROM は規則 (FRESH_GOVERNANCE_COMMIT のコミット日の翌日以降で最初の JRA 開催日) で機械的に確定してから入れる。
+# 確定するまでは RESERVED_FROM 以降をすべて読めない (fail-closed)。
+RESERVED_FROM: str = "20260914"
+FRESH_FROM: str | None = None
+FRESH_FROM_NOT_BEFORE: str = "20261007"
+FRESH_GOVERNANCE_COMMIT: str = "7e8d7a7"
+
 
 def consumed_until() -> str:
     """台帳上、結果を見てしまった最後の日。"""
