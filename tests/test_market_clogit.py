@@ -253,6 +253,10 @@ def test_a_non_converged_fit_stops_instead_of_returning_nan(monkeypatch):
     monkeypatch.setattr(mc, "conditional_logit", lambda rows, cols, with_status=False: ([math.nan, math.nan], False))
     with pytest.raises(mc.MarketClogitError, match="収束しなかった"):
         mc.fit_clogit(_races(n_races=5, seed=3))
+    # 係数が有限でも、収束しなかった当てはめは止める (有限の値の検査だけに頼らない)
+    monkeypatch.setattr(mc, "conditional_logit", lambda rows, cols, with_status=False: ([1.0, 0.1], False))
+    with pytest.raises(mc.MarketClogitError, match="条件付きロジットが収束しなかった"):
+        mc.fit_clogit(_races(n_races=5, seed=3))
 
 
 def test_converged_flag_comes_from_the_fit(monkeypatch):
