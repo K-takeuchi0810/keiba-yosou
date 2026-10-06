@@ -148,6 +148,11 @@ def test_power_reads_no_outcome_and_gives_the_required_races():
     s1 = pw["sigma_per_race"]
     assert pw["n_primary_required"] == math.ceil((3.4174 * s1 / (math.log(1.25) / 2)) ** 2)
     assert pw["fisher"]["se"] == pytest.approx(s1 / math.sqrt(pw["n_races"]))
+    big = a2.outcome_blind_power(out, math.log(1.25) / 2, 3.4174, se_train_boot=1.0, n_train_races=pw["n_races"] * 4)
+    assert big["se_train_scaled"] == pytest.approx(2.0) and big["se_fixed"] == pytest.approx(2.0)       # 大きい方を採る
+    assert big["sigma_per_race"] == pytest.approx(2.0 * math.sqrt(pw["n_races"]))
+    small = a2.outcome_blind_power(out, math.log(1.25) / 2, 3.4174, se_train_boot=1e-6, n_train_races=pw["n_races"])
+    assert small["se_fixed"] == pw["fisher"]["se"] and small["n_primary_required"] == pw["n_primary_required"]
     flipped = [dict(r, won=1 - r["won"]) for r in out]                 # 勝ち負けを入れ替えても同じ (結果を読まない)
     assert a2.outcome_blind_power(flipped, math.log(1.25) / 2, 3.4174) == pw
 
@@ -185,5 +190,26 @@ def test_sign_stability_gate(betas, pooled):
 
 def test_money_state_does_not_reject_and_marks_no_buys():
     assert ex.money_state(0, 3000)["state"] == "MONEY_UNTESTABLE_NO_EXPECTED_BUYS"
-    assert ex.money_state(300, 3400) == {"state": "MONEY_MATURABLE", "races_for_1500": 17000.0}
+    assert ex.money_state(300, 3400) == {"state": "MONEY_MATURABLE", "min_buys": 1500, "races_for_min_buys": 17000.0}
     assert ex.money_state(299, 3400)["state"] == "MONEY_UNTESTABLE_WITHIN_5Y"
+
+
+def test_verdict_reads_the_recorded_results_and_carries_the_inputs(tmp_path):
+    import json
+    def put(mode, obj):
+        (tmp_path / mode).mkdir()
+        (tmp_path / mode / f"{mode}_result.json").write_text(json.dumps({**obj, "provenance": {"git_sha": "x", "git_dirty": False}}),
+                                                              encoding="utf-8")
+    put("e0", {"structural": {"within_race_r2_S_on_finish_only": {"r2": 0.2}}})
+    put("e1", {"directions": [{"beta_S": 0.03, "z_S": 1.3}, {"beta_S": -0.02, "z_S": -0.8}]})
+    put("e2", {"directions": [{"beta_S": -0.005, "z_S": -0.2}]})
+    put("gate", {"pooled_in_sample": {"beta_S": 0.026}, "within_var_gate_value": 0.52, "n_calendar_required": 2180,
+                 "purchase_projection": {"state": "MONEY_UNTESTABLE_WITHIN_5Y"}})
+    v = ex.verdict_from_results(tmp_path)
+    assert v["verdict"] == {"passed": False, "reasons": ["SIGN_INSTABILITY_REJECT"]}
+    assert v["inputs"]["e_betas"] == [(0.03, 1.3), (-0.02, -0.8), (-0.005, -0.2)] and v["inputs"]["n_calendar"] == 2180
+    assert set(v["sources"]) == {"e0", "e1", "e2", "gate"} and all(len(x["sha256"]) == 64 for x in v["sources"].values())
+    (tmp_path / "gate" / "gate_result.json").write_text(json.dumps({"provenance": {}}), encoding="utf-8")
+    with pytest.raises(KeyError):                                                   # 欠けた入力は止まる
+        ex.verdict_from_results(tmp_path)
+

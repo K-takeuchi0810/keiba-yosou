@@ -164,9 +164,18 @@ def rows_without_outcome(rows: list[dict]) -> list[dict]:
     return [{k: v for k, v in r.items() if k != "won"} for r in rows]
 
 
-def outcome_blind_power(rows: list[dict], beta_target: float, critical: float) -> dict:
-    """結果を読まない Fisher の SE (β_market = 1・β_S = 0) と、1 レースあたりの σ₁、MDE ≤ β_target に要るレース数。"""
+def outcome_blind_power(rows: list[dict], beta_target: float, critical: float, se_train_boot: float | None = None,
+                        n_train_races: int | None = None) -> dict:
+    """MDE <= beta_target に要るレース数 (規則 §4、§8-7b と同じ規則の単一の出典)。
+
+    SE は、結果を読まない Fisher の SE (β_market = 1・β_S = 0) と、学習期のブートストラップの SE を √(N_学習 / N) で換算した値の大きい方。
+    σ₁ = その SE × √N (1 レースあたり)、N_primary_required = ceil((critical × σ₁ / β_target)²)。
+    """
     fisher = mc.fisher_se_at_null(rows_without_outcome(rows), s_col="S")
-    sigma1 = fisher["se"] * math.sqrt(fisher["n_races"])
-    return {"fisher": fisher, "sigma_per_race": sigma1, "n_races": fisher["n_races"],
+    n = fisher["n_races"]
+    se_scaled = se_train_boot * math.sqrt(n_train_races / n) if se_train_boot is not None else None
+    se_fixed = max(fisher["se"], se_scaled) if se_scaled is not None else fisher["se"]
+    sigma1 = se_fixed * math.sqrt(n)
+    return {"fisher": fisher, "se_train_boot": se_train_boot, "n_train_races": n_train_races, "se_train_scaled": se_scaled,
+            "se_fixed": se_fixed, "sigma_per_race": sigma1, "n_races": n,
             "n_primary_required": math.ceil((critical * sigma1 / beta_target) ** 2)}
