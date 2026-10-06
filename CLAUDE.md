@@ -121,6 +121,7 @@ PRODUCTION 2026 hold-out で **45% に大暴落** (収支 -6,310 円)。
 
 ## 関連スキル
 
+- `.claude/skills/obsidian-vault/` ← **過去の知見 (研究の結論・撤回・データの罠・手法) はまずここ**。保管庫 `Documents/Obsidian Vault/競馬/` の要点だけを `vault_lookup.py <語>` で引き、docs/ の大きな文書は出典の確認にだけ使う。結論・撤回・罠が出たら作業の最後に書き戻す
 - `.claude/skills/project-state/` ← **新セッション開始時に最初に読む** (現状サマリ + 次の優先課題)
 - `.claude/skills/expert-review/` ← **改修の最後に必ず通す**
 - `.claude/skills/python-embedded-js/` ← GUI HTML/JS 編集時
