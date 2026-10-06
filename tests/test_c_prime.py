@@ -366,3 +366,14 @@ def test_singular_information_in_clogit_is_a_c_prime_error(monkeypatch):
     monkeypatch.setattr(cp.np.linalg, "inv", singular)
     with pytest.raises(cp.CPrimeError, match="特異"):
         cp.clogit_with_se(rows, ["style_x_pace_fit"])
+
+
+def test_history_only_load_nulls_primary_year_results_in_sql(tmp_path):
+    races = [{"ymd": "20241201", "runs": [("01", "A", "0", 1, 2.0, "1"), ("02", "B", "0", 2, 3.0, "3")]},
+             {"ymd": "20250105", "runs": [("01", "A", "0", 1, 2.0, "2"), ("02", "B", "0", 2, 3.0, "4")]}]
+    db = _make_db(tmp_path / "h.db", races)
+    loaded, _ = cp.load_races(2025, db_path=db, allow_primary_year=True, primary_purpose="test", primary_year_history_only=True)
+    r25 = [x for r in loaded.values() if r.ymd.startswith("2025") for x in r.runs]
+    r24 = [x for r in loaded.values() if r.ymd.startswith("2024") for x in r.runs]
+    assert [(x.finish, x.win_odds, x.leg) for x in r25] == [(0, 0.0, "2"), (0, 0.0, "4")]
+    assert [(x.finish, x.win_odds) for x in r24] == [(1, 2.0), (2, 3.0)]
