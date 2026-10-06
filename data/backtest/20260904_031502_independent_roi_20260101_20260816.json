@@ -1,0 +1,24 @@
+{
+ "meta": {
+  "db_path": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\keiba.db",
+  "git_sha": "5e57ca0e3f2c521600b04044e18a1f9febfc662f"
+ },
+ "from_date": "20260101",
+ "to_date": "20260816",
+ "require_market": false,
+ "races_scanned": 2226,
+ "bets": 2226,
+ "hits": 513,
+ "hit_rate": 0.2305,
+ "stake": 222600,
+ "payout": 157340,
+ "return_rate": 0.7068,
+ "balance": -65260,
+ "skipped": {
+  "no_market": 0,
+  "no_horses": 0,
+  "missing_payout": 0
+ },
+ "per_race_count": 2226,
+ "elapsed_sec": 6969.6
+}

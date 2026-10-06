@@ -1,0 +1,31 @@
+{
+ "meta": {
+  "db_path": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\keiba.db",
+  "git_sha": "9d46cb279f3cc11bd061d97988153ddb3fe02cc7"
+ },
+ "from_date": "20260817",
+ "to_date": "20260913",
+ "sealed": {
+  "sealed_from": "20261001",
+  "sealed_active": true,
+  "requested_to": "20260913",
+  "clamped": false,
+  "allow_sealed": false
+ },
+ "require_market": true,
+ "races_scanned": 264,
+ "bets": 264,
+ "hits": 60,
+ "hit_rate": 0.2273,
+ "stake": 26400,
+ "payout": 17490,
+ "return_rate": 0.6625,
+ "balance": -8910,
+ "skipped": {
+  "no_market": 0,
+  "no_horses": 0,
+  "missing_payout": 0
+ },
+ "per_race_count": 264,
+ "elapsed_sec": 845.0
+}
