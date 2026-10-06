@@ -1,0 +1,347 @@
+{
+ "mode": "e1",
+ "load_stats": {
+  "rows": 184146,
+  "skip_obstacle_rows": 5748,
+  "races": 13316,
+  "guard_from": "20210101",
+  "guard_to": "20241231",
+  "research_window_purpose": "development"
+ },
+ "directions": [
+  {
+   "fit_years": [
+    2022
+   ],
+   "eval_years": [
+    2023
+   ],
+   "years": {
+    "2022": {
+     "n_rows": 45599,
+     "n_races": 3327,
+     "counts": {
+      "target_races_seen": 3331,
+      "observed_rows": 40494,
+      "target_races_used": 3327,
+      "missing_rows": 5105,
+      "refunded_runners_excluded": 161,
+      "drop_dead_heat_or_no_winner": 4
+     },
+     "exclusions": [],
+     "component_observed_rate": {
+      "perf_rating_last": 0.8880457904778614,
+      "perf_rating_best3_365": 0.8880457904778614,
+      "perf_rating_trend_365": 0.6716813965218535,
+      "perf_rating_rank_in_race": 0.8880457904778614
+     },
+     "last_finish_observed_rate": 0.8900633785828637
+    },
+    "2023": {
+     "n_rows": 45998,
+     "n_races": 3326,
+     "counts": {
+      "target_races_seen": 3329,
+      "observed_rows": 40294,
+      "target_races_used": 3326,
+      "missing_rows": 5704,
+      "refunded_runners_excluded": 172,
+      "drop_dead_heat_or_no_winner": 3
+     },
+     "exclusions": [],
+     "component_observed_rate": {
+      "perf_rating_last": 0.8759946084612374,
+      "perf_rating_best3_365": 0.8759946084612374,
+      "perf_rating_trend_365": 0.652745771555285,
+      "perf_rating_rank_in_race": 0.8759946084612374
+     },
+     "last_finish_observed_rate": 0.8891256141571373
+    }
+   },
+   "rating_stats": {
+    "unrated_runs": 19760,
+    "rated_runs": 163707
+   },
+   "composite": {
+    "years": [
+     2022
+    ],
+    "component_sd": {
+     "perf_rating_last": {
+      "sd": 0.6711733465585751,
+      "n_races": 3026,
+      "n_races_zero_variance": 0
+     },
+     "perf_rating_best3_365": {
+      "sd": 0.5554994426574058,
+      "n_races": 3026,
+      "n_races_zero_variance": 0
+     },
+     "perf_rating_trend_365": {
+      "sd": 0.7214188752731215,
+      "n_races": 2961,
+      "n_races_zero_variance": 66
+     },
+     "perf_rating_rank_in_race": {
+      "sd": 0.28769418810729697,
+      "n_races": 3026,
+      "n_races_zero_variance": 0
+     }
+    },
+    "fit": {
+     "cols": [
+      "market_feature",
+      "perf_rating_last_wstd",
+      "perf_rating_best3_365_wstd",
+      "perf_rating_trend_365_wstd",
+      "perf_rating_rank_in_race_wstd"
+     ],
+     "beta": [
+      1.0574460001410784,
+      -0.015191529208236423,
+      -0.03159927282336852,
+      -0.039285148330075355,
+      0.04959086491802935
+     ],
+     "se": [
+      0.0219641531866145,
+      0.03561126798386994,
+      0.059686322561715424,
+      0.03145254257227537,
+      0.04485208281457056
+     ],
+     "z": [
+      48.144173424610436,
+      -0.4265933247621904,
+      -0.5294223444692039,
+      -1.2490293349035708,
+      1.1056535573398023
+     ]
+    },
+    "raw_coefficients": {
+     "perf_rating_last": -0.015191529208236423,
+     "perf_rating_best3_365": -0.03159927282336852,
+     "perf_rating_trend_365": -0.039285148330075355,
+     "perf_rating_rank_in_race": 0.04959086491802935
+    },
+    "weights": {
+     "perf_rating_last": 0.0,
+     "perf_rating_best3_365": 0.0,
+     "perf_rating_trend_365": 0.0,
+     "perf_rating_rank_in_race": 0.04959086491802935
+    },
+    "zeroed": [
+     "perf_rating_last",
+     "perf_rating_best3_365",
+     "perf_rating_trend_365"
+    ],
+    "s_sd": {
+     "sd": 0.04666183679262631,
+     "n_races": 3327,
+     "n_races_zero_variance": 301
+    },
+    "n_races": 3327,
+    "n_rows": 45599
+   },
+   "beta_market": 1.0164286880955693,
+   "beta_S": 0.028939935504666857,
+   "se_S": 0.021585356329187132,
+   "z_S": 1.3407207675110306,
+   "S_variance_decomposition_eval": {
+    "total_var": 1.2555145008770074,
+    "between_var": 0.2653473075196246,
+    "within_var": 0.9901671933573737,
+    "within_share": 0.7886545258264441,
+    "market_weighted_within_var_per_race": 0.7429878315929788,
+    "within_race_market_weighted_corr_with_market": 0.3459109851555982
+   }
+  },
+  {
+   "fit_years": [
+    2023
+   ],
+   "eval_years": [
+    2022
+   ],
+   "years": {
+    "2023": {
+     "n_rows": 45998,
+     "n_races": 3326,
+     "counts": {
+      "target_races_seen": 3329,
+      "observed_rows": 40850,
+      "target_races_used": 3326,
+      "missing_rows": 5148,
+      "refunded_runners_excluded": 172,
+      "drop_dead_heat_or_no_winner": 3
+     },
+     "exclusions": [],
+     "component_observed_rate": {
+      "perf_rating_last": 0.888082090525675,
+      "perf_rating_best3_365": 0.888082090525675,
+      "perf_rating_trend_365": 0.6696595504152354,
+      "perf_rating_rank_in_race": 0.888082090525675
+     },
+     "last_finish_observed_rate": 0.8891256141571373
+    },
+    "2022": {
+     "n_rows": 45599,
+     "n_races": 3327,
+     "counts": {
+      "target_races_seen": 3331,
+      "observed_rows": 40560,
+      "target_races_used": 3327,
+      "missing_rows": 5039,
+      "refunded_runners_excluded": 161,
+      "drop_dead_heat_or_no_winner": 4
+     },
+     "exclusions": [],
+     "component_observed_rate": {
+      "perf_rating_last": 0.8894931906401456,
+      "perf_rating_best3_365": 0.8894931906401456,
+      "perf_rating_trend_365": 0.6759139454812606,
+      "perf_rating_rank_in_race": 0.8894931906401456
+     },
+     "last_finish_observed_rate": 0.8900633785828637
+    }
+   },
+   "rating_stats": {
+    "unrated_runs": 5028,
+    "rated_runs": 178439
+   },
+   "composite": {
+    "years": [
+     2023
+    ],
+    "component_sd": {
+     "perf_rating_last": {
+      "sd": 0.6788833722579057,
+      "n_races": 3024,
+      "n_races_zero_variance": 0
+     },
+     "perf_rating_best3_365": {
+      "sd": 0.5599953208644743,
+      "n_races": 3024,
+      "n_races_zero_variance": 0
+     },
+     "perf_rating_trend_365": {
+      "sd": 0.7277446617543141,
+      "n_races": 2953,
+      "n_races_zero_variance": 66
+     },
+     "perf_rating_rank_in_race": {
+      "sd": 0.287727595573653,
+      "n_races": 3024,
+      "n_races_zero_variance": 0
+     }
+    },
+    "fit": {
+     "cols": [
+      "market_feature",
+      "perf_rating_last_wstd",
+      "perf_rating_best3_365_wstd",
+      "perf_rating_trend_365_wstd",
+      "perf_rating_rank_in_race_wstd"
+     ],
+     "beta": [
+      1.0048278037832383,
+      -0.011652410019016715,
+      0.08460670337645837,
+      0.05703110267166859,
+      -0.015556079160396011
+     ],
+     "se": [
+      0.021457663122674945,
+      0.035569315160050866,
+      0.06159077615462374,
+      0.02973529097381496,
+      0.04533787611280904
+     ],
+     "z": [
+      46.82838937486194,
+      -0.3275972552910983,
+      1.3736911378426717,
+      1.91796013436998,
+      -0.343114422071506
+     ]
+    },
+    "raw_coefficients": {
+     "perf_rating_last": -0.011652410019016715,
+     "perf_rating_best3_365": 0.08460670337645837,
+     "perf_rating_trend_365": 0.05703110267166859,
+     "perf_rating_rank_in_race": -0.015556079160396011
+    },
+    "weights": {
+     "perf_rating_last": 0.0,
+     "perf_rating_best3_365": 0.08460670337645837,
+     "perf_rating_trend_365": 0.05703110267166859,
+     "perf_rating_rank_in_race": 0.0
+    },
+    "zeroed": [
+     "perf_rating_last",
+     "perf_rating_rank_in_race"
+    ],
+    "s_sd": {
+     "sd": 0.08772939511119131,
+     "n_races": 3326,
+     "n_races_zero_variance": 302
+    },
+    "n_races": 3326,
+    "n_rows": 45998
+   },
+   "beta_market": 1.0622337395851305,
+   "beta_S": -0.021534482063645784,
+   "se_S": 0.025471317525887188,
+   "z_S": -0.8454404465634613,
+   "S_variance_decomposition_eval": {
+    "total_var": 2.969969846307564,
+    "between_var": 1.9623595410605552,
+    "within_var": 1.007610305247006,
+    "within_share": 0.33926617352688804,
+    "market_weighted_within_var_per_race": 0.5799769578431884,
+    "within_race_market_weighted_corr_with_market": 0.43337330023518444
+   }
+  }
+ ],
+ "provenance": {
+  "git_sha": "d629eae274d1a6459a1aad27d980a1e9e4f97303",
+  "git_dirty": false,
+  "git_status": [],
+  "own_output": [
+   "data/backtest/group_a2_20261006/e1"
+  ],
+  "files_blob_sha1": {
+   "scripts/group_a2.py": "d112c9f56294d5068e79ea461b903f9342025062",
+   "scripts/group_a2_explore.py": "eb4c6fadf96628217e68b67ff41c6cc873a15f98",
+   "scripts/group_a.py": "f974cf3fbea97aa627a244db3f29d51cf98f6c41",
+   "scripts/c_prime.py": "c23abea033706c4249815eccd2846886df0ffdff",
+   "scripts/research_window.py": "b5193582378b9f018b07cbc7129842283487c031",
+   "scripts/prereg_runner.py": "4a619a9ee2abd1190033959388ba52608b4f2e8c",
+   "scripts/group_a_stats.py": "1c1ded61f7b8248872a45699f41f8b5d2bfb1909",
+   "predictor/market_clogit.py": "4f64cae668e20e7c16e525d5bd40dc855603877a",
+   "predictor/race_market.py": "3d0f6bc95401fcc808999139f0ff4dc0df85de0e",
+   "predictor/eval_stats.py": "9c4f9c3a7d4936800721377f53897393b28ac625",
+   "config.py": "6c5903e54e3a1ab7daecd78a14c105c150c1bc38",
+   "db.py": "c89fae5180200254b5d37275d6dc3f4d1d13ca6a",
+   "docs/A_DOUBLE_PRIME_PREREG.md": "a014edc11995ef29edafcd00ccb7080d0b9fe67c",
+   "docs/A_DOUBLE_PRIME_EXPLORATION.md": "04826568a11e6abe3d67a39368518e1147cc7718",
+   "data/backtest/group_a_class_20261005/class_table.csv": "b2122077eb26417860f76dea6100f52c36403ea4"
+  },
+  "python": "3.14.5",
+  "numpy": "2.4.4",
+  "argv": [
+   "C:\\Users\\kizun\\dev\\keiba-yosou\\.claude\\worktrees\\a2\\scripts\\group_a2_explore.py",
+   "--mode",
+   "e1",
+   "--out-dir",
+   "data/backtest/group_a2_20261006/e1",
+   "--db",
+   "C:/Users/kizun/dev/keiba-yosou/data/keiba.db"
+  ],
+  "db": {
+   "path": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\keiba.db",
+   "bytes": 20203466752,
+   "mtime": "2026-10-06T08:00:04"
+  }
+ }
+}
