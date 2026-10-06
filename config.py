@@ -168,6 +168,10 @@ CONSUMED_WINDOWS: list[dict[str, str]] = [
      "note": "validation (2025) の再利用: Group A の主検定を 1 回 (2026-10-06、data/backtest/group_a_20261005/final/primary)。"
              "判定の区分は主検定の前に検出力で PRIMARY_INCONCLUSIVE に確定済み。2025 は 0.5-4A / 4B の早期停止・選択にも"
              "使った年なので、新しい OOS の証拠とは呼ばない"},
+    {"from": "20250101", "to": "20251231", "by": "phase05_5 group_c_prime primary run_index 1",
+     "note": "reused consumed validation window (2 回目、Group A に続く): Group C′ の主検定を 1 回 (2026-10-06、"
+             "data/backtest/c_prime_20261006/final/primary)。検出力で PRIMARY_DECIDABLE (MDE 0.066) を確定した後に実行し "
+             "PRIMARY_FAIL。2 回目だから独立の新しい証拠が増えたとは解釈しない"},
 ]
 
 # 候補の事前登録後に「1 度だけ」使う確認窓の開始日。
