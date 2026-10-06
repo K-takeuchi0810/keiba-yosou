@@ -1,0 +1,17 @@
+{
+ "run_index": 1,
+ "started_at": "2026-10-06T12:28:35+09:00",
+ "out": "data\\backtest\\c_prime_20261006\\final\\primary",
+ "argv": [
+  "c_prime_run",
+  "primary",
+  "--db",
+  "C:/Users/kizun/dev/keiba-yosou/data/keiba.db",
+  "--frozen",
+  "data/backtest/c_prime_20261006/final/frozen",
+  "--power",
+  "data/backtest/c_prime_20261006/final/power/power.json",
+  "--out",
+  "data/backtest/c_prime_20261006/final/primary"
+ ]
+}

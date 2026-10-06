@@ -1,0 +1,128 @@
+{
+ "run_index": 1,
+ "primary_file": "primary_result.json",
+ "S_variance_decomposition": {
+  "total_var": 1.0467689682350771,
+  "between_var": 0.09974022098571972,
+  "within_var": 0.9470287472493545,
+  "within_share": 0.9047161083176848,
+  "market_weighted_within_var_per_race": 0.8271260794080366,
+  "within_race_market_weighted_corr_with_market": -0.18920862062513516
+ },
+ "S_vs_n_runs_365_within_corr": 0.011639174101713516,
+ "beta_S_residualised_on_style_indicator": {
+  "cols": [
+   "market_feature",
+   "S_res"
+  ],
+  "beta": [
+   1.0241042118412416,
+   -0.04408044261053512
+  ],
+  "se": [
+   0.0187888671366945,
+   0.0477210983251118
+  ],
+  "z": [
+   54.505905246473034,
+   -0.9237097249989132
+  ],
+  "note": "pooled の最小二乗で残差化 (2025 の中の in-sample の操作)"
+ },
+ "beta_style_rarity_in_race": {
+  "cols": [
+   "market_feature",
+   "style_rarity_in_race"
+  ],
+  "beta": [
+   1.0235535298202227,
+   0.0001946321182519107
+  ],
+  "se": [
+   0.018836957359870423,
+   0.007442824791113882
+  ],
+  "z": [
+   54.33751907305181,
+   0.026150302299778088
+  ]
+ },
+ "beta_S_with_style_indicator_joint": {
+  "cols": [
+   "market_feature",
+   "style_indicator",
+   "S"
+  ],
+  "beta": [
+   1.0214981430368153,
+   0.03326263553145104,
+   -0.04622094301357783
+  ],
+  "se": [
+   0.01919927828705624,
+   0.05205045833914351,
+   0.0479131631977163
+  ],
+  "z": [
+   53.20502821845592,
+   0.6390459679475394,
+   -0.9646815181632773
+  ]
+ },
+ "beta_S_with_market_square": {
+  "cols": [
+   "market_feature",
+   "market_feature_sq",
+   "S"
+  ],
+  "beta": [
+   0.9295382510028518,
+   -0.018048676202425853,
+   -0.01827660415028702
+  ],
+  "se": [
+   0.07337861783523016,
+   0.014161041659604955,
+   0.019531718398015447
+  ],
+  "z": [
+   12.667699098531763,
+   -1.2745302666477256,
+   -0.9357396916056319
+  ]
+ },
+ "diagnostic_sets_final_market_2025": {
+  "n": {
+   "full": 0,
+   "market_recalibration_only": 0,
+   "s_correction_only": 0,
+   "s_correction_given_unit_market": 0
+  },
+  "jaccard": {
+   "full|market_recalibration_only": null,
+   "full|s_correction_only": null,
+   "full|s_correction_given_unit_market": null,
+   "market_recalibration_only|s_correction_only": null,
+   "market_recalibration_only|s_correction_given_unit_market": null,
+   "s_correction_only|s_correction_given_unit_market": null
+  },
+  "coefficients": {
+   "full": [
+    1.0202698323051267,
+    -0.01831472758126009
+   ],
+   "market_recalibration_only": [
+    1.0202698323051267,
+    0.0
+   ],
+   "s_correction_only": [
+    1.0,
+    -0.01831472758126009
+   ],
+   "s_correction_given_unit_market": [
+    1.0,
+    -0.02215307952110032
+   ]
+  }
+ }
+}

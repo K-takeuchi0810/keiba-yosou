@@ -1,0 +1,154 @@
+{
+ "kind": "c_prime_primary",
+ "run_index": 1,
+ "rerun_reason": null,
+ "started_at": "2026-10-06T12:28:35+09:00",
+ "ended_at": "2026-10-06T12:32:08+09:00",
+ "provenance": {
+  "git_sha": "62e11ec8b6bef17479e83ece6a018992db62201e",
+  "git_dirty": true,
+  "git_status": [
+   "?? data/backtest/c_prime_20261006/final/frozen/PRIMARY_RUN_1_STARTED.json"
+  ],
+  "own_output": "data/backtest/c_prime_20261006/final/primary",
+  "files_blob_sha1": {
+   "scripts/c_prime.py": "55c2a84df09f76681eeedead6353243a55cf1f3e",
+   "scripts/c_prime_explore.py": "1633423054d5053a75060741883012529d722688",
+   "scripts/c_prime_run.py": "b5f06e54dd4a6d20781b658402ad7ae435d37dae",
+   "predictor/market_clogit.py": "4f64cae668e20e7c16e525d5bd40dc855603877a",
+   "predictor/race_market.py": "3d0f6bc95401fcc808999139f0ff4dc0df85de0e",
+   "predictor/eval_stats.py": "9c4f9c3a7d4936800721377f53897393b28ac625",
+   "scripts/group_a_stats.py": "1c1ded61f7b8248872a45699f41f8b5d2bfb1909",
+   "config.py": "b2e03fdae68360aa0b99402bb942da25e56b8d60",
+   "db.py": "c89fae5180200254b5d37275d6dc3f4d1d13ca6a",
+   "docs/PHASE05_5_PREREG.md": "5dcaf6be443a890b0e986adfa0266542d0792e84",
+   "docs/PHASE05_5_EXPLORATION.md": "c0f03d6722889420fcfceaa7ec5a7e0520ceeef9"
+  },
+  "python": "3.14.5",
+  "numpy": "2.4.4",
+  "argv": [
+   "c_prime_run",
+   "primary",
+   "--db",
+   "C:/Users/kizun/dev/keiba-yosou/data/keiba.db",
+   "--frozen",
+   "data/backtest/c_prime_20261006/final/frozen",
+   "--power",
+   "data/backtest/c_prime_20261006/final/power/power.json",
+   "--out",
+   "data/backtest/c_prime_20261006/final/primary"
+  ],
+  "db": {
+   "path": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\keiba.db",
+   "bytes": 20203466752,
+   "mtime": "2026-10-06T08:00:04"
+  }
+ },
+ "pinned": {
+  "git_sha": "62e11ec8b6bef17479e83ece6a018992db62201e",
+  "pinned_blob_sha1": {
+   "scripts/c_prime.py": "55c2a84df09f76681eeedead6353243a55cf1f3e",
+   "scripts/c_prime_run.py": "b5f06e54dd4a6d20781b658402ad7ae435d37dae",
+   "predictor/market_clogit.py": "4f64cae668e20e7c16e525d5bd40dc855603877a",
+   "predictor/race_market.py": "3d0f6bc95401fcc808999139f0ff4dc0df85de0e",
+   "predictor/eval_stats.py": "9c4f9c3a7d4936800721377f53897393b28ac625",
+   "scripts/group_a_stats.py": "1c1ded61f7b8248872a45699f41f8b5d2bfb1909",
+   "config.py": "b2e03fdae68360aa0b99402bb942da25e56b8d60",
+   "db.py": "c89fae5180200254b5d37275d6dc3f4d1d13ca6a",
+   "docs/PHASE05_5_PREREG.md": "5dcaf6be443a890b0e986adfa0266542d0792e84"
+  }
+ },
+ "frozen_sha256": "ee540d6bd427567f6377d2a312528b03af22f33d903d8739f3a5db42a450fdcf",
+ "power_sha256": "6e201e73201a19a4bd3f2e7fa135866ac2fcd3b9fceead6987698f771616e267",
+ "load_stats": {
+  "rows": 230629,
+  "skip_obstacle_rows": 7149,
+  "races": 16651
+ },
+ "choice_set": {
+  "counts": {
+   "target_races_seen": 3335,
+   "style_unknown_rows": 5306,
+   "style_known_rows": 40942,
+   "target_races_used": 3330,
+   "refunded_runners_excluded": 163,
+   "drop_dead_heat_or_no_winner": 5
+  },
+  "n_races": 3330,
+  "n_rows": 46248,
+  "exclusions": [],
+  "known_count": {
+   "n_races": 3330,
+   "n_races_known_zero": 304,
+   "distribution": {
+    "0": 304,
+    "4": 1,
+    "5": 16,
+    "6": 22,
+    "7": 55,
+    "8": 112,
+    "9": 128,
+    "10": 165,
+    "11": 182,
+    "12": 247,
+    "13": 313,
+    "14": 414,
+    "15": 462,
+    "16": 694,
+    "17": 92,
+    "18": 123
+   }
+  },
+  "max_abs_prob_sum_dev": 4.440892098500626e-16
+ },
+ "n_races_power_minus_primary": 5,
+ "beta": {
+  "market": 1.0202698323051267,
+  "S": -0.01831472758126009,
+  "converged": true
+ },
+ "ci_99": {
+  "level": 0.99,
+  "n_boot": 5000,
+  "seed": 20261004,
+  "n_valid": 5000,
+  "n_discarded": 0,
+  "max_discard": 50,
+  "lower_quantile": 0.0050000000000000044,
+  "upper_quantile": 0.995,
+  "lo": -0.06757724931212289,
+  "hi": 0.032801891783544083,
+  "valid": true
+ },
+ "ci_seconds": 207.7,
+ "wald_diagnostic": {
+  "se_hessian": 0.01956700747671983,
+  "lo": -0.06871599882255547,
+  "hi": 0.03208654366003528,
+  "note": "診断だけ。判定に使わない"
+ },
+ "power": {
+  "se_analytic_2025": 0.01938412511248882,
+  "se_train_boot": 0.011205510396926535,
+  "n_train_races": 9974,
+  "n_target_races": 3335,
+  "se_train_scaled": 0.019378421843300957,
+  "se_fixed": 0.01938412511248882,
+  "critical_multiplier": 3.4174505371218147,
+  "mde": 0.06624428877731137,
+  "beta_target": 0.11157177565710488,
+  "inconclusive_by_power": false,
+  "rule": "MDE > beta_target なら、主検定は結果に関係なく PRIMARY_INCONCLUSIVE (§8-4)。主検定は 1 回実行して記録する"
+ },
+ "category": "PRIMARY_FAIL",
+ "category_reason": "ci_lower_not_above_zero",
+ "composite_echo": {
+  "weights": {
+   "style_x_pace_fit": 0.021640405057439364,
+   "front_competition_signed": 0.0
+  },
+  "component_z_max": 1.1392008973949885,
+  "direction_undetermined": true
+ },
+ "after_primary": "config.CONSUMED_WINDOWS に 20250101-20251231 / 'phase05_5 c_prime primary run_index N' を追記する (Group A と同じ形)"
+}
