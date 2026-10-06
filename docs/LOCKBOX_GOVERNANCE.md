@@ -138,5 +138,10 @@ A″ について: 消費済みの 2025 での診断は **急いで実行しな�
 
 ## 10. 記録
 
-- FRESH_FROM の確定値: (出馬表の取り込みの後、規則・出典・判定の手順と一緒に同じコミットで追記する。中止・順延があっても、最初に確定した
-  対象開催日を境界として保つ)
+- **FRESH_FROM = 2026-10-10** (2026-10-06 17:31 JST に確定、`config.FRESH_FROM`)。規則: 規則のコミット `7e8d7a7` (2026-10-06 16:15 JST)
+  の翌日 (2026-10-07) 以降で最初の JRA の開催日。出典: 年間の開催スケジュール (JV-Data YS、`schedules`、作成 2025-12-22 = 規則より前)
+  の 2026-10-10 の行 (東京 05・京都 08、データ区分 1)。手順: `scripts.research_window.determine_fresh_from` (コード `b70a237`)、
+  SQL `SELECT MIN(s.race_year || s.race_month_day) AS first_day FROM schedules s WHERE (s.race_year || s.race_month_day) >= '20261007'
+  AND CAST(s.track_code AS INTEGER) BETWEEN 1 AND 10`。結果の列は読んでいない。記録: `data/backtest/research_window_20261006/fresh_from_determination.json`
+  と監査ログ。2026-10-07〜09 に JRA の開催は無い (10/03・10/04 の後は 10/10・11・12)。中止・順延があってもこの値を保つ
+- **RESERVED_UNTOUCHED = 2026-09-14 〜 2026-10-09** (§9)。fresh = 2026-10-10 〜

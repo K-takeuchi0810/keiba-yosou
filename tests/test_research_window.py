@@ -42,7 +42,13 @@ def test_constants_hold_today():
     rw.check_constants()
     assert config.RESERVED_FROM == config.CONFIRM_FROM == "20260914"
     assert config.RESERVED_FROM > config.consumed_until()
-    assert config.FRESH_FROM is None or config.FRESH_FROM >= config.FRESH_FROM_NOT_BEFORE
+    assert config.FRESH_FROM == "20261010"          # 規則どおり確定した値 (fresh_from_determination.json)。中止・順延でも変えない
+
+
+def test_the_recorded_determination_matches_the_constant():
+    rec = json.loads((ROOT / "data" / "backtest" / "research_window_20261006" / "fresh_from_determination.json").read_text(encoding="utf-8"))
+    assert rec["fresh_from"] == config.FRESH_FROM and rec["not_before"] == config.FRESH_FROM_NOT_BEFORE
+    assert rec["governance_commit"] == config.FRESH_GOVERNANCE_COMMIT and rec["schedule_data_created"] < "20261006"
 
 
 @pytest.mark.parametrize("frm,to,want", [
@@ -59,8 +65,8 @@ def test_period_boundaries_with_fresh_fixed(fresh, frm, to, want):
     assert rw.periods_spanned(frm, to) == want
 
 
-def test_everything_from_reserved_is_reserved_while_fresh_is_unfixed():
-    assert config.FRESH_FROM is None
+def test_everything_from_reserved_is_reserved_while_fresh_is_unfixed(monkeypatch):
+    monkeypatch.setattr(config, "FRESH_FROM", None)
     assert rw.periods_spanned("20270101", "20270101") == {"reserved"}
     assert rw.periods_spanned("20260913", "20260913") == {"consumed"}
 

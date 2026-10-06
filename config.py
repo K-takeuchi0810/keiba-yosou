@@ -186,7 +186,7 @@ CONFIRM_FROM: str = "20260914"
 # FRESH_FROM は規則 (FRESH_GOVERNANCE_COMMIT のコミット日の翌日以降で最初の JRA 開催日) で機械的に確定してから入れる。
 # 確定するまでは RESERVED_FROM 以降をすべて読めない (fail-closed)。
 RESERVED_FROM: str = "20260914"
-FRESH_FROM: str | None = None
+FRESH_FROM: str | None = "20261010"      # 2026-10-06 17:31 JST に規則どおり確定 (data/backtest/research_window_20261006/fresh_from_determination.json)
 FRESH_FROM_NOT_BEFORE: str = "20261007"      # 規則のコミット 7e8d7a7 (2026-10-06 16:15 JST) の翌日
 FRESH_GOVERNANCE_COMMIT: str = "7e8d7a7"
 
