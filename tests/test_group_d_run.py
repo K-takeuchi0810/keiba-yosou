@@ -270,3 +270,25 @@ def test_primary_refuses_to_overwrite_an_existing_result(patched, tmp_path):
         run.run_primary(str(path), frozen, power_path, tmp_path / "p", ["t"])
     assert not (frozen / run.STARTED_FILE.format(1)).exists()
 
+
+def test_every_repo_module_imported_by_the_runner_is_pinned():
+    """group_d_run.py が import する repo 内のモジュールは全部 DEPENDENCIES (= 錠で照合するファイル) に入っている。
+    import を 1 行足して DEPENDENCIES を忘れると、凍結から主検定の間の書き換えが錠を素通りする (2026-10-06 のレビューの持ち越し)。"""
+    import ast
+    root = Path(run.__file__).resolve().parents[1]
+    tree = ast.parse((root / "scripts" / "group_d_run.py").read_text(encoding="utf-8"))
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.update(a.name for a in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            names.add(node.module)
+            names.update(f"{node.module}.{a.name}" for a in node.names)
+    paths = set()
+    for n in names:
+        cand = root / (n.replace(".", "/") + ".py")
+        if cand.exists():
+            paths.add(cand.relative_to(root).as_posix())
+    assert paths, "repo 内の import が 1 つも見つからない (テストの前提が壊れている)"
+    assert paths <= set(run.DEPENDENCIES), sorted(paths - set(run.DEPENDENCIES))
+

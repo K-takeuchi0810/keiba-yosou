@@ -5,6 +5,8 @@
    (結果の列を使わない)
 2. §2 D の仮説が現れる交互作用 S × class_move の係数の SE (条件付きロジットのヘッセ行列から) を、主検定の年のレース数に換算した MDE
    (SE だけを使う。係数の値は判定に使わない)
+3. 件数の見込み (§8-8 / §8-4d と同じ `market_clogit.ratio_buys_at(rows, 1.0, β_target)`、仮定値で数える。結果の列を使わない)。
+   学習期の年ごとと 3 年 pooled (2026-10-06 レビューの指摘で追加。文書の「0.6 頭 / 100 レース」の出典)
 
 usage (worktree の root で):
     .venv64/Scripts/python.exe data/backtest/group_d_20261006/structural/structural_check.py <out.json> --db <keiba.db>
@@ -20,12 +22,23 @@ ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT))
 import numpy as np  # noqa: E402
 
+from predictor import market_clogit as mc  # noqa: E402
 from scripts import c_prime as cp  # noqa: E402
+from scripts import group_d_explore as gde  # noqa: E402
 from scripts import group_a as ga  # noqa: E402
 from scripts import group_d as gd  # noqa: E402
 from scripts import prereg_runner as pr  # noqa: E402
 
 YEARS = (2022, 2023, 2024)
+DEPENDENCIES = gde.DEPENDENCIES + ("data/backtest/group_d_20261006/structural/structural_check.py",
+                                   "data/backtest/group_d_20261006/e2/e2_result.json")
+E2_RESULT = ROOT / "data/backtest/group_d_20261006/e2/e2_result.json"
+
+
+def e2_target_races_2024() -> int:
+    """主検定の年のレース数の代わりに使う 2024 の対象レース数 (E2 の成果物から読む。手書きの写しにしない)。"""
+    e2 = json.loads(E2_RESULT.read_text(encoding="utf-8"))
+    return int(e2["directions"][0]["years"]["2024"]["counts"]["target_races_used"])
 
 
 def within_r2(rows, y, xs):
@@ -72,7 +85,7 @@ def main():
         r["S_x_move"] = r["S_std"] * r["class_move_filled"]
     fit = cp.clogit_with_se(srows, ["class_move_filled", "S_std", "S_x_move"])
     n_train = len({r["race_id"] for r in srows})
-    n_target_proxy = 3019                                    # 2024 の対象レース数 (E2) を主検定の年の代わりに使う (2025 は読まない)
+    n_target_proxy = e2_target_races_2024()                  # 2024 の対象レース数 (E2) を主検定の年の代わりに使う (2025 は読まない)
     se_int = fit["se"][3]
     se_int_target = se_int * math.sqrt(n_train / n_target_proxy)
     out["interaction_S_x_move"] = {"se_train_pooled": se_int, "n_train_races": n_train, "n_target_races_proxy": n_target_proxy,
@@ -88,9 +101,22 @@ def main():
     out["interaction_S_x_riser"] = {"se_train_pooled": fit2["se"][4], "se_scaled_to_target": se2, "mde": pr.CRITICAL_MULTIPLIER * se2,
                                     "share_risers": sum(r["riser"] for r in srows) / len(srows),
                                     "note": "S × 昇級の有無 (0/1)。係数の値は記録しない"}
+    share_risers = out["interaction_S_x_riser"]["share_risers"]
     out["note_interaction_units"] = ("交互作用の MDE は取り方で大きく変わる: S × class_move (整数、-4〜+4) は大きな昇降の行が SE を下げ、"
-                                     "S × 1[昇級] は昇級の行 (約 8%) だけで識別する。§2 D の『同じ昇級でも中身が違う』に近いのは後者")
+                                     f"S × 1[昇級] は昇級の行 (約 {share_risers:.1%}) だけで識別する。§2 D の『同じ昇級でも中身が違う』に近いのは後者")
+    # 件数の見込み (仮定値 β_market = 1・β_S = β_target、β_move = 0。§8-4d と同じ関数)
+    proj = {}
+    for label, yrs in [(str(y), (y,)) for y in YEARS] + [("pooled_2022_2024", YEARS)]:
+        sub = [r for r in srows if r["year"] in yrs]
+        n_r = len({r["race_id"] for r in sub})
+        n_b = len(mc.ratio_buys_at(sub, 1.0, pr.BETA_TARGET, s_col="S_std"))
+        proj[label] = {"n_races": n_r, "n_buys": n_b, "per_100_races": 100 * n_b / n_r,
+                       "races_for_1500": 1500 * n_r / n_b if n_b else None}
+    out["purchase_projection_at_beta_target"] = {
+        "by_year": proj, "method": "market_clogit.ratio_buys_at(rows, 1.0, BETA_TARGET, s_col='S_std')、尺度は 2022-2024 の pooled within-race SD",
+        "note": "仮定値で数える件数の見込み (§8-8)。β̂ は使わない"}
     out["share_class_move_zero"] = sum(r["class_move"] == 0 for r in obs) / len(obs)
+    out["provenance"] = pr.provenance(ROOT, DEPENDENCIES, a.db, sys.argv, own_output=pr.rel(ROOT, Path(a.out).resolve()))
     Path(a.out).write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(out, ensure_ascii=False, indent=1))
 

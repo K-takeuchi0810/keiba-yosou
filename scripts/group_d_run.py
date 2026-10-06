@@ -2,6 +2,9 @@
 
 仕様: `docs/PHASE05_5_PREREG.md` §8-4 / §8-4d / §8-4c-2 / §8-6 / §8-6b / §8-7 / §8-7b / §8-8、台帳 D-0〜D-3。共通の部品は `scripts/prereg_runner.py`。
 
+**2026-10-06 の決定で Group D の主検定は実行しない** (`BLOCKED_BY_IDENTIFIABILITY` / `PRIMARY_NOT_RUN`、`docs/PHASE05_5_GROUP_D_RESULT.md`)。
+freeze 以降を走らせる前に族の状態 (`docs/PHASE05_5_FAMILY_STATUS.md`) と事前登録の追補を確認すること。このスクリプトは実装と変異の記録として残す。
+
     python -m scripts.group_d_run freeze  --db <db> --out <dir>
     python -m scripts.group_d_run power   --db <db> --frozen <dir> --out <dir>
     python -m scripts.group_d_run arm     --db <db> --frozen <dir> --power <power.json>
