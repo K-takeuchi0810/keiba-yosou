@@ -1,0 +1,103 @@
+{
+ "mode": "verdict",
+ "inputs": {
+  "construct_r2": 0.21181094774571807,
+  "e_betas": [
+   [
+    0.028939935504666857,
+    1.3407207675110306
+   ],
+   [
+    -0.021534482063645784,
+    -0.8454404465634613
+   ],
+   [
+    -0.005005095306252737,
+    -0.18751486070958825
+   ]
+  ],
+  "pooled_beta": 0.026467935794394683,
+  "within_var": 0.5229097441534738,
+  "n_calendar": 2180
+ },
+ "verdict": {
+  "passed": false,
+  "reasons": [
+   "SIGN_INSTABILITY_REJECT"
+  ]
+ },
+ "money": {
+  "n_buys_2024": 20,
+  "n_races_2024": 3321,
+  "per_100_races": 0.6022282445046673,
+  "state": "MONEY_UNTESTABLE_WITHIN_5Y",
+  "races_for_1500": 249075.0
+ },
+ "sources": {
+  "e0": {
+   "path": "data/backtest/group_a2_20261006/e0/e0_result.json",
+   "sha256": "49d1dadf55630023ac513385d872186331f519361c938b19a3ed2d72e3315dda",
+   "git_sha": "e1c8effa3d49832a4854e25f5fff94ff6854540b",
+   "git_dirty": false
+  },
+  "e1": {
+   "path": "data/backtest/group_a2_20261006/e1/e1_result.json",
+   "sha256": "ac158805e0a1d803bb584dca050e24d8648fd109277e845561566f49fb0c432b",
+   "git_sha": "d629eae274d1a6459a1aad27d980a1e9e4f97303",
+   "git_dirty": false
+  },
+  "e2": {
+   "path": "data/backtest/group_a2_20261006/e2/e2_result.json",
+   "sha256": "fad13c4f935057791097a03393a2675988d44d338b7ef7618def1d65397c7eaf",
+   "git_sha": "e820a471bcd2ff2ad3e806c3a1eafa6e016c4996",
+   "git_dirty": false
+  },
+  "gate": {
+   "path": "data/backtest/group_a2_20261006/gate/gate_result.json",
+   "sha256": "b912219cb117bc8a56a68e3f12aa2cd1c8823410984289efc160aa1b16a49c0a",
+   "git_sha": "728b6d479e0877fa05149d4b3bbeeb367518fdc1",
+   "git_dirty": false
+  }
+ },
+ "provenance": {
+  "git_sha": "071178a03bd6e3308feae524f0f71531a5922098",
+  "git_dirty": false,
+  "git_status": [],
+  "own_output": [
+   "data/backtest/group_a2_20261006/verdict"
+  ],
+  "files_blob_sha1": {
+   "scripts/group_a2.py": "64580ffcabbe32373bb4ff246532c0e87ae28d21",
+   "scripts/group_a2_explore.py": "d3365245f95013138a4ec963b060575979dc81b8",
+   "scripts/group_a.py": "f974cf3fbea97aa627a244db3f29d51cf98f6c41",
+   "scripts/c_prime.py": "c23abea033706c4249815eccd2846886df0ffdff",
+   "scripts/research_window.py": "b5193582378b9f018b07cbc7129842283487c031",
+   "scripts/prereg_runner.py": "4a619a9ee2abd1190033959388ba52608b4f2e8c",
+   "scripts/group_a_stats.py": "1c1ded61f7b8248872a45699f41f8b5d2bfb1909",
+   "predictor/market_clogit.py": "4f64cae668e20e7c16e525d5bd40dc855603877a",
+   "predictor/race_market.py": "3d0f6bc95401fcc808999139f0ff4dc0df85de0e",
+   "predictor/eval_stats.py": "9c4f9c3a7d4936800721377f53897393b28ac625",
+   "config.py": "6c5903e54e3a1ab7daecd78a14c105c150c1bc38",
+   "db.py": "c89fae5180200254b5d37275d6dc3f4d1d13ca6a",
+   "docs/A_DOUBLE_PRIME_PREREG.md": "36c0113bf7cc3564fe2c35734aaec403e23452d5",
+   "docs/A_DOUBLE_PRIME_EXPLORATION.md": "b5ec4dff245c4d2bdae145d49daf5a830743e572",
+   "data/backtest/group_a_class_20261005/class_table.csv": "b2122077eb26417860f76dea6100f52c36403ea4"
+  },
+  "python": "3.14.5",
+  "numpy": "2.4.4",
+  "argv": [
+   "C:\\Users\\kizun\\dev\\keiba-yosou\\.claude\\worktrees\\a2\\scripts\\group_a2_explore.py",
+   "--mode",
+   "verdict",
+   "--out-dir",
+   "data/backtest/group_a2_20261006/verdict",
+   "--db",
+   "C:/Users/kizun/dev/keiba-yosou/data/keiba.db"
+  ],
+  "db": {
+   "path": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\keiba.db",
+   "bytes": 20203466752,
+   "mtime": "2026-10-06T08:00:04"
+  }
+ }
+}
