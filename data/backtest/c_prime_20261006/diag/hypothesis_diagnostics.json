@@ -1,0 +1,194 @@
+{
+ "purpose": "C′ の仮説の直接の診断 (学習期 2022-2024、仕様の変更に使わない)",
+ "years": [
+  2022,
+  2023,
+  2024
+ ],
+ "n_rows": 137112,
+ "pace_terciles": [
+  0.16666666666666666,
+  0.25
+ ],
+ "calibration_wins_over_sum_p_market": {
+  "high|back": {
+   "wins": 863,
+   "sum_p_market": 865.9331394461766,
+   "n": 16678,
+   "ratio": 0.9966127414316854
+  },
+  "high|front": {
+   "wins": 1899,
+   "sum_p_market": 1900.6433294004707,
+   "n": 19533,
+   "ratio": 0.9991353825438731
+  },
+  "high|style1": {
+   "wins": 498,
+   "sum_p_market": 496.5048254042914,
+   "n": 5098,
+   "ratio": 1.0030113999284722
+  },
+  "high|style2": {
+   "wins": 1401,
+   "sum_p_market": 1404.1385039961865,
+   "n": 14435,
+   "ratio": 0.9977648187929793
+  },
+  "high|style3": {
+   "wins": 591,
+   "sum_p_market": 591.1894938926886,
+   "n": 9483,
+   "ratio": 0.9996794701281972
+  },
+  "high|style4": {
+   "wins": 272,
+   "sum_p_market": 274.7436455534869,
+   "n": 7195,
+   "ratio": 0.9900137979607876
+  },
+  "low|back": {
+   "wins": 2079,
+   "sum_p_market": 2079.1415942302433,
+   "n": 35541,
+   "ratio": 0.999931897745379
+  },
+  "low|front": {
+   "wins": 1174,
+   "sum_p_market": 1171.0852948486424,
+   "n": 9350,
+   "ratio": 1.002488892281526
+  },
+  "low|style1": {
+   "wins": 120,
+   "sum_p_market": 127.84200976155785,
+   "n": 1018,
+   "ratio": 0.9386585851068501
+  },
+  "low|style2": {
+   "wins": 1054,
+   "sum_p_market": 1043.243285087076,
+   "n": 8332,
+   "ratio": 1.010310840306081
+  },
+  "low|style3": {
+   "wins": 1480,
+   "sum_p_market": 1460.856244550373,
+   "n": 19318,
+   "ratio": 1.0131044758996934
+  },
+  "low|style4": {
+   "wins": 599,
+   "sum_p_market": 618.2853496798688,
+   "n": 16223,
+   "ratio": 0.9688083347117085
+  },
+  "mid|back": {
+   "wins": 1353,
+   "sum_p_market": 1347.9616201669248,
+   "n": 25731,
+   "ratio": 1.0037377769201257
+  },
+  "mid|front": {
+   "wins": 1589,
+   "sum_p_market": 1597.826115230812,
+   "n": 14937,
+   "ratio": 0.994476172878463
+  },
+  "mid|style1": {
+   "wins": 277,
+   "sum_p_market": 281.66779321106327,
+   "n": 2579,
+   "ratio": 0.9834280193775454
+  },
+  "mid|style2": {
+   "wins": 1312,
+   "sum_p_market": 1316.158322019756,
+   "n": 12358,
+   "ratio": 0.9968405609339044
+  },
+  "mid|style3": {
+   "wins": 960,
+   "sum_p_market": 936.0464760763809,
+   "n": 14395,
+   "ratio": 1.0255901010642388
+  },
+  "mid|style4": {
+   "wins": 393,
+   "sum_p_market": 411.91514409054025,
+   "n": 11336,
+   "ratio": 0.954079998363977
+  }
+ },
+ "style_estimate_vs_actual": {
+  "n": 121393,
+  "agree_4class": 0.4311204105673309,
+  "agree_front_back": 0.6853195818539785,
+  "baseline_majority_front_back": 0.6573443279266514,
+  "kappa_front_back": 0.3097809311207303,
+  "nige_recall": 0.27811017123994225,
+  "nige_precision": 0.31113675706866706,
+  "confusion": {
+   "est1|act1": 2696,
+   "est1|act2": 3204,
+   "est1|act3": 1742,
+   "est1|act4": 1023,
+   "est2|act1": 3949,
+   "est2|act2": 13694,
+   "est2|act3": 11723,
+   "est2|act4": 5659,
+   "est3|act1": 2043,
+   "est3|act2": 10427,
+   "est3|act3": 17986,
+   "est3|act4": 12621,
+   "est4|act1": 1006,
+   "est4|act2": 4577,
+   "est4|act3": 11084,
+   "est4|act4": 17959
+  }
+ },
+ "within_race_corr": {
+  "pace_fit_std__style_indicator": 0.9245934469770477,
+  "front_comp_std__style_indicator": 0.7941845322523605,
+  "pace_fit_std__front_comp_std": 0.8161073511873442,
+  "S__style_indicator": 0.9245934469770487
+ },
+ "pooled_2022_2024_in_sample": {
+  "composite_weights": {
+   "style_x_pace_fit": 0.021640405057439364,
+   "front_competition_signed": 0.0
+  },
+  "component_z_max": 1.1392008973949885,
+  "single_component_fits": {
+   "style_x_pace_fit": {
+    "beta": 0.00843642147060556,
+    "z": 0.7110792689469099
+   },
+   "front_competition_signed": {
+    "beta": -6.674204526579183e-05,
+    "z": -0.0058553500334573814
+   }
+  },
+  "S": {
+   "beta": 0.00795994901993361,
+   "se": 0.011194179562739971,
+   "z": 0.7110792689469126
+  },
+  "style_indicator_only": {
+   "beta": 0.011593346538780889,
+   "z": 0.9386207923745353
+  },
+  "joint_indicator_and_S": {
+   "beta_indicator": 0.021833549785867643,
+   "z_indicator": 0.713299367100439,
+   "beta_S": -0.010155606497639578,
+   "z_S": -0.3656311125367436
+  }
+ },
+ "unknown_style": {
+  "n": 15342,
+  "share_no_runs_365": 0.9981097640464085,
+  "wins_over_sum_p": 1.005528024606421,
+  "known_wins_over_sum_p": 0.999376174449437
+ }
+}
