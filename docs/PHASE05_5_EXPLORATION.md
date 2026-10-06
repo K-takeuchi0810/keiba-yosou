@@ -566,3 +566,16 @@ D の仕様は §8-4d で決まっていて、軸 (候補) を持たない。E1 
 - S の分散の分解 (2024): レース内の割合 0.76、市場で重み付けたレース内の分散 0.60 / レース、S と市場の列のレース内の相関 +0.46。S × class_move −0.003 (z −0.10)
 - 必須の確認項目: `gap_to_current_class` と前走の評価値の係数の差 1.4e-17
 - パイプラインは 3 年とも同じ水準で通った (全馬が欠損のレース 301〜302 / 年、観測のある行 96〜97%)。点検として問題なし
+
+### D 構造的な停止 (2026-10-06、主検定を実行しない。2025 は未閲覧)
+
+- 凍結の前の 4 名レビュー (`b7bbbc4`、validation 4.3 / prediction-logic 3.8 / data-pipeline 4.5 / code-quality 4.0) で、validation と
+  prediction-logic が独立に、登録した S が前走の評価値と class_move でほぼ表し直せることを実測した
+- 外部の指示者の決定 (2026-10-06): **D の主検定は実行しない** (`BLOCKED_BY_IDENTIFIABILITY` / `PRIMARY_NOT_RUN`)。理由は E1 / E2 の結果ではなく、
+  §8-4d の主検定の量が §2 D の仕組みを識別しないという構成概念の妥当性の問題 (結果と独立)。preregistration は、欠陥が判明した検定を
+  必ず実行する義務ではない
+- 停止の理由の数値は自分で計算し直した (`data/backtest/group_d_20261006/structural/`): レース内の相関 0.939、決定係数 0.929、class_move = 0 が 89%
+- 交互作用の MDE はレビューの「≈ 0.3」が 0/1 の取り方だけの値だったので訂正した (S × 1[昇級] ≈ 0.29 / S × class_move ≈ 0.107)。
+  「交互作用は検出不能」という断定は撤回し、停止の理由を識別の問題に一本化した (外部の指示者の確認)
+- E1 / E2 の β・z は observed before the structural stop decision but not used as a stopping criterion
+- 記録: `docs/PHASE05_5_GROUP_D_RESULT.md`。凍結・検出力・錠・主検定は実行しない

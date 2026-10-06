@@ -196,3 +196,22 @@ def fit_scale(fit_rows: list[dict]) -> dict:
 def clogit(rows: list[dict], s_col: str = "S_std") -> dict:
     """主検定のモデル `[market_feature, class_move, S]` の係数と SE (`c_prime.clogit_with_se` は市場の列を market_clogit で足す)。"""
     return cp.clogit_with_se(rows, ["class_move_filled", s_col])
+
+
+def gap_equivalence(rows: list[dict], s_sd: float) -> dict:
+    """診断 (§8-4d): 今回のクラスの要求水準を引いた量と前走の評価値の、条件付きロジットの係数 (レース内の全馬で両方が定義されるレースだけ)。"""
+    by: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        by[r["race_id"]].append(r)
+    keep = [r for rs in by.values() if all(not math.isnan(x["gap_to_current_class"]) and not math.isnan(x["S_raw"]) for x in rs)
+            for r in rs]
+    if not keep:
+        return {"n_races": 0}
+    data = [{**r, "class_move_filled": r["class_move"], "gap_std": r["gap_to_current_class"] / s_sd,
+             "prev_std": r["prev_rating"] / s_sd} for r in keep]
+    g = cp.clogit_with_se(data, ["class_move_filled", "gap_std"])
+    p = cp.clogit_with_se(data, ["class_move_filled", "prev_std"])
+    return {"n_races": len({r["race_id"] for r in keep}), "beta_gap": g["beta"][2], "beta_prev": p["beta"][2],
+            "abs_diff": abs(g["beta"][2] - p["beta"][2]),
+            "note": "今回のクラスの要求水準はレース内で定数なので、前走の評価値と同じ係数になる (§8-4d、主検定に採らない理由)"}
+

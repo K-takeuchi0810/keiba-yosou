@@ -1,0 +1,42 @@
+{
+ "purpose": "Group D の構造的な非識別の確認 (学習期だけ、停止の理由に β・z は使わない)",
+ "years": [
+  2022,
+  2023,
+  2024
+ ],
+ "n_rows_observed": 121697,
+ "n_races": 9069,
+ "within_race_corr_S_std_prev_std": 0.9393406766011146,
+ "within_race_r2_S_on_prev_and_move": {
+  "r2": 0.9291428195526792,
+  "coef": {
+   "prev_std": 0.9405293081214207,
+   "class_move": 0.4814783429247524
+  }
+ },
+ "within_race_r2_S_on_prev_only": {
+  "r2": 0.8823609067174397,
+  "coef": {
+   "prev_std": 0.9373996608086361
+  }
+ },
+ "interaction_S_x_move": {
+  "se_train_pooled": 0.01802060192634102,
+  "n_train_races": 9069,
+  "n_target_races_proxy": 3019,
+  "se_scaled_to_target": 0.031233268716442945,
+  "mde": 0.10673815095107791,
+  "beta_target": 0.11157177565710488,
+  "note": "SE だけを使う。係数の値は記録もしない (停止の理由に使わないため)"
+ },
+ "interaction_S_x_riser": {
+  "se_train_pooled": 0.04945063055279592,
+  "se_scaled_to_target": 0.0857077271095695,
+  "mde": 0.2929019180460882,
+  "share_risers": 0.09483302078761521,
+  "note": "S × 昇級の有無 (0/1)。係数の値は記録しない"
+ },
+ "note_interaction_units": "交互作用の MDE は取り方で大きく変わる: S × class_move (整数、-4〜+4) は大きな昇降の行が SE を下げ、S × 1[昇級] は昇級の行 (約 8%) だけで識別する。§2 D の『同じ昇級でも中身が違う』に近いのは後者",
+ "share_class_move_zero": 0.893251271600779
+}

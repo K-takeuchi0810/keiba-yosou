@@ -421,10 +421,9 @@ def run_primary(db: str, frozen: Path, power_path: Path, out: Path, argv: list[s
 
 def _side_records(raw_rows: list[dict], rows: list[dict], beta: list[float], s_sd: float) -> dict:
     """§8-4d の診断 (判定に使わない、2025 で 1 回だけ)。"""
-    from scripts.group_d_explore import gap_equivalence
     side = {"S_variance_decomposition": cp.variance_decomposition(rows, "S_std"),
             "S_vs_class_move_within_corr": cp.within_race_corr(rows, "S_std", "class_move_filled"),
-            "gap_to_current_class_equivalence": gap_equivalence(raw_rows, s_sd)}
+            "gap_to_current_class_equivalence": gd.gap_equivalence(raw_rows, s_sd)}
     inter = [{**r, "S_x_move": r["S_std"] * r["class_move_filled"]} for r in rows]
     fit = cp.clogit_with_se(inter, ["class_move_filled", "S_std", "S_x_move"])
     side["S_x_move"] = {"beta": fit["beta"][3], "z": fit["z"][3]}

@@ -38,24 +38,6 @@ def year_summary(rows: list[dict], counts: dict, exclusions: list) -> dict:
             "counts": counts, "exclusions": exclusions}
 
 
-def gap_equivalence(rows: list[dict], s_sd: float) -> dict:
-    """診断: 今回のクラスの要求水準を引いた量と前走の評価値の、条件付きロジットの係数 (レース内の全馬で両方が定義されるレースだけ)。"""
-    by: dict = {}
-    for r in rows:
-        by.setdefault(r["race_id"], []).append(r)
-    keep = [r for rs in by.values() if all(not math.isnan(x["gap_to_current_class"]) and not math.isnan(x["S_raw"]) for x in rs)
-            for r in rs]
-    if not keep:
-        return {"n_races": 0}
-    data = [{**r, "class_move_filled": r["class_move"], "gap_std": r["gap_to_current_class"] / s_sd,
-             "prev_std": r["prev_rating"] / s_sd} for r in keep]
-    g = cp.clogit_with_se(data, ["class_move_filled", "gap_std"])
-    p = cp.clogit_with_se(data, ["class_move_filled", "prev_std"])
-    return {"n_races": len({r["race_id"] for r in keep}), "beta_gap": g["beta"][2], "beta_prev": p["beta"][2],
-            "abs_diff": abs(g["beta"][2] - p["beta"][2]),
-            "note": "今回のクラスの要求水準はレース内で定数なので、前走の評価値と同じ係数になる (§8-4d、主検定に採らない理由)"}
-
-
 def direction(races, fit_years, eval_years) -> dict:
     tables = ga.fit_tables(races, gd.SPEC, fit_years)
     history = gd.run_ratings(races, tables)
@@ -79,7 +61,7 @@ def direction(races, fit_years, eval_years) -> dict:
                 "S_variance_decomposition_eval": cp.variance_decomposition(ev, "S_std"),
                 "S_vs_class_move_within_corr_eval": cp.within_race_corr(ev, "S_std", "class_move_filled"),
                 "diag_S_x_move_eval": {"beta": inter["beta"][3], "z": inter["z"][3]},
-                "diag_gap_equivalence_eval": gap_equivalence(rows_by[eval_years], scale["sd"])})
+                "diag_gap_equivalence_eval": gd.gap_equivalence(rows_by[eval_years], scale["sd"])})
     return out
 
 

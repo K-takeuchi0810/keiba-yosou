@@ -10,7 +10,7 @@
 | **A** (能力の内容評価) | **PRIMARY_INCONCLUSIVE** (`mde_above_beta_target`) | run_index 1 (2026-10-06、錠 `954b954`) | 原因は S を全体の SD で標準化したことで、識別に使えるレース内の分散が 0.26 と小さかったこと (MDE 0.134 > β_target 0.112、主検定の前に確定)。β_S = +0.049 (99% 区間 [−0.051, +0.145]) は観測値だが、**再設計の確証の根拠にはしない**。`docs/PHASE05_5_GROUP_A_RESULT.md` |
 | **B** (文脈で補正した上がり) | **BLOCKED** | なし | 前半ペース (ラップ) の元データが学習期に無い (`BLOCKED_BY_SOURCE_DATA`)。通過順位の部分は backfill 済みだが、群としては解除されない (§8-3) |
 | **C′** (展開 × メンバー構成、脚質コード版。Group C の主検定) | **PRIMARY_FAIL** (`ci_lower_not_above_zero`) | run_index 1 (2026-10-06、錠 `62e11ec`) | 検出力は十分 (MDE 0.066 < 0.112 で `PRIMARY_DECIDABLE` を先に確定)。β_S = −0.0183、99% 区間 [−0.0676, +0.0328] は β_target を明確に下回る。`docs/PHASE05_5_GROUP_C_PRIME_RESULT.md` |
-| **D** (クラス昇降 × 能力) | **NOT_RUN / PIT_GATE_PENDING** | なし | 「クラスの要求水準が決定時刻までに確定した値だけで作れることをコードで確認するまで主検定を走らせない」(§8-3)。次の作業は PIT の確認だけ |
+| **D** (クラス昇降 × 能力) | **BLOCKED_BY_IDENTIFIABILITY / PRIMARY_NOT_RUN** (2026-10-06 更新) | なし (実行しない) | PIT の確認は通った (`626084c`)。§8-4d の主検定の量が §2 D の仕組みを識別しないと 2025 を読む前に分かった (登録した S はレース内で前走の評価値と相関 0.939、[前走の評価値, class_move] で線形な変動の 92.9% が説明される)。外部の指示者の決定で主検定を実行しない。`docs/PHASE05_5_GROUP_D_RESULT.md` |
 | **E** (乗替りの相性) | **BLOCKED_BY_PIT_AVAILABILITY** | なし | 騎手・乗替りの履歴が決定時刻に確定していた値かどうかの契約が弱い (§8-3)。代替の E′ は登録しない |
 
 旧 Group C (通過順位版) は主検定に使わない (§8-3)。
@@ -30,7 +30,7 @@
 | 1 | Group A の主検定 run_index 1 | `config.CONSUMED_WINDOWS` `phase05_5 group_a primary run_index 1` |
 | 2 | Group C′ の主検定 run_index 1 | `config.CONSUMED_WINDOWS` `phase05_5 group_c_prime primary run_index 1` (reused consumed validation window) |
 
-- D の主検定を行う場合は 3 回目の再利用になる (族の枠の中の事前登録済みの群なので、α は 0.05 / 5 のまま。「回数が増えたから独立の証拠が増えた」とは解釈しない)
+- D は主検定を実行しないので、2025 の消費は A・C′ の 2 回のまま (2026-10-06 更新)
 - 封印窓 (lockbox、2026-09-14 以降) は、主検定を通った候補の事前登録をコミットするまで再開しない。`SEALED_FROM` は変えない (§8-8)
 
 ## 4. 次の世代の候補 (この族の主検定ではない)
