@@ -74,21 +74,27 @@ def test_development_reads_only_development():
 def test_reproduce_consumed_needs_a_registered_runner_purpose_and_stops_before_reserved():
     rw.check("20210101", "20251231", purpose="reproduce_consumed", context="t", reproduces=REPRO)
     rw.check("20250101", "20251231", purpose="reproduce_consumed", context="t", reproduces="primary: Group C′ の主検定 (run_index 1)")
-    for bad in (None, "", "anything", "A″ の 2025 での診断", REPRO + " "):
+    for bad in (None, "", "anything", "A″ の 2025 での診断", REPRO + " ", "primary: Group C′ の主検定 (run_index 2)"):
         with pytest.raises(rw.ResearchWindowError, match="reproduces"):
             rw.check("20250101", "20251231", purpose="reproduce_consumed", context="t", reproduces=bad)
     with pytest.raises(rw.ResearchWindowError, match="RESERVED_UNTOUCHED"):
         rw.check("20250101", "20260914", purpose="reproduce_consumed", context="t", reproduces=REPRO)
 
 
-def test_frozen_runner_purposes_are_all_registered():
-    """凍結済みの runner が load_races に渡す primary_purpose は、全部 REPRODUCIBLE_PURPOSES に入っている (再現を壊さない)。"""
-    found = set()
-    for name in ("group_a_run.py", "c_prime_run.py", "group_d_run.py"):
-        text = (ROOT / "scripts" / name).read_text(encoding="utf-8")
-        for m in re.finditer(r'primary_purpose=(f?)"([^"]+)"', text):
-            found.add(m.group(2).replace("{run_index}", "1") if m.group(1) else m.group(2))
-    assert len(found) == 8 and found <= rw.REPRODUCIBLE_PURPOSES, sorted(found - rw.REPRODUCIBLE_PURPOSES)
+def _runner_purposes(name):
+    text = (ROOT / "scripts" / name).read_text(encoding="utf-8")
+    return {m.group(2).replace("{run_index}", "1") if m.group(1) else m.group(2)
+            for m in re.finditer(r'primary_purpose=(f?)"([^"]+)"', text)}
+
+
+def test_executed_runner_purposes_are_registered_and_the_stopped_d_runner_is_not():
+    """主検定を実行した A / C′ の runner の目的 (run_index 1) は一覧の完全一致。停止した D の runner の目的は 1 つも入らない。"""
+    executed = _runner_purposes("group_a_run.py") | _runner_purposes("c_prime_run.py")
+    assert len(executed) == 5 and executed == rw.REPRODUCIBLE_PURPOSES - {"test"}
+    stopped = _runner_purposes("group_d_run.py")
+    assert len(stopped) == 3 and not stopped & rw.REPRODUCIBLE_PURPOSES
+    with pytest.raises(rw.ResearchWindowError, match="reproduces"):
+        rw.check("20250101", "20251231", purpose="reproduce_consumed", context="t", reproduces="primary: Group D の主検定 (run_index 1)")
 
 
 def test_non_development_reads_are_logged_and_development_is_not(fresh):
@@ -209,7 +215,8 @@ def test_research_readers_go_through_the_guard():
     """研究の読み込み (group_* / c_prime* / *_run / *_explore) で DB を読むファイルは、関所 (research_window.check) を呼ぶ。"""
     names = {p for pat in ("group_*.py", "c_prime*.py", "*_run.py", "*_explore.py") for p in (ROOT / "scripts").glob(pat)}
     readers = {p.relative_to(ROOT).as_posix() for p in names
-               if re.search(r"sqlite3\.connect\(|guard_analysis_window\(|list_races\(", p.read_text(encoding="utf-8"))}
+               if re.search(r"sqlite3\.connect\(|guard_analysis_window\(|list_races\(|db\.connect\(|open_db",
+                            p.read_text(encoding="utf-8"))}
     unguarded = {r for r in readers if "research_window.check" not in (ROOT / r).read_text(encoding="utf-8")}
     assert unguarded == FROZEN_RESEARCH_READERS, sorted(unguarded ^ FROZEN_RESEARCH_READERS)
 
@@ -306,6 +313,8 @@ def test_fresh_from_is_the_first_jra_day_on_or_after_the_floor(tmp_path):
                        ("2026", "1010", "08", "4", "3", "1", "1", "20251222")])
     out = rw.determine_fresh_from(db)
     assert out["fresh_from"] == "20261010" and out["not_before"] == "20261007" and out["schedule_data_created"] == "20251222"
+    assert out["schedule_rows"] == [["08", "1", "20251222"]]
+    assert [x["purpose"] for x in _log_lines()] == ["determine_fresh_from"]
 
 
 def test_fresh_from_without_a_scheduled_day_stops(tmp_path):

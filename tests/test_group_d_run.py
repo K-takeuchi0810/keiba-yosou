@@ -22,6 +22,23 @@ from scripts import group_a as ga
 from scripts import group_d as gd
 from scripts import group_d_run as run
 from scripts import prereg_runner as pr
+from scripts import research_window as rw
+
+# Group D は主検定を実行せずに停止した (2026-10-06) ので、D の runner の目的は研究の窓の関所の再現の一覧に無い (本物の DB では 2025 を
+# 読めない)。runner は実装と変異の記録として残すので、合成の DB を使うこのファイルの中だけで D の目的を一覧に足して契約を確かめる。
+D_RUNNER_PURPOSES = frozenset({
+    "power: 2025 の対象日より前の日の走を、前走の評価値と要求水準の履歴として読む (対象の行に結果は付けない)",
+    "arm / primary の前の履歴の照合",
+    *(f"primary: Group D の主検定 (run_index {i})" for i in (1, 2, 3)),
+})
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _allow_d_runner_purposes_on_the_synthetic_db():
+    mp = pytest.MonkeyPatch()
+    mp.setattr(rw, "REPRODUCIBLE_PURPOSES", rw.REPRODUCIBLE_PURPOSES | D_RUNNER_PURPOSES)
+    yield
+    mp.undo()
 
 ROOT = Path(__file__).resolve().parents[1]
 CLASSES = ("703", "005", "010", "016")

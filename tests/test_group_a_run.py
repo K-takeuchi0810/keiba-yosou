@@ -10,6 +10,19 @@ import pytest
 
 from scripts import group_a as g
 from scripts import group_a_run as run
+from scripts import research_window as rw
+
+# 研究の窓の関所の再現の一覧は、実行済みの run_index 1 だけ (2026-10-06)。中断・再 arm の契約を合成の DB で確かめるこのファイルの中だけで
+# run_index 2・3 の目的を足す (本物の DB では、再実行は再凍結と一覧への追加のコミットが先)
+RERUN_PURPOSES = frozenset(f"primary: Group A の主検定 (run_index {i})" for i in (2, 3))
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _allow_reruns_on_the_synthetic_db():
+    mp = pytest.MonkeyPatch()
+    mp.setattr(rw, "REPRODUCIBLE_PURPOSES", rw.REPRODUCIBLE_PURPOSES | RERUN_PURPOSES)
+    yield
+    mp.undo()
 
 
 # ---------------------------------------------------------------------------------------------------- 判定の規則

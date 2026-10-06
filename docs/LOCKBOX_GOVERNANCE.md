@@ -87,7 +87,8 @@ A″ について: 消費済みの 2025 での診断は **急いで実行しな�
   読み込みは目的 (purpose) を必ず渡す:
   - `development`: development だけ
   - `reproduce_consumed`: development と consumed。凍結済みの runner (Group A / C′ / D) の再現だけで、`reproduces` は
-    `REPRODUCIBLE_PURPOSES` (それらの runner の目的の文字列) の **完全一致** に限る。新しい候補の 2025 の閲覧 (A″ の診断など) はこの経路で
+    `REPRODUCIBLE_PURPOSES` (主検定を実行した A / C′ の runner の、実行済みの run_index 1 の目的の文字列) の **完全一致** に限る。
+    停止した D の runner の目的は入れない (D の runner は 2025 を読めない)。新しい候補の 2025 の閲覧 (A″ の診断など) はこの経路で
     通らない。通すなら一覧に足すコミット・`config.CONSUMED_WINDOWS` への記録・事前登録の開示が先 (§6)
   - `lockbox_count_only`: fresh だけで、結果を読まない。件数の SQL は allow-list で、結果・払戻・オッズの列を含めたら止まる
   - `primary_after_unlock`: 開封の手順が無いので今は常に止まる。最初の候補の事前登録と一緒に実装する
@@ -96,7 +97,8 @@ A″ について: 消費済みの 2025 での診断は **急いで実行しな�
   属さない日 (定数の崩れ) も止まる。development 以外の目的で通ったら `data/runtime/research_window_access.jsonl` に 1 行追記する
   (書けなければ読ませない)。`scripts.group_a.load_races` / `scripts.c_prime.load_races` は関所を通る (2025 は `reproduce_consumed`、
   2026 以降は止まる)。研究の読み込みのファイル (`scripts/` の group_* / c_prime* / *_run / *_explore で DB を読むもの) が関所を呼ぶことは
-  テストで確かめる (例外は凍結済みの runner 4 本の完全一致の一覧)
+  テストで確かめる (例外は凍結済みの runner 4 本の完全一致の一覧)。**次の候補の runner・探索のファイルは、この網に入る名前
+  (`scripts/<候補>_explore.py` / `scripts/<候補>_run.py` など) で作る**
 - **関所の範囲外 (運用の規則で守る)**:
   - 旧来の研究スクリプト (0.5-3 / 0.5-4 系の `market_offset_eval` 等、`list_races` で日付の窓を読むもの) は窓の期間で実行しない
   - 凍結済みの runner (`group_a_power` / `c_prime_run` / `group_d_run`) の `load_target_fields` は 2025 の定数でしか呼ばれない

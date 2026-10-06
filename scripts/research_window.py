@@ -38,18 +38,15 @@ ALLOWED_PERIODS = {
     "lockbox_count_only": frozenset({"fresh"}),
 }
 
-# 凍結済みの runner (Group A / C′ / D) が 2025 を読むときの目的の文字列 (完全一致)。新しい候補の 2025 の閲覧はここに足さない
-# (足すなら config.CONSUMED_WINDOWS への記録と事前登録の開示が先、docs/LOCKBOX_GOVERNANCE.md §7)
-_RUN_INDEXES = (1, 2, 3)
+# 主検定まで実行済みの runner (Group A / C′) が 2025 を読むときの目的の文字列 (完全一致、run_index 1 = 実行済みの 1 回だけ)。
+# 新しい候補の 2025 の閲覧はここに足さない (足すなら config.CONSUMED_WINDOWS への記録と事前登録の開示が先、docs/LOCKBOX_GOVERNANCE.md §7)。
+# Group D は主検定を実行せずに停止した (BLOCKED_BY_IDENTIFIABILITY) ので、D の runner の目的は入れない (D の runner は 2025 を読めない)
 REPRODUCIBLE_PURPOSES = frozenset({
     "power: 2025 の過去走の時計を S の履歴として読む (対象レースの結果は対象の行に付けない)",
+    "primary: Group A の主検定 (run_index 1)",
     "power: 2025 の対象日より前の走の脚質コードを履歴として読む (対象の行に結果を付けない)",
     "arm / primary の前の履歴の照合 (2025 の着順・オッズは SQL で NULL)",
-    "power: 2025 の対象日より前の日の走を、前走の評価値と要求水準の履歴として読む (対象の行に結果は付けない)",
-    "arm / primary の前の履歴の照合",
-    *(f"primary: Group A の主検定 (run_index {i})" for i in _RUN_INDEXES),
-    *(f"primary: Group C′ の主検定 (run_index {i})" for i in _RUN_INDEXES),
-    *(f"primary: Group D の主検定 (run_index {i})" for i in _RUN_INDEXES),
+    "primary: Group C′ の主検定 (run_index 1)",
 })
 
 
@@ -249,12 +246,15 @@ def determine_fresh_from(db_path: Path | str) -> dict:
         if names != SCHEDULE_COLUMNS:
             raise ResearchWindowError(f"開催日の SQL の返る列が allow-list と違う: {names}")
         (first,) = cur.fetchone()
-        created = conn.execute("SELECT MAX(data_created) FROM schedules WHERE (race_year || race_month_day) = ? "
-                               "AND CAST(track_code AS INTEGER) BETWEEN 1 AND 10", (first,)).fetchone()[0] if first else None
+        rows = conn.execute("SELECT track_code, data_div, data_created FROM schedules WHERE (race_year || race_month_day) = ? "
+                            "AND CAST(track_code AS INTEGER) BETWEEN 1 AND 10 ORDER BY 1", (first,)).fetchall() if first else []
     finally:
         conn.close()
     if first is None:
         raise ResearchWindowError(f"{not_before} 以降の JRA の開催日が開催スケジュールに無い")
     first = _day("first_day", first)
-    return {"fresh_from": first, "not_before": not_before, "source": "schedules (YS)", "schedule_data_created": created,
-            "sql": schedule_sql(), "governance_commit": config.FRESH_GOVERNANCE_COMMIT}
+    out = {"fresh_from": first, "not_before": not_before, "source": "schedules (YS)",
+           "schedule_data_created": max(r[2] for r in rows), "schedule_rows": [list(r) for r in rows],
+           "sql": schedule_sql(), "governance_commit": config.FRESH_GOVERNANCE_COMMIT}
+    _log_access({"purpose": "determine_fresh_from", "context": "research_window.determine_fresh_from", **out})
+    return out
