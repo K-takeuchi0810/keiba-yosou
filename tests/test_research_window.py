@@ -1,13 +1,17 @@
 """研究の窓の関所 (`scripts/research_window.py`、docs/LOCKBOX_GOVERNANCE.md、2026-10-06) の契約。
 
 - 期間は development (〜2024) / consumed (2025〜RESERVED_FROM の前日) / reserved (RESERVED_FROM〜FRESH_FROM の前日) / fresh (FRESH_FROM〜)
-- reserved はどの目的でも読まない。FRESH_FROM が未確定の間は RESERVED_FROM 以降すべてが reserved
-- 件数の点検の SQL は結果の列を含まず、返る列は allow-list と完全一致
-- 研究の読み込み (group_a / c_prime の load_races) は関所を通る。本番の封印 (SEALED_FROM) は変えない
+- reserved はどの目的でも読まない。FRESH_FROM が未確定の間は RESERVED_FROM 以降すべてが reserved。どの期間にも属さない日は止める
+- 2025 の再現は凍結済みの runner の目的の完全一致だけ。development 以外の通過は監査ログに追記 (書けなければ止める)
+- 件数の点検と開催日の確定の SQL は結果の列を含まず、返る列は allow-list と完全一致
+- 研究の読み込み (group_a / c_prime の load_races と、DB を読む研究のファイル) は関所を通る。本番の封印 (SEALED_FROM) は変えない
 """
 from __future__ import annotations
 
+import json
+import re
 import sqlite3
+from pathlib import Path
 
 import pytest
 
@@ -16,10 +20,18 @@ from scripts import c_prime as cp
 from scripts import group_a as ga
 from scripts import research_window as rw
 
+REPRO = "power: 2025 の過去走の時計を S の履歴として読む (対象レースの結果は対象の行に付けない)"
+ROOT = Path(rw.__file__).resolve().parents[1]
+
 
 @pytest.fixture
 def fresh(monkeypatch):
     monkeypatch.setattr(config, "FRESH_FROM", "20261010")
+
+
+def _log_lines():
+    path = Path(config.RESEARCH_WINDOW_ACCESS_LOG)
+    return [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
 
 
 def test_the_production_seal_is_untouched():
@@ -59,18 +71,45 @@ def test_development_reads_only_development():
         rw.check("20220101", "20250101", purpose="development", context="t")
 
 
-def test_reproduce_consumed_needs_what_it_reproduces_and_stops_before_reserved():
-    rw.check("20210101", "20251231", purpose="reproduce_consumed", context="t", reproduces="group_a primary")
-    with pytest.raises(rw.ResearchWindowError, match="reproduces"):
-        rw.check("20250101", "20251231", purpose="reproduce_consumed", context="t")
+def test_reproduce_consumed_needs_a_registered_runner_purpose_and_stops_before_reserved():
+    rw.check("20210101", "20251231", purpose="reproduce_consumed", context="t", reproduces=REPRO)
+    rw.check("20250101", "20251231", purpose="reproduce_consumed", context="t", reproduces="primary: Group C′ の主検定 (run_index 1)")
+    for bad in (None, "", "anything", "A″ の 2025 での診断", REPRO + " "):
+        with pytest.raises(rw.ResearchWindowError, match="reproduces"):
+            rw.check("20250101", "20251231", purpose="reproduce_consumed", context="t", reproduces=bad)
     with pytest.raises(rw.ResearchWindowError, match="RESERVED_UNTOUCHED"):
-        rw.check("20250101", "20260914", purpose="reproduce_consumed", context="t", reproduces="x")
+        rw.check("20250101", "20260914", purpose="reproduce_consumed", context="t", reproduces=REPRO)
+
+
+def test_frozen_runner_purposes_are_all_registered():
+    """凍結済みの runner が load_races に渡す primary_purpose は、全部 REPRODUCIBLE_PURPOSES に入っている (再現を壊さない)。"""
+    found = set()
+    for name in ("group_a_run.py", "c_prime_run.py", "group_d_run.py"):
+        text = (ROOT / "scripts" / name).read_text(encoding="utf-8")
+        for m in re.finditer(r'primary_purpose=(f?)"([^"]+)"', text):
+            found.add(m.group(2).replace("{run_index}", "1") if m.group(1) else m.group(2))
+    assert len(found) == 8 and found <= rw.REPRODUCIBLE_PURPOSES, sorted(found - rw.REPRODUCIBLE_PURPOSES)
+
+
+def test_non_development_reads_are_logged_and_development_is_not(fresh):
+    rw.check("20220101", "20241231", purpose="development", context="dev")
+    assert _log_lines() == []
+    rw.check("20250101", "20251231", purpose="reproduce_consumed", context="repro", reproduces=REPRO)
+    rw.check("20261010", "20261031", purpose="lockbox_count_only", context="count", reads_outcomes=False)
+    lines = _log_lines()
+    assert [x["context"] for x in lines] == ["repro", "count"] and lines[0]["reproduces"] == REPRO and lines[0]["at"]
+
+
+def test_an_unwritable_log_stops_the_read(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "RESEARCH_WINDOW_ACCESS_LOG", tmp_path)          # ディレクトリには追記できない
+    with pytest.raises(rw.ResearchWindowError, match="監査ログ"):
+        rw.check("20250101", "20251231", purpose="reproduce_consumed", context="t", reproduces=REPRO)
 
 
 @pytest.mark.parametrize("purpose", rw.PURPOSES)
 def test_reserved_is_refused_for_every_purpose(fresh, purpose):
     with pytest.raises(rw.ResearchWindowError, match="RESERVED_UNTOUCHED"):
-        rw.check("20260920", "20260920", purpose=purpose, context="t", reads_outcomes=False, reproduces="x")
+        rw.check("20260920", "20260920", purpose=purpose, context="t", reads_outcomes=False, reproduces=REPRO)
 
 
 def test_count_only_reads_fresh_without_outcomes(fresh):
@@ -84,7 +123,7 @@ def test_count_only_reads_fresh_without_outcomes(fresh):
 def test_fresh_is_refused_for_development_and_reproduction(fresh):
     for purpose in ("development", "reproduce_consumed"):
         with pytest.raises(rw.ResearchWindowError, match="fresh"):
-            rw.check("20261010", "20261010", purpose=purpose, context="t", reproduces="x")
+            rw.check("20261010", "20261010", purpose=purpose, context="t", reproduces=REPRO)
 
 
 def test_primary_after_unlock_is_not_available_yet(fresh):
@@ -97,7 +136,7 @@ def test_unknown_purpose_missing_context_and_bad_dates_stop():
         rw.check("20220101", "20220102", purpose="explore", context="t")
     with pytest.raises(rw.ResearchWindowError, match="context"):
         rw.check("20220101", "20220102", purpose="development", context="")
-    with pytest.raises(ValueError):
+    with pytest.raises(rw.ResearchWindowError, match="YYYYMMDD"):
         rw.check("2022-01-01", "20220102", purpose="development", context="t")
     with pytest.raises(rw.ResearchWindowError, match=">"):
         rw.check("20220102", "20220101", purpose="development", context="t")
@@ -106,6 +145,7 @@ def test_unknown_purpose_missing_context_and_bad_dates_stop():
 @pytest.mark.parametrize("attr,value,match", [
     ("FRESH_FROM", "20261006", "下限"),
     ("RESERVED_FROM", "20260913", "消費済み"),
+    ("FRESH_FROM_NOT_BEFORE", "20260914", "順序"),
 ])
 def test_broken_constants_stop_every_read(monkeypatch, attr, value, match):
     monkeypatch.setattr(config, attr, value)
@@ -113,12 +153,37 @@ def test_broken_constants_stop_every_read(monkeypatch, attr, value, match):
         rw.check("20220101", "20220102", purpose="development", context="t")
 
 
+def test_a_gap_between_development_and_consumed_stops_every_read(monkeypatch):
+    """train の終わりを 1 年早めると 2024 はどの期間にも属さない。そこを『許可』にしない。"""
+    split = {k: dict(v) for k, v in config.DATA_SPLIT.items()}
+    split["train"]["to"] = "20231231"
+    monkeypatch.setattr(config, "DATA_SPLIT", split)
+    with pytest.raises(rw.ResearchWindowError, match="隙間"):
+        rw.check("20240101", "20241231", purpose="development", context="t")
+    monkeypatch.setattr(rw, "check_constants", lambda: None)
+    with pytest.raises(rw.ResearchWindowError, match="どの期間にも属さない"):
+        rw.periods_spanned("20240101", "20241231")
+
+
+def test_recording_an_opened_fresh_window_as_consumed_does_not_break_the_guard(monkeypatch, fresh):
+    """開封した fresh の窓を CONSUMED_WINDOWS に記録しても、development の読み込みは止まらない。"""
+    monkeypatch.setattr(config, "CONSUMED_WINDOWS",
+                        config.CONSUMED_WINDOWS + [{"from": "20261010", "to": "20270331", "by": "t", "note": "t"}])
+    assert rw.check("20220101", "20241231", purpose="development", context="t")["periods"] == ["development"]
+
+
 # ------------------------------------------------------------------------------------------------ 研究の読み込みの配線
 
 @pytest.mark.parametrize("load", [ga.load_races, cp.load_races])
 def test_loaders_refuse_2026_even_with_the_primary_year_flag(load):
     with pytest.raises(rw.ResearchWindowError, match="RESERVED_UNTOUCHED"):
-        load(2026, min_year=2021, db_path="unused.db", allow_primary_year=True, primary_purpose="x")
+        load(2026, min_year=2021, db_path="unused.db", allow_primary_year=True, primary_purpose=REPRO)
+
+
+@pytest.mark.parametrize("load", [ga.load_races, cp.load_races])
+def test_loaders_refuse_a_new_2025_purpose(load):
+    with pytest.raises(rw.ResearchWindowError, match="reproduces"):
+        load(2025, min_year=2021, db_path="unused.db", allow_primary_year=True, primary_purpose="A″ の 2025 での診断")
 
 
 @pytest.mark.parametrize("load", [ga.load_races, cp.load_races])
@@ -136,15 +201,37 @@ def test_loaders_pass_the_purpose_to_the_guard(monkeypatch, load):
     assert seen == [(2021, 2024, "development", None), (2021, 2025, "reproduce_consumed", "why")]
 
 
+FROZEN_RESEARCH_READERS = frozenset({          # 主検定まで実行・凍結済みで、2025 の定数でしか読まない runner (完全一致)
+    "scripts/group_a_power.py", "scripts/group_a_run.py", "scripts/c_prime_run.py", "scripts/group_d_run.py"})
+
+
+def test_research_readers_go_through_the_guard():
+    """研究の読み込み (group_* / c_prime* / *_run / *_explore) で DB を読むファイルは、関所 (research_window.check) を呼ぶ。"""
+    names = {p for pat in ("group_*.py", "c_prime*.py", "*_run.py", "*_explore.py") for p in (ROOT / "scripts").glob(pat)}
+    readers = {p.relative_to(ROOT).as_posix() for p in names
+               if re.search(r"sqlite3\.connect\(|guard_analysis_window\(|list_races\(", p.read_text(encoding="utf-8"))}
+    unguarded = {r for r in readers if "research_window.check" not in (ROOT / r).read_text(encoding="utf-8")}
+    assert unguarded == FROZEN_RESEARCH_READERS, sorted(unguarded ^ FROZEN_RESEARCH_READERS)
+
+
+def test_frozen_runners_read_target_fields_only_for_the_primary_year():
+    calls = []
+    for name in FROZEN_RESEARCH_READERS:
+        calls += re.findall(r"(?<!def )load_target_fields\(([^,]+),", (ROOT / name).read_text(encoding="utf-8"))
+    assert sorted(c.strip() for c in calls) == ["PRIMARY_YEAR", "PRIMARY_YEAR", "max(PRIMARY_YEARS)"]
+
+
 # ------------------------------------------------------------------------------------------------ 件数の点検
 
-def test_count_sql_has_no_result_columns():
-    low = rw.count_sql().lower()
-    assert not [f for f in rw.FORBIDDEN_FRAGMENTS if f in low]
+def test_count_and_schedule_sql_have_no_result_columns():
+    for sql in (rw.count_sql(), rw.schedule_sql()):
+        assert not [f for f in rw.FORBIDDEN_FRAGMENTS if f in sql.lower()]
 
 
-def test_a_result_column_in_the_count_sql_stops(monkeypatch):
-    monkeypatch.setattr(rw, "COUNT_SELECT", rw.COUNT_SELECT + (("r.win_odds", "win_odds"),))
+@pytest.mark.parametrize("col", ["r.win_odds", "r.front3f_time", "r.last4f_time", "r.starter_count", "r.weather_code",
+                                 "r.turf_condition"])
+def test_a_result_column_in_the_count_sql_stops(monkeypatch, col):
+    monkeypatch.setattr(rw, "COUNT_SELECT", rw.COUNT_SELECT + ((col, "x"),))
     with pytest.raises(rw.ResearchWindowError, match="結果の列"):
         rw.count_sql()
 
@@ -158,7 +245,7 @@ def _races_db(path):
             ("2026", "1010", "05", "4", "1", "03", "54", "7", "x"),   # 障害 → 数えない
             ("2026", "1010", "05", "4", "1", "04", "17", "9", "x"),   # 中止 → 数えない
             ("2026", "1011", "30", "1", "1", "01", "17", "7", "x"),   # 地方 → 数えない
-            ("2026", "1011", "08", "4", "2", "01", "17", "1", "x"),   # 発走前 (データ区分 1) も数える
+            ("2026", "1011", "08", "4", "2", "01", "17", "1", "x"),   # 発走前 (データ区分 1) は未確定として数える
             ("2026", "1009", "05", "4", "1", "01", "17", "7", "x")]   # reserved → 範囲外
     conn.executemany("INSERT INTO races VALUES (?,?,?,?,?,?,?,?,?)", rows)
     conn.commit()
@@ -169,8 +256,20 @@ def test_count_fresh_races_counts_flat_jra_races_only(fresh, tmp_path):
     db = tmp_path / "k.db"
     _races_db(db)
     out = rw.count_fresh_races(db, "20261010", "20261031", context="t")
-    assert out["n_flat_races"] == 3 and out["by_day"] == {"20261010": 2, "20261011": 1}
+    assert out["n_confirmed"] == 2 and out["n_pending"] == 1
+    assert out["by_day"] == {"20261010": {"confirmed": 2, "pending": 0}, "20261011": {"confirmed": 0, "pending": 1}}
     assert out["window"]["purpose"] == "lockbox_count_only" and out["window"]["reads_outcomes"] is False
+
+
+def test_count_stops_on_an_unknown_track_type(fresh, tmp_path):
+    db = tmp_path / "k.db"
+    _races_db(db)
+    conn = sqlite3.connect(db)
+    conn.execute("INSERT INTO races VALUES ('2026','1012','05','4','3','01',NULL,'7','x')")
+    conn.commit()
+    conn.close()
+    with pytest.raises(rw.ResearchWindowError, match="track_type_code"):
+        rw.count_fresh_races(db, "20261010", "20261031", context="t")
 
 
 def test_count_fresh_races_refuses_reserved_days(fresh, tmp_path):
@@ -186,3 +285,39 @@ def test_returned_columns_must_match_the_allow_list(fresh, tmp_path, monkeypatch
     monkeypatch.setattr(rw, "COUNT_COLUMNS", rw.COUNT_COLUMNS + ("extra",))
     with pytest.raises(rw.ResearchWindowError, match="allow-list"):
         rw.count_fresh_races(db, "20261010", "20261031", context="t")
+
+
+# ------------------------------------------------------------------------------------------------ FRESH_FROM の確定
+
+def _schedules_db(path, rows):
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE schedules (race_year TEXT, race_month_day TEXT, track_code TEXT, kaiji TEXT, nichiji TEXT,"
+                 " weekday_code TEXT, data_div TEXT, data_created TEXT)")
+    conn.executemany("INSERT INTO schedules VALUES (?,?,?,?,?,?,?,?)", rows)
+    conn.commit()
+    conn.close()
+
+
+def test_fresh_from_is_the_first_jra_day_on_or_after_the_floor(tmp_path):
+    db = tmp_path / "s.db"
+    _schedules_db(db, [("2026", "1004", "05", "4", "2", "2", "1", "20251222"),   # 下限より前
+                       ("2026", "1008", "30", "1", "1", "5", "1", "20251222"),   # 地方
+                       ("2026", "1011", "05", "4", "4", "2", "1", "20251222"),
+                       ("2026", "1010", "08", "4", "3", "1", "1", "20251222")])
+    out = rw.determine_fresh_from(db)
+    assert out["fresh_from"] == "20261010" and out["not_before"] == "20261007" and out["schedule_data_created"] == "20251222"
+
+
+def test_fresh_from_without_a_scheduled_day_stops(tmp_path):
+    db = tmp_path / "s.db"
+    _schedules_db(db, [("2026", "1004", "05", "4", "2", "2", "1", "20251222")])
+    with pytest.raises(rw.ResearchWindowError, match="開催スケジュール"):
+        rw.determine_fresh_from(db)
+
+
+def test_schedule_sql_returned_columns_must_match(tmp_path, monkeypatch):
+    db = tmp_path / "s.db"
+    _schedules_db(db, [("2026", "1010", "05", "4", "3", "1", "1", "20251222")])
+    monkeypatch.setattr(rw, "SCHEDULE_COLUMNS", ("x",))
+    with pytest.raises(rw.ResearchWindowError, match="allow-list"):
+        rw.determine_fresh_from(db)

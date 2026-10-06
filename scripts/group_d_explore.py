@@ -23,7 +23,7 @@ from scripts import group_d as gd  # noqa: E402
 from scripts import prereg_runner as pr  # noqa: E402
 
 MODES = {"e1": [((2022,), (2023,)), ((2023,), (2022,))], "e2": [((2022, 2023), (2024,))]}
-DEPENDENCIES = ("scripts/group_d.py", "scripts/group_d_explore.py", "scripts/group_a.py", "scripts/c_prime.py",
+DEPENDENCIES = ("scripts/group_d.py", "scripts/group_d_explore.py", "scripts/group_a.py", "scripts/c_prime.py", "scripts/research_window.py",
                 "scripts/prereg_runner.py", "predictor/market_clogit.py", "predictor/race_market.py", "predictor/eval_stats.py",
                 "config.py", "db.py", "docs/PHASE05_5_PREREG.md", "docs/PHASE05_5_EXPLORATION.md",
                 "data/backtest/group_a_class_20261005/class_table.csv")

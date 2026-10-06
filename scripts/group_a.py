@@ -684,7 +684,7 @@ def tables_from_payload(payload: dict, races: dict[str, Race]) -> tuple[RatingTa
     return RatingTables(spec, par, variants, float(payload["w"]), payload["weight_fit"], scales), comp
 
 
-DEPENDENCIES = ("scripts/group_a.py", "scripts/group_a_explore.py", "scripts/group_a_power.py",
+DEPENDENCIES = ("scripts/group_a.py", "scripts/group_a_explore.py", "scripts/group_a_power.py", "scripts/research_window.py",
                 "scripts/group_a_run.py", "scripts/group_a_stats.py",
                 "predictor/eval_stats.py", "config.py", "db.py",
                 "data/backtest/group_a_class_20261005/class_table.csv", "docs/PHASE05_5_PREREG.md",

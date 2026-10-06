@@ -76,6 +76,8 @@
 - 族の残り: B / E は BLOCKED、D は PIT の確認の後。仮説 C の再検定は通過順位 (backfill 済み) に基づく本来の Group C の事前登録で行う
   (C′ の結果を見た後の設計になるので、新しい事前登録として扱う)
 
+- **主検定の後の、錠で固定されたファイルの編集 (2026-10-06、次の世代の窓の関所)**: 研究の窓の関所 (`scripts/research_window.py`、`docs/LOCKBOX_GOVERNANCE.md` §7) の配線と定数を、錠で固定された `scripts/c_prime.py` / `config.py` に足した。計算の経路は変えていない (読み込みの前に例外を出す行と、成果物の stats に目的を残す行、DEPENDENCIES への 1 項目だけ)。git の blob: c_prime.py 55c2a84df09f → c23abea03370 / config.py 0c4e8ad3d6f0 → 976390fbe198。**錠の値は書き換えない** (錠は結果を読む前のコードの証明で、主検定の後の変更はそれを遡って崩さない)。再 arm する場合は再凍結から。なお `config.py` と `docs/PHASE05_5_PREREG.md` はこの編集の前から錠と一致していない (CONSUMED_WINDOWS の追記・§8-6 の追補)
+
 ## 5. 記録の場所
 
 - 成果物: `data/backtest/c_prime_20261006/final/` (frozen: MANIFEST.json・frozen_composite.json・PRIMARY_LOCK.json・PRIMARY_RUN_1_STARTED.json /

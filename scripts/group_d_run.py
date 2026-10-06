@@ -54,7 +54,7 @@ SIDE_FILE = "primary_side_records.json"
 LOCK_FILE = "PRIMARY_LOCK.json"
 STARTED_FILE = "PRIMARY_RUN_{}_STARTED.json"
 PAYLOAD_VERSION = "group_d_payload_v1"
-DEPENDENCIES = ("scripts/group_d.py", "scripts/group_d_run.py", "scripts/group_a.py", "scripts/c_prime.py", "scripts/prereg_runner.py",
+DEPENDENCIES = ("scripts/group_d.py", "scripts/group_d_run.py", "scripts/group_a.py", "scripts/c_prime.py", "scripts/prereg_runner.py", "scripts/research_window.py",
                 "predictor/market_clogit.py", "predictor/race_market.py", "predictor/eval_stats.py", "scripts/group_a_stats.py",
                 "config.py", "db.py", "docs/PHASE05_5_PREREG.md", "data/backtest/group_a_class_20261005/class_table.csv")
 PINNED_FILES = DEPENDENCIES

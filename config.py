@@ -187,7 +187,7 @@ CONFIRM_FROM: str = "20260914"
 # 確定するまでは RESERVED_FROM 以降をすべて読めない (fail-closed)。
 RESERVED_FROM: str = "20260914"
 FRESH_FROM: str | None = None
-FRESH_FROM_NOT_BEFORE: str = "20261007"
+FRESH_FROM_NOT_BEFORE: str = "20261007"      # 規則のコミット 7e8d7a7 (2026-10-06 16:15 JST) の翌日
 FRESH_GOVERNANCE_COMMIT: str = "7e8d7a7"
 
 
@@ -262,6 +262,9 @@ SEALED_JUDGMENT_DONE: bool = False     # 判定を実施したら True にして
 # 封印を破った事実を残す監査ログ。--allow-sealed で意図的に覗いた場合に追記する。
 # 判定時にこのファイルが空でなければ、その判定は「一発勝負」として扱えない。
 SEALED_ACCESS_LOG = PROJECT_ROOT / "data" / "runtime" / "sealed_access_log.jsonl"
+
+# 研究の窓の関所 (scripts/research_window.py) を development 以外の目的で通った記録 (追記だけ)。書けなければ読ませない
+RESEARCH_WINDOW_ACCESS_LOG = PROJECT_ROOT / "data" / "runtime" / "research_window_access.jsonl"
 
 
 # 封印中に凍結しておくモデル成果物と、その指紋 (2026-09-14 採取)。

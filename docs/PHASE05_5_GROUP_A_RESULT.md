@@ -70,6 +70,7 @@
   市場だけの当てはめで β_market は logit 0.88〜0.90、log P_market なら 1.03〜1.05。Group A の検出力の計算の「β_market = 1 で勝つ確率 =
   P_market」も、logit のモデルでは厳密には成り立たない (判定の区分は変えない。判定不能は MDE で主検定の前に確定)。C′ 以降は log P_market に
   統一し、P_new は 1 つの式 (`predictor.race_market.p_new`) で尤度と金額の両方に使う
+- **主検定の後の、錠で固定されたファイルの編集 (2026-10-06、次の世代の窓の関所)**: 研究の窓の関所 (`scripts/research_window.py`、`docs/LOCKBOX_GOVERNANCE.md` §7) の配線と定数を、錠で固定された `scripts/group_a.py` / `config.py` に足した。計算の経路は変えていない (読み込みの前に例外を出す行と、成果物の stats に目的を残す行、DEPENDENCIES への 1 項目だけ)。git の blob: group_a.py 18a9315b3e20 → f974cf3fbea9 / config.py 0c4e8ad3d6f0 → 976390fbe198。**錠の値は書き換えない** (錠は結果を読む前のコードの証明で、主検定の後の変更はそれを遡って崩さない)。再 arm する場合は再凍結から。なお `config.py` と `docs/PHASE05_5_PREREG.md` はこの編集の前から錠と一致していない (CONSUMED_WINDOWS の追記・§8-6 の追補)
 - **錠の事前登録の版**: PRIMARY_LOCK.json の pinned の `docs/PHASE05_5_PREREG.md` は、§8-6a / §8-6b の追補 (2026-10-06) の **前** の版
   (錠の git_sha a34ae91 の時点)。Group A の主検定はその版の定義 (市場の項は logit) で実行した
 - 2025 の確定オッズは買えない価格で、T−10 のずれは別のコスト (§8-7 のとおり)

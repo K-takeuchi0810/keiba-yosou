@@ -95,3 +95,37 @@ def _tests_do_not_touch_runtime_logs():
     assert not changed, (
         "テストが運用ログ置き場を変更した (本番 checkout なら運用ログの汚染): "
         f"{changed}")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _isolate_research_window_log(tmp_path_factory):
+    """研究の窓の関所の監査ログ (`config.RESEARCH_WINDOW_ACCESS_LOG`) を本番から切り離す (2026-10-06)。
+
+    session 単位にする: module 単位の fixture (凍結物を一度だけ作るもの) が関所を通るので、関数単位の monkeypatch では間に合わない
+    (実測: 関数単位では c_prime_run / group_d_run の module fixture が本物の data/runtime に書いた)。
+    合成の DB で 2025 を読むテスト (目的の文字列 "test") だけは、凍結済みの runner の目的の一覧に足して通す。
+    一覧の完全一致そのものは `tests/test_research_window.py` で確かめる (そこでは "test" 以外の文字列で止まることを見る)。
+    """
+    try:
+        import config
+        from scripts import research_window
+    except ImportError:          # conftest を一時のリポジトリに写して試すテスト (test_conftest_guard 等) では関所が無い
+        yield
+        return
+    mp = pytest.MonkeyPatch()
+    mp.setattr(config, "RESEARCH_WINDOW_ACCESS_LOG", tmp_path_factory.mktemp("research_window") / "access.jsonl")
+    mp.setattr(research_window, "REPRODUCIBLE_PURPOSES", research_window.REPRODUCIBLE_PURPOSES | {"test"})
+    yield
+    mp.undo()
+
+
+@pytest.fixture(autouse=True)
+def _fresh_research_window_log_per_test(tmp_path, monkeypatch):
+    """関数単位のテストは、自分の監査ログだけを見られるように tmp_path に向け直す。"""
+    try:
+        import config
+    except ImportError:
+        return
+    if not hasattr(config, "RESEARCH_WINDOW_ACCESS_LOG"):
+        return
+    monkeypatch.setattr(config, "RESEARCH_WINDOW_ACCESS_LOG", tmp_path / "research_window_access.jsonl")

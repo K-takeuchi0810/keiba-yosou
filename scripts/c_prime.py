@@ -108,7 +108,7 @@ def load_races(max_year: int, *, min_year: int = 2021, db_path: Path | str = DB_
     if allow_primary_year and not primary_purpose:
         raise CPrimeError("主検定の年を読むときは primary_purpose (目的) を書く")
     # 研究の窓の関所 (docs/LOCKBOX_GOVERNANCE.md、2026-10-06 追加): 2025 は reproduce_consumed、2026 以降 (RESERVED / fresh) は止まる
-    research_window.check_years(min_year, max_year, context="c_prime.load_races",
+    window = research_window.check_years(min_year, max_year, context="c_prime.load_races",
                                 purpose="reproduce_consumed" if allow_primary_year else "development",
                                 reproduces=primary_purpose)
     from_date, to_date, _sealed = guard_analysis_window(f"{min_year}0101", f"{max_year}1231", context="c_prime.load_races")
@@ -149,6 +149,7 @@ def load_races(max_year: int, *, min_year: int = 2021, db_path: Path | str = DB_
                              finish, (odds or 0) / 10.0, str(leg or "").strip()))
         stats["rows"] += 1
     stats["races"] = len(races)
+    stats["research_window_purpose"] = window["purpose"]
     return races, stats
 
 
@@ -416,7 +417,7 @@ def within_race_corr(rows: list[dict], a: str, b: str) -> float:
 
 # ---------------------------------------------------------------------------------------------------- 来歴
 
-DEPENDENCIES = ("scripts/c_prime.py", "scripts/c_prime_explore.py", "scripts/c_prime_run.py", "predictor/market_clogit.py",
+DEPENDENCIES = ("scripts/c_prime.py", "scripts/c_prime_explore.py", "scripts/c_prime_run.py", "predictor/market_clogit.py", "scripts/research_window.py",
                 "predictor/race_market.py", "predictor/eval_stats.py", "scripts/group_a_stats.py", "config.py", "db.py",
                 "docs/PHASE05_5_PREREG.md", "docs/PHASE05_5_EXPLORATION.md")
 
