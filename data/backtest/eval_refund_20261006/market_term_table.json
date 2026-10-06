@@ -1,0 +1,37 @@
+{
+ "purpose": "prereg 0.5-5 §8-6b table (training years only, 2025 not read)",
+ "git_sha": "e30d06c5932cd7d21b92fd8e970b8369c1c3c110",
+ "git_dirty": false,
+ "years": {
+  "2022": {
+   "races": 3327,
+   "horses": 45599,
+   "beta_market_logit": 0.9003958438404505,
+   "converged_logit": true,
+   "beta_market_log": 1.0545680611792512,
+   "converged_log": true,
+   "mean_loglik_at_beta1_logit": -1.9076104676962855,
+   "mean_loglik_at_beta1_log": -1.8982316470171083
+  },
+  "2023": {
+   "races": 3326,
+   "horses": 45998,
+   "beta_market_logit": 0.8795161242470372,
+   "converged_logit": true,
+   "beta_market_log": 1.0255913987766314,
+   "converged_log": true,
+   "mean_loglik_at_beta1_logit": -1.9428979165730975,
+   "mean_loglik_at_beta1_log": -1.930623292546753
+  },
+  "2024": {
+   "races": 3321,
+   "horses": 45515,
+   "beta_market_logit": 0.8945852730479117,
+   "converged_logit": true,
+   "beta_market_log": 1.0469580008803478,
+   "converged_log": true,
+   "mean_loglik_at_beta1_logit": -1.8959469464367649,
+   "mean_loglik_at_beta1_log": -1.8870189988935373
+  }
+ }
+}

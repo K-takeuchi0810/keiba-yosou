@@ -321,7 +321,7 @@ def ratio_stats(samples: list[dict]) -> dict:
 
 def summarise(out: dict, samples: list[dict]) -> dict:
     p = out["primary_conditional_logit"]
-    fb = out["flat_bet_edge"]
+    fb = out["flat_bet_ratio"]      # 2026-10-06 から判定は比 ≥ 1.25 (0.5-5 §8-6)。d5eb54e の成果物は旧条件 (5pt) の値
     months = Counter(str(s["date"]).replace("-", "")[:6] for s in samples if is_fresh(s))
     return {
         "coverage": {"counts": out["counts"], "all": out["sets"]["all"],
@@ -336,8 +336,10 @@ def summarise(out: dict, samples: list[dict]) -> dict:
         "rejection_1_price_polynomial": out["rejection_1_price_polynomial"],
         "rejection_2_stale_only_win": out["rejection_2_stale_only_win"],
         "p_offset_over_p_market": ratio_stats(samples),
-        "purchase_criteria": {"edge_pt": moe.BUY_EDGE_PT, "n_bets": fb["n_bets"],
-                              "testable": fb["testable"], "money_pass": out["money_pass"]},
+        "purchase_criteria": {"ratio": moe.RATIO_BUY, "n_bets": fb["n_bets"],
+                              "testable": fb["testable"], "money_pass": out["money_pass"],
+                              "legacy_edge_pt": moe.BUY_EDGE_PT,
+                              "legacy_n_bets": out["legacy_flat_bet_edge_5pt"]["n_bets"]},
         "verdict": out["verdict"],
     }
 

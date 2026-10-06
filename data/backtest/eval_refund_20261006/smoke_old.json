@@ -1,0 +1,14 @@
+{
+ "root": "C:\\Users\\kizun\\dev\\keiba-yosou",
+ "counts": {
+  "no_t10": 239,
+  "analysed": 931,
+  "t10_fresh": 626,
+  "runner_set_mismatch": 6
+ },
+ "n_races_all": 931,
+ "n_horses_all": 12533,
+ "n_races_fresh": 626,
+ "exclusions": null,
+ "exclusion_reasons": {}
+}
