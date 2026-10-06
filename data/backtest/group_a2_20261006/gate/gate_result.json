@@ -1,0 +1,236 @@
+{
+ "mode": "gate",
+ "load_stats": {
+  "rows": 184146,
+  "skip_obstacle_rows": 5748,
+  "races": 13316,
+  "guard_from": "20210101",
+  "guard_to": "20241231",
+  "research_window_purpose": "development"
+ },
+ "years": {
+  "2022-2023": {
+   "n_rows": 91597,
+   "n_races": 6653,
+   "counts": {
+    "target_races_seen": 6660,
+    "observed_rows": 81416,
+    "target_races_used": 6653,
+    "missing_rows": 10181,
+    "refunded_runners_excluded": 333,
+    "drop_dead_heat_or_no_winner": 7
+   },
+   "exclusions": [],
+   "component_observed_rate": {
+    "perf_rating_last": 0.8888500715088922,
+    "perf_rating_best3_365": 0.8888500715088922,
+    "perf_rating_trend_365": 0.674476238304748,
+    "perf_rating_rank_in_race": 0.8888500715088922
+   },
+   "last_finish_observed_rate": 0.8895924539013287
+  },
+  "2024": {
+   "n_rows": 45515,
+   "n_races": 3321,
+   "counts": {
+    "target_races_seen": 3327,
+    "observed_rows": 40180,
+    "target_races_used": 3321,
+    "missing_rows": 5335,
+    "refunded_runners_excluded": 184,
+    "drop_dead_heat_or_no_winner": 6
+   },
+   "exclusions": [],
+   "component_observed_rate": {
+    "perf_rating_last": 0.8827858947599693,
+    "perf_rating_best3_365": 0.8827858947599693,
+    "perf_rating_trend_365": 0.6530594309568274,
+    "perf_rating_rank_in_race": 0.8827858947599693
+   },
+   "last_finish_observed_rate": 0.885114797319565
+  }
+ },
+ "variance_decomposition_2024": {
+  "total_var": 3.753525394269294,
+  "between_var": 2.7477715419886715,
+  "within_var": 1.0057538522806373,
+  "within_share": 0.2679491269237637,
+  "market_weighted_within_var_per_race": 0.5229097441534738,
+  "within_race_market_weighted_corr_with_market": 0.41849803503169136
+ },
+ "within_var_gate_value": 0.5229097441534738,
+ "power": {
+  "fisher": {
+   "se": 0.026421789743479054,
+   "n_races": 3321,
+   "info": [
+    [
+     2907.969107478489,
+     940.4508918598483
+    ],
+    [
+     940.4508918598478,
+     1736.5832603336862
+    ]
+   ],
+   "var_s_within": 1736.5832603336862,
+   "schur_complement": 1432.4370169209108,
+   "rho_within_race_market_weighted": 0.4184980350316913,
+   "assumption": "beta_market=1, beta_S=0 (win probability = renormalised market probability, log market term)"
+  },
+  "sigma_per_race": 1.5226380207254284,
+  "n_races": 3321,
+  "n_primary_required": 2176
+ },
+ "train_bootstrap": {
+  "n_boot": 1000,
+  "seed": 20261004,
+  "n_valid": 1000,
+  "n_discarded": 0,
+  "max_discard": 10,
+  "se": 0.018618207719172844,
+  "n_races": 6653,
+  "seconds": 91.9
+ },
+ "se_train_scaled": 0.02635191586557188,
+ "sigma_per_race_fixed": 1.5226380207254284,
+ "n_primary_required": 2176,
+ "confirmed_flat_jra_races_2024": 3327,
+ "r": 0.9981965734896303,
+ "n_calendar_required": 2180,
+ "purchase_projection": {
+  "n_buys_2024": 20,
+  "n_races_2024": 3321,
+  "per_100_races": 0.6022282445046673,
+  "state": "MONEY_UNTESTABLE_WITHIN_5Y",
+  "races_for_1500": 249075.0
+ },
+ "pooled_in_sample": {
+  "beta_market": 1.0328964159237506,
+  "beta_S": 0.026467935794394683,
+  "se_S": 0.014461372368086934,
+  "z_S": 1.8302506235717706
+ },
+ "pooled_composite": {
+  "years": [
+   2022,
+   2023,
+   2024
+  ],
+  "component_sd": {
+   "perf_rating_last": {
+    "sd": 0.6711980560111539,
+    "n_races": 9069,
+    "n_races_zero_variance": 0
+   },
+   "perf_rating_best3_365": {
+    "sd": 0.5518016779113138,
+    "n_races": 9069,
+    "n_races_zero_variance": 0
+   },
+   "perf_rating_trend_365": {
+    "sd": 0.7258112606076315,
+    "n_races": 8841,
+    "n_races_zero_variance": 183
+   },
+   "perf_rating_rank_in_race": {
+    "sd": 0.28770438939611476,
+    "n_races": 9069,
+    "n_races_zero_variance": 0
+   }
+  },
+  "fit": {
+   "cols": [
+    "market_feature",
+    "perf_rating_last_wstd",
+    "perf_rating_best3_365_wstd",
+    "perf_rating_trend_365_wstd",
+    "perf_rating_rank_in_race_wstd"
+   ],
+   "beta": [
+    1.0371859372953514,
+    -0.029196478055654528,
+    0.03417540276904415,
+    0.02881819748133806,
+    0.008225111856682085
+   ],
+   "se": [
+    0.01258040936747414,
+    0.020558053991740273,
+    0.034838573615385435,
+    0.017540295887577086,
+    0.025833430759623525
+   ],
+   "z": [
+    82.44452998301713,
+    -1.4201965841409387,
+    0.9809644661787067,
+    1.6429710003779667,
+    0.31839022595239497
+   ]
+  },
+  "raw_coefficients": {
+   "perf_rating_last": -0.029196478055654528,
+   "perf_rating_best3_365": 0.03417540276904415,
+   "perf_rating_trend_365": 0.02881819748133806,
+   "perf_rating_rank_in_race": 0.008225111856682085
+  },
+  "weights": {
+   "perf_rating_last": 0.0,
+   "perf_rating_best3_365": 0.03417540276904415,
+   "perf_rating_trend_365": 0.02881819748133806,
+   "perf_rating_rank_in_race": 0.008225111856682085
+  },
+  "zeroed": [
+   "perf_rating_last"
+  ],
+  "s_sd": {
+   "sd": 0.04331363500962522,
+   "n_races": 9974,
+   "n_races_zero_variance": 905
+  },
+  "n_races": 9974,
+  "n_rows": 137112
+ },
+ "provenance": {
+  "git_sha": "728b6d479e0877fa05149d4b3bbeeb367518fdc1",
+  "git_dirty": false,
+  "git_status": [],
+  "own_output": [
+   "data/backtest/group_a2_20261006/gate"
+  ],
+  "files_blob_sha1": {
+   "scripts/group_a2.py": "d112c9f56294d5068e79ea461b903f9342025062",
+   "scripts/group_a2_explore.py": "eb4c6fadf96628217e68b67ff41c6cc873a15f98",
+   "scripts/group_a.py": "f974cf3fbea97aa627a244db3f29d51cf98f6c41",
+   "scripts/c_prime.py": "c23abea033706c4249815eccd2846886df0ffdff",
+   "scripts/research_window.py": "b5193582378b9f018b07cbc7129842283487c031",
+   "scripts/prereg_runner.py": "4a619a9ee2abd1190033959388ba52608b4f2e8c",
+   "scripts/group_a_stats.py": "1c1ded61f7b8248872a45699f41f8b5d2bfb1909",
+   "predictor/market_clogit.py": "4f64cae668e20e7c16e525d5bd40dc855603877a",
+   "predictor/race_market.py": "3d0f6bc95401fcc808999139f0ff4dc0df85de0e",
+   "predictor/eval_stats.py": "9c4f9c3a7d4936800721377f53897393b28ac625",
+   "config.py": "6c5903e54e3a1ab7daecd78a14c105c150c1bc38",
+   "db.py": "c89fae5180200254b5d37275d6dc3f4d1d13ca6a",
+   "docs/A_DOUBLE_PRIME_PREREG.md": "a014edc11995ef29edafcd00ccb7080d0b9fe67c",
+   "docs/A_DOUBLE_PRIME_EXPLORATION.md": "f607d38d655073656a7879021d57abd5c884f7bf",
+   "data/backtest/group_a_class_20261005/class_table.csv": "b2122077eb26417860f76dea6100f52c36403ea4"
+  },
+  "python": "3.14.5",
+  "numpy": "2.4.4",
+  "argv": [
+   "C:\\Users\\kizun\\dev\\keiba-yosou\\.claude\\worktrees\\a2\\scripts\\group_a2_explore.py",
+   "--mode",
+   "gate",
+   "--out-dir",
+   "data/backtest/group_a2_20261006/gate",
+   "--db",
+   "C:/Users/kizun/dev/keiba-yosou/data/keiba.db"
+  ],
+  "db": {
+   "path": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\keiba.db",
+   "bytes": 20203466752,
+   "mtime": "2026-10-06T08:00:04"
+  }
+ }
+}
