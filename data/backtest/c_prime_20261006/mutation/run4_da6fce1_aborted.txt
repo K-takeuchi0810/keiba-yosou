@@ -1,0 +1,5 @@
+ABORT: 変異 'C4 直近 6 走を数える' の実行で本番が変わった: ['data/keiba.db-wal']
+KILLED C1 窓に対象日 (同じ日) を含める FAILED tests/test_c_prime.py::test_target_race_own_leg_codes_never_reach_any_component
+KILLED C2 窓を 366 日にする FAILED tests/test_c_prime.py::test_window_edges_are_365_days_back_and_the_day_before
+KILLED C3 窓を 364 日にする FAILED tests/test_c_prime.py::test_window_edges_are_365_days_back_and_the_day_before
+ABORTED C4 直近 6 走を数える data/keiba.db-wal

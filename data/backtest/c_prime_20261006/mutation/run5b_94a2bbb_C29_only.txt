@@ -1,0 +1,1 @@
+KILLED C29 履歴だけの読み込みで主検定の年の着順を NULL にしない FAILED tests/test_c_prime.py::test_history_only_load_nulls_primary_year_results_in_sql
