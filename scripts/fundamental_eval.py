@@ -63,6 +63,10 @@ from scripts.fundamental_model import (  # noqa: E402
     FEATURES, MODEL_PATH, build_dataset, eval_audit_info)
 from scripts.market_data_audit import confirmed_win_payouts  # noqa: E402
 
+# 返還の会計 (成果物の meta に残す)。返還の対象は「賭けに数えない」(事前登録 0.5-5 §8-6)。賭け金を戻して分母に残す
+# 「stake 中立」の版は採らない (尤度の選択集合と金額の対象を同じにするため)。
+REFUND_ACCOUNTING = "refunded_runners_excluded_from_bets_and_choice_set (prereg 0.5-5 §8-6)"
+
 # T−10 スナップが発走の何分前までなら「T−10 の市場」と呼んでよいか。
 # 決定時刻は発走 10 分前なので理想は 10 分ちょうど。実データのばらつきを
 # 見込んで 30 分を既定にする。
@@ -115,6 +119,10 @@ def select_race(conn, race, rows: list[dict], m10_odds: dict[str, float], final_
     旧実装は「T−10 市場・最終市場・標本の馬の集合が一致しない」レースを `runner_set_mismatch` で黙って落としていた。
     価格の無い返還の対象 (2025 で約 110 レース) がいるだけで落ち、価格のある返還の対象は外れの賭けに数えていた。
     """
+    if not rows:
+        raise ValueError("select_race: 標本の行が空 (呼び出し側はレースごとの行を渡す)")
+    # 最終の列も全馬の価格を要求する: 0.5-3 / 4A と同じく T−10 と最終の両方で確率を作れるレースに揃えるため
+    # (market_offset_eval は最終の列を確定払戻との照合 (final_odds_confirmed) にだけ使うが、集合は fundamental_eval と同じにする)
     sel = choice_rows(rows, _abnormal_codes(conn, race), {"t10": m10_odds, "final": final_odds})
     rid = rows[0]["race_id"]
     if isinstance(sel, Excluded):
@@ -131,9 +139,17 @@ def select_race(conn, race, rows: list[dict], m10_odds: dict[str, float], final_
 
 
 def count_special_payouts(rows: list[dict], payouts: dict[str, float], c: Counter) -> None:
-    """特払い (勝ち馬の払戻が 100 円未満) の件数。0 であることを成果物で確かめる (事前登録 0.5-5 §8-6)。"""
+    """特払い (勝ち馬の払戻が 100 円未満) と、払戻の取れない勝ち馬の件数。0 であることを成果物で確かめる (事前登録 0.5-5 §8-6)。
+
+    払戻の無い勝ち馬は `flat_bet_roi` で黙って外れになるので、特払いと別に数える。
+    """
     for r in rows:
-        if r["won"] == 1 and 0.0 < payouts.get(r["horse_num"].zfill(2), 0.0) < 1.0:
+        if r["won"] != 1:
+            continue
+        pay = payouts.get(r["horse_num"].zfill(2), 0.0)
+        if pay <= 0.0:
+            c["winner_without_payout"] += 1
+        elif pay < 1.0:
             c["special_payout_winners"] += 1
 
 
@@ -191,7 +207,8 @@ def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter, dict]:
               AND CAST(track_code AS INTEGER) BETWEEN 1 AND 10""",
         (from_date, to_date))}
 
-    c: Counter = Counter()
+    # 検査が走って 0 だったことを成果物に残す (キーが無いと「走らなかった」と区別できない)
+    c: Counter = Counter({"special_payout_winners": 0, "winner_without_payout": 0})
     samples: list[dict] = []
     exclusions: list[dict] = []
     for rid, rows in by_race.items():
@@ -269,6 +286,7 @@ def run(from_date: str, to_date: str, max_lead: int) -> dict:
                  "market_features": 0, **model_info},
         "counts": dict(counts),
         "race_exclusions": exclusions,
+        "refund_accounting": REFUND_ACCOUNTING,
         "sets": {
             "all": {"n_races": len({s["race_id"] for s in samples}),
                     "n_horses": len(samples)},

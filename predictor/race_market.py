@@ -28,20 +28,19 @@ from dataclasses import dataclass, field
 
 from collections import defaultdict
 
-from db import REFUNDED_ABNORMAL_CODES
-from predictor.eval_stats import N_BOOT, block_boot, flat_bet_roi
+from db import is_refunded  # noqa: F401  (返還の対象の判定の単一の出典は db。ここでは再公開するだけ)
+from predictor.eval_stats import MIN_BUYS_FOR_MONEY, N_BOOT, block_boot, flat_bet_roi
 
-# 金額の対照 (下の 3 関数) は predictor/eval_stats.py に置かない: eval_stats.py は Group A の主検定の錠 (PRIMARY_LOCK.json) が
-# sha256 を固定したファイルで、変えると Group A の固定のファイルの照合が通らなくなる
+# 金額の対照と区分 (下の関数) は predictor/eval_stats.py に置かない: eval_stats.py と db.py は Group A の主検定の錠
+# (data/backtest/group_a_20261005/final/PRIMARY_LOCK.json の pinned) が sha256 を固定したファイルで、変えると Group A の
+# 固定のファイルの照合が通らなくなる
 
 #: 購入条件 (事前登録 §4-5・§8-8): `P_new / P_market ≥ 1.25`。結果を見て変えない。
 RATIO_BUY = 1.25
 #: 140% 級の目安 (観察の記録だけ。購入条件ではない)。
 RATIO_140 = 1.75
-
-
-def is_refunded(code: object) -> bool:
-    return str(code or "").strip() in REFUNDED_ABNORMAL_CODES
+#: 金額の合格を主張してよい最低点数 (事前登録 §4-5 の検出力の表・§8-7 の区分)。100〜1,499 点は MONEY_UNDERPOWERED。
+MIN_BUYS_FOR_MONEY_PASS = 1500
 
 
 @dataclass(frozen=True)
@@ -88,11 +87,20 @@ def build_choice_set(abnormal: dict[str, object], markets: dict[str, dict[str, f
     return ChoiceSet(choice=choice, refunded=refunded, implied=implied, refunded_priced=refunded_priced)
 
 
+def market_term(p: float) -> float:
+    """条件付きロジットの市場の列 (§8-6b)。**log P_market** (logit ではない)。C′ 以降の尤度・検出力・P_new はすべてこれを通す。"""
+    return math.log(p)
+
+
 def p_new(p_market: dict[str, float], s: dict[str, float], beta_market: float, beta_s: float) -> dict[str, float]:
-    """§8-6b の P_new。`p_market` は選択集合の中で和 1 (build_choice_set の implied)。"""
+    """§8-6b の P_new。`p_market` は選択集合の中で和 1 (build_choice_set の implied)。
+
+    2026-10-06 時点で本番の呼び出し元は無い (C′ から配線する。C′ の凍結の前提条件: 尤度の列と金額の P_new が
+    `market_term` と `p_new` を通ることをテストで強制する、事前登録 §8-6b)。
+    """
     if set(p_market) != set(s):
         raise ValueError(f"P_market と S の馬の集合が違う: {sorted(set(p_market) ^ set(s))}")
-    u = {h: beta_market * math.log(p) + beta_s * s[h] for h, p in p_market.items()}
+    u = {h: beta_market * market_term(p) + beta_s * s[h] for h, p in p_market.items()}
     m = max(u.values())
     e = {h: math.exp(v - m) for h, v in u.items()}
     total = sum(e.values())
@@ -167,11 +175,11 @@ def market_proportional_roi(samples: list[dict], p_key: str = "p_t10", n_boot: i
 
 
 def favourite_flat_roi(samples: list[dict], odds_key: str = "odds_t10", n_boot: int = N_BOOT) -> dict:
-    """事前登録 §4-5 の対照 2: 各レースのオッズ最小の 1 頭に 100 円 (同値は馬番の小さい方)。返還の対象は標本に居ない。"""
+    """事前登録 §4-5 の対照 2: 各レースのオッズ最小の 1 頭に 100 円 (同値は馬番の小さい方、数値で比べる)。返還の対象は標本に居ない。"""
     by_race: dict[str, list[dict]] = defaultdict(list)
     for s in samples:
         by_race[s["race_id"]].append(s)
-    picks = [min(rows, key=lambda s: (s[odds_key], str(s["horse_num"]))) for rows in by_race.values()]
+    picks = [min(rows, key=lambda s: (s[odds_key], int(s["horse_num"]))) for rows in by_race.values()]
     return flat_bet_roi(picks, n_boot=n_boot)
 
 
@@ -180,3 +188,21 @@ def tail_calibration(samples: list[dict], new_key: str, market_key: str) -> dict
     return {"n": len(samples), "wins": int(sum(s["won"] for s in samples)),
             "sum_p_new": float(sum(s[new_key] for s in samples)),
             "sum_p_market": float(sum(s[market_key] for s in samples))}
+
+
+def money_class(flat: dict) -> str:
+    """金額の区分 (事前登録 §4-5・§8-7)。**合格を主張してよいのは MONEY_PASS だけ**。
+
+    - MONEY_UNTESTABLE: 100 点未満 (区間を定義しない)
+    - MONEY_UNDERPOWERED: 100〜1,499 点 (区間は記録するが、下限が 100% を超えても合格を主張しない)
+    - MONEY_PASS: 1,500 点以上かつ回収率の 95% 区間の下限 > 100% (点推定ではなく区間の下限で判定する)
+    - MONEY_NOT_PASSED: 1,500 点以上で、下限が 100% 以下か区間が無効
+    """
+    n = flat["n_bets"]
+    if n < MIN_BUYS_FOR_MONEY:
+        return "MONEY_UNTESTABLE"
+    if n < MIN_BUYS_FOR_MONEY_PASS:
+        return "MONEY_UNDERPOWERED"
+    lo = flat["roi_ci95"][0]
+    return "MONEY_PASS" if lo == lo and lo > 1.0 else "MONEY_NOT_PASSED"
+

@@ -714,7 +714,8 @@ JRA 9,987 レースのうち 7,243 は一般競走で `race_name` が空)。ま�
 
 - 主検定に通っても、それは「確定市場に対する追加の情報」の証拠であって、T−10 で買えることの証拠ではない
 - 2026-05-09〜08-31 の 626 レースは **消費済み**。今後この窓を使うのは paired の診断・移植の確認であって、
-  新しい validation ではない
+  新しい validation ではない (§8-6a の返還の規則では同じ窓の鮮度内は 630 レース。旧実装が黙って落とした 6 レースのうち 4 が鮮度内。
+  別の窓ではない)
 - §4-1 の式の `logit(P_T10)` は移植の確認用であって、主検定の市場の定義ではない
 
 ### 8-6. 金額の会計と、尤度の選択集合を分ける
@@ -759,7 +760,16 @@ JRA 9,987 レースのうち 7,243 は一般競走で `race_name` が空)。ま�
   `nonrefund_runner_without_price:<市場>` / `market_runner_not_registered:<市場>` / `no_runner_after_refund` /
   `sample_row_not_registered` / `choice_runner_without_sample_row` / `winner_is_refunded` の 6 つ。旧 `runner_set_mismatch` は廃止
 - 返還の対象を除いた頭数・レース数 (`refunded_runners_excluded` / `races_with_refunded_runner`)、価格のあった返還の対象の頭数
-  (`refunded_runners_priced:<市場>`、旧実装が外れの賭けに数えていた数)、特払いの勝ち馬 (`special_payout_winners`) を `counts` に残す
+  (`refunded_runners_priced:<市場>`、旧実装が外れの賭けに数えていた数)、特払いの勝ち馬 (`special_payout_winners`)、払戻の取れない
+  勝ち馬 (`winner_without_payout`) を `counts` に残す (後の 2 つは 0 でもキーを出す)。返還の会計は成果物の `refund_accounting` に刻む
+  (「賭けに数えない」。賭け金を戻して分母に残す stake 中立の版は採らない)
+- 選択集合は T−10 と最終の列の両方で全馬に価格を要求する (0.5-3 / 4A と同じく両方の市場で確率を作れるレースに揃える。
+  `market_offset_eval` は最終の列を確定払戻との照合にだけ使うが、集合は `fundamental_eval` と同じにする)。両方で欠けたレースの理由は
+  先に見た市場 (T−10) の名前になる
+- **金額の区分をコードで強制する** (`predictor.race_market.money_class`、2026-10-06 の 4 名レビューの must-fix): 100 点未満は
+  `MONEY_UNTESTABLE`、100〜1,499 点は `MONEY_UNDERPOWERED` (区間は記録、下限が 100% を超えても合格を主張しない)、1,500 点以上かつ
+  回収率の 95% 区間の **下限** > 100% だけが `MONEY_PASS`、1,500 点以上でそれ以外は `MONEY_NOT_PASSED`。`money_pass` が True に
+  なるのは `MONEY_PASS` のときだけ (それまでの実装は 100 点以上で下限 > 100% なら合格を表示しえた)
 - 金額の判定の購入条件は比 ≥ 1.25 (`flat_bet_ratio`)。絶対 5pt は `legacy_flat_bet_edge_5pt` として記録だけ。対照 1
   (`control_1_market_proportional`) と対照 2 (`control_2_favourite`) と、比 ≥ 1.25 / ≥ 1.75 の集合の「実勝利数 / Σ P_new / Σ P_market」
   (`ratio_tail_calibration`) を併記する
@@ -776,7 +786,11 @@ JRA 9,987 レースのうち 7,243 は一般競走で `race_name` が空)。ま�
 - **市場の項は log P_market にする** (これまでの §4-1 / §8-4 の `logit(P_market)` を、C′ 以降の主検定・検出力・金額の
   すべてで置き換える)。理由: logit で入れると、β_market = 1・β_S = 0 でもモデルの確率は `(p/(1−p)) / Σ` になり、市場その
   ものにならない (本命ほど過大)。log なら β_market = 1・β_S = 0 で P_new = P_market に **ちょうど** 一致する
-- 学習期だけで確かめた大きさ (2025 は読んでいない。Group A の対象の定義で、市場だけの条件付きロジット):
+- **この改訂のきっかけ (隠さない)**: Group A の主検定 (2025、run_index 1) で β_market = 0.867 を観測した **後** に、§8-6 の
+  「β_market = 1 の仮定」との不一致を調べて見つけた。β_S の推定値・区間は改訂の判断に使っていない。根拠は構造的な要請
+  (β_market = 1・β_S = 0 で P_new が市場そのものになるべき) で、裏付けの数値は学習期だけ
+- 学習期だけで確かめた大きさ (2025 は読んでいない。Group A の対象の定義で、市場だけの条件付きロジット。再現:
+  `data/backtest/eval_refund_20261006/market_term_table.py` → `market_term_table.json`):
 
   | 年 | レース | β_market (logit) | β_market (log) | β = 1 の平均対数尤度 logit / log |
   |---|---|---|---|---|
@@ -791,13 +805,22 @@ JRA 9,987 レースのうち 7,243 は一般競走で `race_name` が空)。ま�
   T−10 の P_market に当てる。β_market を 1 に置き換えたり、β_S だけを持ち出したりしない
 - 主検定の前の件数の見込み (§8-8) は、同じ関数に仮定値 (β_market = 1, β_S = β_target) を渡して数える (今までどおり。
   2025 の β̂ は使わない)
-- 金額の試験の診断として、市場の項だけの補正 `P_new(β̂_market, 0)` での比 ≥ 1.25 の件数を併記する
-  (β̂_market ≠ 1 による本命・人気薄の補正だけで買い目が出ていないかを分けて見るため。判定には使わない)
+- 金額の試験の診断 (判定には使わない。結果を見る前にここで宣言する): β̂_market ≠ 1 による本命・人気薄の補正だけで買い目が
+  出ていないか、T−10 に移した市場の項の過不足が S の寄与に混ざっていないかを分けて見るため
+  - 3 つの集合の比 ≥ 1.25 の件数と重なり (Jaccard): full `P_new(β̂_market, β̂_S)` / 市場の項だけ `P_new(β̂_market, 0)` /
+    S だけ `P_new(1, β̂_S)`
+  - T−10 の市場だけの条件付きロジットの β_market (移植の確認の窓で、診断として 1 回)
+  - 封印窓の金額の試験では、市場の項だけの集合を **対照 3** として先に宣言し、full の集合との差で S の金銭的な寄与を見る
+    (回収率を見るのは封印窓でだけ)
 - **Group A には遡って当てない**。Group A の主検定・検出力は logit のまま固定・実行済み (954b954)。Group A の検出力の
   計算は「β_market = 1 の仮定で勝つ確率 = P_market」としたが、logit のモデルでは β_market = 1 でも勝つ確率は P_market に
   ならない。この食い違いは Group A の結果の文書に記録として足す (判定の区分は変えない。判定不能は MDE で主検定の前に確定)
 - C′ の検出力の入力は C′ 自身の凍結した S・2025 の市場の確率・結果を読まない Fisher 情報だけ (Group A の実測のレース内の
   分散 0.26 は入力にしない。設計上の警告として参照するだけ、外部の指示者 2026-10-06)
+- **C′ の凍結の前提条件 (2026-10-06 の 4 名レビューの must-fix)**: Group A のコード (`scripts/group_a.py::add_market_logit`・
+  `scripts/group_a_power.py::fisher_se_at_null` の `logit_p_market`) は logit のまま凍結されている。C′ のコードは市場の列を
+  `predictor.race_market.market_term` (log) だけから作り、尤度の列・検出力の Fisher 情報・金額の P_new (`p_new`) が同じ関数を通ることを
+  テストで強制する。このテストが通るまで C′ の探索台帳を開かない
 
 ### 8-7. 多重比較・検出力
 
@@ -866,7 +889,8 @@ JRA 9,987 レースのうち 7,243 は一般競走で `race_name` が空)。ま�
 backfill → 被覆率の監査 → `block_boot` の分位の引数 (テスト付き。検出力の固定でブートストラップの SE を使うので先に) →
 Group A の仕様を学習期だけで固定 (探索台帳・dry run) → 返還・再正規化・比 ≥ 1.25 の修正 (テスト付き) →
 Group A の検出力を固定 (判定の区分を決める) → コミットして SHA を固定 → 主検定を 1 回 → レビュー →
-C′ (同じ手順、A の結果に関係なく)
+C′ (同じ手順、A の結果に関係なく)。C′ は §8-6b の前提条件 (市場の列を `market_term` の 1 つから作ることのテスト) を満たしてから
+探索台帳を開く
 
 ---
 

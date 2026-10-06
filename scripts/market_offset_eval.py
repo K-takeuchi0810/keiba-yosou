@@ -66,8 +66,10 @@ from predictor.eval_stats import (  # noqa: E402
     normalise,
 )
 from predictor.race_market import (  # noqa: E402
+    MIN_BUYS_FOR_MONEY_PASS,
     RATIO_140,
     RATIO_BUY,
+    money_class,
     favourite_flat_roi,
     market_proportional_roi,
     ratio_set,
@@ -75,6 +77,7 @@ from predictor.race_market import (  # noqa: E402
 )
 from scripts.fundamental_eval import (  # noqa: E402
     DEFAULT_MAX_LEAD_MINUTES,
+    REFUND_ACCOUNTING,
     _final_market_odds,
     count_special_payouts,
     select_race,
@@ -134,7 +137,7 @@ def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter, dict]:
               AND CAST(track_code AS INTEGER) BETWEEN 1 AND 10""",
         (from_date, to_date))}
 
-    c: Counter = Counter()
+    c: Counter = Counter({"special_payout_winners": 0, "winner_without_payout": 0})
     samples: list[dict] = []
     exclusions: list[dict] = []
     for rid, rows in by_race.items():
@@ -226,6 +229,7 @@ def run(from_date: str, to_date: str, run_index: int) -> dict:
                  **model_info},
         "counts": dict(counts),
         "race_exclusions": exclusions,
+        "refund_accounting": REFUND_ACCOUNTING,
         "sets": {"all": {"n_races": len({s["race_id"] for s in samples}),
                          "n_horses": len(samples)},
                  "fresh_t10": {"n_races": len({s["race_id"] for s in fresh}),
@@ -281,18 +285,19 @@ def run(from_date: str, to_date: str, run_index: int) -> dict:
         "ge_1_75": tail_calibration(ratio_set(fresh, "p_offset", RATIO_140), "p_offset", "p_t10")}
     # 旧条件 (絶対 5pt) は記録だけ。判定には使わない
     out["legacy_flat_bet_edge_5pt"] = flat_bet_roi([s for s in fresh if s["edge"] > BUY_EDGE_PT])
-    # 対象が最低件数に満たなければ **不合格ではなく判定不能**。
-    out["money_pass"] = (
-        bool(out["flat_bet_ratio"]["roi_ci95"][0] > 1.0)
-        if out["flat_bet_ratio"]["testable"] else None)
+    # 金額の区分 (0.5-5 §4-5・§8-7)。合格を主張してよいのは MONEY_PASS (1,500 点以上かつ区間の下限 > 100%) だけ。
+    # 100 点未満は判定不能、100〜1,499 点は検出力不足 (区間は記録、合格は主張しない) で、どちらも money_pass は None。
+    out["money_class"] = money_class(out["flat_bet_ratio"])
+    out["money_pass"] = {"MONEY_PASS": True, "MONEY_NOT_PASSED": False}.get(out["money_class"])
 
     out["verdict"] = {
         "primary": out["primary_conditional_logit"]["pass"],
         "money": out["money_pass"],
+        "money_class": out["money_class"],
         "money_untestable_reason": (
             None if out["money_pass"] is not None else
-            f"購入条件 (比 ≥ {RATIO_BUY}) に該当 {out['flat_bet_ratio']['n_bets']} 頭 "
-            f"(最低 {MIN_BUYS_FOR_MONEY} 頭)"),
+            f"{out['money_class']}: 購入条件 (比 ≥ {RATIO_BUY}) に該当 {out['flat_bet_ratio']['n_bets']} 頭 "
+            f"(区間は {MIN_BUYS_FOR_MONEY} 頭から、合格の主張は {MIN_BUYS_FOR_MONEY_PASS} 頭から)"),
         "rejected_by": [k for k, v in (
             ("補正が価格の単調変換にすぎない",
              not out["rejection_1_price_polynomial"]["survives"]
@@ -413,8 +418,8 @@ def main() -> int:
     print(f"  {'市場比例 (stake ∝ 1/odds)':>32} {c1['n_races']:6,d} R  {c1['roi'] * 100:6.1f}%  [対照 1]")
 
     v = out["verdict"]
-    print("\n=== 事前登録に照らした判定 ===")
-    print(f"  主要仮説 (b2 の区間下限 > 0)     {'合格' if v['primary'] else '不合格'}")
+    print("\n=== 事前登録に照らした判定 (4A の経路: 主要仮説の区間は 95%) ===")
+    print(f"  主要仮説 (b2 の 95% 区間下限 > 0) {'合格' if v['primary'] else '不合格'}")
     money_label = ("判定不能: " + v["money_untestable_reason"]
                    if v["money"] is None else ("合格" if v["money"] else "不合格"))
     print(f"  金額 (回収率の区間下限 > 100%)   {money_label}")

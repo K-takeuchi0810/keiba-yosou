@@ -82,7 +82,9 @@ def test_every_refunded_code_is_removed(code):
 
 
 def test_refund_codes_come_from_db():
+    import db
     from db import REFUNDED_ABNORMAL_CODES
+    assert rm.is_refunded is db.is_refunded
     assert rm.is_refunded("1") and rm.is_refunded("2") and rm.is_refunded("3")
     assert not rm.is_refunded("4") and not rm.is_refunded("0") and not rm.is_refunded(None)
     assert {c for c in "0123456789" if rm.is_refunded(c)} == set(REFUNDED_ABNORMAL_CODES)
@@ -144,6 +146,15 @@ def test_p_new_with_unit_market_coefficient_and_zero_feature_is_exactly_the_mark
     assert lo["01"] / t > 0.6 + 0.1
 
 
+def test_market_term_is_log_and_p_new_goes_through_it(monkeypatch):
+    assert rm.market_term(0.25) == math.log(0.25)
+    calls = []
+    real = rm.market_term
+    monkeypatch.setattr(rm, "market_term", lambda p: calls.append(p) or real(p))
+    rm.p_new({"01": 0.5, "02": 0.5}, {"01": 0.0, "02": 0.0}, 1.0, 0.0)
+    assert sorted(calls) == [0.5, 0.5]
+
+
 def test_p_new_matches_a_hand_softmax():
     p = {"01": 0.5, "02": 0.3, "03": 0.2}
     s = {"01": 0.0, "02": 1.0, "03": -1.0}
@@ -167,6 +178,22 @@ def test_ratio_threshold_is_inclusive_and_fixed_at_1_25():
         rm.ratio_buys({"01": 0.5}, market)
 
 
+# --- 金額の区分 (事前登録 §4-5・§8-7) ---------------------------------------------------------------
+
+@pytest.mark.parametrize("n,roi,lo,want", [
+    (99, 3.0, float("nan"), "MONEY_UNTESTABLE"),
+    (100, 3.0, 2.0, "MONEY_UNDERPOWERED"),          # 区間の下限が 100% を超えても、1,500 点未満は合格を主張しない
+    (1499, 3.0, 2.0, "MONEY_UNDERPOWERED"),
+    (1500, 1.3, 1.01, "MONEY_PASS"),
+    (1500, 1.3, 1.0, "MONEY_NOT_PASSED"),           # 下限ちょうど 100% は合格でない
+    (1500, 1.2, 0.9, "MONEY_NOT_PASSED"),           # 点推定が 100% を超えても、区間の下限で判定する
+    (2000, 1.5, float("nan"), "MONEY_NOT_PASSED"),  # 区間が無効
+])
+def test_money_class_boundaries(n, roi, lo, want):
+    assert rm.MIN_BUYS_FOR_MONEY_PASS == 1500
+    assert rm.money_class({"n_bets": n, "roi": roi, "roi_ci95": [lo, lo + 1.0]}) == want
+
+
 # --- 対照 (事前登録 §4-5) -----------------------------------------------------------------------
 
 def _bet(race, h, p, odds, won, payout=None):
@@ -187,6 +214,9 @@ def test_favourite_control_picks_the_lowest_odds_and_breaks_ties_by_horse_number
             _bet("B", "01", 0.3, 3.0, 0), _bet("B", "02", 0.7, 1.4, 1)]
     r = favourite_flat_roi(rows, "odds_t10", n_boot=200)
     assert r["n_bets"] == 2 and r["roi"] == pytest.approx((2.0 + 1.4) / 2)
+    # 同値は馬番を数値で比べる (文字列だと "10" < "9")
+    rows = [_bet("C", "10", 0.5, 2.0, 0), _bet("C", "9", 0.5, 2.0, 1)]
+    assert favourite_flat_roi(rows, "odds_t10", n_boot=200)["roi"] == pytest.approx(2.0)
 
 
 def test_tail_calibration_records_wins_and_both_probability_sums():
@@ -208,6 +238,8 @@ def _db(abnormal: dict[str, str]):
     for h, c in abnormal.items():
         conn.execute("INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?)", (*RACE.values(), h, c))
     conn.execute("INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?)", (*RACE.values(), "00", "0"))
+    # 同じ日・同じ場の次のレース (異常コードの読み込みがレースキーで絞れていることを確かめる)
+    conn.execute("INSERT INTO horse_races VALUES (?,?,?,?,?,?,?,?)", (*list(RACE.values())[:5], "02", "05", "0"))
     return conn
 
 
@@ -248,12 +280,20 @@ def test_select_race_counts_priced_refunded_runners_per_market():
     assert c["refunded_runners_priced:t10"] == 1 and c["refunded_runners_priced:final"] == 0
 
 
-def test_special_payouts_are_counted():
+def test_special_payouts_and_winners_without_payout_are_counted():
     from scripts.fundamental_eval import count_special_payouts
     c = Counter()
     count_special_payouts(_eval_rows(("01", 1), ("02", 0)), {"01": 0.7}, c)
     count_special_payouts(_eval_rows(("01", 1)), {"01": 1.0}, c)
-    assert c["special_payout_winners"] == 1
+    count_special_payouts(_eval_rows(("1", 1)), {"01": 0.7}, c)          # 馬番 "1" は払戻の "01" で引く
+    count_special_payouts(_eval_rows(("03", 1)), {"01": 2.0}, c)         # 勝ち馬の払戻が無い
+    assert c["special_payout_winners"] == 2 and c["winner_without_payout"] == 1
+
+
+def test_select_race_refuses_empty_rows():
+    from scripts.fundamental_eval import select_race
+    with pytest.raises(ValueError, match="空"):
+        select_race(_db({}), RACE, [], {}, {}, Counter(), [])
 
 
 def test_ratio_set_selects_per_race_against_the_market_column():
@@ -266,7 +306,7 @@ def test_ratio_set_selects_per_race_against_the_market_column():
     assert ratio_set(rows, "p_offset", 1.75) == []
 
 
-def _synthetic_eval_samples(n_races=60, seed=11):
+def _synthetic_eval_samples(n_races=60, seed=11, boost=1.6):
     """run() の金額の段を確かめる人工の標本 (collect の戻り値の形)。"""
     import random
     rng = random.Random(seed)
@@ -276,7 +316,7 @@ def _synthetic_eval_samples(n_races=60, seed=11):
         raw = [rng.random() + 0.2 for _ in range(k)]
         tot = sum(raw)
         p = [x / tot for x in raw]
-        off_raw = [pi * (1.6 if j == 0 else 1.0) for j, pi in enumerate(p)]
+        off_raw = [pi * (boost if j == 0 else 1.0) for j, pi in enumerate(p)]
         t2 = sum(off_raw)
         winner = rng.choices(range(k), weights=p)[0]
         for j in range(k):
@@ -311,7 +351,40 @@ def test_market_offset_run_judges_money_on_the_ratio_set_and_records_controls(mo
     assert out["control_1_market_proportional"]["n_races"] == 60
     assert out["control_2_favourite"]["n_bets"] == 60
     assert out["ratio_tail_calibration"]["ge_1_25"]["n"] == len(want)
-    assert "購入条件 (比 ≥ 1.25)" in (out["verdict"]["money_untestable_reason"] or "購入条件 (比 ≥ 1.25)")
+    assert out["money_class"] == "MONEY_UNTESTABLE" and out["money_pass"] is None
+    assert "購入条件 (比 ≥ 1.25)" in out["verdict"]["money_untestable_reason"]
+    assert out["refund_accounting"].startswith("refunded_runners_excluded")
+
+
+def test_market_offset_run_never_claims_money_below_1500_bets(monkeypatch, tmp_path):
+    """100 点以上 (区間が定義される) でも 1,500 点未満は MONEY_UNDERPOWERED で、合格を主張しない。
+
+    人工の標本は各レースの 1 番目の馬が必ず比 ≥ 1.25 になり、払戻を大きくして区間の下限を 100% より上にする
+    (旧実装なら「金額 合格」が立つ)。対照 1 はモデルに依存しないこと、1.75 の集合が RATIO_140 で作られることも確かめる。
+    """
+    import scripts.market_offset_eval as moe
+    from predictor.race_market import ratio_set
+    samples = _synthetic_eval_samples(n_races=130, seed=3, boost=2.0)
+    for s in samples:
+        if s["won"]:
+            s["payout_odds"] = 30.0
+    sqlite3.connect(tmp_path / "empty.db").close()
+    monkeypatch.setattr(moe, "DB_PATH", tmp_path / "empty.db")
+    monkeypatch.setattr(moe, "snapshot", lambda conn: {})
+    monkeypatch.setattr(moe, "N_BOOT_PRIMARY", 20)
+    monkeypatch.setattr(moe, "collect", lambda f, t: ([dict(s) for s in samples], Counter(), {"race_exclusions": []}))
+    out = moe.run("20260601", "20260731", run_index=0)
+    fb = out["flat_bet_ratio"]
+    assert fb["n_bets"] == 130 and fb["testable"] and fb["roi_ci95"][0] > 1.0
+    assert out["money_class"] == "MONEY_UNDERPOWERED"
+    assert out["money_pass"] is None and out["verdict"]["overall_pass"] is False
+    assert out["verdict"]["money_untestable_reason"].startswith("MONEY_UNDERPOWERED")
+    # 対照 1 は市場の確率だけで決まる (P_offset で配分するとずれる)
+    want_c1 = market_proportional_roi(samples, "p_t10", n_boot=200)["roi"]
+    assert out["control_1_market_proportional"]["roi"] == pytest.approx(want_c1)
+    assert market_proportional_roi(samples, "p_offset", n_boot=200)["roi"] != pytest.approx(want_c1)
+    n175 = len(ratio_set(samples, "p_offset", 1.75))
+    assert out["ratio_tail_calibration"]["ge_1_75"]["n"] == n175 < 130
 
 
 def test_fundamental_run_records_exclusions_and_the_ratio_reference_set(monkeypatch, tmp_path):
