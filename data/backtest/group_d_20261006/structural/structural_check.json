@@ -66,11 +66,11 @@
    }
   },
   "method": "market_clogit.ratio_buys_at(rows, 1.0, BETA_TARGET, s_col='S_std')、尺度は 2022-2024 の pooled within-race SD",
-  "note": "仮定値で数える件数の見込み (§8-8)。β̂ は使わない"
+  "note": "仮定値で数える件数の見込み (§8-8)。係数の推定値は使わない"
  },
  "share_class_move_zero": 0.893251271600779,
  "provenance": {
-  "git_sha": "85fb0ce807a3d6ad2a75e3f010846df097ee1851",
+  "git_sha": "230a12d39c677ef067c586b553c3e78cf94b3037",
   "git_dirty": false,
   "git_status": [],
   "own_output": [
@@ -90,7 +90,7 @@
    "docs/PHASE05_5_PREREG.md": "fad55d3134a3e30ca76491abca6f4ffb191c69ed",
    "docs/PHASE05_5_EXPLORATION.md": "9fd01202a6f1d297269859344d654bb3239df887",
    "data/backtest/group_a_class_20261005/class_table.csv": "b2122077eb26417860f76dea6100f52c36403ea4",
-   "data/backtest/group_d_20261006/structural/structural_check.py": "a2cde91556603f05661e50fe3338894d753d1c36",
+   "data/backtest/group_d_20261006/structural/structural_check.py": "83c858bf5b3380831bf84d137c344185e933692e",
    "data/backtest/group_d_20261006/e2/e2_result.json": "8edb26526db3a9025b516a2f182353b52059ffd1"
   },
   "python": "3.14.5",
