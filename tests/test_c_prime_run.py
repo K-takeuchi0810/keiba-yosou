@@ -517,3 +517,50 @@ def test_freeze_records_weight_sign_agreement_and_single_fits(frozen_and_power):
         assert 0.0 <= d["agreement"] <= 1.0 and d["n_valid"] + d["n_discarded"] == run.SIGN_BOOT_N
     payload = json.loads((out / "frozen" / run.FROZEN_FILE).read_text(encoding="utf-8"))
     assert set(payload["composite"]["single_component_fits"]) == set(cp.COMPONENTS)
+
+
+# --- 主検定の後の 4 名レビュー (58dd91e) の後に追加 (テストだけ。固定のファイルは変えない) ------------------------------
+
+def _digest_after(db_src, tmp_path, name, sql):
+    import shutil
+    db = tmp_path / name
+    shutil.copy(db_src, db)
+    conn = sqlite3.connect(db)
+    conn.execute(sql)
+    conn.commit()
+    conn.close()
+    races, _ = cp.load_races(2025, db_path=db, allow_primary_year=True, primary_purpose="test", primary_year_history_only=True)
+    return run.primary_year_history_digest(races, 2025)
+
+
+def test_primary_year_history_digest_sees_legs_and_refunds_but_not_results(synth_db, tmp_path):
+    """2025 の履歴の digest は、脚質コードと返還の変化で変わり、着順・オッズの変化では変わらない (主検定の前の照合の感度)。"""
+    races, _ = cp.load_races(2025, db_path=synth_db, allow_primary_year=True, primary_purpose="test", primary_year_history_only=True)
+    base = run.primary_year_history_digest(races, 2025)
+    key = "race_year = '2025' AND race_month_day = '0105' AND horse_num = '01'"
+    leg = _digest_after(synth_db, tmp_path, "leg.db",
+                        f"UPDATE horse_races SET leg_quality_code = CASE leg_quality_code WHEN '1' THEN '4' ELSE '1' END WHERE {key}")
+    refund = _digest_after(synth_db, tmp_path, "ref.db", f"UPDATE horse_races SET abnormal_code = '3' WHERE {key}")
+    result = _digest_after(synth_db, tmp_path, "res.db",
+                           "UPDATE horse_races SET confirmed_order = '9', win_odds = win_odds + 10 WHERE race_year = '2025'")
+    assert leg["sha256"] != base["sha256"]
+    assert refund["sha256"] != base["sha256"]
+    assert result == base
+
+
+def test_arm_checks_the_histories_with_2025_results_nulled(frozen_and_power, synth_db, tmp_path, monkeypatch):
+    """錠を書く前の照合も、2025 の着順・オッズを SQL の段で NULL にして読む。"""
+    out, _, _ = frozen_and_power
+    import shutil
+    frozen = tmp_path / "frozen"
+    shutil.copytree(out / "frozen", frozen)
+    monkeypatch.setattr(run, "_check_pinned", lambda m, p: {"git_sha": "s", "pinned_blob_sha1": {}})
+    seen = []
+    real = cp.load_races
+
+    def spy(*a, **k):
+        seen.append(k.get("primary_year_history_only", False))
+        return real(*a, **k)
+    monkeypatch.setattr(cp, "load_races", spy)
+    run.run_arm(str(synth_db), frozen, out / "power" / run.POWER_FILE, ["t"])
+    assert seen == [True]

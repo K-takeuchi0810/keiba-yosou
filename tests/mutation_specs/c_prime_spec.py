@@ -104,4 +104,7 @@ MUTANTS = [
     ("C31 来歴の git status で未追跡のディレクトリをまとめる", CP,
      '    status = git("status", "--porcelain", "--untracked-files=all")',
      '    status = git("status", "--porcelain")'),
+    ("C32 向きの定まらない合成の閾値を変える", CP,
+     "Z_DIRECTION = 2.0 ",
+     "Z_DIRECTION = 20.0 "),
 ]

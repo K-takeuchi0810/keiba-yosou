@@ -396,3 +396,8 @@ def test_provenance_excludes_its_own_untracked_output_directory(tmp_path, monkey
     assert cp.provenance(tmp_path / "none.db", own_output="out/frozen")["git_dirty"] is False
     (repo / "other.txt").write_text("y", encoding="utf-8")
     assert cp.provenance(tmp_path / "none.db", own_output="out/frozen")["git_dirty"] is True
+
+
+def test_direction_threshold_is_fixed_at_two():
+    """結果の文書が「向きの定まらない合成」(成分の |z| の最大 < 2) を引用するので、閾値を固定する (台帳 C′-3)。"""
+    assert cp.Z_DIRECTION == 2.0
