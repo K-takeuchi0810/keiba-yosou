@@ -1,0 +1,86 @@
+{
+ "payload_version": "c_prime_payload_v1",
+ "composite": {
+  "single_component_fits": {
+   "style_x_pace_fit": {
+    "beta": 0.00843642147060556,
+    "z": 0.7110792689469099
+   },
+   "front_competition_signed": {
+    "beta": -6.674204526579183e-05,
+    "z": -0.0058553500334573814
+   }
+  },
+  "component_within_corr": 0.8161073511873442,
+  "years": [
+   2022,
+   2023,
+   2024
+  ],
+  "component_sd": {
+   "style_x_pace_fit": {
+    "sd": 0.2283018588669488,
+    "n_races": 9069,
+    "n_races_zero_variance": 88
+   },
+   "front_competition_signed": {
+    "sd": 1.6381370656603718,
+    "n_races": 9069,
+    "n_races_zero_variance": 769
+   }
+  },
+  "fit": {
+   "cols": [
+    "market_feature",
+    "style_x_pace_fit_std",
+    "front_competition_signed_std"
+   ],
+   "beta": [
+    1.043610819655028,
+    0.021640405057439364,
+    -0.016261760064165357
+   ],
+   "se": [
+    0.011223921447944242,
+    0.01899612711587964,
+    0.01825944303612663
+   ],
+   "z": [
+    92.98094471662347,
+    1.1392008973949885,
+    -0.8905945286497062
+   ]
+  },
+  "raw_coefficients": {
+   "style_x_pace_fit": 0.021640405057439364,
+   "front_competition_signed": -0.016261760064165357
+  },
+  "weights": {
+   "style_x_pace_fit": 0.021640405057439364,
+   "front_competition_signed": 0.0
+  },
+  "s_sd": {
+   "sd": 0.020418197647914027,
+   "n_races": 9974,
+   "n_races_zero_variance": 993
+  },
+  "component_z_max": 1.1392008973949885,
+  "direction_undetermined": true,
+  "n_races": 9974,
+  "n_rows": 137112
+ },
+ "components": [
+  "style_x_pace_fit",
+  "front_competition_signed"
+ ],
+ "constants": {
+  "window_days": 365,
+  "history_runs": 5,
+  "style_codes": [
+   "1",
+   "2",
+   "3",
+   "4"
+  ]
+ }
+}
