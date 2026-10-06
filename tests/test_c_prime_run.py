@@ -317,3 +317,34 @@ def test_frozen_constants_must_match_the_code(frozen_and_power, tmp_path):
     (frozen / run.MANIFEST_FILE).write_text(json.dumps(m), encoding="utf-8")
     with pytest.raises(run.RunError, match="定数"):
         run._load_frozen(frozen)
+
+
+def test_power_from_another_frozen_is_refused(frozen_and_power, tmp_path):
+    out, _, _ = frozen_and_power
+    pw = json.loads((out / "power" / run.POWER_FILE).read_text(encoding="utf-8"))
+    pw["frozen_sha256"] = "0" * 64
+    other = tmp_path / "power.json"
+    other.write_text(json.dumps(pw), encoding="utf-8")
+    with pytest.raises(run.RunError, match="別の凍結物から"):
+        run._frozen_and_power(out / "frozen", other)
+
+
+def test_bootstrap_draws_follow_the_fixed_count(frozen_and_power):
+    _, man, _ = frozen_and_power
+    b = man["bootstrap"]
+    assert b["n_valid"] + b["n_discarded"] == b["n_boot"] == 120
+
+
+def test_primary_refuses_pinned_files_changed_after_arming(frozen_and_power, synth_db, tmp_path, monkeypatch):
+    out, _, _ = frozen_and_power
+    import shutil
+    frozen = tmp_path / "frozen"
+    shutil.copytree(out / "frozen", frozen)
+    power_path = out / "power" / run.POWER_FILE
+    monkeypatch.setattr(run, "_check_pinned", lambda m, p: {"git_sha": "s", "pinned_blob_sha1": {"a": "1"}})
+    run.run_arm(str(synth_db), frozen, power_path, ["t"])
+    monkeypatch.setattr(run, "_check_pinned", lambda m, p: {"git_sha": "s", "pinned_blob_sha1": {"a": "2"}})
+    monkeypatch.setattr(run, "_lock_is_committed", lambda p: True)
+    with pytest.raises(run.RunError, match="錠を書いた時点と違う"):
+        run.run_primary(str(synth_db), frozen, power_path, tmp_path / "p", ["t"])
+    assert not (frozen / run.STARTED_FILE.format(1)).exists()
