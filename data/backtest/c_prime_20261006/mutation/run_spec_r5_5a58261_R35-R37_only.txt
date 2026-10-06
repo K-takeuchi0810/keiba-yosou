@@ -1,0 +1,3 @@
+KILLED R35 2025 の履歴の digest から脚質コードを外す FAILED tests/test_c_prime_run.py::test_primary_year_history_digest_sees_legs_and_refunds_but_not_results
+KILLED R36 2025 の履歴の digest から返還を外す FAILED tests/test_c_prime_run.py::test_primary_year_history_digest_sees_legs_and_refunds_but_not_results
+KILLED R37 錠の前の照合で 2025 の結果を NULL にしない FAILED tests/test_c_prime_run.py::test_arm_checks_the_histories_with_2025_results_nulled

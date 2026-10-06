@@ -487,3 +487,13 @@ C′ の仕様は事前登録 (§8-4c / §8-4c-2) と上の C′-0 で決まっ�
 
 - 錠 (run_index 1) を `62e11ec` でコミット → 主検定 12:28〜12:32 (区間の計算 208 秒) → **PRIMARY_FAIL**、β_S −0.0183、99% 区間 [−0.0676, +0.0328]
   (`27c1112`)。CONSUMED_WINDOWS を `cb52f19` で更新。結果の文書は `docs/PHASE05_5_GROUP_C_PRIME_RESULT.md`
+
+### C′ 主検定の後の 4 名レビュー (2026-10-06、`58dd91e`) の後の注記 (追記だけ、過去の行は書き換えない)
+
+- レビュー: validation 4.5 PASS / profitability 4.2 / prediction-logic 4.1 / code-quality 4.1 (平均 4.23)。must-fix (段階の明示・通過順位版の Group C の
+  学習期の条件・2025 の履歴の digest の感度と錠の前の照合のテスト) は反映した
+- **CONSUMED_WINDOWS の名前**: 正本は `config.py` の `phase05_5 group_c_prime primary run_index 1`。上の「主検定の年の履歴の扱い」の
+  `phase05_5 c_prime primary run_index N` と、`scripts/c_prime_run.py` の `after_primary` の文字列は古い表記 (runner は錠で固定しているので直さない)
+- **最初の凍結の「値は同じ sha256」**: 最初の凍結の成果物はコミットせずに消したので、保存した証拠ではない。端末の出力で `ee540d6b…` を確認した観察で、
+  凍結の計算は決定的 (seed 固定、来歴は payload に含まれない) なので同じ値になる、という主張
+
