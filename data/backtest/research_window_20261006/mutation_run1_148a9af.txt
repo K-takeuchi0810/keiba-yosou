@@ -1,0 +1,26 @@
+KILLED W1 reserved を止めない FAILED tests/test_research_window.py::test_reproduce_consumed_needs_what_it_reproduces_and_stops_before_reserved
+KILLED W2 reserved の終わりを FRESH_FROM 当日まで延ばす FAILED tests/test_research_window.py::test_period_boundaries_with_fresh_fixed[20261010-20261010-want6]
+KILLED W3 FRESH_FROM 未確定でも RESERVED_FROM 以降を fresh にする FAILED tests/test_research_window.py::test_everything_from_reserved_is_reserved_while_fresh_is_unfixed
+KILLED W4 consumed の終わりを RESERVED_FROM 当日まで延ばす FAILED tests/test_research_window.py::test_period_boundaries_with_fresh_fixed[20260914-20260914-want4]
+KILLED W5 development に 2025 を含める FAILED tests/test_research_window.py::test_period_boundaries_with_fresh_fixed[20250601-20251231-want2]
+KILLED W6 reproduce_consumed に fresh を許す FAILED tests/test_research_window.py::test_fresh_is_refused_for_development_and_reproduction
+KILLED W7 lockbox_count_only に consumed を許す FAILED tests/test_research_window.py::test_count_only_reads_fresh_without_outcomes
+KILLED W8 count_only で結果を読むのを止めない FAILED tests/test_research_window.py::test_count_only_reads_fresh_without_outcomes
+KILLED W9 primary_after_unlock を通す FAILED tests/test_research_window.py::test_primary_after_unlock_is_not_available_yet
+KILLED W10 reproduces を要求しない FAILED tests/test_research_window.py::test_reproduce_consumed_needs_what_it_reproduces_and_stops_before_reserved
+KILLED W11 未知の purpose を通す FAILED tests/test_research_window.py::test_unknown_purpose_missing_context_and_bad_dates_stop
+KILLED W12 期間の外れを止めない (bad を空にする) FAILED tests/test_research_window.py::test_development_reads_only_development
+KILLED W13 FRESH_FROM の下限を確かめない FAILED tests/test_research_window.py::test_broken_constants_stop_every_read[FRESH_FROM-20261006-\u4e0b\u9650]
+KILLED W14 RESERVED_FROM と消費済みの順序を確かめない FAILED tests/test_research_window.py::test_broken_constants_stop_every_read[RESERVED_FROM-20260913-\u6d88\u8cbb\u6e08\u307f]
+KILLED W15 件数の SQL の禁止の断片を確かめない FAILED tests/test_research_window.py::test_a_result_column_in_the_count_sql_stops
+KILLED W16 件数の返る列を確かめない FAILED tests/test_research_window.py::test_returned_columns_must_match_the_allow_list
+KILLED W17 障害も数える FAILED tests/test_research_window.py::test_count_fresh_races_counts_flat_jra_races_only
+KILLED W18 中止も数える FAILED tests/test_research_window.py::test_count_fresh_races_counts_flat_jra_races_only
+KILLED W19 地方も数える FAILED tests/test_research_window.py::test_count_fresh_races_counts_flat_jra_races_only
+KILLED W20 件数で reads_outcomes=True を渡す FAILED tests/test_research_window.py::test_count_fresh_races_counts_flat_jra_races_only
+KILLED G1 group_a の 2025 を development にする FAILED tests/test_research_window.py::test_loaders_pass_the_purpose_to_the_guard[load_races0]
+KILLED G2 group_a が関所を通らない FAILED tests/test_research_window.py::test_loaders_refuse_2026_even_with_the_primary_year_flag[load_races0]
+KILLED C1 c_prime が関所を通らない FAILED tests/test_research_window.py::test_loaders_refuse_2026_even_with_the_primary_year_flag[load_races1]
+KILLED C2 c_prime の目的を取り違える FAILED tests/test_research_window.py::test_loaders_pass_the_purpose_to_the_guard[load_races1]
+KILLED F1 RESERVED_FROM を 1 日後ろにずらす FAILED tests/test_research_window.py::test_constants_hold_today - AssertionEr...
+KILLED F2 FRESH_FROM の下限を 1 日前にする FAILED tests/test_research_window.py::test_broken_constants_stop_every_read[FRESH_FROM-20261006-\u4e0b\u9650]
