@@ -84,7 +84,7 @@ MUTANTS = [
      "        p_t10 = m10.implied\n"),
     ("E23 fundamental_eval が最終市場を正規化し直さない", FE,
      '        p_final = cs.implied["final"]\n',
-     '        p_final = _normalise({h: 1.0 / o for h, o in final_odds.items() if h in cs.choice or True})\n'),
+     "        p_final = _normalise({h: 1.0 / o for h, o in final_odds.items()})\n"),
     ("E24 market_offset_eval が正規化し直す前の T−10 市場を使う", ME,
      '        p_t10 = cs.implied["t10"]     # 返還の対象を除いて正規化し直した T−10 市場',
      "        p_t10 = m10.implied"),

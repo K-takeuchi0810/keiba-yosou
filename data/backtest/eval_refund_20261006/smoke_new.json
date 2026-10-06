@@ -1,0 +1,17 @@
+{
+ "root": "C:\\Users\\kizun\\dev\\keiba-yosou\\.claude\\worktrees\\eval-refund",
+ "counts": {
+  "no_t10": 239,
+  "races_with_refunded_runner": 54,
+  "refunded_runners_excluded": 58,
+  "refunded_runners_priced:t10": 44,
+  "refunded_runners_priced:final": 48,
+  "analysed": 937,
+  "t10_fresh": 630
+ },
+ "n_races_all": 937,
+ "n_horses_all": 12573,
+ "n_races_fresh": 630,
+ "exclusions": [],
+ "exclusion_reasons": {}
+}
