@@ -17,7 +17,7 @@ from predictor import market_clogit as mc
 from predictor import race_market as rm
 
 
-def _races(n_races=40, k=8, seed=0, beta_market=1.0, beta_s=0.0, with_won=True):
+def _races(n_races=40, k=8, seed=0, beta_market=1.0, beta_s=0.0, with_won=True, s_market_corr=0.0):
     """log の市場の項のモデル `P(i) ∝ P_market(i)^β_market · exp(β_S·S(i))` から勝ち馬を引いた人工のレース。
 
     勝つ確率は検査対象 (`rm.p_new`) を使わずにここで計算する (生成器が検査対象に依存すると、変換を変えても回復テストが通る)。
@@ -28,7 +28,8 @@ def _races(n_races=40, k=8, seed=0, beta_market=1.0, beta_s=0.0, with_won=True):
         raw = [rng.random() ** 2 + 0.02 for _ in range(k)]
         tot = sum(raw)
         p = {f"{j + 1:02d}": x / tot for j, x in enumerate(raw)}
-        s = {h: rng.gauss(0.0, 1.0) for h in p}
+        mean_log = sum(math.log(q) for q in p.values()) / k
+        s = {h: rng.gauss(0.0, 1.0) + s_market_corr * (math.log(p[h]) - mean_log) for h in p}
         w = {h: p[h] ** beta_market * math.exp(beta_s * s[h]) for h in p}
         wt = sum(w.values())
         pn = {h: v / wt for h, v in w.items()}
@@ -329,4 +330,11 @@ def test_market_feature_accepts_numpy_reals_and_reports_in_ascii():
     with pytest.raises(rm.MarketFeatureError) as e:
         rm.market_feature(0.0)
     assert str(e.value).isascii()
+
+
+def test_fit_with_unit_market_keeps_the_market_offset_when_s_tracks_the_market():
+    """S が市場と相関する世界で β_S = 0 なら、市場をオフセットに保つ当てはめは β̂_S ≈ 0 (オフセットを落とすと S が市場の代わりになる)。"""
+    rows = _races(n_races=3000, k=8, seed=15, beta_market=1.0, beta_s=0.0, s_market_corr=0.8)
+    got = mc.fit_s_given_unit_market(rows)
+    assert abs(got["beta_s_given_unit_market"]) < 0.06
 
