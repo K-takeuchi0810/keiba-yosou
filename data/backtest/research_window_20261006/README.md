@@ -8,3 +8,6 @@
   track_type 不明・開催日の確定などを追加)、run2 (`755d81e`): **KILLED 38 / 38** (`mutation_run2_755d81e.txt`)
 - §9 の改訂 (履歴としてだけの読み、`check_history_for_fresh_targets`) を足して spec に H1〜H7 を追加 (45 個)、run3 (`3971a55`): **KILLED 45 / 45**
   (`mutation_run3_3971a55.txt`)。凍結 SHA `09a8c5c` との差は記録のファイル (README と run3 のログ) だけで、コードは同一
+- 2 名レビュー (履歴の例外) の反映で spec を 51 個に (H3 を人気の断片に、H8〜H12・M1 を追加)。run4 (`ee765c6`): KILLED 50 / SURVIVED 1
+  (H3 人気の断片 `_pop` を落とす — 今のスキーマで `_pop` の列は払戻の表にしか無く、表ごと禁止で止まっていた) → 市場の表の外の `_pop` の列の
+  テストを足して (`1563fd6`) run5: **KILLED 51 / 51** (`mutation_run4_ee765c6.txt` / `mutation_run5_1563fd6.txt`)
