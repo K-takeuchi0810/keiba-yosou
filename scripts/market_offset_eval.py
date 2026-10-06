@@ -23,6 +23,15 @@
 無くなるので、0.5-3 で既に公表している 2 つ (全頭 / AI が市場より 5pt 以上高い馬)
 をそのまま使う。閾値の探索はしない。
 
+## 2026-10-06 の改修 (事前登録 0.5-5 §8-6、結果を見る前)
+
+- 返還の対象 (異常コード 1/2/3) は選択集合から除き、残りの馬で市場の確率を正規化し直してから z・edge・比を計算する。
+  賭けにも数えない。返還の対象に価格が無いことでレースを落とさない。返還の対象でない馬に価格が無いレースは、理由と
+  馬番を `race_exclusions` に残して除く (`predictor/race_market.py`)
+- 金額の判定の購入条件を **比 `P_offset / P_market_T10 ≥ 1.25`** (0.5-5 §4-5) にした。絶対 5pt (`BUY_EDGE_PT`) は
+  旧条件として記録だけ残す。対照 1 (市場比例) と対照 2 (1 番人気) を併記する
+- 修正前の成果物の数値は書き換えない。この改修の後に同じ窓で走らせた値は、旧値と同じ集合ではない
+
 usage:
     .venv64/Scripts/python.exe -m scripts.market_offset_eval --json out.json
 """
@@ -56,9 +65,19 @@ from predictor.eval_stats import (  # noqa: E402
     metrics,
     normalise,
 )
+from predictor.race_market import (  # noqa: E402
+    RATIO_140,
+    RATIO_BUY,
+    favourite_flat_roi,
+    market_proportional_roi,
+    ratio_set,
+    tail_calibration,
+)
 from scripts.fundamental_eval import (  # noqa: E402
     DEFAULT_MAX_LEAD_MINUTES,
     _final_market_odds,
+    count_special_payouts,
+    select_race,
 )
 from predictor.model_schema import (  # noqa: E402
     assert_model_window_disjoint, feature_matrix, load_model_schema)
@@ -76,6 +95,7 @@ BONFERRONI_Z = 2.638
 # ロジットを解き直すため。**meta に記録する** (成果物だけから区間を再現できるように)。
 N_BOOT_PRIMARY = 300
 # 0.5-3 で既に公表している購入条件。結果を見てから決めない。
+# 2026-10-06 から金額の判定には使わない (旧条件として記録だけ。判定は比 RATIO_BUY、0.5-5 §8-6)
 BUY_EDGE_PT = 0.05
 
 
@@ -116,6 +136,7 @@ def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter, dict]:
 
     c: Counter = Counter()
     samples: list[dict] = []
+    exclusions: list[dict] = []
     for rid, rows in by_race.items():
         race = races.get(rid)
         if race is None:
@@ -131,17 +152,19 @@ def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter, dict]:
         if not final_odds:
             c["no_final"] += 1
             continue
-        if (set(m10.odds) != set(final_odds)
-                or set(m10.odds) != {r["horse_num"] for r in rows}):
-            c["runner_set_mismatch"] += 1
+        sel = select_race(conn, race, rows, m10.odds, final_odds, c, exclusions)
+        if sel is None:
             continue
+        cs, rows = sel
         c["analysed"] += 1
+        count_special_payouts(rows, payouts, c)
 
         lead = ((start - datetime.fromisoformat(m10.odds_received_at))
                 .total_seconds() / 60.0)
-        # logit(P_true) = logit(P_market_T10) + 補正
+        p_t10 = cs.implied["t10"]     # 返還の対象を除いて正規化し直した T−10 市場
+        # logit(P_true) = logit(P_market_T10) + 補正 (4A のモデル自身の変換: init_score = logit(P_market))
         raw = {r["horse_num"]: float(
-            1.0 / (1.0 + np.exp(-(logit(m10.implied[r["horse_num"]])
+            1.0 / (1.0 + np.exp(-(logit(p_t10[r["horse_num"]])
                                   + r["margin"])))) for r in rows}
         p_off = normalise(raw)
         winners = [r["horse_num"] for r in rows if r["won"] == 1]
@@ -157,15 +180,15 @@ def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter, dict]:
                 "race_id": rid, "horse_num": h, "date": r["date"],
                 "won": r["won"], "lead_min": round(lead, 2),
                 "final_odds_confirmed": int(confirmed),
-                "p_t10": m10.implied[h], "p_offset": p_off[h],
+                "p_t10": p_t10[h], "p_offset": p_off[h],
                 "margin": r["margin"],
-                "z_t10": float(logit(m10.implied[h])),
-                "edge": p_off[h] - m10.implied[h],
+                "z_t10": float(logit(p_t10[h])),
+                "edge": p_off[h] - p_t10[h],
                 "odds_t10": m10.odds[h],
                 "payout_odds": payouts.get(h.zfill(2), 0.0),
             })
     conn.close()
-    return samples, c, model_info
+    return samples, c, {**model_info, "race_exclusions": exclusions}
 
 
 def _add_price_polynomial(rows: list[dict]) -> None:
@@ -183,6 +206,7 @@ def run(from_date: str, to_date: str, run_index: int) -> dict:
     if notice:
         print(notice, file=sys.stderr)
     samples, counts, model_info = collect(from_date, to_date)
+    exclusions = model_info.pop("race_exclusions", [])
     fresh = [s for s in samples if s["lead_min"] <= DEFAULT_MAX_LEAD_MINUTES]
     _add_price_polynomial(samples)   # fresh は samples の部分集合
 
@@ -197,9 +221,11 @@ def run(from_date: str, to_date: str, run_index: int) -> dict:
                  "baseline_log_loss": BASELINE_LOG_LOSS,
                  "max_lead_minutes": DEFAULT_MAX_LEAD_MINUTES,
                  "sealed": sealed,
-                 "buy_edge_pt": BUY_EDGE_PT, "market_features": 0,
+                 "buy_ratio": RATIO_BUY, "legacy_buy_edge_pt": BUY_EDGE_PT,
+                 "market_features": 0,
                  **model_info},
         "counts": dict(counts),
+        "race_exclusions": exclusions,
         "sets": {"all": {"n_races": len({s["race_id"] for s in samples}),
                          "n_horses": len(samples)},
                  "fresh_t10": {"n_races": len({s["race_id"] for s in fresh}),
@@ -244,21 +270,28 @@ def run(from_date: str, to_date: str, run_index: int) -> dict:
 
     # --- 金額 ---
     # **対照とテスト対象を峻別する。** 全頭均等はモデルに一切依存しないので
-    # 「モデルの成績」ではなく市場の性質 (単勝の人気薄バイアス)。
-    buys = [s for s in fresh if s["edge"] > BUY_EDGE_PT]
+    # 「モデルの成績」ではなく市場の性質 (単勝の人気薄バイアス)。参考値としてだけ載せる (0.5-5 §4-5)。
+    buys = ratio_set(fresh, "p_offset", RATIO_BUY)
     out["control_flat_all"] = flat_bet_roi(fresh)
-    out["flat_bet_edge"] = flat_bet_roi(buys)
+    out["control_1_market_proportional"] = market_proportional_roi(fresh, "p_t10")
+    out["control_2_favourite"] = favourite_flat_roi(fresh, "odds_t10")
+    out["flat_bet_ratio"] = flat_bet_roi(buys)
+    out["ratio_tail_calibration"] = {
+        "ge_1_25": tail_calibration(buys, "p_offset", "p_t10"),
+        "ge_1_75": tail_calibration(ratio_set(fresh, "p_offset", RATIO_140), "p_offset", "p_t10")}
+    # 旧条件 (絶対 5pt) は記録だけ。判定には使わない
+    out["legacy_flat_bet_edge_5pt"] = flat_bet_roi([s for s in fresh if s["edge"] > BUY_EDGE_PT])
     # 対象が最低件数に満たなければ **不合格ではなく判定不能**。
     out["money_pass"] = (
-        bool(out["flat_bet_edge"]["roi_ci95"][0] > 1.0)
-        if out["flat_bet_edge"]["testable"] else None)
+        bool(out["flat_bet_ratio"]["roi_ci95"][0] > 1.0)
+        if out["flat_bet_ratio"]["testable"] else None)
 
     out["verdict"] = {
         "primary": out["primary_conditional_logit"]["pass"],
         "money": out["money_pass"],
         "money_untestable_reason": (
             None if out["money_pass"] is not None else
-            f"購入条件に該当 {out['flat_bet_edge']['n_bets']} 頭 "
+            f"購入条件 (比 ≥ {RATIO_BUY}) に該当 {out['flat_bet_ratio']['n_bets']} 頭 "
             f"(最低 {MIN_BUYS_FOR_MONEY} 頭)"),
         "rejected_by": [k for k, v in (
             ("補正が価格の単調変換にすぎない",
@@ -360,9 +393,11 @@ def main() -> int:
 
     print("\n=== 金額 (100 円均等 / 払戻は確定値) ===")
     for key, title, kind in (
-            ("flat_bet_edge",
-             f"補正後が市場より {BUY_EDGE_PT * 100:.0f}pt 以上高い馬", "判定対象"),
-            ("control_flat_all", "鮮度内の全頭", "対照 (モデル非依存)")):
+            ("flat_bet_ratio", f"補正後 / 市場 ≥ {RATIO_BUY}", "判定対象"),
+            ("control_2_favourite", "1 番人気", "対照 2"),
+            ("legacy_flat_bet_edge_5pt",
+             f"補正後が市場より {BUY_EDGE_PT * 100:.0f}pt 以上高い馬", "旧条件 (記録だけ)"),
+            ("control_flat_all", "鮮度内の全頭", "参考 (モデル非依存)")):
         r = out.get(key)
         if not r:
             continue
@@ -373,6 +408,9 @@ def main() -> int:
         lo_r, hi_r = r["roi_ci95"]
         print(f"  {title:>32} {r['n_bets']:6,d} 点 {r['roi'] * 100:6.1f}% "
               f"95% 区間 [{lo_r * 100:.1f}, {hi_r * 100:.1f}]%  [{kind}]")
+
+    c1 = out["control_1_market_proportional"]
+    print(f"  {'市場比例 (stake ∝ 1/odds)':>32} {c1['n_races']:6,d} R  {c1['roi'] * 100:6.1f}%  [対照 1]")
 
     v = out["verdict"]
     print("\n=== 事前登録に照らした判定 ===")

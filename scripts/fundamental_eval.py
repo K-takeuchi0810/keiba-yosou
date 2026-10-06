@@ -56,6 +56,7 @@ from predictor.eval_stats import (  # noqa: E402
 from predictor.feature_manifest import assert_no_market_features  # noqa: E402
 from predictor.pit_t10 import RACE_KEYS, decision_time, t10_market  # noqa: E402
 from predictor.provenance import snapshot  # noqa: E402
+from predictor.race_market import RATIO_BUY, Excluded, choice_rows, ratio_set  # noqa: E402
 from predictor.model_schema import (  # noqa: E402
     assert_model_window_disjoint, feature_matrix, load_model_schema)
 from scripts.fundamental_model import (  # noqa: E402
@@ -94,6 +95,46 @@ def _final_market_odds(conn, race) -> dict[str, float]:
               AND horse_num NOT IN ('', '00') AND win_odds > 0""",
         tuple(race.get(k) for k in RACE_KEYS)).fetchall()
     return {str(r[0]).strip(): r[1] / 10.0 for r in rows}
+
+
+def _abnormal_codes(conn, race) -> dict[str, str]:
+    """そのレースの全出走登録馬 (取消を含む) の 馬番 → 異常コード。返還の対象の判定に使う (事前登録 0.5-5 §8-6)。"""
+    rows = conn.execute(
+        """SELECT horse_num, abnormal_code FROM horse_races
+            WHERE race_year=? AND race_month_day=? AND track_code=?
+              AND kaiji=? AND nichiji=? AND race_num=?
+              AND horse_num NOT IN ('', '00')""",
+        tuple(race.get(k) for k in RACE_KEYS)).fetchall()
+    return {str(r[0]).strip(): str(r[1] or "").strip() for r in rows}
+
+
+def select_race(conn, race, rows: list[dict], m10_odds: dict[str, float], final_odds: dict[str, float],
+                c: Counter, exclusions: list[dict]):
+    """1 レースを選択集合に絞る (返還の対象を除き、残りで市場を正規化し直す)。除くなら理由を記録して None。
+
+    旧実装は「T−10 市場・最終市場・標本の馬の集合が一致しない」レースを `runner_set_mismatch` で黙って落としていた。
+    価格の無い返還の対象 (2025 で約 110 レース) がいるだけで落ち、価格のある返還の対象は外れの賭けに数えていた。
+    """
+    sel = choice_rows(rows, _abnormal_codes(conn, race), {"t10": m10_odds, "final": final_odds})
+    rid = rows[0]["race_id"]
+    if isinstance(sel, Excluded):
+        c[f"excluded:{sel.reason}"] += 1
+        exclusions.append({"race_id": rid, "reason": sel.reason, "horses": list(sel.horses)})
+        return None
+    cs, kept = sel
+    if cs.refunded:
+        c["races_with_refunded_runner"] += 1
+        c["refunded_runners_excluded"] += len(cs.refunded)
+    for name, horses in cs.refunded_priced.items():
+        c[f"refunded_runners_priced:{name}"] += len(horses)
+    return cs, kept
+
+
+def count_special_payouts(rows: list[dict], payouts: dict[str, float], c: Counter) -> None:
+    """特払い (勝ち馬の払戻が 100 円未満) の件数。0 であることを成果物で確かめる (事前登録 0.5-5 §8-6)。"""
+    for r in rows:
+        if r["won"] == 1 and 0.0 < payouts.get(r["horse_num"].zfill(2), 0.0) < 1.0:
+            c["special_payout_winners"] += 1
 
 
 def delta_distribution(samples: list[dict]) -> dict:
@@ -152,6 +193,7 @@ def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter, dict]:
 
     c: Counter = Counter()
     samples: list[dict] = []
+    exclusions: list[dict] = []
     for rid, rows in by_race.items():
         race = races.get(rid)
         if race is None:
@@ -167,15 +209,17 @@ def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter, dict]:
         if not final_odds:
             c["no_final"] += 1
             continue
-        if (set(m10.odds) != set(final_odds)
-                or set(m10.odds) != {r["horse_num"] for r in rows}):
-            c["runner_set_mismatch"] += 1
+        sel = select_race(conn, race, rows, m10.odds, final_odds, c, exclusions)
+        if sel is None:
             continue
+        cs, rows = sel
         c["analysed"] += 1
+        count_special_payouts(rows, payouts, c)
 
         lead = ((start - datetime.fromisoformat(m10.odds_received_at))
                 .total_seconds() / 60.0)
-        p_final = _normalise({h: 1.0 / o for h, o in final_odds.items()})
+        p_t10 = cs.implied["t10"]
+        p_final = cs.implied["final"]
         p_fund = _normalise({r["horse_num"]: r["p_raw"] for r in rows})
         # 最終オッズが確定払戻と一致しているレースだけ、最終市場の確率を信じる。
         winners = [r["horse_num"] for r in rows if r["won"] == 1]
@@ -193,14 +237,14 @@ def collect(from_date: str, to_date: str) -> tuple[list[dict], Counter, dict]:
                 "race_id": rid, "horse_num": h, "date": r["date"],
                 "won": r["won"], "lead_min": round(lead, 2),
                 "final_odds_confirmed": int(confirmed),
-                "p_t10": m10.implied[h], "p_fund": p_fund[h], "p_final": p_final[h],
-                "delta_ai": p_fund[h] - m10.implied[h],
-                "delta_market": p_final[h] - m10.implied[h],
+                "p_t10": p_t10[h], "p_fund": p_fund[h], "p_final": p_final[h],
+                "delta_ai": p_fund[h] - p_t10[h],
+                "delta_market": p_final[h] - p_t10[h],
                 "odds_t10": m10.odds[h], "odds_final": final_odds[h],
                 "payout_odds": payouts.get(h.zfill(2), 0.0),
             })
     conn.close()
-    return samples, c, model_info
+    return samples, c, {**model_info, "race_exclusions": exclusions}
 
 
 def run(from_date: str, to_date: str, max_lead: int) -> dict:
@@ -211,6 +255,7 @@ def run(from_date: str, to_date: str, max_lead: int) -> dict:
         print(notice, file=sys.stderr)
 
     samples, counts, model_info = collect(from_date, to_date)
+    exclusions = model_info.pop("race_exclusions", [])
     fresh = [s for s in samples if s["lead_min"] <= max_lead]
     confirmed = [s for s in fresh if s["final_odds_confirmed"]]
 
@@ -223,6 +268,7 @@ def run(from_date: str, to_date: str, max_lead: int) -> dict:
                  "odds_source": "T-10", "max_lead_minutes": max_lead,
                  "market_features": 0, **model_info},
         "counts": dict(counts),
+        "race_exclusions": exclusions,
         "sets": {
             "all": {"n_races": len({s["race_id"] for s in samples}),
                     "n_horses": len(samples)},
@@ -268,6 +314,9 @@ def run(from_date: str, to_date: str, max_lead: int) -> dict:
     top = [s for s in fresh if s["delta_ai"] > 0.05]
     out["flat_bet_all"] = flat_bet_roi(fresh)
     out["flat_bet_ai_over_market_5pt"] = flat_bet_roi(top) if top else None
+    # 事前登録 0.5-5 §4-5 の比で定義した購入条件 (参考。Fundamental は市場を使わないモデルなので判定はしない)
+    ratio = ratio_set(fresh, "p_fund", RATIO_BUY)
+    out["flat_bet_ratio_ge_1_25"] = flat_bet_roi(ratio) if ratio else None
     out["_samples"] = samples
     return out
 
@@ -346,9 +395,13 @@ def main() -> int:
     print("\n=== 100 円均等で買ったときの回収率 (払戻は確定値) ===")
     for key, title in (("flat_bet_all", "鮮度内の全頭"),
                        ("flat_bet_ai_over_market_5pt",
-                        "AI が市場より 5pt 以上高い馬")):
+                        "AI が市場より 5pt 以上高い馬"),
+                       ("flat_bet_ratio_ge_1_25", f"AI / 市場 ≥ {RATIO_BUY} (参考)")):
         r = out.get(key)
         if not r:
+            continue
+        if not r.get("testable", True):
+            print(f"  {title:>26} {r['n_bets']:6,d} 点  判定不能 (最低 {r['min_bets_required']} 点)")
             continue
         lo, hi = r["roi_ci95"]
         print(f"  {title:>26} {r['n_bets']:6,d} 点 "
