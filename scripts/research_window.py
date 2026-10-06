@@ -7,8 +7,8 @@
 期間 (日付 YYYYMMDD):
 - development: `config.DATA_SPLIT["train"]["to"]` (20241231) まで。2021 の burn-in を含む
 - consumed: validation の開始 (20250101) 〜 RESERVED_FROM の前日。既に結果を見た期間 (2025 の主検定 2 回・strategy_dev など)
-- reserved: RESERVED_FROM 〜 FRESH_FROM の前日 (RESERVED_UNTOUCHED)。どの目的でも読まない。FRESH_FROM が未確定の間は
-  RESERVED_FROM 以降をすべて reserved として扱う
+- reserved: RESERVED_FROM 〜 FRESH_FROM の前日 (RESERVED_UNTOUCHED)。対象としてはどの目的でも読まない (fresh の対象の履歴としての読みは
+  `check_history_for_fresh_targets`、開封の中だけ)。FRESH_FROM が未確定の間は RESERVED_FROM 以降をすべて reserved として扱う
 - fresh: FRESH_FROM 以降
 どの期間にも属さない日が出たら (定数の崩れ) 止める。
 
@@ -135,7 +135,7 @@ def check(from_date: str, to_date: str, *, purpose: str, context: str, reads_out
     periods = periods_spanned(from_date, to_date)
     if "reserved" in periods:
         raise ResearchWindowError(
-            f"{context}: {from_date}〜{to_date} は RESERVED_UNTOUCHED ({config.RESERVED_FROM}〜) に重なる。どの目的でも読まない"
+            f"{context}: {from_date}〜{to_date} は RESERVED_UNTOUCHED ({config.RESERVED_FROM}〜) に重なる。対象としてはどの目的でも読まない"
             + (" (FRESH_FROM が未確定の間は RESERVED_FROM 以降をすべて読まない)" if config.FRESH_FROM is None else ""))
     if purpose == "primary_after_unlock":
         raise ResearchWindowError(f"{context}: 開封の手順はまだ無い (最初の候補の事前登録と一緒に実装する)")
@@ -161,16 +161,21 @@ def check_years(min_year: int, max_year: int, *, purpose: str, context: str, **k
 
 # ------------------------------------------------------------------------------------------- 履歴としてだけの読み (§9 の改訂)
 
-HISTORY_LOOKBACK_DAYS = frozenset({365})          # 事前に固定した参照日数 (A″ は Group A と同じ 365 日)
-HISTORY_FORBIDDEN_FRAGMENTS = ("odds", "payout", "pay_", "popularity", "dividend", "*")
+HISTORY_LOOKBACK_DAYS = frozenset({365})          # 事前に固定した参照日数 (A″ は Group A と同じ 365 日、テストで group_a.WINDOW_DAYS と照合)
+# 市場の情報 (オッズ・払戻・人気・票数) の列名の断片と、それだけを持つ表。件数の SQL と履歴の列の両方がここを使う (単一の出典)。
+# data/schema.sql の全列に対する照合はテストで行う
+MARKET_FRAGMENTS = ("odds", "payout", "_pop", "popularity", "vote")
+MARKET_TABLES = frozenset({"payouts", "exotic_odds", "vote_counts", "odds_snapshots", "win5", "win5_payouts"})
 
 
 def check_history_for_fresh_targets(target_from: str, target_to: str, *, lookback_days: int, history_columns: tuple[str, ...],
                                     context: str) -> dict:
     """fresh の対象の特徴を作るために、対象より前の履歴 (consumed・reserved・それ以前の fresh を含む) を読む許可 (§9 の改訂)。
 
-    条件: 対象がすべて fresh / 履歴の窓は [最初の対象日 − 参照日数, 最後の対象日 − 1 日] / 参照日数は HISTORY_LOOKBACK_DAYS /
-    履歴の列は allow-list で、オッズ・払戻・人気を含めない。**主検定の開封の中からだけ** 呼ぶ — 開封の手順 (primary_after_unlock) が
+    条件: 対象がすべて fresh / 履歴の窓は [最初の対象日 − 参照日数, 最後の対象日 − 1 日] (期間の粗い上界。**対象ごとの
+    history_date < target_date は特徴の作り手の要件** で、開封の手順の実装のときに単体テストで強制する) / 参照日数は
+    HISTORY_LOOKBACK_DAYS / 履歴の列は呼び出し側が「表.列」で渡し、市場の表とオッズ・払戻・人気・票数の列を含めない
+    (候補の固定の allow-list は事前登録で定める)。監査ログは開封の手順の実装のときに結び付ける。**主検定の開封の中からだけ** 呼ぶ — 開封の手順 (primary_after_unlock) が
     まだ無いので、条件を確かめた後に常に止まる。開封の手順を実装するときに、ここを開封の記録 (錠・開始の印) と結び付ける。
     """
     if not context:
@@ -178,14 +183,18 @@ def check_history_for_fresh_targets(target_from: str, target_to: str, *, lookbac
     periods = periods_spanned(target_from, target_to)
     if periods != {"fresh"}:
         raise ResearchWindowError(f"{context}: 履歴としてだけの読みは、対象がすべて fresh のときだけ (対象 {target_from}〜{target_to}: {sorted(periods)})")
-    if isinstance(lookback_days, bool) or lookback_days not in HISTORY_LOOKBACK_DAYS:
+    if type(lookback_days) is not int or lookback_days not in HISTORY_LOOKBACK_DAYS:
         raise ResearchWindowError(f"{context}: 参照日数 {lookback_days!r} は事前に固定した値 {sorted(HISTORY_LOOKBACK_DAYS)} に無い")
     cols = tuple(history_columns)
     if not cols or not all(isinstance(c, str) and c for c in cols):
-        raise ResearchWindowError(f"{context}: 履歴の列の allow-list を渡す")
-    bad = [c for c in cols for f in HISTORY_FORBIDDEN_FRAGMENTS if f in c.lower()]
+        raise ResearchWindowError(f"{context}: 履歴の列の allow-list (表.列) を渡す")
+    malformed = [c for c in cols if len(c.split(".")) != 2 or not all(c.split(".")) or "*" in c]
+    if malformed:
+        raise ResearchWindowError(f"{context}: 履歴の列は「表.列」で渡す: {malformed}")
+    bad = [c for c in cols if c.split(".")[0].lower() in MARKET_TABLES
+           or any(f in c.split(".")[1].lower() for f in MARKET_FRAGMENTS)]
     if bad:
-        raise ResearchWindowError(f"{context}: 履歴の列にオッズ・払戻・人気を含めない: {bad}")
+        raise ResearchWindowError(f"{context}: 履歴の列にオッズ・払戻・人気・票数を含めない: {bad}")
     history_from, history_to = _shift(target_from, -lookback_days), _shift(target_to, -1)
     raise ResearchWindowError(
         f"{context}: 履歴としてだけの読み ({history_from}〜{history_to}) は主検定の開封の中からだけ呼ぶ。開封の手順 (primary_after_unlock) は"
@@ -204,9 +213,9 @@ COUNT_SELECT = (
 )
 COUNT_COLUMNS = tuple(alias for _, alias in COUNT_SELECT)
 # 結果・払戻・オッズ・発走後に決まる races の列 (前後半の時計・頭数・天候・馬場状態) に当たる列名の断片。件数の SQL に 1 つでも含めたら止める
-FORBIDDEN_FRAGMENTS = ("confirmed_order", "finish", "time_diff", "corner", "final_3f", "3f_time", "4f_time", "same_finish",
-                       "starter_count", "weather", "condition", "odds", "payout", "pay_", "popularity", "win_", "place_",
-                       "lap", "dividend", "horse_races", "payouts", "*")
+OUTCOME_FRAGMENTS = ("confirmed_order", "finish", "time_diff", "corner", "final_3f", "3f_time", "4f_time", "same_finish",
+                     "starter_count", "weather", "condition", "win_", "place_", "lap")
+FORBIDDEN_FRAGMENTS = OUTCOME_FRAGMENTS + MARKET_FRAGMENTS + tuple(sorted(MARKET_TABLES)) + ("horse_races", "*")
 CONFIRMED_DATA_DIV = "7"
 
 

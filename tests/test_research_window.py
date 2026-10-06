@@ -340,7 +340,8 @@ def test_schedule_sql_returned_columns_must_match(tmp_path, monkeypatch):
 
 # ------------------------------------------------------------------------------------------------ 履歴としてだけの読み (§9 の改訂)
 
-HIST_COLS = ("race_date", "horse", "finish_time", "confirmed_order", "abnormal_code")
+HIST_COLS = ("horse_races.race_year", "horse_races.blood_register_num", "horse_races.finish_time", "horse_races.confirmed_order",
+             "horse_races.abnormal_code", "races.distance")
 
 
 def _hist(**kw):
@@ -357,17 +358,19 @@ def test_history_read_is_only_from_inside_an_opening_for_now():
 
 @pytest.mark.parametrize("frm,to", [("20261009", "20261031"), ("20260920", "20260930"), ("20250101", "20250131")])
 def test_history_read_needs_all_targets_in_fresh(frm, to):
-    with pytest.raises(rw.ResearchWindowError, match="対象がすべて fresh|RESERVED"):
+    with pytest.raises(rw.ResearchWindowError, match="対象がすべて fresh"):
         _hist(target_from=frm, target_to=to)
 
 
-@pytest.mark.parametrize("days", [364, 366, 730, True, "365"])
+@pytest.mark.parametrize("days", [364, 366, 730, True, "365", 365.0])
 def test_history_lookback_must_be_the_fixed_value(days):
     with pytest.raises(rw.ResearchWindowError, match="参照日数"):
         _hist(lookback_days=days)
 
 
-@pytest.mark.parametrize("cols", [(), ("",), ("finish_time", "win_odds"), ("tan_payout",), ("popularity",), ("*",)])
+@pytest.mark.parametrize("cols", [(), ("",), ("finish_time",), ("horse_races.finish_time", "horse_races.win_odds"),
+                                  ("payouts.tan_pop1",), ("horse_races.Win_Popularity",), ("vote_counts.combo",), ("Payouts.race_year",),
+                                  ("horse_races.*",), ("*",), ("a.b.c",), (".finish_time",)])
 def test_history_columns_are_an_allow_list_without_market_or_payouts(cols):
     with pytest.raises(rw.ResearchWindowError, match="履歴の列"):
         _hist(history_columns=cols)
@@ -376,3 +379,36 @@ def test_history_columns_are_an_allow_list_without_market_or_payouts(cols):
 def test_history_read_needs_a_context():
     with pytest.raises(rw.ResearchWindowError, match="context"):
         _hist(context="")
+
+
+def _schema_columns():
+    conn = sqlite3.connect(":memory:")
+    conn.executescript((ROOT / "data" / "schema.sql").read_text(encoding="utf-8"))
+    tables = [t for (t,) in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")]
+    return [(t, r[1]) for t in tables for r in conn.execute(f"PRAGMA table_info({t})")]
+
+
+def test_every_market_column_in_the_schema_is_refused_as_history():
+    """data/schema.sql の全列のうち、市場の表の列と、オッズ・人気・票数・払戻らしい名前の列は、履歴の列として全部止まる (列名はスキーマから引く)。"""
+    cols = _schema_columns()
+    assert len(cols) > 200
+    market = [f"{t}.{c}" for t, c in cols
+              if t in rw.MARKET_TABLES or re.search(r"odds|pop|vote|pay|refund|dividend", c.lower())]
+    assert {"payouts.tan_pop1", "horse_races.win_popularity", "vote_counts.votes", "win5_payouts.hit_votes",
+            "odds_snapshots.win_odds", "win5.refund_flag"} <= set(market)
+    for col in market:
+        with pytest.raises(rw.ResearchWindowError, match="履歴の列"):
+            _hist(history_columns=(col,))
+    assert set(rw.MARKET_TABLES) <= {t for t, _ in cols}
+
+
+def test_ordinary_history_columns_reach_the_opening_gate():
+    for col in ("horse_races.finish_time", "horse_races.confirmed_order", "races.track_type_code", "races.turf_condition"):
+        with pytest.raises(rw.ResearchWindowError, match="開封の中からだけ"):
+            _hist(history_columns=(col,))
+
+
+def test_market_fragments_are_shared_with_the_count_sql_and_the_lookback_matches_group_a():
+    assert set(rw.MARKET_FRAGMENTS) | set(rw.MARKET_TABLES) <= set(rw.FORBIDDEN_FRAGMENTS)
+    assert rw.HISTORY_LOOKBACK_DAYS == {ga.WINDOW_DAYS}
+
