@@ -1,0 +1,21 @@
+ABORT: 変異 'G20 空の行を通す' の実行で本番が変わった: ['data/keiba.db-wal', 'data/logs/fetch_fresh_odds_20261006.log', 'data/logs/fresh_odds_coverage.jsonl']
+KILLED G1 市場の列を logit にする FAILED tests/test_market_clogit.py::test_market_feature_is_log - ZeroDivision...
+KILLED G2 不正な市場の確率を epsilon で丸める FAILED tests/test_market_clogit.py::test_market_feature_fails_closed_without_epsilon[0.0]
+KILLED G3 1 を超える市場の確率を通す FAILED tests/test_market_clogit.py::test_market_feature_fails_closed_without_epsilon[1.0000001]
+KILLED G4 canonical (和 1) を確かめない FAILED tests/test_market_clogit.py::test_non_canonical_market_probabilities_are_refused
+KILLED G5 尤度の列が自前の log を使う FAILED tests/test_market_clogit.py::test_a_zero_market_probability_stops_the_fit
+KILLED G6 Fisher の列が自前の log を使う FAILED tests/test_market_clogit.py::test_fisher_takes_both_the_column_and_the_null_weights_from_market_feature
+KILLED G7 Fisher の仮定の重みに P_market をそのまま使う FAILED tests/test_market_clogit.py::test_fisher_takes_both_the_column_and_the_null_weights_from_market_feature
+KILLED G8 検出力の行の勝ちの列を拒否しない FAILED tests/test_market_clogit.py::test_fisher_refuses_rows_with_outcomes - ...
+KILLED G9 比を正規化した P_new でなく exp(β·S) で取る FAILED tests/test_market_clogit.py::test_a_different_market_transform_changes_every_path
+KILLED G10 S-correction only を推定した β_market で作る FAILED tests/test_market_clogit.py::test_diagnostic_sets_separate_market_recalibration_from_s_correction
+KILLED G11 market-recalibration only に S を入れる FAILED tests/test_market_clogit.py::test_diagnostic_sets_separate_market_recalibration_from_s_correction
+KILLED G12 P_new が β_market を無視する FAILED tests/test_market_clogit.py::test_diagnostic_sets_separate_market_recalibration_from_s_correction
+KILLED G13 P_new が market_feature を通らない FAILED tests/test_market_clogit.py::test_likelihood_fisher_p_new_and_purchase_count_all_go_through_market_feature
+KILLED G14 当てはめの列の順を入れ替える FAILED tests/test_market_clogit.py::test_fit_recovers_unit_market_coefficient_under_the_log_model
+KILLED G15 非有限の係数を通す FAILED tests/test_market_clogit.py::test_non_finite_coefficients_are_refused[nan-0.1]
+SURVIVED G16 不収束の当てはめを通す
+KILLED G17 収束の印を定数にする FAILED tests/test_market_clogit.py::test_fit_recovers_unit_market_coefficient_under_the_log_model
+KILLED G18 馬番の重複を見逃す FAILED tests/test_market_clogit.py::test_duplicate_horse_numbers_in_a_race_are_refused
+KILLED G19 Group A の logit の列を見逃す FAILED tests/test_market_clogit.py::test_group_a_logit_rows_and_empty_rows_are_refused
+ABORTED G20 空の行を通す data/keiba.db-wal data/logs/fetch_fresh_odds_20261006.log data/logs/fresh_odds_coverage.jsonl
