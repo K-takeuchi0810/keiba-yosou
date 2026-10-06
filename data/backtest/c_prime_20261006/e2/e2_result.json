@@ -1,0 +1,282 @@
+{
+ "mode": "e2",
+ "load_stats": {
+  "rows": 184146,
+  "skip_obstacle_rows": 5748,
+  "races": 13316
+ },
+ "years": {
+  "2022": {
+   "n_rows": 45599,
+   "n_races": 3327,
+   "style_unknown_rate": 0.10993662141713634,
+   "style_counts": {
+    "1": 2871,
+    "2": 11665,
+    "3": 14429,
+    "4": 11621,
+    "unknown": 5013
+   },
+   "known_count": {
+    "n_races": 3327,
+    "n_races_known_zero": 301,
+    "distribution": {
+     "0": 301,
+     "4": 1,
+     "5": 5,
+     "6": 17,
+     "7": 48,
+     "8": 95,
+     "9": 138,
+     "10": 216,
+     "11": 237,
+     "12": 274,
+     "13": 288,
+     "14": 409,
+     "15": 450,
+     "16": 677,
+     "17": 68,
+     "18": 103
+    }
+   },
+   "component_within_share": {
+    "style_x_pace_fit": 0.9098595320009875,
+    "front_competition_signed": 0.7016642696583018
+   },
+   "counts": {
+    "target_races_seen": 3331,
+    "style_known_rows": 40586,
+    "target_races_used": 3327,
+    "style_unknown_rows": 5013,
+    "refunded_runners_excluded": 161,
+    "drop_dead_heat_or_no_winner": 4
+   },
+   "exclusions": []
+  },
+  "2023": {
+   "n_rows": 45998,
+   "n_races": 3326,
+   "style_unknown_rate": 0.11087438584286273,
+   "style_counts": {
+    "1": 2947,
+    "2": 11685,
+    "3": 14661,
+    "4": 11605,
+    "unknown": 5100
+   },
+   "known_count": {
+    "n_races": 3326,
+    "n_races_known_zero": 302,
+    "distribution": {
+     "0": 302,
+     "5": 6,
+     "6": 16,
+     "7": 45,
+     "8": 85,
+     "9": 142,
+     "10": 186,
+     "11": 231,
+     "12": 253,
+     "13": 338,
+     "14": 369,
+     "15": 470,
+     "16": 681,
+     "17": 80,
+     "18": 122
+    }
+   },
+   "component_within_share": {
+    "style_x_pace_fit": 0.902719325218629,
+    "front_competition_signed": 0.6918660699922619
+   },
+   "counts": {
+    "target_races_seen": 3329,
+    "style_known_rows": 40898,
+    "target_races_used": 3326,
+    "style_unknown_rows": 5100,
+    "refunded_runners_excluded": 172,
+    "drop_dead_heat_or_no_winner": 3
+   },
+   "exclusions": []
+  },
+  "2024": {
+   "n_rows": 45515,
+   "n_races": 3321,
+   "style_unknown_rate": 0.11488520268043502,
+   "style_counts": {
+    "1": 2877,
+    "2": 11775,
+    "3": 14106,
+    "4": 11528,
+    "unknown": 5229
+   },
+   "known_count": {
+    "n_races": 3321,
+    "n_races_known_zero": 302,
+    "distribution": {
+     "0": 302,
+     "4": 3,
+     "5": 6,
+     "6": 19,
+     "7": 68,
+     "8": 107,
+     "9": 139,
+     "10": 208,
+     "11": 221,
+     "12": 285,
+     "13": 285,
+     "14": 408,
+     "15": 456,
+     "16": 600,
+     "17": 93,
+     "18": 121
+    }
+   },
+   "component_within_share": {
+    "style_x_pace_fit": 0.9015570466216565,
+    "front_competition_signed": 0.691074623055879
+   },
+   "counts": {
+    "target_races_seen": 3327,
+    "style_known_rows": 40286,
+    "target_races_used": 3321,
+    "style_unknown_rows": 5229,
+    "refunded_runners_excluded": 184,
+    "drop_dead_heat_or_no_winner": 6
+   },
+   "exclusions": []
+  }
+ },
+ "directions": [
+  {
+   "fit_years": [
+    2022,
+    2023
+   ],
+   "eval_years": [
+    2024
+   ],
+   "composite": {
+    "years": [
+     2022,
+     2023
+    ],
+    "component_sd": {
+     "style_x_pace_fit": {
+      "sd": 0.22726175834056941,
+      "n_races": 6050,
+      "n_races_zero_variance": 57
+     },
+     "front_competition_signed": {
+      "sd": 1.6313102958189503,
+      "n_races": 6050,
+      "n_races_zero_variance": 522
+     }
+    },
+    "fit": {
+     "cols": [
+      "market_feature",
+      "style_x_pace_fit_std",
+      "front_competition_signed_std"
+     ],
+     "beta": [
+      1.0414364054544962,
+      0.030680158249267224,
+      -0.02644372134645528
+     ],
+     "se": [
+      0.013732973007332895,
+      0.023136287988827997,
+      0.02227609299214549
+     ],
+     "z": [
+      75.83473767103511,
+      1.3260622561442006,
+      -1.187089735878697
+     ]
+    },
+    "raw_coefficients": {
+     "style_x_pace_fit": 0.030680158249267224,
+     "front_competition_signed": -0.02644372134645528
+    },
+    "weights": {
+     "style_x_pace_fit": 0.030680158249267224,
+     "front_competition_signed": 0.0
+    },
+    "s_sd": {
+     "sd": 0.028960191905402905,
+     "n_races": 6653,
+     "n_races_zero_variance": 662
+    },
+    "component_z_max": 1.3260622561442006,
+    "direction_undetermined": true,
+    "n_races": 6653,
+    "n_rows": 91597
+   },
+   "eval_clogit": {
+    "cols": [
+     "market_feature",
+     "S"
+    ],
+    "beta": [
+     1.0481438749556973,
+     0.006324819621487789
+    ],
+    "se": [
+     0.019476718240671306,
+     0.01934179752442252
+    ],
+    "z": [
+     53.81521989505203,
+     0.32700267974067865
+    ]
+   },
+   "beta_S": 0.006324819621487789,
+   "z_S": 0.32700267974067865,
+   "S_within_share_fit": 0.9030394825559852,
+   "S_within_share_eval": 0.8989735300347761,
+   "S_variance_decomposition_eval": {
+    "total_var": 1.1046513697963876,
+    "between_var": 0.111599028432783,
+    "within_var": 0.9930523413636094,
+    "within_share": 0.8989735300347722,
+    "market_weighted_within_var_per_race": 0.8437499120271696,
+    "within_race_market_weighted_corr_with_market": -0.1896488293972177
+   },
+   "S_vs_n_runs_365_within_corr_eval": -0.001042990941379951
+  }
+ ],
+ "provenance": {
+  "git_sha": "403fe83ea02e1b75cab0940bb845c43a321d9bcf",
+  "git_dirty": false,
+  "git_status": [],
+  "own_output": "data/backtest/c_prime_20261006/e2",
+  "files_blob_sha1": {
+   "scripts/c_prime.py": "2ae559d8e8084d96f14f64437ff0e9d9654963fe",
+   "scripts/c_prime_explore.py": "1633423054d5053a75060741883012529d722688",
+   "predictor/market_clogit.py": "4f64cae668e20e7c16e525d5bd40dc855603877a",
+   "predictor/race_market.py": "3d0f6bc95401fcc808999139f0ff4dc0df85de0e",
+   "predictor/eval_stats.py": "9c4f9c3a7d4936800721377f53897393b28ac625",
+   "config.py": "b2e03fdae68360aa0b99402bb942da25e56b8d60",
+   "db.py": "c89fae5180200254b5d37275d6dc3f4d1d13ca6a",
+   "docs/PHASE05_5_PREREG.md": "5dcaf6be443a890b0e986adfa0266542d0792e84",
+   "docs/PHASE05_5_EXPLORATION.md": "c5a0e85cd374f2c22cd592354b0b749ba9c6d347"
+  },
+  "python": "3.14.5",
+  "numpy": "2.4.4",
+  "argv": [
+   "C:\\Users\\kizun\\dev\\keiba-yosou\\.claude\\worktrees\\c-prime\\scripts\\c_prime_explore.py",
+   "--mode",
+   "e2",
+   "--out-dir",
+   "data/backtest/c_prime_20261006/e2",
+   "--db",
+   "C:/Users/kizun/dev/keiba-yosou/data/keiba.db"
+  ],
+  "db": {
+   "path": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\keiba.db",
+   "bytes": 20203466752,
+   "mtime": "2026-10-06T08:00:04"
+  }
+ }
+}
