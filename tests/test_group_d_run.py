@@ -257,3 +257,15 @@ def test_arm_refuses_a_changed_2025_history(patched, tmp_path, monkeypatch):
         run.run_arm(str(path), frozen, tmp / "power" / run.POWER_FILE, ["t"])
     assert not (frozen / run.LOCK_FILE).exists()
 
+
+def test_primary_refuses_to_overwrite_an_existing_result(patched, tmp_path):
+    frozen = _copy_frozen(patched, tmp_path)
+    tmp, path = patched[0], patched[1]
+    power_path = tmp / "power" / run.POWER_FILE
+    run.run_arm(str(path), frozen, power_path, ["t"])
+    (tmp_path / "p").mkdir()
+    (tmp_path / "p" / run.PRIMARY_FILE).write_text("{}", encoding="utf-8")
+    with pytest.raises(pr.RunError, match="上書きしない"):
+        run.run_primary(str(path), frozen, power_path, tmp_path / "p", ["t"])
+    assert not (frozen / run.STARTED_FILE.format(1)).exists()
+

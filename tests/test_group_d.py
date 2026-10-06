@@ -131,11 +131,11 @@ def test_requirement_missing_makes_both_surplus_and_move_missing():
 
 
 def test_standardize_divides_and_fills_both_columns_with_the_race_observed_mean():
-    rows = [{"race_id": "A", "S_raw": 2.0, "class_move": 1.0}, {"race_id": "A", "S_raw": 4.0, "class_move": -1.0},
+    rows = [{"race_id": "A", "S_raw": 2.0, "class_move": 1.0}, {"race_id": "A", "S_raw": 4.0, "class_move": 3.0},
             {"race_id": "A", "S_raw": math.nan, "class_move": math.nan}]
     out = gd.standardize_and_fill(rows, 2.0)
     assert [r["S_std"] for r in out] == [1.0, 2.0, 1.5]
-    assert [r["class_move_filled"] for r in out] == [1.0, -1.0, 0.0]
+    assert [r["class_move_filled"] for r in out] == [1.0, 3.0, 2.0]          # 欠損はレース内の観測の平均 (0 ではない)
     assert math.isnan(rows[2]["S_raw"]) and "S_std" not in rows[0]         # 入力の行は変えない
     with pytest.raises(gd.GroupDError):
         gd.standardize_and_fill([{"race_id": "B", "S_raw": math.nan, "class_move": math.nan}], 1.0)
@@ -255,3 +255,11 @@ def test_prereg_runner_write_json_is_atomic_and_nan_free(tmp_path):
     p = tmp_path / "x.json"
     pr.write_json(p, {"a": math.nan, "b": [1.0, math.inf]})
     assert p.read_text(encoding="utf-8").count("null") == 2 and not (tmp_path / "x.json.tmp").exists()
+
+
+def test_requirement_uses_the_median_not_the_mean():
+    races, hist, d0 = _req_world(n_races=25, winner=lambda i: float(i) ** 2)
+    req = gd.Requirements(races, gd.winner_ratings(races, hist))
+    # 窓は 0..20 の 21 レース、勝ち馬の評価値は i² → 中央値 100 (平均は約 136.7)
+    assert req("005", "D", d0 + 21) == 100.0
+
