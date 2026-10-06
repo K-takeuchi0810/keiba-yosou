@@ -1,0 +1,118 @@
+{
+ "purpose": "Group D の PIT の確認 (結果・勝ち馬・払戻を読まない)",
+ "check1_condition_code_pre_vs_final_2026": {
+  "races": 2412,
+  "data_div_sets": {
+   "7": 1122,
+   "1|2|7": 876,
+   "2|7": 372,
+   "9": 42
+  },
+  "races_with_pre_race_and_final_records": 1248,
+  "mismatches": 0,
+  "note": "group_a_class_table.extract は同じレースの条件コード・距離・コースが食い違うと止まる。止まらずに完了 = 食い違い 0",
+  "record_counts": {
+   "records_read": 41828,
+   "records_used": 5725,
+   "skipped_out_of_range": 35949,
+   "skipped_non_jra": 154
+  }
+ },
+ "check2_class_table": {
+  "rows": 17292,
+  "columns": [
+   "race_id",
+   "c2",
+   "c3",
+   "c4",
+   "c5",
+   "cmin",
+   "canonical_class",
+   "data_divs",
+   "track_type_code",
+   "distance",
+   "source_files",
+   "source_sha256"
+  ]
+ },
+ "check3_requirement_sample_sizes_train": {
+  "005|D": {
+   "target_races": 1564,
+   "min": 505,
+   "p5": 507.0,
+   "median": 522.0
+  },
+  "005|T": {
+   "target_races": 1236,
+   "min": 394,
+   "p5": 400.0,
+   "median": 414.0
+  },
+  "010|D": {
+   "target_races": 699,
+   "min": 228,
+   "p5": 231.0,
+   "median": 234.0
+  },
+  "010|T": {
+   "target_races": 704,
+   "min": 233,
+   "p5": 234.0,
+   "median": 236.0
+  },
+  "016|D": {
+   "target_races": 292,
+   "min": 95,
+   "p5": 96.0,
+   "median": 98.0
+  },
+  "016|T": {
+   "target_races": 345,
+   "min": 113,
+   "p5": 114.0,
+   "median": 115.0
+  },
+  "701|D": {
+   "target_races": 298,
+   "min": 94,
+   "p5": 96.0,
+   "median": 100.0
+  },
+  "701|T": {
+   "target_races": 607,
+   "min": 197,
+   "p5": 198.0,
+   "median": 204.0
+  },
+  "703|D": {
+   "target_races": 1947,
+   "min": 628,
+   "p5": 630.0,
+   "median": 660.0
+  },
+  "703|T": {
+   "target_races": 1497,
+   "min": 467,
+   "p5": 475.0,
+   "median": 499.0
+  },
+  "999|D": {
+   "target_races": 223,
+   "min": 69,
+   "p5": 69.0,
+   "median": 74.0
+  },
+  "999|T": {
+   "target_races": 575,
+   "min": 189,
+   "p5": 190.0,
+   "median": 192.0
+  }
+ },
+ "check3_races_without_class": 0,
+ "check4_share_with_past_run_365": {
+  "2022": 0.8903371377248133,
+  "2023": 0.8894632811312149,
+  "2024": 0.8855100743241762
+ }
+}
