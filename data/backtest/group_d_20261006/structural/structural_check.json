@@ -37,6 +37,74 @@
   "share_risers": 0.09483302078761521,
   "note": "S × 昇級の有無 (0/1)。係数の値は記録しない"
  },
- "note_interaction_units": "交互作用の MDE は取り方で大きく変わる: S × class_move (整数、-4〜+4) は大きな昇降の行が SE を下げ、S × 1[昇級] は昇級の行 (約 8%) だけで識別する。§2 D の『同じ昇級でも中身が違う』に近いのは後者",
- "share_class_move_zero": 0.893251271600779
+ "note_interaction_units": "交互作用の MDE は取り方で大きく変わる: S × class_move (整数、-4〜+4) は大きな昇降の行が SE を下げ、S × 1[昇級] は昇級の行 (約 9.5%) だけで識別する。§2 D の『同じ昇級でも中身が違う』に近いのは後者",
+ "purchase_projection_at_beta_target": {
+  "by_year": {
+   "2022": {
+    "n_races": 3026,
+    "n_buys": 22,
+    "per_100_races": 0.7270323859881032,
+    "races_for_1500": 206318.18181818182
+   },
+   "2023": {
+    "n_races": 3024,
+    "n_buys": 22,
+    "per_100_races": 0.7275132275132276,
+    "races_for_1500": 206181.81818181818
+   },
+   "2024": {
+    "n_races": 3019,
+    "n_buys": 17,
+    "per_100_races": 0.5631003643590593,
+    "races_for_1500": 266382.35294117645
+   },
+   "pooled_2022_2024": {
+    "n_races": 9069,
+    "n_buys": 61,
+    "per_100_races": 0.6726210166501269,
+    "races_for_1500": 223008.19672131148
+   }
+  },
+  "method": "market_clogit.ratio_buys_at(rows, 1.0, BETA_TARGET, s_col='S_std')、尺度は 2022-2024 の pooled within-race SD",
+  "note": "仮定値で数える件数の見込み (§8-8)。β̂ は使わない"
+ },
+ "share_class_move_zero": 0.893251271600779,
+ "provenance": {
+  "git_sha": "85fb0ce807a3d6ad2a75e3f010846df097ee1851",
+  "git_dirty": false,
+  "git_status": [],
+  "own_output": [
+   "data/backtest/group_d_20261006/structural/structural_check.json"
+  ],
+  "files_blob_sha1": {
+   "scripts/group_d.py": "ac7347c74b3a5969dace46de73b74bc24979aa6c",
+   "scripts/group_d_explore.py": "0e518788387b44eb19954f4a48691c4d3baa248d",
+   "scripts/group_a.py": "18a9315b3e20e1242ecd09fe0d9ff41b91de0634",
+   "scripts/c_prime.py": "55c2a84df09f76681eeedead6353243a55cf1f3e",
+   "scripts/prereg_runner.py": "4a619a9ee2abd1190033959388ba52608b4f2e8c",
+   "predictor/market_clogit.py": "4f64cae668e20e7c16e525d5bd40dc855603877a",
+   "predictor/race_market.py": "3d0f6bc95401fcc808999139f0ff4dc0df85de0e",
+   "predictor/eval_stats.py": "9c4f9c3a7d4936800721377f53897393b28ac625",
+   "config.py": "0c4e8ad3d6f07bc6717d1e378ed10cff4cdf923f",
+   "db.py": "c89fae5180200254b5d37275d6dc3f4d1d13ca6a",
+   "docs/PHASE05_5_PREREG.md": "fad55d3134a3e30ca76491abca6f4ffb191c69ed",
+   "docs/PHASE05_5_EXPLORATION.md": "9fd01202a6f1d297269859344d654bb3239df887",
+   "data/backtest/group_a_class_20261005/class_table.csv": "b2122077eb26417860f76dea6100f52c36403ea4",
+   "data/backtest/group_d_20261006/structural/structural_check.py": "a2cde91556603f05661e50fe3338894d753d1c36",
+   "data/backtest/group_d_20261006/e2/e2_result.json": "8edb26526db3a9025b516a2f182353b52059ffd1"
+  },
+  "python": "3.14.5",
+  "numpy": "2.4.4",
+  "argv": [
+   "data/backtest/group_d_20261006/structural/structural_check.py",
+   "data/backtest/group_d_20261006/structural/structural_check.json",
+   "--db",
+   "C:/Users/kizun/dev/keiba-yosou/data/keiba.db"
+  ],
+  "db": {
+   "path": "C:\\Users\\kizun\\dev\\keiba-yosou\\data\\keiba.db",
+   "bytes": 20203466752,
+   "mtime": "2026-10-06T08:00:04"
+  }
+ }
 }

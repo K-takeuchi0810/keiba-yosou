@@ -114,7 +114,7 @@ def main():
                        "races_for_1500": 1500 * n_r / n_b if n_b else None}
     out["purchase_projection_at_beta_target"] = {
         "by_year": proj, "method": "market_clogit.ratio_buys_at(rows, 1.0, BETA_TARGET, s_col='S_std')、尺度は 2022-2024 の pooled within-race SD",
-        "note": "仮定値で数える件数の見込み (§8-8)。β̂ は使わない"}
+        "note": "仮定値で数える件数の見込み (§8-8)。係数の推定値は使わない"}
     out["share_class_move_zero"] = sum(r["class_move"] == 0 for r in obs) / len(obs)
     out["provenance"] = pr.provenance(ROOT, DEPENDENCIES, a.db, sys.argv, own_output=pr.rel(ROOT, Path(a.out).resolve()))
     Path(a.out).write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
