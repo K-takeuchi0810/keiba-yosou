@@ -1,0 +1,1 @@
+KILLED C31 来歴の git status で未追跡のディレクトリをまとめる FAILED tests/test_c_prime.py::test_provenance_excludes_its_own_untracked_output_directory
