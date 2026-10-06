@@ -6,3 +6,5 @@
 - run1 (`148a9af`): **KILLED 26 / 26** (`mutation_run1_148a9af.txt`、cp932 → UTF-8 に変換して保存)
 - 3 名レビューの指摘の反映 (`755d81e`) の後、spec を新しいコードに合わせて書き直し (38 個: 期間の隙間・監査ログ・再現の一覧・未確定の件数・
   track_type 不明・開催日の確定などを追加)、run2 (`755d81e`): **KILLED 38 / 38** (`mutation_run2_755d81e.txt`)
+- §9 の改訂 (履歴としてだけの読み、`check_history_for_fresh_targets`) を足して spec に H1〜H7 を追加 (45 個)、run3 (`3971a55`): **KILLED 45 / 45**
+  (`mutation_run3_3971a55.txt`)
