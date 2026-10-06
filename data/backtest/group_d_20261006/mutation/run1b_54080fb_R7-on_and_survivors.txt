@@ -1,0 +1,19 @@
+KILLED D5 要求水準を平均にする FAILED tests/test_group_d.py::test_requirement_uses_the_median_not_the_mean
+KILLED D12 class_move の欠損を 0 で埋める FAILED tests/test_group_d.py::test_standardize_divides_and_fills_both_columns_with_the_race_observed_mean
+KILLED R5 主検定の結果を上書きできる FAILED tests/test_group_d_run.py::test_primary_refuses_to_overwrite_an_existing_result
+KILLED R7 別の凍結物の検出力を受け入れる FAILED tests/test_group_d_run.py::test_power_from_another_frozen_is_refused
+KILLED R8 錠を 2 回書ける FAILED tests/test_group_d_run.py::test_arm_then_primary_runs_once - Failed: D...
+KILLED R9 学習期のブートストラップの回数を固定値から外す FAILED tests/test_group_d_run.py::test_freeze_records_scale_tables_and_bootstrap
+KILLED R10 対象レースの SQL の結果の列の検査を外す FAILED tests/test_group_d_run.py::test_target_sql_has_no_result_columns - Fai...
+KILLED R11 検出力で 2021-2024 の履歴を照合しない FAILED tests/test_group_d_run.py::test_power_refuses_a_changed_2021_2024_history
+KILLED R12 2025 の履歴の照合を外す FAILED tests/test_group_d_run.py::test_primary_refuses_a_changed_2025_history_before_the_marker
+KILLED R13 判定を副次の記録の後に書く FAILED tests/test_group_d_run.py::test_side_record_failure_keeps_the_verdict
+KILLED R14 副次の記録の失敗を握り潰す FAILED tests/test_group_d_run.py::test_side_record_failure_keeps_the_verdict
+KILLED P1 git の状態が不明でも通す (fail-open) FAILED tests/test_group_d.py::test_prereg_runner_check_pinned_is_fail_closed
+KILLED P2 固定のファイルが無くても通す FAILED tests/test_group_d.py::test_prereg_runner_check_pinned_is_fail_closed
+SURVIVED P3 SE の小さい方を採る
+KILLED P4 下限 0 ちょうどを PASS にする FAILED tests/test_group_d.py::test_prereg_runner_fixed_power_and_verdict - As...
+KILLED P5 区間が無効なら MDE の理由を上書きする FAILED tests/test_group_d.py::test_prereg_runner_fixed_power_and_verdict - As...
+KILLED P6 来歴の git status で未追跡のディレクトリをまとめる FAILED tests/test_group_d.py::test_prereg_runner_provenance_excludes_several_own_outputs
+KILLED P7 自分の出力先を 1 つしか除かない FAILED tests/test_group_d.py::test_prereg_runner_provenance_excludes_several_own_outputs
+KILLED P8 NaN を null にしない FAILED tests/test_group_d.py::test_prereg_runner_write_json_is_atomic_and_nan_free

@@ -1,0 +1,22 @@
+ABORT: 変異 'R7 別の凍結物の検出力を受け入れる' の実行で本番が変わった: ['data/keiba.db-wal']
+KILLED D1 前走に対象日 (同じ日) を含める FAILED tests/test_group_d.py::test_previous_run_uses_only_days_before_the_target_within_365
+KILLED D2 前走の窓を 366 日にする FAILED tests/test_group_d.py::test_previous_run_uses_only_days_before_the_target_within_365
+KILLED D3 要求水準の窓にその日を含める FAILED tests/test_group_d.py::test_requirement_is_the_median_winner_rating_of_the_window_before_the_day_and_needs_20_races
+KILLED D4 要求水準の最低件数を 5 にする FAILED tests/test_group_d.py::test_requirement_is_the_median_winner_rating_of_the_window_before_the_day_and_needs_20_races
+SURVIVED D5 要求水準を平均にする
+KILLED D6 同着の勝ち馬を最初の 1 頭にする FAILED tests/test_group_d.py::test_dead_heat_winners_count_as_one_observation_at_their_median
+KILLED D7 S を今回のクラスの要求水準で作る (§8-4d の不採用の案) FAILED tests/test_group_d.py::test_target_rows_build_surplus_and_class_move_from_the_same_previous_run
+KILLED D8 class_move の符号を逆にする FAILED tests/test_group_d.py::test_target_rows_build_surplus_and_class_move_from_the_same_previous_run
+KILLED D9 新馬を 1 にする FAILED tests/test_group_d.py::test_level_mapping_puts_newcomer_and_maiden_together
+KILLED D10 全馬が欠損のレースを除かない FAILED tests/test_group_d.py::test_race_with_no_observed_runner_is_excluded_and_recorded
+KILLED D11 S の欠損を 0 で埋める FAILED tests/test_group_d.py::test_standardize_divides_and_fills_both_columns_with_the_race_observed_mean
+SURVIVED D12 class_move の欠損を 0 で埋める
+KILLED D13 推定に 2025 を通す FAILED tests/test_group_d.py::test_fit_scale_refuses_the_primary_year - Faile...
+KILLED D14 主検定のモデルから class_move を外す FAILED tests/test_group_d.py::test_primary_clogit_columns_are_market_move_and_s
+KILLED R1 検出力の情報行列から class_move を外す ERROR tests/test_group_d_run.py::test_freeze_records_scale_tables_and_bootstrap
+KILLED R2 主検定の列から class_move を外す FAILED tests/test_group_d_run.py::test_arm_then_primary_runs_once - IndexErro...
+KILLED R3 主検定の開始の印の前に履歴を照合しない FAILED tests/test_group_d_run.py::test_primary_refuses_a_changed_2025_history_before_the_marker
+KILLED R4 主検定を同じ run_index で 2 回走らせられる FAILED tests/test_group_d_run.py::test_arm_then_primary_runs_once - Failed: D...
+SURVIVED R5 主検定の結果を上書きできる
+KILLED R6 凍結物を上書きできる FAILED tests/test_group_d_run.py::test_freeze_refuses_to_overwrite - Failed: ...
+ABORTED R7 別の凍結物の検出力を受け入れる data/keiba.db-wal
