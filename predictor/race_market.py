@@ -24,6 +24,7 @@
 from __future__ import annotations
 
 import math
+import numbers
 from dataclasses import dataclass, field
 
 from collections import defaultdict
@@ -96,11 +97,12 @@ def market_feature(p: float) -> float:
 
     C′ 以降の尤度の列・検出力の Fisher 情報・P_new・金額の評価はすべてこれを通す (`predictor/market_clogit.py`)。
     `p` は §8-6 の選択集合の中で正規化し直した P_market。0 以下・1 超・NaN・非有限は **止める** (epsilon で丸めない。
-    丸めると、価格の欠けたデータが黙って極端な本命・人気薄の値として尤度に入る)。
+    丸めると、価格の欠けたデータが黙って極端な本命・人気薄の値として尤度に入る)。実数 (numpy の浮動小数を含む) だけを受け、
+    bool と文字列は拒否する。例外の文は ASCII の記号だけにする (cp932 のコンソールで表示に失敗して理由が隠れないように)。
     """
-    if isinstance(p, bool) or not isinstance(p, (int, float)) or not math.isfinite(p) or not 0.0 < p <= 1.0:
-        raise MarketFeatureError(f"市場の確率が不正: {p!r} (0 < p ≤ 1 の有限の値だけ)")
-    return math.log(p)
+    if isinstance(p, bool) or not isinstance(p, numbers.Real) or not math.isfinite(p) or not 0.0 < p <= 1.0:
+        raise MarketFeatureError(f"market probability out of range: {p!r} (need finite 0 < p <= 1)")
+    return math.log(float(p))
 
 
 def p_new(p_market: dict[str, float], s: dict[str, float], beta_market: float, beta_s: float) -> dict[str, float]:

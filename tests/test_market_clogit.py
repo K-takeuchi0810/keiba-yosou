@@ -18,7 +18,10 @@ from predictor import race_market as rm
 
 
 def _races(n_races=40, k=8, seed=0, beta_market=1.0, beta_s=0.0, with_won=True):
-    """log の市場の項のモデルから勝ち馬を引いた人工のレース。"""
+    """log の市場の項のモデル `P(i) ∝ P_market(i)^β_market · exp(β_S·S(i))` から勝ち馬を引いた人工のレース。
+
+    勝つ確率は検査対象 (`rm.p_new`) を使わずにここで計算する (生成器が検査対象に依存すると、変換を変えても回復テストが通る)。
+    """
     rng = random.Random(seed)
     rows = []
     for i in range(n_races):
@@ -26,7 +29,9 @@ def _races(n_races=40, k=8, seed=0, beta_market=1.0, beta_s=0.0, with_won=True):
         tot = sum(raw)
         p = {f"{j + 1:02d}": x / tot for j, x in enumerate(raw)}
         s = {h: rng.gauss(0.0, 1.0) for h in p}
-        pn = rm.p_new(p, s, beta_market, beta_s)
+        w = {h: p[h] ** beta_market * math.exp(beta_s * s[h]) for h in p}
+        wt = sum(w.values())
+        pn = {h: v / wt for h, v in w.items()}
         u = rng.random()
         acc, winner = 0.0, None
         for h, q in pn.items():
@@ -162,7 +167,7 @@ def test_results_are_invariant_to_scaling_market_probabilities_within_a_race(mon
     se = mc.fisher_se_at_null(no_won)["se"]
     buys = mc.ratio_buys_at(rows, fit["beta_market"], fit["beta_s"])
 
-    # (1) 定数倍して正規化し直す
+    # (1) 定数倍して正規化し直す (和 1 の制約の下では浮動小数の恒等の確認。本体は (2))
     scaled = []
     for rs in mc._by_race(rows).values():
         c = 3.7
@@ -207,6 +212,8 @@ def test_diagnostic_sets_separate_market_recalibration_from_s_correction():
     assert d["n"]["market_recalibration_only"] == 3 and d["n"]["s_correction_only"] == 1
     assert d["n"]["full"] == 2
     assert d["jaccard"]["market_recalibration_only|s_correction_only"] == pytest.approx(1 / 3)
+    assert d["jaccard"]["full|market_recalibration_only"] == pytest.approx(2 / 3)
+    assert d["jaccard"]["full|s_correction_only"] == pytest.approx(1 / 2)
     assert d["coefficients"]["s_correction_only"] == [1.0, 0.2]
     assert d["coefficients"]["market_recalibration_only"] == [0.6, 0.0]
 
@@ -229,3 +236,93 @@ def test_fisher_takes_both_the_column_and_the_null_weights_from_market_feature(m
         m = w @ X
         info += (X * w[:, None]).T @ X - np.outer(m, m)
     assert np.allclose(got["info"], info, rtol=1e-12, atol=1e-12)
+
+
+# --- 2026-10-06 の 3 名レビューの後に追加 (黙った壊れ方を止める) --------------------------------------------
+
+@pytest.mark.parametrize("bm,bs", [(float("nan"), 0.1), (1.0, float("nan")), (float("inf"), 0.0)])
+def test_non_finite_coefficients_are_refused(bm, bs):
+    rows = _races(n_races=5, seed=2, with_won=False)
+    with pytest.raises(mc.MarketClogitError, match="有限でない"):
+        mc.ratio_buys_at(rows, bm, bs)
+    with pytest.raises(mc.MarketClogitError, match="有限でない"):
+        mc.diagnostic_sets(rows, bm, bs)
+
+
+def test_a_non_converged_fit_stops_instead_of_returning_nan(monkeypatch):
+    monkeypatch.setattr(mc, "conditional_logit", lambda rows, cols, with_status=False: ([math.nan, math.nan], False))
+    with pytest.raises(mc.MarketClogitError, match="収束しなかった"):
+        mc.fit_clogit(_races(n_races=5, seed=3))
+
+
+def test_converged_flag_comes_from_the_fit(monkeypatch):
+    monkeypatch.setattr(mc, "conditional_logit", lambda rows, cols, with_status=False: ([1.0, 0.1], True))
+    assert mc.fit_clogit(_races(n_races=5, seed=3))["converged"] is True
+
+
+def test_duplicate_horse_numbers_in_a_race_are_refused():
+    rows = [{"race_id": "A", "horse_num": "01", "p_market": 0.25, "S": 0.0},
+            {"race_id": "A", "horse_num": "01", "p_market": 0.25, "S": 1.0},
+            {"race_id": "A", "horse_num": "02", "p_market": 0.5, "S": 0.0}]
+    with pytest.raises(mc.MarketClogitError, match="重複"):
+        mc.ratio_buys_at(rows, 1.0, 0.2)
+
+
+def test_group_a_logit_rows_and_empty_rows_are_refused():
+    rows = _races(n_races=3, seed=4, with_won=False)
+    rows[0]["logit_p_market"] = 0.0
+    with pytest.raises(mc.MarketClogitError, match="Group A"):
+        mc.fisher_se_at_null(rows)
+    for fn in (mc.fisher_se_at_null, lambda r: mc.ratio_buys_at(r, 1.0, 0.1), mc.fit_clogit):
+        with pytest.raises(mc.MarketClogitError, match="空"):
+            fn([])
+
+
+def test_singular_information_is_a_clogit_error():
+    rows = [{"race_id": f"R{i}", "horse_num": h, "p_market": q, "S": 1.0}
+            for i in range(3) for h, q in (("01", 0.6), ("02", 0.4))]
+    with pytest.raises(mc.MarketClogitError, match="特異"):
+        mc.fisher_se_at_null(rows)
+
+
+@pytest.mark.parametrize("eps,ok", [(1e-12, True), (1e-6, False), (-1e-6, False)])
+def test_canonical_tolerance_boundary(eps, ok):
+    rows = [{"race_id": "A", "horse_num": "01", "p_market": 0.5 + eps, "S": 0.0},
+            {"race_id": "A", "horse_num": "02", "p_market": 0.5, "S": 1.0}]
+    if ok:
+        mc.check_canonical(rows)
+    else:
+        with pytest.raises(mc.MarketClogitError):
+            mc.check_canonical(rows)
+
+
+def test_fisher_refuses_outcomes_even_on_a_single_row():
+    rows = _races(n_races=3, seed=6, with_won=False)
+    rows[-1]["won"] = 0
+    with pytest.raises(mc.MarketClogitError, match="勝ちの列"):
+        mc.fisher_se_at_null(rows)
+
+
+def test_fit_does_not_modify_the_input_rows():
+    rows = _races(n_races=50, seed=8)
+    before = [dict(r) for r in rows]
+    mc.fit_clogit(rows)
+    assert rows == before and mc.MARKET_COL not in rows[0]
+
+
+def test_fit_with_unit_market_recovers_a_planted_feature_effect():
+    rows = _races(n_races=4000, k=8, seed=14, beta_market=1.0, beta_s=0.3)
+    got = mc.fit_s_given_unit_market(rows)
+    assert got["converged"] and abs(got["beta_s_given_unit_market"] - 0.3) < 0.07
+    d = mc.diagnostic_sets([{k: v for k, v in r.items() if k != "won"} for r in rows], 1.0, 0.3,
+                           beta_s_given_unit_market=got["beta_s_given_unit_market"])
+    assert d["coefficients"]["s_correction_given_unit_market"] == [1.0, got["beta_s_given_unit_market"]]
+    assert "s_correction_given_unit_market" in d["n"]
+
+
+def test_market_feature_accepts_numpy_reals_and_reports_in_ascii():
+    assert rm.market_feature(np.float32(0.25)) == pytest.approx(math.log(0.25))
+    with pytest.raises(rm.MarketFeatureError) as e:
+        rm.market_feature(0.0)
+    assert str(e.value).isascii()
+
